@@ -60,10 +60,17 @@ fi
 # Install dependencies
 echo "[4] Installing npm dependencies..."
 echo "   This may take a few minutes..."
-npm install 2>&1 | tail -20
+npm install --legacy-peer-deps 2>&1 | tail -20
 
 if [ $? -ne 0 ]; then
-    echo "⚠️  npm install had some issues, but continuing..."
+    echo "⚠️  npm install had some issues, trying with --force..."
+    npm install --force 2>&1 | tail -10
+fi
+
+# Verify node_modules exists
+if [ ! -d "node_modules" ]; then
+    echo "❌ node_modules not found after install"
+    exit 1
 fi
 
 # Build frontend
