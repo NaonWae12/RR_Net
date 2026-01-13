@@ -12,8 +12,17 @@ VPS_IP="72.60.74.209"
 # Database connection (from VPS .env or default)
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
-DB_NAME="${DB_NAME:-rrnet}"
+DB_NAME="${DB_NAME:-rrnet_dev}"
 DB_USER="${DB_USER:-rrnet}"
+
+# Try to read password from .env file if exists
+if [ -f "$PROJECT_DIR/BE/.env" ]; then
+    # Extract password from DATABASE_URL if exists
+    DB_PASSWORD=$(grep "^DATABASE_URL=" "$PROJECT_DIR/BE/.env" | sed -n 's/.*:\([^@]*\)@.*/\1/p' 2>/dev/null || echo "")
+fi
+
+# Use default password if not set
+DB_PASSWORD="${DB_PASSWORD:-rrnet_secret}"
 
 echo "=========================================="
 echo "Import Development Data"
@@ -44,6 +53,7 @@ echo "[1] Checking database connection..."
 echo "    Host: $DB_HOST:$DB_PORT"
 echo "    Database: $DB_NAME"
 echo "    User: $DB_USER"
+echo "    Password: ${DB_PASSWORD:+***hidden***}"
 echo ""
 
 # Test connection
