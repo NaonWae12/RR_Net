@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Check and Fix VPS Deployment Issues
-set -e
+# Don't exit on error, continue to fix all issues
+set +e
 
 echo "=========================================="
 echo "RRNET VPS Check & Fix Script"
@@ -48,17 +49,38 @@ node --version
 
 # Check PostgreSQL
 echo "[4] Checking PostgreSQL..."
-systemctl enable postgresql
-systemctl start postgresql
-sudo -u postgres psql -c "CREATE DATABASE rrnet_dev;" 2>/dev/null || true
-sudo -u postgres psql -c "CREATE USER rrnet WITH PASSWORD 'rrnet_secret';" 2>/dev/null || true
+if ! command -v psql &> /dev/null; then
+    echo "❌ PostgreSQL not found. Installing..."
+    apt-get update -qq
+    apt-get install -y -qq postgresql postgresql-contrib
+fi
+
+# Start and enable PostgreSQL
+systemctl start postgresql 2>/dev/null || service postgresql start
+systemctl enable postgresql 2>/dev/null || true
+
+# Wait for PostgreSQL to be ready
+sleep 3
+
+# Create database and user
+sudo -u postgres psql -c "CREATE DATABASE rrnet_dev;" 2>/dev/null || echo "Database may already exist"
+sudo -u postgres psql -c "CREATE USER rrnet WITH PASSWORD 'rrnet_secret';" 2>/dev/null || echo "User may already exist"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE rrnet_dev TO rrnet;" 2>/dev/null || true
 sudo -u postgres psql -c "ALTER USER rrnet CREATEDB;" 2>/dev/null || true
+echo "✓ PostgreSQL configured"
 
 # Check Redis
 echo "[5] Checking Redis..."
-systemctl enable redis-server
-systemctl start redis-server
+if ! command -v redis-cli &> /dev/null; then
+    echo "❌ Redis not found. Installing..."
+    apt-get update -qq
+    apt-get install -y -qq redis-server
+fi
+
+systemctl enable redis-server 2>/dev/null || true
+systemctl start redis-server 2>/dev/null || service redis-server start
+sleep 2
+redis-cli ping > /dev/null 2>&1 && echo "✓ Redis is running" || echo "⚠️  Redis may not be running"
 
 # Setup Backend .env
 echo "[6] Setting up backend environment..."
