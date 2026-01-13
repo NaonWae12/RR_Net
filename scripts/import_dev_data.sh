@@ -105,6 +105,29 @@ echo ""
 echo "[2.2] Importing data..."
 echo ""
 
+# Import data (remove BOM if exists and fix encoding)
+echo "   Cleaning file encoding..."
+# Remove BOM and convert to UTF-8 if needed
+if file "$DUMP_FILE" | grep -q "UTF-8 Unicode (with BOM)"; then
+    sed -i '1s/^\xEF\xBB\xBF//' "$DUMP_FILE"
+    echo "   Removed BOM from file"
+fi
+
+# Import data (remove BOM if exists and fix encoding)
+echo "   Cleaning file encoding..."
+# Remove BOM if exists (UTF-8 BOM is EF BB BF)
+if [ -f "$DUMP_FILE" ]; then
+    # Check and remove BOM
+    if head -c 3 "$DUMP_FILE" | od -An -tx1 | grep -q "ef bb bf"; then
+        sed -i '1s/^\xEF\xBB\xBF//' "$DUMP_FILE"
+        echo "   Removed BOM from file"
+    fi
+    # Ensure UTF-8 encoding
+    if command -v iconv &> /dev/null; then
+        iconv -f UTF-8 -t UTF-8 "$DUMP_FILE" > "${DUMP_FILE}.clean" 2>/dev/null && mv "${DUMP_FILE}.clean" "$DUMP_FILE" || true
+    fi
+fi
+
 # Import data
 PGPASSWORD="${DB_PASSWORD}" psql \
     -h "$DB_HOST" \

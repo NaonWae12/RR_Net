@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { generateUUID } from "../utils";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
@@ -195,7 +196,7 @@ apiClient.interceptors.request.use(
   
   // Attach request id header for tracing
   if (!config.headers['x-request-id']) {
-    config.headers['x-request-id'] = crypto.randomUUID();
+    config.headers['x-request-id'] = generateUUID();
   }
   
   return config;

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { generateUUID } from "../lib/utils";
 
 type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -28,7 +29,7 @@ export const useNotificationStore = create<NotificationState & NotificationActio
         toasts: [
           ...state.toasts,
           {
-            id: toast.id ?? crypto.randomUUID(),
+            id: toast.id ?? generateUUID(),
             ...toast,
           },
         ],
