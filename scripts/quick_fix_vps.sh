@@ -117,7 +117,7 @@ else
 fi
 
 # Setup Frontend
-echo "[8] Setting up frontend..."
+echo "[9] Setting up frontend..."
 cd $PROJECT_DIR/fe
 
 # Create .env.local if not exists
@@ -138,7 +138,7 @@ else
 fi
 
 # Create systemd services
-echo "[9] Creating systemd services..."
+echo "[10] Creating systemd services..."
 
 # Backend service
 cat > /etc/systemd/system/rrnet-backend.service << EOF
@@ -186,7 +186,7 @@ systemctl enable rrnet-frontend 2>/dev/null
 echo "✓ Systemd services created"
 
 # Start services
-echo "[10] Starting services..."
+echo "[11] Starting services..."
 systemctl stop rrnet-backend 2>/dev/null
 systemctl stop rrnet-frontend 2>/dev/null
 sleep 2
@@ -210,7 +210,7 @@ echo ""
 echo "=========================================="
 echo "Testing Endpoints:"
 echo "=========================================="
-sleep 2
+sleep 5
 
 echo "Backend Health Check:"
 curl -s http://localhost:8080/health || echo "❌ Backend not responding"

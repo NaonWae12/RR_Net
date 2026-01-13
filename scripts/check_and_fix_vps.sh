@@ -102,8 +102,40 @@ EOF
     echo "✓ Created BE/.env"
 fi
 
+# Run Database Migrations
+echo "[7] Running database migrations..."
+cd $PROJECT_DIR/BE
+
+# Install PostgreSQL extensions first
+if [ -f "migrations/init/001_init_extensions.sql" ]; then
+    echo "Installing PostgreSQL extensions..."
+    sudo -u postgres psql -d rrnet_dev -f migrations/init/001_init_extensions.sql 2>/dev/null || echo "Extensions may already exist"
+fi
+
+# Run all migrations in order
+MIGRATION_COUNT=0
+for migration in migrations/000*.up.sql; do
+    if [ -f "$migration" ]; then
+        MIGRATION_COUNT=$((MIGRATION_COUNT + 1))
+        MIGRATION_NAME=$(basename "$migration")
+        echo "  [$MIGRATION_COUNT] Running $MIGRATION_NAME..."
+        psql -U rrnet -d rrnet_dev -h localhost -f "$migration" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "    ✓ $MIGRATION_NAME completed"
+        else
+            echo "    ⚠️  $MIGRATION_NAME may have errors (table might already exist)"
+        fi
+    fi
+done
+
+if [ $MIGRATION_COUNT -gt 0 ]; then
+    echo "✓ Database migrations completed ($MIGRATION_COUNT migrations)"
+else
+    echo "⚠️  No migration files found"
+fi
+
 # Build Backend
-echo "[7] Building backend..."
+echo "[8] Building backend..."
 export PATH=$PATH:/usr/local/go/bin
 cd $PROJECT_DIR/BE
 go mod download
@@ -112,7 +144,7 @@ chmod +x rrnet-api
 echo "✓ Backend built successfully"
 
 # Setup Frontend .env
-echo "[8] Setting up frontend environment..."
+echo "[9] Setting up frontend environment..."
 cd $PROJECT_DIR/fe
 if [ ! -f .env.local ]; then
     cat > .env.local << EOF
@@ -129,7 +161,7 @@ npm run build
 echo "✓ Frontend built successfully"
 
 # Create systemd services
-echo "[10] Creating systemd services..."
+echo "[11] Creating systemd services..."
 
 # Backend service
 cat > /etc/systemd/system/rrnet-backend.service << EOF
@@ -176,21 +208,21 @@ systemctl enable rrnet-backend rrnet-frontend
 echo "✓ Systemd services created"
 
 # Start services
-echo "[11] Starting services..."
+echo "[12] Starting services..."
 systemctl restart rrnet-backend
 sleep 2
 systemctl restart rrnet-frontend
 sleep 2
 
 # Check status
-echo "[12] Checking service status..."
+echo "[13] Checking service status..."
 systemctl status rrnet-backend --no-pager -l
 echo ""
 systemctl status rrnet-frontend --no-pager -l
 
 # Test endpoints
-echo "[13] Testing endpoints..."
-sleep 3
+echo "[14] Testing endpoints..."
+sleep 5
 echo "Testing backend health..."
 curl -s http://localhost:8080/health || echo "❌ Backend health check failed"
 echo ""
