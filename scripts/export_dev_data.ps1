@@ -13,7 +13,8 @@ $DB_PASSWORD = "rrnet_secret"
 
 # Output file
 $OUTPUT_FILE = "dev_data_export_$(Get-Date -Format 'yyyyMMdd_HHmmss').sql"
-$OUTPUT_PATH = Join-Path $PSScriptRoot ".." $OUTPUT_FILE
+$parentDir = Split-Path -Parent $PSScriptRoot
+$OUTPUT_PATH = Join-Path $parentDir $OUTPUT_FILE
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Export Development Data" -ForegroundColor Cyan
@@ -29,7 +30,8 @@ if (-not (Get-Command pg_dump -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "[1] Connecting to database..." -ForegroundColor Yellow
-Write-Host "    Host: ${DB_HOST}:${DB_PORT}" -ForegroundColor Gray
+$hostInfo = "    Host: ${DB_HOST}:${DB_PORT}"
+Write-Host $hostInfo -ForegroundColor Gray
 Write-Host "    Database: $DB_NAME" -ForegroundColor Gray
 Write-Host "    User: $DB_USER" -ForegroundColor Gray
 Write-Host ""
@@ -69,40 +71,44 @@ if ($LASTEXITCODE -ne 0) {
 # Get file size
 $fileSize = (Get-Item $OUTPUT_PATH).Length / 1MB
 Write-Host ""
-Write-Host "✓ Export completed!" -ForegroundColor Green
+Write-Host '✓ Export completed!' -ForegroundColor Green
 Write-Host "  File: $OUTPUT_PATH" -ForegroundColor Gray
-Write-Host "  Size: $([math]::Round($fileSize, 2)) MB" -ForegroundColor Gray
+$sizeMsg = '  Size: ' + [math]::Round($fileSize, 2).ToString() + ' MB'
+Write-Host $sizeMsg -ForegroundColor Gray
 Write-Host ""
 
 # Show summary
-Write-Host "[3] Data summary:" -ForegroundColor Yellow
+Write-Host '[3] Data summary:' -ForegroundColor Yellow
 $env:PGPASSWORD = $DB_PASSWORD
 $tables = @(
-    "tenants", "users", "clients", "invoices", "payments",
-    "service_packages", "network_profiles", "client_groups",
-    "routers", "pppoe_secrets", "ip_pools"
+    'tenants', 'users', 'clients', 'invoices', 'payments',
+    'service_packages', 'network_profiles', 'client_groups',
+    'routers', 'pppoe_secrets', 'ip_pools'
 )
 
 foreach ($table in $tables) {
-    $count = psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM $table;" 2>$null
+    $query = 'SELECT COUNT(*) FROM ' + $table + ';'
+    $count = & psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c $query 2>$null
     if ($count) {
-        $tableName = $table
-        Write-Host "    $tableName : $($count.Trim()) rows" -ForegroundColor Gray
+        $rowCount = $count.Trim()
+        $output = '    ' + $table + ' : ' + $rowCount + ' rows'
+        Write-Host $output -ForegroundColor Gray
     }
 }
 
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "Next Steps:" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "1. Upload file to VPS:" -ForegroundColor Yellow
-$uploadCmd = "   scp $OUTPUT_FILE root@72.60.74.209:/opt/rrnet/"
+$separator = '=========================================='
+Write-Host $separator -ForegroundColor Cyan
+Write-Host 'Next Steps:' -ForegroundColor Cyan
+Write-Host $separator -ForegroundColor Cyan
+Write-Host '1. Upload file to VPS:' -ForegroundColor Yellow
+$uploadCmd = '   scp ' + $OUTPUT_FILE + ' root@72.60.74.209:/opt/rrnet/'
 Write-Host $uploadCmd -ForegroundColor White
 Write-Host ""
-Write-Host "2. Import on VPS:" -ForegroundColor Yellow
-Write-Host "   ssh root@72.60.74.209" -ForegroundColor White
-Write-Host "   cd /opt/rrnet" -ForegroundColor White
-$importCmd = "   ./scripts/import_dev_data.sh $OUTPUT_FILE"
+Write-Host '2. Import on VPS:' -ForegroundColor Yellow
+Write-Host '   ssh root@72.60.74.209' -ForegroundColor White
+Write-Host '   cd /opt/rrnet' -ForegroundColor White
+$importCmd = '   ./scripts/import_dev_data.sh ' + $OUTPUT_FILE
 Write-Host $importCmd -ForegroundColor White
 Write-Host ""
 
