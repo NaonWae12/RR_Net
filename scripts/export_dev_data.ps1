@@ -21,12 +21,25 @@ Write-Host "Export Development Data" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check if pg_dump is available
+# Check if pg_dump is available, or use Docker
+$USE_DOCKER = $false
 if (-not (Get-Command pg_dump -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ pg_dump not found!" -ForegroundColor Red
-    Write-Host "   Please install PostgreSQL client tools" -ForegroundColor Yellow
-    Write-Host "   Or use Docker: docker exec rrnet-postgres pg_dump ..." -ForegroundColor Yellow
-    exit 1
+    # Try Docker instead
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        $dockerPs = docker ps --filter "name=rrnet-postgres" --format "{{.Names}}" 2>$null
+        if ($dockerPs -eq "rrnet-postgres") {
+            Write-Host "⚠️  pg_dump not found, using Docker instead..." -ForegroundColor Yellow
+            $USE_DOCKER = $true
+        } else {
+            Write-Host "❌ pg_dump not found and Docker container 'rrnet-postgres' not running!" -ForegroundColor Red
+            Write-Host "   Please install PostgreSQL client tools or start Docker container" -ForegroundColor Yellow
+            exit 1
+        }
+    } else {
+        Write-Host "❌ pg_dump not found and Docker not available!" -ForegroundColor Red
+        Write-Host "   Please install PostgreSQL client tools" -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 Write-Host "[1] Connecting to database..." -ForegroundColor Yellow
@@ -50,18 +63,32 @@ Write-Host ""
 # --no-owner: Don't include ownership commands
 # --no-privileges: Don't include privilege commands
 # --disable-triggers: Disable triggers during restore (faster)
-pg_dump `
-    -h $DB_HOST `
-    -p $DB_PORT `
-    -U $DB_USER `
-    -d $DB_NAME `
-    --data-only `
-    --column-inserts `
-    --no-owner `
-    --no-privileges `
-    --disable-triggers `
-    --exclude-table=public.schema_migrations `
-    -f $OUTPUT_PATH
+if ($USE_DOCKER) {
+    Write-Host "   Using Docker container: rrnet-postgres" -ForegroundColor Gray
+    docker exec rrnet-postgres pg_dump `
+        -U $DB_USER `
+        -d $DB_NAME `
+        --data-only `
+        --column-inserts `
+        --no-owner `
+        --no-privileges `
+        --disable-triggers `
+        --exclude-table=public.schema_migrations `
+        > $OUTPUT_PATH
+} else {
+    pg_dump `
+        -h $DB_HOST `
+        -p $DB_PORT `
+        -U $DB_USER `
+        -d $DB_NAME `
+        --data-only `
+        --column-inserts `
+        --no-owner `
+        --no-privileges `
+        --disable-triggers `
+        --exclude-table=public.schema_migrations `
+        -f $OUTPUT_PATH
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Export failed!" -ForegroundColor Red
@@ -88,7 +115,11 @@ $tables = @(
 
 foreach ($table in $tables) {
     $query = 'SELECT COUNT(*) FROM ' + $table + ';'
-    $count = & psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c $query 2>$null
+    if ($USE_DOCKER) {
+        $count = docker exec rrnet-postgres psql -U $DB_USER -d $DB_NAME -t -c $query 2>$null
+    } else {
+        $count = & psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c $query 2>$null
+    }
     if ($count) {
         $rowCount = $count.Trim()
         $output = '    ' + $table + ' : ' + $rowCount + ' rows'
