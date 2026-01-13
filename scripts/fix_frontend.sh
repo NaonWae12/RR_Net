@@ -57,8 +57,20 @@ else
     echo "✓ .env.local already exists"
 fi
 
+# Check Node.js version
+echo "[4] Checking Node.js version..."
+NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
+if [ "$NODE_VERSION" -lt 20 ]; then
+    echo "⚠️  Node.js version is too old (need >=20.9.0)"
+    echo "   Upgrading Node.js to version 20..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y -qq nodejs
+    echo "   New Node.js version:"
+    node --version
+fi
+
 # Install dependencies
-echo "[4] Installing npm dependencies..."
+echo "[5] Installing npm dependencies..."
 echo "   This may take a few minutes..."
 npm install --legacy-peer-deps 2>&1 | tail -20
 
@@ -74,7 +86,7 @@ if [ ! -d "node_modules" ]; then
 fi
 
 # Build frontend
-echo "[5] Building frontend..."
+echo "[6] Building frontend..."
 echo "   This may take 2-5 minutes..."
 npm run build 2>&1 | tail -30
 
@@ -87,7 +99,7 @@ else
 fi
 
 # Create/update systemd service
-echo "[6] Creating frontend systemd service..."
+echo "[7] Creating frontend systemd service..."
 cat > /etc/systemd/system/rrnet-frontend.service << EOF
 [Unit]
 Description=RRNET Frontend
@@ -111,7 +123,7 @@ systemctl daemon-reload
 systemctl enable rrnet-frontend 2>/dev/null
 
 # Start service
-echo "[7] Starting frontend service..."
+echo "[8] Starting frontend service..."
 systemctl stop rrnet-frontend 2>/dev/null
 sleep 2
 systemctl start rrnet-frontend
