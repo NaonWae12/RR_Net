@@ -16,6 +16,8 @@ cd $PROJECT_DIR
 
 # Ensure we have latest code
 echo "[1] Updating repository..."
+# Discard any local changes to scripts
+git checkout -- scripts/ 2>/dev/null || true
 git pull origin main 2>/dev/null || true
 
 # Check if fe directory exists
