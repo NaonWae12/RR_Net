@@ -25,6 +25,9 @@ GRANT CREATE ON SCHEMA public TO $DB_USER;
 GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
 
 -- Make user owner of public schema (safer for development)
+-- Note: In PostgreSQL 15+, need to revoke from public first
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO $DB_USER;
 ALTER SCHEMA public OWNER TO $DB_USER;
 
 -- Grant privileges on all existing tables (if any)
