@@ -45,13 +45,17 @@ for migration in migrations/000*.up.sql; do
         MIGRATION_NAME=$(basename "$migration")
         echo "  [$MIGRATION_COUNT] Running $MIGRATION_NAME..."
         
-        # Run migration and capture output
+        # Run migration and capture output (don't suppress errors)
         OUTPUT=$(PGPASSWORD="$DB_PASSWORD" psql -U "$DB_USER" -d "$DB_NAME" -h localhost -f "$migration" 2>&1)
         EXIT_CODE=$?
         
         if [ $EXIT_CODE -eq 0 ]; then
-            # Check for common non-fatal errors
-            if echo "$OUTPUT" | grep -qi "already exists\|duplicate\|relation.*already exists"; then
+            # Check for errors in output even if exit code is 0
+            if echo "$OUTPUT" | grep -qi "error\|fatal"; then
+                echo "    ❌ $MIGRATION_NAME has errors!"
+                echo "       Error: $(echo "$OUTPUT" | grep -i "error\|fatal" | head -2)"
+                MIGRATION_FAILED=$((MIGRATION_FAILED + 1))
+            elif echo "$OUTPUT" | grep -qi "already exists\|duplicate\|relation.*already exists"; then
                 echo "    ⚠️  $MIGRATION_NAME (table/object may already exist - OK)"
                 MIGRATION_SUCCESS=$((MIGRATION_SUCCESS + 1))
             else
@@ -65,7 +69,8 @@ for migration in migrations/000*.up.sql; do
                 MIGRATION_SUCCESS=$((MIGRATION_SUCCESS + 1))
             else
                 echo "    ❌ $MIGRATION_NAME failed!"
-                echo "       Error: $(echo "$OUTPUT" | head -3)"
+                echo "       Exit code: $EXIT_CODE"
+                echo "       Error: $(echo "$OUTPUT" | grep -v "^$" | head -5)"
                 MIGRATION_FAILED=$((MIGRATION_FAILED + 1))
             fi
         fi
