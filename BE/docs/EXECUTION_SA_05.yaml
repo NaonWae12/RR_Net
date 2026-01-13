@@ -1,0 +1,637 @@
+execution_prompt:
+  id: "RRNET_EXEC_SA_05_AUDIT_LOGS_COMPLIANCE"
+  purpose: >
+    Implement comprehensive audit logs and compliance management system
+    for super admin including immutable audit trails, GDPR compliance,
+    data retention policies, regulatory reporting, and enterprise-grade
+    governance with searchable analytics and export capabilities.
+
+  prerequisites:
+    - "EXECUTION_SA_04 System Monitoring & Health completed"
+    - "All previous super admin modules completed"
+    - "Background job system operational"
+    - "File storage system (MinIO/S3) available"
+
+  design_principles:
+    - "Audit logs are immutable and tamper-proof"
+    - "Compliance with GDPR, SOX, and data protection laws"
+    - "Data retention policies are configurable and enforceable"
+    - "Regulatory reporting is automated and comprehensive"
+    - "All system events are captured and searchable"
+    - "Export capabilities support legal requests"
+
+  scope:
+    include:
+      - audit_log_management
+      - compliance_framework
+      - data_retention_policies
+      - gdpr_compliance
+      - regulatory_reporting
+      - audit_analytics
+      - export_management
+      - compliance_monitoring
+      - data_protection
+    exclude:
+      - real_time_monitoring
+      - customer_facing_compliance
+      - legal_advice_features
+      - automated_compliance_decisions
+
+  backend_structure_additions:
+    internal/domain:
+      - audit/
+      - compliance/
+    internal/audit:
+      - service.go
+      - log_manager.go
+      - search_service.go
+      - export_service.go
+    internal/compliance:
+      - service.go
+      - gdpr_manager.go
+      - retention_manager.go
+      - reporting_service.go
+    internal/repository:
+      - audit_repository.go
+      - compliance_repository.go
+      - gdpr_repository.go
+    internal/http/handlers:
+      - audit_handler.go
+      - compliance_handler.go
+      - gdpr_handler.go
+    internal/jobs:
+      - audit_cleanup_job.go
+      - compliance_job.go
+      - retention_job.go
+
+  database_schema:
+    audit_logs:
+      fields:
+        - id (uuid, pk)
+        - event_type
+        - event_category (auth | tenant | billing | network | system | compliance)
+        - actor_id (nullable, user_id)
+        - actor_type (super_admin | tenant_admin | system)
+        - tenant_id (nullable)
+        - resource_type
+        - resource_id (nullable)
+        - action
+        - old_values (jsonb, nullable)
+        - new_values (jsonb, nullable)
+        - ip_address
+        - user_agent
+        - session_id (nullable)
+        - request_id (nullable)
+        - metadata (jsonb, nullable)
+        - severity (info | warning | critical)
+        - compliance_tags (jsonb, nullable)
+        - created_at
+        - hash_signature (string, immutable)
+        - sequence_number (bigint, sequential)
+
+    audit_log_attachments:
+      fields:
+        - id (uuid, pk)
+        - audit_log_id (fk)
+        - file_name
+        - file_path
+        - file_type
+        - file_size
+        - mime_type
+        - checksum
+        - created_at
+
+    compliance_policies:
+      fields:
+        - id (uuid, pk)
+        - policy_name
+        - policy_type (data_retention | gdpr | sox | hipaa | pci_dss)
+        - description
+        - rules (jsonb)
+        - retention_period_days
+        - is_active
+        - created_at
+        - updated_at
+
+    data_subject_requests:
+      fields:
+        - id (uuid, pk)
+        - request_type (access | rectification | erasure | portability | restriction)
+        - requester_email
+        - requester_type (tenant_user | customer | third_party)
+        - tenant_id (nullable)
+        - subject_identifier
+        - status (pending | processing | completed | rejected)
+        - processed_data (jsonb, nullable)
+        - rejection_reason (nullable)
+        - processed_by (super_admin_id, nullable)
+        - created_at
+        - updated_at
+        - completed_at (nullable)
+
+    gdpr_consent_logs:
+      fields:
+        - id (uuid, pk)
+        - tenant_id (fk)
+        - user_id (nullable)
+        - consent_type (marketing | analytics | functional | third_party)
+        - consent_given (boolean)
+        - consent_date
+        - ip_address
+        - user_agent
+        - withdrawal_date (nullable)
+        - created_at
+        - updated_at
+
+    regulatory_reports:
+      fields:
+        - id (uuid, pk)
+        - report_type (sox_section404 | gdpr_dpia | data_breach | audit_summary)
+        - report_period_start
+        - report_period_end
+        - generated_at
+        - generated_by (super_admin_id)
+        - file_path
+        - status (draft | final | archived)
+        - compliance_score (nullable)
+        - findings_count
+        - created_at
+        - updated_at
+
+    compliance_monitoring:
+      fields:
+        - id (uuid, pk)
+        - monitoring_type (data_access | data_retention | consent_management | security_controls)
+        - entity_type (tenant | user | system)
+        - entity_id
+        - compliance_status (compliant | non_compliant | pending_review)
+        - violation_details (jsonb, nullable)
+        - remediation_required (boolean)
+        - remediation_deadline (nullable)
+        - monitored_at
+        - created_at
+        - updated_at
+
+  audit_log_management:
+  log_collection:
+    mandatory_events:
+      authentication_events:
+        - user_login
+        - user_logout
+        - failed_login
+        - password_change
+        - mfa_setup
+        - mfa_verification
+        - account_lockout
+        - session_termination
+
+      tenant_management:
+        - tenant_created
+        - tenant_updated
+        - tenant_deleted
+        - tenant_suspended
+        - tenant_isolated
+        - plan_assigned
+        - addon_assigned
+        - domain_added
+        - domain_verified
+
+      billing_events:
+        - invoice_created
+        - invoice_updated
+        - payment_processed
+        - refund_issued
+        - isolir_triggered
+        - isolir_lifted
+        - payment_method_added
+        - subscription_changed
+
+      network_events:
+        - router_added
+        - router_updated
+        - router_deleted
+        - user_provisioned
+        - user_deprovisioned
+        - outage_triggered
+        - outage_resolved
+        - configuration_changed
+
+      system_events:
+        - super_admin_login
+        - privilege_escalation
+        - configuration_change
+        - security_violation
+        - data_export
+        - backup_created
+        - system_maintenance
+
+    log_enrichment:
+      - ip_geolocation
+      - device_fingerprinting
+      - user_behavior_analysis
+      - risk_scoring
+      - compliance_tagging
+
+  log_endpoints:
+    search_logs:
+      endpoint: POST /api/v1/superadmin/audit/logs/search
+      input:
+        - filters (event_type, date_range, actor, tenant, resource)
+        - search_query
+        - sort_options
+        - pagination
+      behavior:
+        - full-text search across audit logs
+        - filter by multiple criteria
+        - export results
+        - track search queries
+
+    log_details:
+      endpoint: GET /api/v1/superadmin/audit/logs/{id}
+      response:
+        - complete audit log entry
+        - related logs
+        - attachments
+        - compliance tags
+        - risk_score
+
+    log_export:
+      endpoint: POST /api/v1/superadmin/audit/logs/export
+      input:
+        - search_criteria
+        - format (json | csv | xlsx | pdf)
+        - include_attachments
+      behavior:
+        - generate export in background
+        - notify when ready
+        - provide secure download link
+        - log export request
+
+  compliance_framework:
+  gdpr_compliance:
+    data_subject_rights:
+      right_to_access:
+        - export all personal data
+        - provide in machine-readable format
+        - respond within 30 days
+
+      right_to_rectification:
+        - correct inaccurate data
+        - update records
+        - notify third parties
+
+      right_to_erasure:
+        - delete personal data
+        - remove from backups
+        - notify data processors
+
+      right_to_portability:
+        - export in structured format
+        - provide data mapping
+        - ensure interoperability
+
+      right_to_restriction:
+        - limit processing
+        - maintain data for legal purposes
+        - notify relevant parties
+
+    consent_management:
+      - granular consent tracking
+      - consent withdrawal
+      - consent expiration
+      - consent audit trail
+
+    data_breach_notification:
+      - 72-hour notification requirement
+      - breach assessment
+      - impact analysis
+      - regulatory reporting
+
+  gdpr_endpoints:
+    data_subject_requests:
+      endpoint: POST /api/v1/superadmin/compliance/gdpr/requests
+      input:
+        - request_type
+        - requester_email
+        - subject_identifier
+      behavior:
+        - create request
+        - assign to processor
+        - track progress
+        - notify requester
+
+    consent_management:
+      endpoint: GET /api/v1/superadmin/compliance/gdpr/consent
+      input:
+        - tenant_id
+        - user_id
+        - consent_type
+      response:
+        - consent history
+        - current status
+        - withdrawal records
+
+    breach_reporting:
+      endpoint: POST /api/v1/superadmin/compliance/gdpr/breach-report
+      input:
+        - breach_details
+        - affected_users
+        - impact_assessment
+      behavior:
+        - create breach report
+        - assess notification requirements
+        - generate regulatory submission
+
+  data_retention_policies:
+  policy_management:
+    retention_rules:
+      user_data:
+        - active_users: retain indefinitely
+        - inactive_users: retain 7 years
+        - deleted_users: retain 30 days
+      financial_data:
+        - invoices: retain 7 years
+        - payments: retain 7 years
+        - tax_records: retain 10 years
+      audit_logs:
+        - critical_events: retain 7 years
+        - normal_events: retain 3 years
+        - debug_logs: retain 90 days
+      system_logs:
+        - security_events: retain 7 years
+        - performance_logs: retain 1 year
+        - error_logs: retain 6 months
+
+    automated_cleanup:
+      - daily cleanup job
+      - retention policy enforcement
+      - compliance verification
+      - cleanup reporting
+
+  retention_endpoints:
+    policy_management:
+      endpoint: POST /api/v1/superadmin/compliance/retention/policies
+      input:
+        - policy_name
+        - policy_type
+        - retention_rules
+      behavior:
+        - create retention policy
+        - validate against regulations
+        - schedule enforcement
+
+    retention_monitoring:
+      endpoint: GET /api/v1/superadmin/compliance/retention/monitoring
+      response:
+        - policy compliance status
+        - upcoming expirations
+        - cleanup statistics
+        - violation alerts
+
+  regulatory_reporting:
+  report_types:
+    sox_reporting:
+      - section_404_internal_controls
+      - financial_statement_audit
+      - management_assessment
+      - remediation_tracking
+
+    gdpr_reporting:
+      - data_protection_impact_assessment
+      - data_breach_notifications
+      - consent_compliance_report
+      - data_subject_request_summary
+
+    industry_specific:
+      - iso_27001_compliance
+      - pci_dss_attestation
+      - hipaa_security_assessment
+      - industry_specific_standards
+
+  reporting_endpoints:
+    generate_report:
+      endpoint: POST /api/v1/superadmin/compliance/reports/generate
+      input:
+        - report_type
+        - reporting_period
+        - parameters
+        - format
+      behavior:
+        - generate report in background
+        - aggregate required data
+        - apply compliance rules
+        - provide download link
+
+    report_library:
+      endpoint: GET /api/v1/superadmin/compliance/reports
+      response:
+        - available reports
+        - generation history
+        - scheduled reports
+        - compliance status
+
+  audit_analytics:
+  analytics_types:
+    compliance_analytics:
+      - policy compliance rates
+      - violation trends
+      - remediation effectiveness
+      - risk assessment scores
+
+    access_analytics:
+      - user access patterns
+      - privilege escalation events
+      - data access frequency
+      - unusual activity detection
+
+    system_analytics:
+      - configuration changes
+      - security events
+      - performance impacts
+      - availability statistics
+
+  analytics_endpoints:
+    compliance_dashboard:
+      endpoint: GET /api/v1/superadmin/compliance/analytics/dashboard
+      response:
+        - overall compliance score
+        - policy compliance breakdown
+        - violation trends
+        - remediation status
+
+    detailed_analytics:
+      endpoint: POST /api/v1/superadmin/compliance/analytics/detailed
+      input:
+        - analytics_type
+        - time_range
+        - filters
+      response:
+        - detailed analytics data
+        - visualizations
+        - insights
+        - recommendations
+
+  export_management:
+  export_types:
+    compliance_exports:
+      - audit_log_exports
+      - data_subject_exports
+      - regulatory_exports
+      - policy_exports
+
+    data_exports:
+      - tenant_data_exports
+      - user_data_exports
+      - financial_data_exports
+      - system_data_exports
+
+  export_security:
+    - encryption at rest and in transit
+    - access control and authorization
+    - audit trail of export activities
+    - secure download mechanisms
+    - automatic cleanup of expired exports
+
+  export_endpoints:
+    create_export:
+      endpoint: POST /api/v1/superadmin/compliance/exports
+      input:
+        - export_type
+        - data_criteria
+        - format
+        - recipients
+      behavior:
+        - validate export authorization
+        - create export job
+        - notify when complete
+        - provide secure access
+
+    export_history:
+      endpoint: GET /api/v1/superadmin/compliance/exports/history
+      response:
+        - export history
+        - download links
+        - access logs
+        - retention status
+
+  compliance_monitoring:
+  monitoring_types:
+    continuous_monitoring:
+      - policy compliance
+      - data access patterns
+      - security controls
+      - regulatory requirements
+
+    periodic_assessments:
+      - quarterly compliance reviews
+      - annual risk assessments
+      - regulatory audits
+      - policy effectiveness reviews
+
+  monitoring_endpoints:
+    compliance_status:
+      endpoint: GET /api/v1/superadmin/compliance/monitoring/status
+      response:
+        - overall compliance score
+        - policy compliance status
+        - violation summary
+        - remediation requirements
+
+    violation_tracking:
+      endpoint: GET /api/v1/superadmin/compliance/monitoring/violations
+      response:
+        - active violations
+        - violation history
+        - remediation status
+        - risk assessment
+
+  data_protection:
+  protection_measures:
+    encryption:
+      - data_at_rest_encryption
+      - data_in_transit_encryption
+      - key_management
+      - encryption_key_rotation
+
+    access_control:
+      - role_based_access_control
+      - principle_of_least_privilege
+      - access_review_processes
+      - privileged_access_management
+
+    data_masking:
+      - sensitive_data_identification
+      - data_masking_rules
+      - test_data_anonymization
+      - production_data_protection
+
+  protection_endpoints:
+    protection_status:
+      endpoint: GET /api/v1/superadmin/compliance/protection/status
+      response:
+        - encryption_status
+        - access_control_status
+        - data_masking_status
+        - protection_recommendations
+
+  security_enhancements:
+  authorization:
+    required_permissions:
+      - audit.view
+      - audit.export
+      - compliance.manage
+      - gdpr.manage
+      - retention.manage
+      - reporting.generate
+
+  access_controls:
+    - read_only_access for auditors
+    - full_access for compliance_managers
+    - export_access for data_protection_officers
+    - admin_access for super_admins
+
+  audit_requirements:
+  mandatory_events:
+    - all_compliance_activities
+    - data_access_events
+    - policy_changes
+    - export_activities
+    - regulatory_submissions
+    - breach_notifications
+
+  coding_rules:
+    - "All audit logs must be immutable"
+    - "Compliance policies must be enforceable"
+    - "Data retention must be automated"
+    - "GDPR requests must be tracked"
+    - "Regulatory reports must be accurate"
+    - "All exports must be secure"
+    - "Data protection must be comprehensive"
+
+  output_expectations:
+    - "Comprehensive audit log system"
+    - "GDPR compliance management"
+    - "Data retention policies"
+    - "Regulatory reporting capabilities"
+    - "Audit analytics and insights"
+    - "Secure export management"
+    - "Continuous compliance monitoring"
+    - "Data protection measures"
+
+  stop_condition:
+    - "Audit logs collected and immutable"
+    - "GDPR compliance functional"
+    - "Data retention policies enforced"
+    - "Regulatory reports generated"
+    - "Analytics providing insights"
+    - "Exports secure and trackable"
+    - "Compliance monitoring active"
+    - "Data protection implemented"
+    - "Ready for emergency controls module"
+
+  instruction_to_ai:
+    - "Implement enterprise-grade compliance system"
+    - "Include all security and audit features"
+    - "Prepare for integration with emergency controls"
+    - "Follow super admin permission model"
+    - "Ensure regulatory compliance capabilities"

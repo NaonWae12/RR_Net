@@ -1,0 +1,364 @@
+execution_prompt:
+  id: "RRNET_EXEC_SA_02_TENANT_MANAGEMENT"
+  purpose: >
+    Implement comprehensive tenant management system for super admin
+    including CRUD operations, status management, plan assignment,
+    domain management, and bulk operations with enterprise-grade
+    security and audit capabilities.
+
+  prerequisites:
+    - "EXECUTION_SA_01 Super Admin Auth completed"
+    - "EXECUTION_04_1 Plan & Addon Migration completed"
+    - "EXECUTION_02_1 Auth Hardening completed"
+
+  design_principles:
+    - "Super admin has full tenant lifecycle control"
+    - "Tenant operations are auditable and reversible"
+    - "Bulk operations have safety mechanisms"
+    - "Domain management includes SSL automation"
+    - "Tenant isolation enforced at all levels"
+
+  scope:
+    include:
+      - tenant_crud_operations
+      - tenant_status_management
+      - tenant_plan_assignment
+      - tenant_addon_management
+      - domain_management
+      - tenant_usage_monitoring
+      - bulk_operations
+      - tenant_impersonation_integration
+    exclude:
+      - billing_invoice_generation
+      - system_monitoring_details
+      - emergency_controls
+      - audit_log_viewer
+
+  backend_structure_additions:
+    internal/domain:
+      - tenant/
+    internal/tenant:
+      - service.go
+      - status_manager.go
+      - domain_manager.go
+      - usage_monitor.go
+      - bulk_operations.go
+    internal/repository:
+      - tenant_repository.go
+      - tenant_domain_repository.go
+      - tenant_usage_repository.go
+    internal/http/handlers:
+      - tenant_handler.go
+      - tenant_domain_handler.go
+      - tenant_bulk_handler.go
+
+  database_schema:
+    tenants:
+      fields:
+        - id (uuid, pk)
+        - name
+        - slug (unique)
+        - status (active | suspended | isolated | deleted)
+        - plan_id (fk)
+        - custom_domain (nullable)
+        - ssl_certificate_path (nullable)
+        - ssl_expires_at (nullable)
+        - limits (jsonb)
+        - settings (jsonb)
+        - created_at
+        - updated_at
+        - deleted_at (nullable)
+
+    tenant_domains:
+      fields:
+        - id (uuid, pk)
+        - tenant_id (fk)
+        - domain_name
+        - type (subdomain | custom)
+        - ssl_status (none | pending | active | expired)
+        - dns_verified (boolean)
+        - created_at
+        - updated_at
+
+    tenant_usage:
+      fields:
+        - id (uuid, pk)
+        - tenant_id (fk)
+        - metric_name
+        - current_value
+        - limit_value
+        - recorded_at
+
+    tenant_operation_logs:
+      fields:
+        - id (uuid, pk)
+        - tenant_id (fk)
+        - operation_type
+        - performed_by (super_admin_id)
+        - old_values (jsonb, nullable)
+        - new_values (jsonb, nullable)
+        - reason
+        - created_at
+
+  tenant_crud_operations:
+  create_tenant:
+    endpoint: POST /api/v1/superadmin/tenants
+    input:
+      - name
+      - plan_id
+      - custom_domain (optional)
+    behavior:
+      - generate unique slug
+      - assign default limits from plan
+      - create subdomain
+      - setup domain DNS records
+      - log creation
+    validation:
+      - name uniqueness
+      - plan availability
+      - domain availability
+
+  update_tenant:
+    endpoint: PUT /api/v1/superadmin/tenants/{id}
+    input:
+      - name
+      - custom_domain
+      - settings
+    behavior:
+      - validate changes
+      - update domain if changed
+      - log modifications
+      - trigger webhook if needed
+
+  delete_tenant:
+    endpoint: DELETE /api/v1/superadmin/tenants/{id}
+    behavior:
+      - soft delete (set deleted_at)
+      - cancel active subscriptions
+      - suspend services
+      - schedule data purge (30 days)
+      - log deletion
+
+  tenant_status_management:
+  status_transitions:
+    active → suspended:
+      - panel_access: blocked
+      - api_access: limited
+      - services: continue
+    suspended → active:
+      - full access restored
+    active → isolated:
+      - panel_access: blocked
+      - api_access: blocked
+      - services: continue
+    isolated → active:
+      - full access restored
+    any → deleted:
+      - immediate suspension
+      - data purge scheduled
+
+  status_operations:
+    endpoint: PATCH /api/v1/superadmin/tenants/{id}/status
+    input:
+      - status
+      - reason
+    behavior:
+      - validate transition
+      - execute status change
+      - notify affected systems
+      - log operation
+
+  tenant_plan_management:
+  assign_plan:
+    endpoint: POST /api/v1/superadmin/tenants/{id}/plan
+    input:
+      - plan_id
+      - effective_date (optional)
+    behavior:
+      - calculate proration if mid-cycle
+      - update tenant limits
+      - schedule plan change
+      - notify billing system
+
+  plan_history:
+    endpoint: GET /api/v1/superadmin/tenants/{id}/plan-history
+    behavior:
+      - show plan changes over time
+      - include proration details
+
+  tenant_addon_management:
+  assign_addon:
+    endpoint: POST /api/v1/superadmin/tenants/{id}/addons
+    input:
+      - addon_id
+      - quantity (optional)
+      - custom_price (optional)
+    behavior:
+      - validate addon availability
+      - update tenant limits
+      - calculate proration
+      - notify billing system
+
+  remove_addon:
+    endpoint: DELETE /api/v1/superadmin/tenants/{id}/addons/{addon_id}
+    behavior:
+      - validate removal
+      - update limits
+      - handle downgrade scenarios
+      - schedule effective date
+
+  domain_management:
+  add_custom_domain:
+    endpoint: POST /api/v1/superadmin/tenants/{id}/domains
+    input:
+      - domain_name
+    behavior:
+      - validate domain ownership
+      - generate SSL certificate
+      - update DNS records
+      - configure routing
+
+  verify_domain:
+    endpoint: POST /api/v1/superadmin/tenants/{id}/domains/{domain_id}/verify
+    behavior:
+      - check DNS configuration
+      - activate SSL if verified
+      - update domain status
+
+  renew_ssl:
+    endpoint: POST /api/v1/superadmin/tenants/{id}/domains/{domain_id}/renew-ssl
+    behavior:
+      - generate new certificate
+      - update configuration
+      - schedule renewal
+
+  tenant_usage_monitoring:
+  real_time_metrics:
+    endpoint: GET /api/v1/superadmin/tenants/{id}/usage
+    metrics:
+      - router_count
+      - client_count
+      - voucher_count
+      - storage_usage
+      - bandwidth_usage
+    behavior:
+      - calculate current usage
+      - compare against limits
+      - flag overages
+
+  usage_history:
+    endpoint: GET /api/v1/superadmin/tenants/{id}/usage-history
+    behavior:
+      - show usage trends
+      - identify growth patterns
+      - support capacity planning
+
+  bulk_operations:
+  bulk_status_change:
+    endpoint: POST /api/v1/superadmin/tenants/bulk/status
+    input:
+      - tenant_ids
+      - status
+      - reason
+    behavior:
+      - validate operation
+      - process in background
+      - track progress
+      - notify completion
+
+  bulk_plan_change:
+    endpoint: POST /api/v1/superadmin/tenants/bulk/plan
+    input:
+      - tenant_ids
+      - plan_id
+      - effective_date
+    behavior:
+      - validate plan availability
+      - calculate proration for each
+      - process in background
+      - generate summary report
+
+  bulk_export:
+    endpoint: POST /api/v1/superadmin/tenants/bulk/export
+    input:
+      - filters
+      - format (csv | xlsx)
+    behavior:
+      - generate export in background
+      - notify when ready
+      - provide download link
+
+  tenant_impersonation_integration:
+  impersonation_permissions:
+    - can_impersonate: active, suspended tenants
+    - cannot_impersonate: isolated, deleted tenants
+    - duration_limit: 2 hours
+    - approval_required: for sensitive tenants
+
+  impersonation_from_tenant:
+    endpoint: POST /api/v1/superadmin/tenants/{id}/impersonate
+    behavior:
+      - validate tenant status
+      - check impersonation permissions
+      - create impersonation session
+      - redirect to tenant context
+
+  security_enhancements:
+  authorization:
+    required_permissions:
+      - tenant.create
+      - tenant.update
+      - tenant.delete
+      - tenant.suspend
+      - tenant.isolate
+      - tenant.plan.manage
+      - tenant.addon.manage
+
+  validation_rules:
+    - tenant name uniqueness
+    - slug format validation
+    - domain ownership verification
+    - plan/addon availability
+    - limit compliance
+
+  audit_requirements:
+    mandatory_events:
+      - tenant_created
+      - tenant_updated
+      - tenant_deleted
+      - status_changed
+      - plan_assigned
+      - addon_assigned
+      - domain_added
+      - bulk_operations
+
+  coding_rules:
+    - "All tenant operations must be audited"
+    - "Domain changes must be verified before activation"
+    - "Bulk operations must have progress tracking"
+    - "Status transitions must be validated"
+    - "Usage monitoring must be real-time"
+    - "SSL certificates must auto-renew"
+
+  output_expectations:
+    - "Complete tenant management system"
+    - "Domain management with SSL automation"
+    - "Plan and addon assignment capabilities"
+    - "Usage monitoring and reporting"
+    - "Bulk operations with safety mechanisms"
+    - "Integration with impersonation system"
+
+  stop_condition:
+    - "Super admin can manage complete tenant lifecycle"
+    - "Domain management working with SSL"
+    - "Plan and addon assignments functional"
+    - "Usage monitoring active"
+    - "Bulk operations safe and trackable"
+    - "Ready for system monitoring module"
+
+  instruction_to_ai:
+    - "Implement comprehensive tenant management"
+    - "Include all security and audit features"
+    - "Prepare for integration with billing system"
+    - "Follow super admin permission model"
+    - "Do not implement billing logic"

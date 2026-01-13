@@ -1,0 +1,114 @@
+EXECUTION_04_5_NOTIFICATION_WA_GATEWAY_STUB:
+  goal: >
+    Provide a production-ready notification service stub for WhatsApp
+    with deterministic status handling and safe default tenant configuration.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_01_1_BACKEND_FOUNDATION_HARDENING
+      - EXECUTION_04_1_PLAN_ADDON_MIGRATION_AND_SEEDING
+
+  design_principles:
+    - Provider-agnostic
+    - Async-first via Asynq
+    - Safe defaults for zero-configuration tenants
+    - Deterministic message lifecycle
+
+  tasks:
+    1_notification_schema:
+      description: Create notification log storage
+      steps:
+        - Add migration under migrations/
+        - Create table notification_logs:
+            fields:
+              - id (uuid)
+              - tenant_id (fk)
+              - channel (enum: wa)
+              - provider (string)
+              - recipient
+              - message
+              - status (queued | sent | failed)
+              - error_message (nullable)
+              - created_at
+              - sent_at (nullable)
+
+    2_provider_interface:
+      description: Define WA provider abstraction
+      steps:
+        - Create interface WhatsAppProvider:
+            methods:
+              - SendMessage(ctx, recipient, message) error
+        - Implement noop_provider:
+            behavior:
+              - Always returns success
+              - Does not send external request
+        - Prepare adapter structure for:
+            - Fonnte
+            - wwebjs
+
+    3_asynq_job_definition:
+      description: Define async job for WA sending
+      steps:
+        - Define SendWAMessageJob payload:
+            fields:
+              - notification_log_id
+              - tenant_id
+        - Enqueue job with status:
+            - notification_logs.status = queued
+
+    4_worker_execution_logic:
+      description: Deterministic worker behavior
+      rules:
+        - Worker must always update notification_logs status
+      steps:
+        - On job start:
+            - Load notification_log by ID
+        - On provider.SendMessage success:
+            - Update notification_logs:
+                status: sent
+                sent_at: now()
+        - On error:
+            - Update notification_logs:
+                status: failed
+                error_message: error text
+        - No silent failures allowed
+
+    5_tenant_wa_settings:
+      description: Tenant-level WA configuration
+      steps:
+        - Create table tenant_wa_settings:
+            fields:
+              - tenant_id (unique, fk)
+              - provider (string)
+              - config (jsonb)
+              - is_active
+              - created_at
+        - Default behavior:
+            - On tenant creation:
+                - Auto insert tenant_wa_settings
+                - provider = noop_provider
+                - is_active = true
+
+    6_event_integration_stub:
+      description: Prepare event-based notification trigger
+      steps:
+        - Define events (no business logic yet):
+            - billing.invoice_created
+            - billing.invoice_overdue
+            - billing.isolir_applied
+        - Each event:
+            - creates notification_logs entry
+            - enqueues SendWAMessageJob
+
+  done_criteria:
+    - notification_logs table exists
+    - Worker always transitions status: queued → sent / failed
+    - New tenant auto-has WA settings with noop_provider
+    - WA service usable without external provider config
+    - Safe for repeated runs and CI/CD
+
+  note:
+    - This is a stub service, not full integration
+    - Real providers plugged in later without refactor
+    - Notification lifecycle fully observable

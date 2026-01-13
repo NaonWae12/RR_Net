@@ -1,0 +1,63 @@
+# RRNET - Minimal default virtual server (Hotspot voucher-only MVP)
+#
+# We keep this minimal on purpose:
+# - Handle PAP authentication via rlm_rest -> RRNET backend
+# - Forward accounting (Start/Interim/Stop) via rlm_rest -> RRNET backend
+
+server default {
+	listen {
+		type = auth
+		ipaddr = *
+		port = 0
+	}
+
+	listen {
+		type = acct
+		ipaddr = *
+		port = 0
+	}
+
+	authorize {
+		# Force REST authentication when User-Password is present (Hotspot voucher-only)
+		if (&User-Password) {
+			update control {
+				Auth-Type := REST
+			}
+		}
+	}
+
+	authenticate {
+		Auth-Type REST {
+			update control {
+				# Use FreeRADIUS env var syntax for config-time expansion
+				&REST-HTTP-Header := "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
+			}
+
+			rest
+
+			# rlm_rest may return "updated" when it only updated reply attributes.
+			# Treat both "ok" and "updated" as successful authentication for voucher-only MVP.
+			if (ok) {
+				ok
+			}
+			if (updated) {
+				ok
+			}
+		}
+	}
+
+	preacct {
+		preprocess
+	}
+
+	accounting {
+		update control {
+			# Use FreeRADIUS env var syntax for config-time expansion
+			&REST-HTTP-Header := "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
+		}
+
+		rest
+	}
+}
+
+

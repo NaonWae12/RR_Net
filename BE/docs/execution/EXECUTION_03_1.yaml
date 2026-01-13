@@ -1,0 +1,127 @@
+EXECUTION_03_1_RBAC_MIGRATION_AND_SEEDING:
+  goal: >
+    Provide deterministic, consistent, and production-safe RBAC schema
+    with initial roles, capabilities, and mappings, without special-case logic.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_01_1_BACKEND_FOUNDATION_HARDENING
+      - EXECUTION_03_RBAC_CAPABILITY_ENGINE
+
+  tasks:
+    1_rbac_schema_migration:
+      description: Create RBAC database schema
+      steps:
+        - Add migration file under migrations/
+        - Create tables:
+            roles:
+              - id (uuid)
+              - name (unique)
+              - scope (system | tenant)
+              - description
+            capabilities:
+              - id (uuid)
+              - code (unique)
+              - description
+            role_capabilities:
+              - role_id (fk)
+              - capability_id (fk)
+              - unique(role_id, capability_id)
+            user_roles:
+              - user_id
+              - role_id
+              - tenant_id (nullable for system roles)
+      constraints:
+        - Enforce foreign keys
+        - Use unique constraints
+        - No soft delete for RBAC tables
+
+    2_seed_initial_roles:
+      description: Seed predefined roles
+      rules:
+        - Seeder must be idempotent
+      steps:
+        - Insert roles:
+            super_admin:
+              scope: system
+            owner:
+              scope: tenant
+            admin:
+              scope: tenant
+            finance:
+              scope: tenant
+            hr:
+              scope: tenant
+            technician:
+              scope: tenant
+            collector:
+              scope: tenant
+            client:
+              scope: tenant
+        - Use PostgreSQL ON CONFLICT DO NOTHING
+
+    3_seed_capabilities:
+      description: Seed base capabilities
+      rules:
+        - Capability codes are immutable
+        - Seeder must be idempotent
+      steps:
+        - Insert capabilities:
+            - tenant.manage
+            - user.manage
+            - role.assign
+            - billing.view
+            - billing.manage
+            - billing.collect
+            - network.view
+            - network.manage
+            - maps.view
+            - maps.update
+            - wa.send
+            - wa.template.manage
+        - Use ON CONFLICT DO NOTHING
+
+    4_map_role_capabilities:
+      description: Assign capabilities to roles
+      rules:
+        - No wildcard or special-case logic
+        - Mapping must be explicit in DB
+        - Seeder must be idempotent
+      steps:
+        - For super_admin:
+            - Query all capabilities from capabilities table
+            - Insert mapping for each capability
+        - owner:
+            - tenant.manage
+            - user.manage
+            - billing.view
+            - billing.manage
+            - network.view
+        - admin:
+            - same as owner (full tenant operational access)
+        - finance:
+            - billing.view
+            - billing.manage
+        - hr:
+            - user.manage
+        - technician:
+            - network.view
+            - maps.update
+        - collector:
+            - billing.collect
+            - billing.view
+        - client:
+            - billing.view
+        - Use ON CONFLICT DO NOTHING for all inserts
+
+  done_criteria:
+    - RBAC tables created via migration
+    - Seeders can be run multiple times safely
+    - super_admin permissions derived purely from DB state
+    - No hardcoded capability bypass in code
+
+  note:
+    - Eliminates hidden privilege logic
+    - Ensures consistent RBAC queries for all roles
+    - Safe for CI/CD and repeated deployments

@@ -1,0 +1,102 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: rrnet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rrnet
+      POSTGRES_PASSWORD: rrnet_secret
+      POSTGRES_DB: rrnet_dev
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./BE/migrations/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rrnet -d rrnet_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: rrnet-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Commander (Optional - GUI for Redis)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: rrnet-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+  # WhatsApp Gateway (Baileys) - multi-tenant sessions (no Redis)
+  wa-gateway:
+    build:
+      context: ./wa-gateway
+    container_name: rrnet-wa-gateway
+    restart: unless-stopped
+    environment:
+      WA_PORT: "3001"
+      WA_DATA_DIR: /app/data
+      # Dev default; set your own secret in real deployments
+      WA_ADMIN_TOKEN: dev-wa-admin-token
+      # Optional tuning
+      WA_SEND_DELAY_MS: "350"
+      WA_SEND_JITTER_MS: "250"
+    ports:
+      - "3001:3001"
+    volumes:
+      - wa_gateway_data:/app/data
+    networks:
+      - default
+
+  # FreeRADIUS (Hotspot voucher-only MVP)
+  freeradius:
+    build:
+      context: ./infra/freeradius
+    container_name: rrnet-freeradius
+    restart: unless-stopped
+    environment:
+      # Backend REST endpoints consumed by rlm_rest inside FreeRADIUS
+      RRNET_RADIUS_REST_BASE: "${RRNET_RADIUS_REST_BASE:-http://host.docker.internal:8080/api/v1/radius}"
+      # Shared secret between FreeRADIUS -> RRNET backend REST endpoints
+      RRNET_RADIUS_REST_SECRET: "${RRNET_RADIUS_REST_SECRET:-dev-radius-rest-secret}"
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  wa_gateway_data:
+    driver: local
+
+networks:
+  default:
+    name: rrnet-network
+

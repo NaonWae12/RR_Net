@@ -1,0 +1,103 @@
+EXECUTION_09_1_MAPS_AND_OUTAGE_PROPAGATION_HARDENING:
+  goal: >
+    Finalize maps and outage propagation module with
+    fully consistent entity typing and explicit degraded
+    status across all topology entities.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_05_CUSTOMER_CLIENT_MANAGEMENT
+      - EXECUTION_06_NETWORK_MANAGEMENT_MIKROTIK_RADIUS
+      - EXECUTION_09_MAPS_AND_OUTAGE_PROPAGATION
+
+  design_principles:
+    - Schema must fully reflect business logic
+    - Consistent enum values for safe querying
+    - Hierarchical outage propagation with clear states
+    - Override behavior must be observable and auditable
+
+  tasks:
+    1_topology_status_alignment:
+      description: Align status enum across topology entities
+      steps:
+        - Update status enum for:
+            entities:
+              - odc
+              - odp
+              - clients
+        - Allowed status values:
+            - normal
+            - outage
+            - degraded
+        - Ensure default status = normal
+      note:
+        - degraded represents upstream outage with local override
+
+    2_entity_type_consistency:
+      description: Normalize entity_type values in outage history
+      steps:
+        - Update outage_history.entity_type enum:
+            allowed_values:
+              - odc
+              - odp
+              - client
+        - Enforce lowercase usage in DB constraint
+      benefits:
+        - Simpler SQL queries
+        - Consistent analytics
+        - Less conditional logic in code
+
+    3_outage_reason_enum:
+      description: Structured outage classification
+      steps:
+        - outage_history.reason enum values:
+            - power_failure
+            - fiber_cut
+            - maintenance
+            - device_failure
+            - manual_override
+
+    4_propagation_and_override_rules:
+      description: Deterministic outage + override logic
+      rules:
+        - If ODC.status = outage:
+            - All child ODP.status = outage
+            - All clients.status = outage
+        - If ODP.status = outage:
+            - All clients.status = outage
+        - Manual override behavior:
+            - Override only applies to target entity
+            - If parent = outage and child manually set to normal:
+                - child.status = degraded
+                - effective_outage_source = parent
+        - Override metadata required:
+            - overridden_by
+            - overridden_at
+            - expires_at (nullable)
+      note:
+        - Overrides never permanently mask upstream outages
+
+    5_outage_history_audit:
+      description: Immutable outage audit trail
+      steps:
+        - outage_history fields:
+            - entity_type (enum: odc | odp | client)
+            - entity_id
+            - previous_status
+            - new_status
+            - reason (enum)
+            - triggered_by (system | user_id)
+            - created_at
+        - No delete or update of historical rows
+
+  done_criteria:
+    - degraded status exists in all topology schemas
+    - entity_type values are consistent and lowercase
+    - Override logic fully represented in DB
+    - Outage propagation deterministic and auditable
+    - Ready for scalable map visualization
+
+  note:
+    - This is the final hardening for EXECUTION #9
+    - No further schema change expected for outage logic

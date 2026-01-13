@@ -1,0 +1,123 @@
+EXECUTION_07_1_BILLING_AND_ISOLIR_HARDENING:
+  goal: >
+    Harden billing and isolir module to ensure financial correctness,
+    auditability, and robustness for multi-method payments including
+    cash collection with 3-phase verification.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_05_CUSTOMER_CLIENT_MANAGEMENT
+      - EXECUTION_06_NETWORK_MANAGEMENT_MIKROTIK_RADIUS
+      - EXECUTION_07_BILLING_AND_ISOLIR
+
+  design_principles:
+    - Financial data must be immutable once issued
+    - Cash collection must be fully auditable
+    - Payment lifecycle must be explicit and traceable
+    - Billing must be resilient to future price changes
+
+  tasks:
+    1_invoice_snapshot_model:
+      description: Ensure invoice amount is immutable
+      steps:
+        - Update invoices table:
+            fields:
+              - id
+              - tenant_id
+              - client_id
+              - billing_package_id
+              - amount
+              - status
+              - due_date
+              - created_at
+        - Rule:
+            - invoices.amount MUST be copied from billing_packages.price
+              at invoice creation time
+            - Never re-calculate invoice amount from package after creation
+      note:
+        - Package price changes do not affect existing invoices
+
+    2_payment_schema_hardening:
+      description: Explicit payment lifecycle & status
+      steps:
+        - Update / create payments table:
+            fields:
+              - id
+              - tenant_id
+              - invoice_id
+              - method (enum: gateway | cash | manual)
+              - status (enum: pending | success | failed | refunded)
+              - amount
+              - created_at
+              - updated_at
+        - Enforce:
+            - status is mandatory
+            - status transitions must be logged
+
+    3_cash_collector_3_phase_model:
+      description: Model 3-phase cash collection flow
+      applies_to:
+        - payments.method = cash
+      steps:
+        - Extend payments table with:
+            fields:
+              - collector_id (fk, nullable)
+              - collected_at (nullable)
+              - deposited_at (nullable)
+              - confirmed_at (nullable)
+        - Phase definitions:
+            visit_success:
+              - collector_id set
+              - collected_at timestamp filled
+              - payment.status = pending
+            deposited:
+              - deposited_at timestamp filled
+            confirmed:
+              - confirmed_at timestamp filled
+              - payment.status = success
+        - Rule:
+            - Phases must occur sequentially
+            - confirmed is the only state that marks invoice as paid
+
+    4_isolir_trigger_rules:
+      description: Deterministic isolir behavior
+      steps:
+        - If invoice overdue AND payment.status != success:
+            - Trigger network isolir
+        - If payment.status transitions to success:
+            - Trigger unisolir
+        - Record isolir history:
+            table: isolir_history
+            fields:
+              - tenant_id
+              - client_id
+              - reason
+              - created_at
+      note:
+        - Isolir history never deleted
+
+    5_audit_and_traceability:
+      description: Financial audit readiness
+      steps:
+        - Ensure all payment state transitions are logged
+        - Cash collection records must reference:
+            - collector
+            - invoice
+            - timestamps
+        - No hard delete for:
+            - invoices
+            - payments
+            - isolir_history
+
+  done_criteria:
+    - Invoice amounts remain stable after creation
+    - Cash collection supports 3-phase audit trail
+    - Payment status lifecycle explicit & enforced
+    - Isolir & unisolir fully traceable
+    - Safe for gateway, manual, and cash payments
+
+  note:
+    - This execution hardens EXECUTION #7
+    - No UI logic included
+    - Ready for Collector & Finance modules

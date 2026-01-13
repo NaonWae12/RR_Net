@@ -1,0 +1,164 @@
+execution_prompt:
+  id: "RRNET_EXEC_08_COLLECTOR_SYSTEM"
+  purpose: >
+    Implement cash collection operations for ISP billing.
+    This module handles collector assignments, daily visit tracking,
+    3-phase cash verification, and reporting without allowing
+    collectors to input monetary values manually.
+
+  prerequisites:
+    - "EXECUTION #7 Billing & Isolir Engine completed"
+    - "Client Management available"
+    - "RBAC enforced"
+
+  design_principles:
+    - "Collector never inputs nominal"
+    - "Invoice defines amount"
+    - "3-phase verification ensures accountability"
+    - "Collectors see only assigned clients"
+    - "Operations are date-based"
+
+  scope:
+    include:
+      - collector_role_logic
+      - collector_assignment
+      - daily_collection_tasks
+      - 3_phase_verification_flow
+      - collector_reporting
+      - notification_hooks
+    exclude:
+      - payroll_calculation
+      - incentive_engine
+      - gps_checkin
+      - route_optimization
+
+  backend_structure_additions:
+    internal/domain:
+      - collector/
+    internal/collector:
+      - service.go
+      - assignment.go
+      - verification.go
+    internal/repository:
+      - collector_assignment_repository.go
+      - collector_activity_repository.go
+    internal/http/handlers:
+      - collector_handler.go
+      - collector_task_handler.go
+
+  database_schema:
+    collector_assignments:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - collector_id (user_id)
+        - client_id
+        - invoice_id
+        - scheduled_date
+        - status (pending | visited | deposited | confirmed)
+        - created_at
+
+    collector_activities:
+      fields:
+        - id (uuid, pk)
+        - assignment_id
+        - phase (visit_success | deposited | confirmed)
+        - actor_role (collector | finance)
+        - created_at
+
+  collector_flow:
+    daily_tasks:
+      behavior:
+        - fetch_assignments_by_collector_and_date
+        - split_completed_vs_pending
+
+    phase_1_visit_success:
+      actor: collector
+      action:
+        - mark_invoice_visit_success
+        - update_assignment_status
+      rules:
+        - "Does not mark invoice paid"
+
+    phase_2_deposit:
+      actor: collector
+      action:
+        - mark_invoice_deposited
+        - confirm_cash_handover
+      rules:
+        - "No amount input"
+
+    phase_3_finance_confirm:
+      actor: finance
+      action:
+        - confirm_deposit
+        - mark_invoice_paid
+
+  visibility_rules:
+    collector:
+      can_view:
+        - assigned_clients_only
+        - client_address
+        - client_phone
+        - client_map_location
+    admin:
+      can_view:
+        - all_assignments
+        - per_collector_summary
+    owner:
+      can_view:
+        - financial_summary_only
+
+  retry_logic:
+    unpaid_after_visit:
+      behavior:
+        - keep_assignment_open
+        - allow_reschedule_next_day
+
+  reporting:
+    daily_summary:
+      metrics:
+        - total_assigned
+        - total_visited
+        - total_collected
+        - total_pending
+    per_collector:
+      metrics:
+        - invoices_collected
+        - invoices_pending
+
+  notification_hooks:
+    events:
+      - visit_success
+      - deposit_submitted
+      - finance_confirmed
+    behavior:
+      - emit_event_only
+
+  rbac_integration:
+    required_capabilities:
+      collector_view: billing.collect
+      collector_update: billing.collect
+      finance_confirm: billing.confirm
+
+  coding_rules:
+    - "Collector never updates invoice amount"
+    - "All status transitions via service"
+    - "Audit all phase changes"
+    - "Respect tenant isolation strictly"
+
+  output_expectations:
+    - "Collector assignment & workflow"
+    - "3-phase verification implementation"
+    - "Daily collector task endpoints"
+    - "Reporting queries"
+
+  stop_condition:
+    - "Collector can complete 3-phase flow"
+    - "Invoice state updates correctly"
+    - "Ready for Maps & Technician integration"
+
+  instruction_to_ai:
+    - "Follow real-world ISP cash collection behavior"
+    - "Keep collector UX simple"
+    - "Do not mix payroll or incentives"

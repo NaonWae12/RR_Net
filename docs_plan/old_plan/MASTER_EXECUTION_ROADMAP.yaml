@@ -1,0 +1,69 @@
+rrnet_execution_roadmap:
+  phase_1_foundation_saas:
+    - id: EXECUTION_01
+      name: Backend Foundations
+      scope: infra, config, http server, postgres, redis, asynq
+      status: DONE
+
+    - id: EXECUTION_02
+      name: Auth + Tenant + Sub-domain Middleware
+      scope: auth, jwt, tenant lifecycle, subdomain resolution
+      status: DONE
+
+    - id: EXECUTION_03
+      name: RBAC Capability Engine
+      scope: roles, capabilities, permission checks
+      status: PENDING
+
+    - id: EXECUTION_04
+      name: Plan + Add-on + Feature Toggle
+      scope: saas plans, limits, addon engine, feature flags
+      status: PENDING
+
+    - id: EXECUTION_04_5
+      name: Notification Service (WA Gateway Stub)
+      scope: wa interface, provider adapter, async jobs
+      status: PENDING
+
+  phase_2_core_isp_business:
+    - id: EXECUTION_05
+      name: Client / Customer Management
+      scope: client CRUD, packages, coordinates, status
+      status: PENDING
+
+    - id: EXECUTION_06
+      name: Network Management (Mikrotik & RADIUS)
+      scope: routers, profiles, sync workers, isolation hooks
+      status: PENDING
+
+    - id: EXECUTION_07
+      name: Billing & Isolir Engine
+      scope: invoices, payments, isolir/unisolir, wa notify
+      status: PENDING
+
+  phase_3_field_operations:
+    - id: EXECUTION_08
+      name: Collector System (Cash Flow 3-Phase)
+      scope: collector tasks, verification stages, cash logs
+      status: PENDING
+
+    - id: EXECUTION_09
+      name: Maps & Outage Propagation
+      scope: ODC/ODP/client topology, outage cascade logic
+      status: PENDING
+
+    - id: EXECUTION_10
+      name: Technician Module
+      scope: technician tasks, activity logs, map integration
+      status: PENDING
+
+  frontend_parallel_build:
+    note: >
+      Frontend should be built in parallel after each backend execution.
+      UI surface follows MVVM with role-based access.
+    mapping:
+      EXECUTION_02: login, auth, tenant context
+      EXECUTION_03: role-based sidebar & guards
+      EXECUTION_05: client management pages
+      EXECUTION_07: billing & invoice UI
+      EXECUTION_09: maps visualization

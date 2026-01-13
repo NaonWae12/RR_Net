@@ -1,0 +1,32 @@
+rest {
+	#
+	# Disable startup reachability check (connect_uri) so the container can boot
+	# even if the backend is not running yet.
+	#
+	# connect_uri = "http://host.docker.internal:8080/"
+	#
+
+	# Authenticate: Access-Request (PAP)
+	authenticate {
+		# Use FreeRADIUS env var syntax for config-time expansion
+		uri = "$ENV{RRNET_RADIUS_REST_BASE}/auth"
+		method = 'post'
+		body = 'json'
+		#
+		# Explicitly send request attributes as JSON so the backend can decode them.
+		# (Without this, many setups end up sending an empty/invalid JSON body.)
+		#
+		data = '{ "User-Name": "%{request:User-Name}", "User-Password": "%{request:User-Password}", "NAS-IP-Address": "%{request:NAS-IP-Address}", "NAS-Port-Id": "%{request:NAS-Port-Id}", "Calling-Station-Id": "%{request:Calling-Station-Id}", "Called-Station-Id": "%{request:Called-Station-Id}" }'
+	}
+
+	# Accounting: Start/Interim/Stop
+	accounting {
+		# Use FreeRADIUS env var syntax for config-time expansion
+		uri = "$ENV{RRNET_RADIUS_REST_BASE}/acct"
+		method = 'post'
+		body = 'json'
+		data = '{ "Acct-Status-Type": "%{request:Acct-Status-Type}", "Acct-Session-Id": "%{request:Acct-Session-Id}", "User-Name": "%{request:User-Name}", "NAS-IP-Address": "%{request:NAS-IP-Address}", "NAS-Port-Id": "%{request:NAS-Port-Id}", "Framed-IP-Address": "%{request:Framed-IP-Address}", "Calling-Station-Id": "%{request:Calling-Station-Id}", "Called-Station-Id": "%{request:Called-Station-Id}", "Acct-Session-Time": "%{request:Acct-Session-Time}", "Acct-Input-Octets": "%{request:Acct-Input-Octets}", "Acct-Output-Octets": "%{request:Acct-Output-Octets}", "Acct-Input-Packets": "%{request:Acct-Input-Packets}", "Acct-Output-Packets": "%{request:Acct-Output-Packets}", "Acct-Terminate-Cause": "%{request:Acct-Terminate-Cause}" }'
+	}
+}
+
+

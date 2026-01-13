@@ -1,0 +1,104 @@
+EXECUTION_05_1_CUSTOMER_CLIENT_MANAGEMENT:
+  goal: >
+    Provide a robust customer/client management module as the foundation
+    for billing, network provisioning, maps, and field operations,
+    with audit-safe data handling.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_01_1_BACKEND_FOUNDATION_HARDENING
+      - EXECUTION_03_1_RBAC_MIGRATION_AND_SEEDING
+      - EXECUTION_04_1_PLAN_ADDON_MIGRATION_AND_SEEDING
+
+  design_principles:
+    - Tenant-isolated data
+    - Soft delete for historical integrity
+    - Deterministic identity per tenant
+    - Ready for billing & network binding
+
+  tasks:
+    1_customer_schema_migration:
+      description: Create client/customer storage with audit safety
+      steps:
+        - Add migration under migrations/
+        - Create table clients:
+            fields:
+              - id (uuid)
+              - tenant_id (fk)
+              - name
+              - phone
+              - email (nullable)
+              - address
+              - latitude (nullable)
+              - longitude (nullable)
+              - category (enum: regular | hotspot | member)
+              - status (enum: active | suspended | isolated)
+              - created_at
+              - updated_at
+              - deleted_at (nullable)
+        - Constraints:
+            - unique(tenant_id, phone)
+            - index on tenant_id
+            - index on deleted_at
+
+    2_soft_delete_rules:
+      description: Enforce soft delete behavior
+      rules:
+        - DELETE operations must:
+            - set deleted_at = now()
+            - not physically remove row
+        - All queries for active clients must:
+            - include WHERE deleted_at IS NULL
+      output:
+        - Historical data preserved for billing & audit
+
+    3_crud_api:
+      description: Client CRUD endpoints
+      steps:
+        - Create endpoints:
+            - POST /clients
+            - GET /clients
+            - GET /clients/{id}
+            - PUT /clients/{id}
+            - DELETE /clients/{id} (soft delete)
+        - Validation rules:
+            - phone required & normalized
+            - category must be valid enum
+        - Enforce tenant context on all queries
+
+    4_role_access_rules:
+      description: RBAC integration
+      rules:
+        - owner/admin:
+            - full CRUD
+        - finance:
+            - read-only
+        - technician:
+            - read + location access
+        - collector:
+            - read-only for assigned clients
+        - client:
+            - self read-only
+
+    5_future_hooks:
+      description: Prepare integration points
+      steps:
+        - Expose client_id reference for:
+            - billing module
+            - network/radius binding
+            - maps & outage propagation
+            - collector assignments
+      note:
+        - No billing logic implemented here
+
+  done_criteria:
+    - Clients table uses soft delete
+    - Phone number unique per tenant
+    - CRUD APIs tenant-safe
+    - No physical deletes
+    - Ready for billing & network modules
+
+  note:
+    - Client is the central entity for ISP operations
+    - This module intentionally contains no business automation

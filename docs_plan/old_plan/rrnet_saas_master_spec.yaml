@@ -1,0 +1,274 @@
+rrnet_saas_master_spec:
+meta:
+  version: "3.0.0"
+  date_generated: "2025-01-15"
+  purpose: "Complete blueprint for RRNet SaaS system development"
+  scope: "Backend + Frontend full system"
+  status: "PRODUCTION_READY"
+  architecture: "Modular Monolith with Micro-block Components"
+
+system_overview:
+  backend:
+    modules:
+      - foundation: "Backend foundations (01-01.1)"
+      - auth: "Authentication & tenant resolution (02)"
+      - rbac: "Role-based access control (03)"
+      - plans: "Plans, addons, features (04)"
+      - clients: "Client management (05)"
+      - network: "Network management (06)"
+      - billing: "Billing & isolir (07)"
+      - collector: "Cash collection (08)"
+      - maps: "Topology & outage (09)"
+      - technician: "Field operations (10)"
+      - super_admin: "System administration (SA_01-SA_06)"
+      - integration: "Testing & validation (Integration_01-04)"
+
+  frontend:
+    modules:
+      - foundation: "Frontend foundations (FE_00)"
+      - auth: "Auth & tenant resolution (FE_01)"
+      - routing: "Dynamic routes & layout (FE_02)"
+      - dashboard: "Dashboard system (FE_03)"
+      - clients: "Client management (FE_04)"
+      - billing: "Billing system (FE_05)"
+      - collector: "Collector interface (FE_06)"
+      - network: "Network management (FE_07)"
+      - maps: "Topology & outage (FE_08)"
+      - technician: "Field operations (FE_09)"
+      - admin: "Tenant admin (FE_10)"
+      - super_admin: "Super admin (FE_11)"
+      - components: "Common components (FE_12)"
+
+  dependencies:
+    cross_module:
+      - auth → all modules
+      - rbac → all protected modules
+      - plans → billing, features
+      - clients → billing, network, maps
+      - network → maps, technician
+      - billing → collector, isolir
+      - maps → technician
+      - technician → maps
+      - super_admin → all modules
+
+execution_strategy:
+  phases:
+    phase_1_foundation:
+      description: "Core infrastructure and authentication"
+      backend_modules: ["01", "01_1", "02", "03"]
+      frontend_modules: ["FE_00", "FE_01"]
+      dependencies: "None"
+      parallel_execution: false
+      estimated_duration: "2-3 weeks"
+
+    phase_2_core_business:
+      description: "Core business logic and user management"
+      backend_modules: ["04", "05"]
+      frontend_modules: ["FE_02", "FE_03", "FE_04"]
+      dependencies: "Phase 1"
+      parallel_execution: true
+      estimated_duration: "3-4 weeks"
+
+    phase_3_operations:
+      description: "Network operations and field management"
+      backend_modules: ["06", "07", "08"]
+      frontend_modules: ["FE_05", "FE_06", "FE_07"]
+      dependencies: "Phase 1, Phase 2"
+      parallel_execution: true
+      estimated_duration: "4-5 weeks"
+
+    phase_4_advanced:
+      description: "Advanced features and administration"
+      backend_modules: ["09", "10", "SA_01-SA_06"]
+      frontend_modules: ["FE_08", "FE_09", "FE_10"]
+      dependencies: "Phase 1, Phase 2, Phase 3"
+      parallel_execution: true
+      estimated_duration: "4-5 weeks"
+
+    phase_5_integration:
+      description: "Integration testing and quality assurance"
+      backend_modules:
+        ["Integration_01", "Integration_02", "Integration_03", "Integration_04"]
+      frontend_modules: ["FE_11", "FE_12"]
+      dependencies: "All previous phases"
+      parallel_execution: true
+      estimated_duration: "2-3 weeks"
+
+    phase_6_production:
+      description: "Production deployment and optimization"
+      backend_modules: "Performance optimization, security hardening"
+      frontend_modules: "Performance optimization, mobile optimization"
+      dependencies: "All previous phases"
+      parallel_execution: true
+      estimated_duration: "2-3 weeks"
+
+  critical_path:
+    description: "Minimum viable product path"
+    phases: ["phase_1_foundation", "phase_2_core_business"]
+    features:
+      - User authentication and tenant resolution
+      - Basic client management
+      - Simple billing (invoices only)
+      - Basic network monitoring
+      - Dashboard with basic metrics
+    estimated_duration: "5-7 weeks"
+
+  parallel_execution_matrix:
+    phase_1_foundation:
+      backend: "01, 01_1, 02, 03"
+      frontend: "FE_00, FE_01"
+
+    phase_2_core_business:
+      backend: "04, 05"
+      frontend: "FE_02, FE_03, FE_04"
+
+    phase_3_operations:
+      backend: "06, 07, 08"
+      frontend: "FE_05, FE_06, FE_07"
+
+    phase_4_advanced:
+      backend: "09, 10, SA_01-SA_06"
+      frontend: "FE_08, FE_09, FE_10"
+
+    phase_5_integration:
+      backend: "Integration_01-04"
+      frontend: "FE_11, FE_12"
+
+    phase_6_production:
+      backend: "Performance optimization"
+      frontend: "Performance optimization"
+
+  cursor_execution_order:
+    step_1: "Setup project structure and backend foundations (01)"
+    step_2: "Implement authentication and RBAC (01_1, 02, 03)"
+    step_3: "Setup frontend foundations and auth (FE_00, FE_01)"
+    step_4: "Implement plans, addons, features (04)"
+    step_5: "Implement dynamic routes and dashboard (FE_02, FE_03)"
+    step_6: "Implement client management (05)"
+    step_7: "Implement client management UI (FE_04)"
+    step_8: "Implement network management (06)"
+    step_9: "Implement billing system (07)"
+    step_10: "Implement billing UI (FE_05)"
+    step_11: "Implement collector system (08)"
+    step_12: "Implement collector UI (FE_06)"
+    step_13: "Implement maps system (09)"
+    step_14: "Implement maps UI (FE_08)"
+    step_15: "Implement technician system (10)"
+    step_16: "Implement technician UI (FE_09)"
+    step_17: "Implement super admin backend (SA_01-SA_06)"
+    step_18: "Implement super admin UI (FE_11)"
+    step_19: "Implement common components (FE_12)"
+    step_20: "Integration testing (Integration_01-04)"
+    step_21: "Performance optimization"
+    step_22: "Security audit"
+    step_23: "Production deployment"
+
+  cursor_optimization:
+    prompt_strategy:
+      - "Execute phases sequentially within each phase"
+      - "Use parallel execution within phases where possible"
+      - "Prioritize critical path for MVP"
+      - "Apply hardening overlays after each module"
+
+    execution_commands:
+      phase_1:
+        - "Execute backend 01, 01_1, 02, 03 sequentially"
+        - "Execute frontend FE_00, FE_01 sequentially"
+        - "Apply hardening overlays after each module"
+
+      phase_2:
+        - "Execute backend 04, 05 in parallel"
+        - "Execute frontend FE_02, FE_03, FE_04 in parallel"
+        - "Apply hardening overlays after each module"
+
+      phase_3:
+        - "Execute backend 06, 07, 08 in parallel"
+        - "Execute frontend FE_05, FE_06, FE_07 in parallel"
+        - "Apply hardening overlays after each module"
+
+      phase_4:
+        - "Execute backend 09, 10, SA_01-SA_06 in parallel"
+        - "Execute frontend FE_08, FE_09, FE_10 in parallel"
+        - "Apply hardening overlays after each module"
+
+      phase_5:
+        - "Execute backend Integration_01-04 sequentially"
+        - "Execute frontend FE_11, FE_12 in parallel"
+        - "Apply hardening overlays after each module"
+
+      phase_6:
+        - "Execute performance optimization"
+        - "Execute security audit"
+        - "Deploy to production"
+
+  quality_gates:
+    code_quality:
+      - TypeScript strict mode
+      - ESLint + Prettier
+      - Unit tests (80% coverage)
+      - Integration tests (60% coverage)
+      - E2E tests (critical paths)
+
+    performance:
+      - Page load < 2s
+      - API response < 500ms
+      - Mobile LCP < 3s
+      - Bundle size < 1MB (gzipped)
+
+    security:
+      - OWASP Top 10 compliance
+      - Security audit passed
+      - Penetration test passed
+      - Dependency scan passed
+
+    accessibility:
+      - WCAG 2.1 AA compliance
+      - Keyboard navigation
+      - Screen reader support
+      - Color contrast ratio > 4.5:1
+
+  deployment_strategy:
+    environments:
+      development: "Local development with Docker Compose"
+      staging: "Staging environment with production-like setup"
+      production: "Production environment with high availability"
+
+    infrastructure:
+      - "Containerized deployment with Docker"
+      - "Load balancer (Nginx)"
+      - "Database (PostgreSQL with read replicas)"
+      - "Cache (Redis cluster)"
+      - "File storage (MinIO/S3)"
+      - "Monitoring (Prometheus + Grafana)"
+      - "Logging (ELK stack)"
+
+  success_criteria:
+    functional:
+      - All modules implemented and tested
+      - Integration between modules working
+      - Real-time features operational
+      - Mobile interfaces responsive
+      - Accessibility features compliant
+
+    technical:
+      - Code quality metrics met
+      - Performance benchmarks met
+      - Security requirements met
+      - Accessibility compliance achieved
+      - Deployment automation complete
+
+    business:
+      - MVP features delivered
+      - User acceptance testing passed
+      - Performance requirements met
+      - Security audit passed
+      - Production deployment ready
+
+  next_steps:
+    - "Review and approve unified master spec"
+    - "Begin execution with phase 1"
+    - "Apply hardening overlays after each module"
+    - "Monitor progress and adjust as needed"
+    - "Deploy to production after phase 6"
+
+  note: "This unified master spec serves as the single source of truth for the entire RRNet SaaS system development."

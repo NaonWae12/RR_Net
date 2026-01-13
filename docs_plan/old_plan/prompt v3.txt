@@ -1,0 +1,302 @@
+prompt v3
+# ===================================================================
+# RRNet SaaS OS — FULL SYSTEM BLUEPRINT (FINAL MASTER PROMPT)
+# ===================================================================
+meta:
+  name: "RRNet SaaS OS"
+  version: "v1.0"
+  author: "Cursor + ChatGPT Planning"
+  mode: "full-system-blueprint"
+  purpose: >
+    Sistem SaaS lengkap untuk RT/RW Net & ISP kecil.
+    Project ini mencakup:
+      - Tenancy
+      - Billing SaaS
+      - Billing End-User
+      - Network (Mikrotik, Radius, Voucher)
+      - Maps (ODC-ODP-Client Topology)
+      - WA Communication
+      - HR Lite
+      - Add-on Engine
+      - Super Admin Panel
+      - Full integration architecture
+      - FE MVVM + BE Golang Modular Architecture
+
+# ===================================================================
+# 1. CORE SYSTEM
+# ===================================================================
+core_system:
+  modules:
+    - auth
+    - tenant
+    - rbac
+    - feature_toggle
+    - domain_routing
+  auth:
+    method: jwt + refresh
+    context: includes tenant_id
+  tenant:
+    multi_tenant: true
+    isolation_behavior:
+      panel_lock: true
+      router_access: allowed
+      radius_reject: configurable
+  rbac:
+    roles:
+      super_admin: full_access
+      owner: admin_equivalent
+      admin: full_tenant_management
+      hr: employee_management
+      technician: field_tasks
+      finance: billing_related
+      client: end_user_panel (optional)
+  feature_toggle:
+    type: per_feature
+    modes: [simple_set, advanced_switching]
+  plan_system:
+    base_plans: [basic, pro, business, enterprise]
+    includes: limits + feature access
+
+# ===================================================================
+# 2. NETWORK MODULES (MIKROTIK, RADIUS, VOUCHER)
+# ===================================================================
+network_modules:
+  mikrotik:
+    supports: hotspot + pppoe
+    connections: routeros-api
+    sync_jobs: asynq
+    features:
+      - active_user_list
+      - dhcp_list
+      - disconnect_user
+      - create_user
+  radius:
+    integration: FreeRADIUS REST
+    auth_flow: centralized backend validation
+    responses: [ACCEPT, REJECT + reason]
+  voucher:
+    behavior: similar_to_mikhmon
+    package_system: true
+    batch_generator: true
+    validation: server_mode
+    push_to_mikrotik: optional
+
+# ===================================================================
+# 3. BILLING SYSTEM
+# ===================================================================
+billing:
+  saas_billing:
+    plan_billing: monthly
+    addons_supported: true
+    isolir_behavior: panel_lock
+  enduser_billing:
+    supports: invoice, packages, auto_isolir, payment_gateway
+    categories: [regular, hotspot, member, custom]
+  upstream_billing:
+    provider_invoice: monthly
+    used_for: tenant_expense
+
+# ===================================================================
+# 4. WA GATEWAY
+# ===================================================================
+communication:
+  wa_gateway:
+    providers:
+      - fonnte
+      - wwebjs_local
+    templates: system + tenant
+    queue: redis + asynq
+    events:
+      - invoice_created
+      - invoice_due
+      - overdue
+      - tenant_isolated
+      - voucher_generated
+      - voucher_used
+      - upstream_reminder
+    broadcast_support: true
+
+# ===================================================================
+# 5. HR MODULE (HCM)
+# ===================================================================
+hr_module:
+  includes:
+    - employee_management
+    - attendance_manual
+    - leave
+    - payroll_simple
+    - technician_activity
+  exclude_v1:
+    - gps_attendance
+    - shift_management
+
+# ===================================================================
+# 6. MAPS MODULE (ODC → ODP → CLIENT)
+# ===================================================================
+maps_module:
+  nodes:
+    - odc
+    - odp
+    - client
+  topology:
+    draw_lines: true
+    cascades:
+      odc_outage: affects_odp_and_clients
+      odp_outage: affects_clients
+      client_outage: local_only
+  addons:
+    - extra_ODP_maps
+    - extra_client_maps
+  tech_overlay: technician_activity
+
+# ===================================================================
+# 7. ADD-ON ENGINE
+# ===================================================================
+addon_engine:
+  catalog:
+    types:
+      - resource_addons
+      - feature_addons
+      - marketplace_addons
+  flows:
+    direct_activate: no_approval
+    custom_other: requires_super_admin_approval
+  integrates_with:
+    - limits
+    - saas_billing
+    - UI marketplace
+    - super_admin_panel
+    - features
+
+# ===================================================================
+# 8. SUPER ADMIN PANEL
+# ===================================================================
+super_admin_panel:
+  controls:
+    - tenant_management
+    - domain_management
+    - plan_management
+    - addon_approval
+    - billing_override
+    - wa_provider_control
+    - logs
+    - monitoring
+    - security
+  abilities:
+    full_impersonation: true
+    override_everything: true
+
+# ===================================================================
+# 9. INTEGRATION LAYER
+# ===================================================================
+integration_layer:
+  event_bus: internal + async_jobs
+  connections:
+    - billing_to_isolir
+    - addon_to_limits
+    - addon_to_billing
+    - radius_to_billing
+    - maps_outage_to_wa
+    - hr_to_maps
+    - wa_to_billing
+    - super_admin_to_everything
+
+# ===================================================================
+# 10. BACKEND ARCHITECTURE (GOLANG)
+# ===================================================================
+backend:
+  pattern: modular_monolith
+  structure:
+    cmd:
+      - api
+      - worker
+    internal:
+      - config
+      - common
+      - middleware
+      - domain (ALL MODULES)
+      - service
+      - repository
+      - handler
+      - jobs
+      - server
+    pkg:
+      - shared_libraries
+  rules:
+    - handler = input/output only
+    - service = logic
+    - repo = db only
+    - domain folder split per-module
+    - use interfaces consistently
+    - small file principle
+
+# ===================================================================
+# 11. FRONTEND ARCHITECTURE (NEXT.JS + MVVM)
+# ===================================================================
+frontend:
+  architecture: MVVM
+  folder_structure:
+    modules:
+      - auth/
+        - view/
+        - viewmodel/
+        - model/
+      - tenant/
+      - billing/
+      - network/
+      - maps/
+      - hr/
+      - addons/
+      - superadmin/
+    components:
+      - ui/
+      - forms/
+      - table/
+      - charts/
+      - map/
+    shared:
+      - hooks/
+      - api/
+      - constants/
+      - helpers/
+  rules:
+    - View = UI only
+    - ViewModel = state + logic
+    - Model = DTO + schema + types
+    - Reusable component mandatory
+    - No fat pages
+
+# ===================================================================
+# 12. IMPLEMENTATION INSTRUCTIONS FOR CURSOR
+# ===================================================================
+instructions_for_cursor:
+  general:
+    - Always follow this blueprint exactly
+    - Every module built in separate domain folder (BE) or module folder (FE)
+    - Use MVVM patterns strictly for frontend
+    - All backend features must use clean architecture style (handler/service/repo)
+  coding_style:
+    - small files
+    - reusable components
+    - pure logic separated from UI
+  priority_order_for_build:
+    - Auth
+    - Tenant
+    - RBAC
+    - Feature Toggle
+    - Network Modules
+    - Billing Modules
+    - WA Gateway
+    - Maps
+    - HR
+    - Add-on Engine
+    - Super Admin Panel
+  generate_when:
+    - when user requests a module → generate according to this blueprint
+    - when generating APIs → follow BE structure rules
+    - when generating UI → follow MVVM structure
+  avoid:
+    - don't merge modules unless specified
+    - no spaghetti logic
+    - no giant God-files
+    - no business logic in frontend view

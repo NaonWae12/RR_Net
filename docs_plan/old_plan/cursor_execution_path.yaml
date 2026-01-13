@@ -1,0 +1,294 @@
+cursor_execution_path:
+  phase_1_foundation:
+    description: >
+      Foundation phase establishing backend infrastructure, authentication, RBAC,
+      and frontend foundation with basic component library setup.
+
+    commands:
+      - "Execute backend 01: Backend foundations"
+      - "Apply hardening overlay"
+      - "Execute backend 01_1: Backend hardening"
+      - "Execute backend 02: Authentication"
+      - "Execute backend 03: RBAC"
+      - "Execute frontend FE_00: Foundation (component library setup with shadcn/ui)"
+      - "Execute frontend FE_01: Auth & tenant resolution"
+      - "Execute frontend FE_02: Dynamic routes"
+
+    reusable_components_note: >
+      FE_00 sets up basic component library (shadcn/ui + custom basic components).
+      Advanced reusable components will be created in FE_12 (phase 5).
+      After FE_12 completion, consider refactoring FE_01 and FE_02 to use advanced components.
+
+    validation:
+      - "Backend auth and RBAC working"
+      - "Frontend auth and routing working"
+      - "Integration tests passing"
+      - "Hardening applied"
+      - "Basic component library setup (shadcn/ui installed and configured)"
+      - "Frontend foundation components reusable within phase 1"
+
+  phase_2_core_business:
+    description: >
+      Core business phase implementing plans/addons/features, client management,
+      dashboard, and client management UI.
+
+    commands:
+      - "Execute backend 04: Plans, addons, features"
+      - "Execute backend 05: Client management"
+      - "Execute frontend FE_03: Dashboard"
+      - "Execute frontend FE_04: Client management"
+
+    parallel_commands:
+      - "Execute backend 04 + FE_03 (parallel)"
+      - "Execute backend 05 + FE_04 (parallel)"
+
+    reusable_components_note: >
+      FE_03 and FE_04 should use basic components from FE_00.
+      After FE_12 (phase 5) completion, refactor to use advanced DataTable, Chart,
+      Form, and Modal components from FE_12 for better consistency and reusability.
+
+    validation:
+      - "Core business logic working"
+      - "User management functional"
+      - "Dashboard displaying data (use basic chart components from FE_00)"
+      - "Client management functional (use basic table components from FE_00)"
+      - "Integration tests passing"
+      - "UI components follow reusable patterns (prepare for FE_12 refactoring)"
+
+  phase_3_operations:
+    description: >
+      Operations phase implementing network management, billing & isolir, collector system,
+      and their corresponding frontend UIs.
+
+    commands:
+      - "Execute backend 06: Network management"
+      - "Execute backend 07: Billing & isolir"
+      - "Execute backend 08: Collector system"
+      - "Execute frontend FE_05: Billing"
+      - "Execute frontend FE_06: Collector"
+      - "Execute frontend FE_07: Network"
+
+    parallel_commands:
+      - "Execute backend 06 + FE_07 (parallel)"
+      - "Execute backend 08 + FE_06 (parallel)"
+      - "Execute FE_05 + FE_07 (parallel)"
+
+    reusable_components_note: >
+      FE_05, FE_06, FE_07 should use basic components from FE_00.
+      After FE_12 (phase 5) completion, refactor to use:
+      - Advanced DataTable for billing/collector/client lists
+      - Advanced Chart components for billing analytics
+      - Advanced Form components for billing/collector forms
+      - Advanced Modal components for confirmations
+      - Utility components (StatusBadge, ProgressIndicator) for status displays
+
+    validation:
+      - "Network management functional"
+      - "Billing system functional"
+      - "Collector system functional"
+      - "Network UI functional (use basic components from FE_00)"
+      - "Billing UI functional (use basic table/form components from FE_00)"
+      - "Collector UI functional (use basic components from FE_00)"
+      - "UI components follow reusable patterns (prepare for FE_12 refactoring)"
+
+  phase_4_advanced:
+    description: >
+      Advanced phase implementing maps & outage, technician module, super admin backend,
+      and their corresponding frontend UIs.
+
+    commands:
+      - "Execute backend 09: Maps & outage"
+      - "Execute backend 10: Technician"
+      - "Execute backend SA_01-SA_06: Super admin"
+      - "Execute frontend FE_08: Maps"
+      - "Execute frontend FE_09: Technician"
+      - "Execute frontend FE_10: Tenant admin"
+
+    parallel_commands:
+      - "Execute backend 09 + FE_08 (parallel)"
+      - "Execute backend 10 + FE_09 (parallel)"
+      - "Execute SA_01-SA_06 + FE_10 (parallel)"
+
+    reusable_components_note: >
+      FE_08, FE_09, FE_10 should use basic components from FE_00.
+      After FE_12 (phase 5) completion, refactor to use:
+      - Advanced Chart components for maps analytics
+      - Advanced DataTable for technician tasks and tenant admin lists
+      - Advanced Form components for technician/tenant admin forms
+      - Advanced Modal components for confirmations
+      - Layout components (PageLayout, CardLayout) for consistent page structure
+      - Feedback components (Toast, Alert) for notifications
+
+    validation:
+      - "Advanced features working"
+      - "Super admin system functional (backend)"
+      - "Maps system functional (use basic map components from FE_00)"
+      - "Technician system functional (use basic components from FE_00)"
+      - "Tenant admin functional (use basic components from FE_00)"
+      - "UI components follow reusable patterns (prepare for FE_12 refactoring)"
+
+  phase_5_integration:
+    description: >
+      Integration phase covering comprehensive testing, validation, performance benchmarking,
+      security audit, and frontend common components library. This phase ensures system
+      integrity, performance, security, and provides reusable components for all modules.
+
+    execution_order:
+      step_1:
+        description: "Foundation: Common components must be built first for reuse"
+        commands:
+          - "Execute frontend FE_12: Common components (DataTable, Charts, Forms, Modals, Utilities)"
+        dependencies: []
+        reusable_components_created:
+          - "DataTable with pagination, sorting, filtering, export"
+          - "Chart components (Line, Bar, Pie, Gauge, HeatMap)"
+          - "Form components (FormGenerator, FormField, FormWizard)"
+          - "Modal components (Modal, ConfirmModal, FormModal)"
+          - "Utility components (LoadingSpinner, StatusBadge, ProgressIndicator, SkeletonLoader, EmptyState)"
+          - "Layout components (PageLayout, CardLayout, TabLayout)"
+          - "Feedback components (Toast, Alert, Tooltip, Notification)"
+        validation:
+          - "All common components are reusable and configurable"
+          - "Components are type-safe with TypeScript"
+          - "Components are accessible (ARIA attributes)"
+          - "Components are responsive"
+          - "Components are performance optimized (React.memo)"
+          - "Components have proper error handling"
+          - "Components have proper documentation"
+
+      step_2:
+        description: "Backend integration tests and frontend super admin (parallel execution)"
+        commands:
+          - "Execute backend Integration_01: Integration tests"
+          - "Execute frontend FE_11: Super admin (using reusable components from FE_12)"
+        dependencies:
+          - "FE_12 Common components completed"
+        parallel_execution: true
+        reusable_components_usage:
+          - "FE_11 must use DataTable from FE_12 for tenant/plan/addon lists"
+          - "FE_11 must use Chart components from FE_12 for analytics dashboards"
+          - "FE_11 must use Modal components from FE_12 for confirmations and forms"
+          - "FE_11 must use Utility components from FE_12 for loading/status indicators"
+          - "FE_11 must use Layout components from FE_12 for page structure"
+          - "FE_11 must use Feedback components from FE_12 for notifications"
+        validation:
+          - "Integration tests cover all business workflows"
+          - "Integration tests cover module interactions"
+          - "Integration tests cover API contracts"
+          - "Integration tests cover database consistency"
+          - "Integration tests cover background jobs"
+          - "Integration tests cover external services"
+          - "Super admin dashboard functional with reusable components"
+          - "Super admin tenant management functional"
+          - "Super admin plan/addon management functional"
+          - "Super admin system monitoring functional"
+          - "Super admin audit logs viewer functional"
+          - "Super admin emergency controls functional"
+          - "Super admin compliance dashboard functional"
+          - "All super admin UI uses reusable components (no duplicate code)"
+
+      step_3:
+        description: "Cross-module validation and performance benchmarking (parallel execution)"
+        commands:
+          - "Execute backend Integration_02: Cross-module validation"
+          - "Execute backend Integration_03: Performance benchmarking"
+        dependencies:
+          - "Integration_01 completed"
+        parallel_execution: true
+        validation:
+          - "Data consistency validated across all modules"
+          - "Workflows validated across all modules"
+          - "API contracts validated across all modules"
+          - "Performance validated across all modules"
+          - "Security validated across all modules"
+          - "Configuration validated across all modules"
+          - "Dependencies validated across all modules"
+          - "Load testing functional for all critical workflows"
+          - "Stress testing identifies system limits"
+          - "Performance monitoring provides real-time insights"
+          - "Bottleneck detection working effectively"
+          - "Performance analytics providing actionable insights"
+          - "Performance regression detection functional"
+          - "Benchmark automation integrated with CI/CD"
+
+      step_4:
+        description: "Security audit (final validation before production)"
+        commands:
+          - "Execute backend Integration_04: Security audit"
+        dependencies:
+          - "Integration_02 completed"
+          - "Integration_03 completed"
+        validation:
+          - "Vulnerability scanning functional for all components"
+          - "Penetration testing capabilities implemented"
+          - "Security configuration review working"
+          - "Code security analysis integrated"
+          - "Dependency security checking automated"
+          - "Infrastructure security validation functional"
+          - "Compliance validation working (GDPR, SOX, industry standards)"
+          - "Security monitoring providing real-time insights"
+          - "Security reporting comprehensive"
+          - "Security automation functional"
+
+    commands:
+      - "Execute frontend FE_12: Common components (MUST BE FIRST - foundation for reuse)"
+      - "Execute backend Integration_01: Integration tests"
+      - "Execute frontend FE_11: Super admin (uses components from FE_12)"
+      - "Execute backend Integration_02: Cross-module validation"
+      - "Execute backend Integration_03: Performance benchmarking"
+      - "Execute backend Integration_04: Security audit"
+
+    parallel_commands:
+      - "FE_12 completes first, then Integration_01 + FE_11 (parallel)"
+      - "Integration_02 + Integration_03 (parallel after Integration_01)"
+      - "Integration_04 runs after Integration_02 and Integration_03 complete"
+
+    reusable_components_requirements:
+      - "FE_12 must be completed before FE_11 to provide reusable components"
+      - "FE_11 must use components from FE_12 (no duplicate implementations)"
+      - "All future frontend modules must use components from FE_12"
+      - "Previous frontend modules (FE_01-FE_10) should be refactored to use FE_12 components after FE_12 completion"
+      - "Components must be configurable and type-safe"
+      - "Components must follow accessibility standards"
+      - "Components must be performance optimized"
+      - "No duplicate component implementations across modules"
+
+    validation:
+      - "All integration tests passing (business workflows, module interactions, API contracts)"
+      - "Cross-module validation working (data consistency, workflows, API contracts, performance, security)"
+      - "Performance benchmarks met (load testing, stress testing, monitoring, bottleneck detection)"
+      - "Security audit passed (vulnerability scanning, penetration testing, compliance validation)"
+      - "Super admin functional (dashboard, tenant management, plan/addon management, monitoring, audit logs, emergency controls, compliance)"
+      - "Common components working and reusable (DataTable, Charts, Forms, Modals, Utilities, Layouts, Feedback)"
+      - "All super admin UI uses reusable components (no code duplication)"
+      - "System ready for production deployment"
+
+  phase_6_production:
+    description: >
+      Production phase focusing on performance optimization, security hardening,
+      and final production deployment preparation.
+
+    commands:
+      - "Performance optimization (backend)"
+      - "Performance optimization (frontend)"
+      - "Security hardening (backend)"
+      - "Security hardening (frontend)"
+      - "Production deployment"
+
+    parallel_commands:
+      - "Backend performance + Frontend performance (parallel)"
+      - "Backend security + Frontend security (parallel)"
+
+    reusable_components_note: >
+      During frontend performance optimization, ensure all modules use reusable components
+      from FE_12. Remove any duplicate component implementations. Optimize component
+      bundle sizes and ensure proper code splitting for reusable components.
+
+    validation:
+      - "Performance benchmarks met"
+      - "Security audit passed"
+      - "Production deployment successful"
+      - "System ready for production"
+      - "All frontend modules use reusable components from FE_12 (no duplicates)"
+      - "Component bundle sizes optimized"
+      - "Code splitting properly implemented for reusable components"

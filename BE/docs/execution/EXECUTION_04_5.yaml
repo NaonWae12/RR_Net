@@ -1,0 +1,121 @@
+execution_prompt:
+  id: "RRNET_EXEC_04_5_WA_NOTIFICATION_STUB"
+  purpose: >
+    Create a WhatsApp Notification Service stub that provides
+    a unified interface for sending messages. This module
+    will be used by billing, isolir, collector, and system events,
+    but does not implement real provider delivery yet.
+
+  prerequisites:
+    - "EXECUTION #4 Plan + Add-on + Feature Toggle completed"
+    - "Asynq job system available"
+
+  design_principles:
+    - "Notification is async by default"
+    - "Provider-agnostic interface"
+    - "Feature-toggle aware"
+    - "Safe no-op if WA feature disabled"
+
+  scope:
+    include:
+      - notification_domain
+      - wa_provider_interface
+      - async_job_definition
+      - job_dispatcher
+      - tenant_wa_settings_model
+      - notification_log_model
+    exclude:
+      - real_whatsapp_api_calls
+      - message_templates_ui
+      - rate_limit_enforcement
+      - retry_policy_advanced
+
+  backend_structure_additions:
+    internal/domain:
+      - notification/
+    internal/notification:
+      - service.go
+      - provider.go
+      - dispatcher.go
+    internal/notification/providers:
+      - noop_provider.go
+    internal/jobs:
+      - wa_send_job.go
+    internal/repository:
+      - notification_log_repository.go
+      - tenant_wa_setting_repository.go
+    internal/http/handlers:
+      - wa_setting_handler.go
+
+  database_schema:
+    tenant_wa_settings:
+      fields:
+        - tenant_id
+        - provider (noop | fonnte | wwebjs)
+        - is_enabled
+        - config (jsonb)
+    notification_logs:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - channel (wa)
+        - to
+        - message
+        - status (queued, sent, failed)
+        - created_at
+
+  wa_provider_interface:
+    methods:
+      - Send(ctx, to, message) error
+
+  noop_provider:
+    behavior:
+      - always_success
+      - log_message_only
+
+  notification_service:
+    behavior:
+      - check_feature_toggle("wa_notification")
+      - check_tenant_wa_enabled
+      - enqueue_asynq_job
+      - persist_notification_log
+
+  async_job:
+    name: SendWAMessageJob
+    queue: notification
+    payload:
+      - tenant_id
+      - to
+      - message
+
+  admin_apis:
+    tenant_wa_settings:
+      - GET /api/v1/tenant/wa-settings
+      - PUT /api/v1/tenant/wa-settings
+
+  example_usage:
+    billing_event:
+      code: |
+        notification.Send(ctx, phone, "Invoice jatuh tempo")
+
+  coding_rules:
+    - "All sends go through service"
+    - "No direct provider calls from business modules"
+    - "Graceful no-op if disabled"
+    - "Async only, no sync send"
+
+  output_expectations:
+    - "WA notification stub service"
+    - "No-op provider implementation"
+    - "Asynq job & worker"
+    - "Notification logs stored"
+
+  stop_condition:
+    - "Modules can call notification.Send safely"
+    - "No external API calls"
+    - "Ready for real provider integration later"
+
+  instruction_to_ai:
+    - "Do not implement real WhatsApp provider"
+    - "Focus on clean interfaces"
+    - "Follow feature toggle & tenant isolation"

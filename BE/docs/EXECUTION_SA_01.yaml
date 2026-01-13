@@ -1,0 +1,257 @@
+execution_prompt:
+  id: "RRNET_EXEC_SA_01_SUPER_ADMIN_AUTH"
+  purpose: >
+    Implement hardened super admin authentication system with global context
+    bypassing tenant isolation. Includes MFA, session security, audit trails,
+    and tenant impersonation capabilities with enterprise-grade security built-in.
+
+  prerequisites:
+    - "EXECUTION_03_1 RBAC Migration completed"
+    - "EXECUTION_02_1 Auth Hardening completed"
+    - "JWT system with refresh tokens working"
+
+  design_principles:
+    - "Super admin operates outside tenant context"
+    - "Global permissions override tenant restrictions"
+    - "Tenant impersonation is auditable and time-limited"
+    - "Multi-factor authentication mandatory"
+    - "Zero-trust security model"
+    - "Comprehensive audit trail"
+
+  scope:
+    include:
+      - super_admin_role_model (hardened)
+      - global_auth_flow (with MFA)
+      - tenant_impersonation (secured)
+      - super_admin_session_management (enhanced)
+      - global_context_middleware (hardened)
+      - audit_logging (comprehensive)
+    exclude:
+      - tenant_management_logic
+      - system_monitoring
+      - emergency_controls
+
+  backend_structure_additions:
+    internal/domain:
+      - superadmin/
+    internal/superadmin:
+      - service.go
+      - impersonation.go
+      - global_context.go
+      - mfa.go
+    internal/repository:
+      - superadmin_repository.go
+    internal/http/middleware:
+      - superadmin_context.go
+    internal/http/handlers:
+      - superadmin_auth_handler.go
+
+  database_schema:
+    super_admins:
+      fields:
+        - id (uuid, pk)
+        - user_id (fk to users table)
+        - permissions (jsonb)
+        - mfa_secret (encrypted)
+        - mfa_backup_codes (encrypted, jsonb)
+        - is_active
+        - last_login_at
+        - failed_login_attempts
+        - locked_until (nullable)
+        - password_changed_at
+        - totp_enabled (boolean)
+        - created_at
+        - updated_at
+
+    impersonation_sessions:
+      fields:
+        - id (uuid, pk)
+        - super_admin_id
+        - tenant_id
+        - impersonated_user_id
+        - session_token
+        - impersonation_reason
+        - approved_by (nullable)
+        - ip_address_at_impersonation
+        - device_fingerprint
+        - expires_at
+        - created_at
+        - ended_at (nullable)
+
+    sys_superadmin_audit_logs:
+      fields:
+        - id (uuid, pk)
+        - event_type
+        - super_admin_id
+        - tenant_id (nullable)
+        - details (jsonb)
+        - ip_address
+        - user_agent
+        - created_at
+
+  super_admin_role:
+  permissions:
+    global_permissions:
+      - tenant.create
+      - tenant.update
+      - tenant.suspend
+      - tenant.isolate
+      - plan.manage
+      - addon.manage
+      - system.monitor
+      - audit.view
+      - emergency.override
+    restrictions:
+      - cannot_view_tenant_pii
+      - cannot_view_internal_logs
+      - cannot_access_billing_details
+
+  auth_flow:
+  login:
+    endpoint: POST /api/v1/superadmin/login
+    steps:
+      1: validate credentials
+      2: check account status (not locked)
+      3: require MFA verification
+      4: issue super admin JWT with global scope
+      5: log successful login
+    security:
+      - rate_limit: 5 attempts per 15 minutes
+      - account_lockout: 5 failed attempts
+      - mfa_required: always
+
+  mfa_setup:
+    endpoint: POST /api/v1/superadmin/setup-mfa
+    behavior:
+      - generate TOTP secret
+      - generate backup codes (10 codes, 8 digits)
+      - require setup on first login
+      - encrypt storage
+
+  mfa_verify:
+    endpoint: POST /api/v1/superadmin/verify-mfa
+    behavior:
+      - validate TOTP code
+      - allow backup codes (single use)
+      - rate_limit: 3 attempts per login
+
+  logout:
+    endpoint: POST /api/v1/superadmin/logout
+    behavior:
+      - invalidate all sessions
+      - end active impersonations
+      - log logout event
+
+  tenant_impersonation:
+  start_impersonation:
+    endpoint: POST /api/v1/superadmin/impersonate
+    input:
+      - tenant_id
+      - target_user_id (optional)
+      - impersonation_reason
+    behavior:
+      - validate impersonation permissions
+      - create impersonation session with security metadata
+      - issue tenant-scoped JWT
+      - log impersonation start
+      - set expiry (max 2 hours)
+    security:
+      - require_approval_for_sensitive_tenants
+      - rate_limit: 10 attempts per hour
+      - bind to device fingerprint
+
+  stop_impersonation:
+    endpoint: POST /api/v1/superadmin/stop-impersonation
+    behavior:
+      - end impersonation session
+      - restore super admin context
+      - log impersonation end
+      - invalidate tenant JWT
+
+  session_security:
+  session_fingerprinting:
+    factors:
+      - ip_address
+      - user_agent
+      - device_hash
+    rules:
+      - bind_session_to_fingerprint: true
+      - detect_session_anomalies: true
+      - force_reauth_on_anomaly: true
+
+  session_management:
+    - max_concurrent_sessions: 2
+    - session_timeout: 4 hours
+    - forced_reauth_interval: 8 hours
+    - password_expiry: 90 days
+
+  global_context_middleware:
+  behavior:
+    - detect super admin JWT
+    - bypass tenant_context_middleware
+    - inject global_context
+    - handle impersonation context
+    - validate session fingerprint
+    - detect context anomalies
+
+  security_headers:
+    - X-Frame-Options: DENY
+    - X-Content-Type-Options: nosniff
+    - X-XSS-Protection: "1; mode=block"
+    - Strict-Transport-Security: "max-age=31536000"
+
+  rbac_integration:
+  super_admin_role:
+    - bypass_tenant_restrictions
+    - global_permission_check
+    - audit_all_actions
+    - enhanced_security_validation
+
+  audit_events:
+  mandatory_events:
+    - super_admin_login
+    - mfa_setup
+    - mfa_verification
+    - tenant_impersonation_start
+    - tenant_impersonation_end
+    - permission_changes
+    - failed_access_attempts
+    - account_lockout
+    - password_change
+
+  audit_storage:
+    - table: sys_superadmin_audit_logs
+    - retention: 7 years
+    - immutable: true
+    - encrypted sensitive fields
+
+  coding_rules:
+  - "All super admin operations must be audited"
+  - "Never expose tenant PII to super admin"
+  - "All impersonation must be time-limited and approved"
+  - "MFA mandatory for all operations"
+  - "Session security hardened with fingerprinting"
+  - "Rate limiting and account lockout enforced"
+  - "Global permissions must be explicitly granted"
+
+  output_expectations:
+  - "Hardened super admin authentication system"
+  - "MFA implementation with TOTP and backup codes"
+  - "Secure tenant impersonation functionality"
+  - "Global context middleware with security"
+  - "Enhanced session management"
+  - "Comprehensive audit trail"
+
+  stop_condition:
+  - "Super admin can authenticate with MFA"
+  - "Tenant impersonation working securely"
+  - "All actions audited with retention"
+  - "Session security hardened"
+  - "Ready for tenant management module"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade security from start"
+  - "Follow zero-trust authentication model"
+  - "All security measures built-in, not added later"
+  - "Prepare for tenant management integration"
+  - "Do not implement tenant management logic"

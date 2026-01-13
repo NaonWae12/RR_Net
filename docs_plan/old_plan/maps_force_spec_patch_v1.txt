@@ -1,0 +1,217 @@
+maps_force_spec_patch_v1
+# ============================================================================
+# PATCH: maps_force_spec_v1 (ODC → ODP → Client Topology + Outage Propagation)
+# ============================================================================
+maps_force_spec_patch_v1:
+  meta:
+    patched_from: "maps_module + role_and_collector_adjustments"
+    module: "maps"
+    timestamp: 2025-12-12
+
+  maps:
+    overview: >
+      Maps module represents physical network topology for ODC → ODP → Client.
+      Includes outage propagation, technician integration, collector access rules,
+      and add-on expansion (extra_ODP_maps, extra_client_maps).
+
+    nodes:
+      - odc:
+          fields:
+            - id
+            - tenant_id
+            - name
+            - coordinate
+            - capacity_info (optional)
+            - notes
+      - odp:
+          fields:
+            - id
+            - tenant_id
+            - odc_id
+            - name
+            - coordinate
+            - port_count (optional)
+            - notes
+      - client:
+          fields:
+            - id
+            - tenant_id
+            - odp_id
+            - customer_id (link to billing customer)
+            - coordinate
+            - connection_type: [pppoe, hotspot, static]
+            - signal_info (optional)
+            - notes
+
+    topology_links:
+      behavior:
+        - "ODC → ODP connected via logical/visual link."
+        - "ODP → Client connected via link."
+        - "Lines drawn on map for full visual path."
+        - "Click chain: selecting ODC shows list of ODPs, selecting ODP shows clients."
+      ui:
+        - expandable_tree_view
+        - map_overlay
+        - outage_color_scheme:
+            odc_outage: "#DC2626" # red
+            odp_outage: "#F87171" # soft red
+            client_outage: "#FBBF24" # orange for single local issue
+            normal: "#10B981" # green
+            degraded: "#EAB308" # yellow
+
+    outage_system:
+      overview: "Auto-propagation outage system based on parent node status."
+      outage_status_values:
+        - normal
+        - degraded
+        - outage
+
+      propagation_rules:
+        odc_outage:
+          - mark all odp_under_odc = outage
+          - mark all clients_under_odc = outage
+        odp_outage:
+          - mark all clients_under_odp = outage
+        client_only_outage:
+          - do not propagate upward
+          - do not affect other clients
+
+      manual_outage_actions:
+        admin_can:
+          - set_outage_status
+          - clear_outage_status
+        technician_can:
+          - set_outage (if assigned task)
+          - clear_outage (with notes)
+        collector_cannot:
+          - "no outage permissions"
+
+      outage_logs:
+        table: outage_history
+        fields:
+          - id
+          - type: [odc, odp, client]
+          - node_id
+          - prev_status
+          - new_status
+          - triggered_by: ["admin","technician","system"]
+          - timestamp
+          - notes
+        visibility:
+          - owner: full
+          - admin: full
+          - technician: assigned_only
+          - collector: none
+          - super_admin: none
+
+    collector_map_rules:
+      collector_visibility:
+        allowed:
+          - client_coordinates_assigned_to_task
+          - client_address
+          - client_name
+          - client_phone
+        forbidden:
+          - ODP topology
+          - ODC topology
+          - entire map layers
+          - any upstream nodes info
+      behavior:
+        - "Collector only sees BLUE markers for assigned customers."
+        - "Collector does not see ODP/ODC nodes."
+        - "Collector cannot change outage status."
+
+    technician_map_rules:
+      technician_visibility:
+        allowed:
+          - odc_nodes
+          - odp_nodes
+          - client_nodes
+          - outage_status
+          - topology_paths
+        actions:
+          - log_technician_activity
+          - set_outage
+          - clear_outage
+          - upload_activity_photo
+      notes:
+        - "Technician may also be collector (multi-role)."
+
+    admin_owner_map_rules:
+      admin:
+        can:
+          - create_odc
+          - create_odp
+          - create_client_map_node
+          - edit_coordinates
+          - edit_metadata
+          - set_outage
+          - clear_outage
+        visibility: full_map + full_topology
+      owner:
+        can:
+          - all_admin_map_actions
+
+    addons_integration:
+      available_addons:
+        - extra_ODP_maps:
+            description: "Allows tenant to create additional ODP groups beyond plan default."
+        - extra_client_maps:
+            description: "Allows more client visualization nodes than default limit."
+      behavior:
+        - addon_activation_updates_limits = true
+        - addon_affects_map_capacity = true
+
+    ui_components:
+      admin_ui:
+        - map_overview_panel
+        - odc_list_panel
+        - odp_list_panel
+        - client_list_panel
+        - outage_status_legend
+        - outage_bulk_tools
+        - add_node_modals
+        - edit_node_modals
+      technician_ui:
+        - task_related_map_view
+        - outage_update_screen
+        - node_inspection_view
+        - activity_photo_upload
+      collector_ui:
+        - assigned_clients_map_view_only
+        - quick_navigation_links
+
+    apis:
+      odc:
+        - GET  /maps/odc
+        - POST /maps/odc
+        - PATCH /maps/odc/:id
+        - DELETE /maps/odc/:id
+      odp:
+        - GET  /maps/odc/:odc_id/odp
+        - POST /maps/odp
+        - PATCH /maps/odp/:id
+        - DELETE /maps/odp/:id
+      client:
+        - GET  /maps/odp/:odp_id/clients
+        - POST /maps/client
+        - PATCH /maps/client/:id
+        - DELETE /maps/client/:id
+      outage:
+        - POST /maps/outage/:node_type/:node_id/set
+        - POST /maps/outage/:node_type/:node_id/clear
+        - GET  /maps/outage/history
+      technician_tasks:
+        - GET  /technician/maps/tasks
+        - POST /technician/maps/tasks/:id/log
+
+    acceptance_criteria:
+      - "ODC, ODP, client nodes fully manageable via API and UI."
+      - "Topology lines appear automatically."
+      - "Outage propagates correctly (ODC → ODP → Client)."
+      - "Client outage does not propagate upward."
+      - "Collector only sees assigned clients and their map pins."
+      - "Technician sees full topology including outage."
+      - "Admin sees full topology + editing tools."
+      - "Add-on maps extend limits and capacity."
+      - "Outage history stored properly and visible to tenant roles."

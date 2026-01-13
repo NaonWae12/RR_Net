@@ -1,0 +1,407 @@
+execution_prompt:
+  id: "RRNET_EXEC_INTEGRATION_01_TESTS"
+  purpose: >
+    Implement comprehensive integration test suite for RRNet SaaS
+    covering end-to-end workflows, cross-module interactions,
+    API integrations, and database consistency with automated
+    test execution and reporting capabilities.
+
+  prerequisites:
+    - "All backend modules completed (01-10.1)"
+    - "All super admin modules completed (SA_01-SA_06)"
+    - "Test database environment available"
+    - "CI/CD pipeline infrastructure ready"
+
+  design_principles:
+    - "Tests cover critical business workflows"
+    - "Integration tests validate module interactions"
+    - "Database tests ensure data consistency"
+    - "API tests verify contract compliance"
+    - "Tests are automated and repeatable"
+    - "Test failures provide actionable feedback"
+
+  scope:
+    include:
+      - business_workflow_tests
+      - module_integration_tests
+      - api_integration_tests
+      - database_consistency_tests
+      - background_job_tests
+      - external_service_tests
+      - test_automation
+      - test_reporting
+    exclude:
+      - unit_tests
+      - frontend_tests
+      - load_testing
+      - security_penetration_tests
+
+  backend_structure_additions:
+    internal/testing:
+      - integration/
+      - fixtures/
+      - helpers/
+    internal/testing/integration:
+      - business_workflows_test.go
+      - module_integration_test.go
+      - api_integration_test.go
+      - database_consistency_test.go
+      - background_job_test.go
+      - external_service_test.go
+    internal/testing/fixtures:
+      - tenant_fixtures.go
+      - user_fixtures.go
+      - client_fixtures.go
+      - billing_fixtures.go
+      - network_fixtures.go
+    internal/testing/helpers:
+      - test_helper.go
+      - database_helper.go
+      - api_helper.go
+      - auth_helper.go
+
+  test_categories:
+  business_workflow_tests:
+    complete_billing_cycle:
+      description: "Test complete billing workflow from invoice creation to payment"
+      steps:
+        - create_tenant_with_plan
+        - create_client_with_package
+        - generate_monthly_invoice
+        - process_payment
+        - verify_invoice_status_update
+        - verify_payment_records
+        - verify_financial_reports
+      assertions:
+        - invoice_amount_matches_package_price
+        - payment_records_created_correctly
+        - financial_reports_updated
+        - no_orphaned_records
+
+    isolir_workflow:
+      description: "Test complete isolir workflow from overdue invoice to service restoration"
+      steps:
+        - create_tenant_with_client
+        - generate_invoice
+        - mark_invoice_overdue
+        - verify_isolir_triggered
+        - verify_network_user_disabled
+        - process_payment
+        - verify_unisolir_triggered
+        - verify_network_user_enabled
+      assertions:
+        - isolir_triggered_on_overdue
+        - network_user_correctly_disabled
+        - unisolir_triggered_on_payment
+        - network_user_correctly_enabled
+
+    collector_3_phase_flow:
+      description: "Test complete collector workflow from assignment to finance confirmation"
+      steps:
+        - create_tenant_with_cash_clients
+        - generate_cash_invoices
+        - assign_collector
+        - collector_marks_visit_success
+        - collector_marks_deposited
+        - finance_confirms_deposit
+        - verify_invoice_paid
+        - verify_payment_records
+      assertions:
+        - assignment_created_correctly
+        - phase_transitions_recorded
+        - invoice_marked_paid
+        - payment_records_complete
+
+    outage_propagation_flow:
+      description: "Test complete outage propagation from ODC to clients"
+      steps:
+        - create_tenant_with_topology
+        - trigger_odc_outage
+        - verify_odp_outage_propagation
+        - verify_client_outage_propagation
+        - create_technician_task
+        - technician_resolves_outage
+        - verify_outage_cleared
+      assertions:
+        - outage_propagates_downward_only
+        - technician_task_created
+        - outage_resolved_correctly
+
+  module_integration_tests:
+    auth_tenant_integration:
+      description: "Test authentication and tenant context integration"
+      steps:
+        - create_tenant
+        - create_tenant_users
+        - test_login_with_correct_credentials
+        - test_login_with_incorrect_credentials
+        - test_tenant_context_injection
+        - test_cross_tenant_access_prevention
+      assertions:
+        - authentication_works_correctly
+        - tenant_context_injected_properly
+        - cross_tenant_access_prevented
+
+    rbac_feature_toggle_integration:
+      description: "Test RBAC and feature toggle integration"
+      steps:
+        - create_tenant_with_plan
+        - create_users_with_different_roles
+        - test_role_based_access
+        - test_feature_toggle_enforcement
+        - test_addon_feature_enabling
+      assertions:
+        - rbac_enforced_correctly
+        - feature_toggles_working
+        - addon_features_enabled
+
+    billing_network_integration:
+      description: "Test billing and network integration"
+      steps:
+        - create_tenant_with_client
+        - create_network_profile
+        - assign_client_to_network
+        - generate_invoice
+        - test_isolir_network_integration
+      assertions:
+        - network_profiles_assigned_correctly
+        - isolir_affects_network_access
+
+    billing_collector_integration:
+      description: "Test billing and collector integration"
+      steps:
+        - create_tenant_with_cash_clients
+        - generate_cash_invoices
+        - assign_collector
+        - test_collector_payment_flow
+      assertions:
+        - collector_assignments_created
+        - payment_flow_working
+
+    maps_technician_integration:
+      description: "Test maps and technician integration"
+      steps:
+        - create_tenant_with_topology
+        - create_outage
+        - verify_technician_task_creation
+        - test_technician_activity_logging
+      assertions:
+        - tasks_created_for_outages
+        - technician_activities_logged
+
+  api_integration_tests:
+    contract_compliance:
+      description: "Test API contract compliance across all modules"
+      steps:
+        - test_all_api_endpoints
+        - verify_response_formats
+        - verify_error_codes
+        - verify_authentication_requirements
+      assertions:
+        - all_endpoints_return_correct_format
+        - error_codes_consistent
+        - authentication_enforced
+
+    pagination_filtering:
+      description: "Test pagination and filtering across list endpoints"
+      steps:
+        - test_pagination_parameters
+        - test_filter_parameters
+        - test_sort_parameters
+      assertions:
+        - pagination_working_correctly
+        - filters_working_correctly
+        - sort_working_correctly
+
+    rate_limiting:
+      description: "Test rate limiting across API endpoints"
+      steps:
+        - test_rate_limiting_enforcement
+        - test_rate_limit_bypass_attempts
+        - test_rate_limit_recovery
+      assertions:
+        - rate_limiting_enforced
+        - bypass_attempts_blocked
+        - rate_limits_recover
+
+  database_consistency_tests:
+    foreign_key_constraints:
+      description: "Test foreign key constraints across all tables"
+      steps:
+        - test_referential_integrity
+        - test_cascade_deletes
+        - test_constraint_violations
+      assertions:
+        - foreign_keys_enforced
+        - cascades_working_correctly
+        - constraint_violations_handled
+
+    transaction_consistency:
+      description: "Test transaction consistency across complex operations"
+      steps:
+        - test_transaction_rollbacks
+        - test_concurrent_modifications
+        - test_isolation_levels
+      assertions:
+        - transactions_rollback_correctly
+        - concurrent_modifications_handled
+        - isolation_levels_enforced
+
+    data_integrity:
+      description: "Test data integrity across business operations"
+      steps:
+        - test_billing_data_integrity
+        - test_network_data_integrity
+        - test_audit_trail_integrity
+      assertions:
+        - billing_data_consistent
+        - network_data_consistent
+        - audit_trail_complete
+
+  background_job_tests:
+    job_execution:
+      description: "Test background job execution and reliability"
+      steps:
+        - test_job_creation
+        - test_job_processing
+        - test_job_retry_logic
+        - test_job_failure_handling
+      assertions:
+        - jobs_created_correctly
+        - jobs_processed_successfully
+        - retry_logic_working
+        - failures_handled_gracefully
+
+    job_prioritization:
+      description: "Test background job prioritization"
+      steps:
+        - test_priority_queue_behavior
+        - test_job_preemption
+        - test_queue_depth_management
+      assertions:
+        - priority_queue_working
+        - job_preemption_working
+        - queue_depth_managed
+
+  external_service_tests:
+    mikrotik_integration:
+      description: "Test Mikrotik API integration"
+      steps:
+        - test_connection_establishment
+        - test_user_creation
+        - test_user_modification
+        - test_user_deletion
+        - test_connection_failure_handling
+      assertions:
+        - connection_established
+        - user_operations_successful
+        - failures_handled_gracefully
+
+    payment_gateway_integration:
+      description: "Test payment gateway integration"
+      steps:
+        - test_payment_creation
+        - test_payment_success
+        - test_payment_failure
+        - test_webhook_processing
+      assertions:
+        - payments_created_correctly
+        - success_handled_correctly
+        - failures_handled_correctly
+        - webhooks_processed
+
+    wa_gateway_integration:
+      description: "Test WhatsApp gateway integration"
+      steps:
+        - test_message_sending
+        - test_template_usage
+        - test_rate_limiting
+        - test_failure_handling
+      assertions:
+        - messages_sent_successfully
+        - templates_used_correctly
+        - rate_limiting_enforced
+        - failures_handled_gracefully
+
+  test_automation:
+  test_execution:
+    test_runner:
+      description: "Automated test execution system"
+      behavior:
+        - run_all_integration_tests
+        - run_specific_test_categories
+        - run_tests_in_parallel
+        - generate_test_reports
+        - notify_on_test_failures
+
+    test_environment:
+      description: "Automated test environment setup"
+      behavior:
+        - create_test_database
+        - load_test_fixtures
+        - start_test_services
+        - cleanup_after_tests
+        - reset_state_between_tests
+
+  test_reporting:
+    test_results:
+      description: "Comprehensive test result reporting"
+      behavior:
+        - generate_test_summary
+        - identify_failing_tests
+        - provide_failure_details
+        - track_test_history
+        - generate_trend_reports
+
+    coverage_reporting:
+      description: "Test coverage reporting"
+      behavior:
+        - calculate_code_coverage
+        - identify_uncovered_code
+        - generate_coverage_reports
+        - track_coverage_trends
+
+  security_enhancements:
+  test_security:
+    test_isolation:
+      - test_data_isolation
+      - test_user_isolation
+      - test_tenant_isolation
+
+    test_authentication:
+      - test_authentication_bypass_attempts
+      - test_session_hijacking_attempts
+      - test_privilege_escalation_attempts
+
+  coding_rules:
+    - "Tests must be deterministic"
+    - "Tests must be independent"
+    - "Tests must have clear assertions"
+    - "Tests must have descriptive names"
+    - "Tests must clean up after themselves"
+    - "Tests must handle failures gracefully"
+
+  output_expectations:
+    - "Comprehensive integration test suite"
+    - "Automated test execution system"
+    - "Test result reporting"
+    - "Coverage reporting"
+    - "Test environment automation"
+
+  stop_condition:
+    - "All business workflows tested"
+    - "All module integrations tested"
+    - "All API contracts tested"
+    - "All database consistency tested"
+    - "All background jobs tested"
+    - "All external services tested"
+    - "Test automation functional"
+    - "Test reporting functional"
+    - "Ready for cross-module validation"
+
+  instruction_to_ai:
+    - "Implement comprehensive integration tests"
+    - "Focus on business-critical workflows"
+    - "Ensure tests are automated and repeatable"
+    - "Provide clear failure reporting"
+    - "Do not implement unit tests"

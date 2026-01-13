@@ -1,0 +1,586 @@
+execution_prompt:
+  id: "RRNET_EXEC_SA_06_EMERGENCY_CONTROLS"
+  purpose: >
+    Implement comprehensive emergency controls system for super admin
+    including emergency shutdown, system overrides, mass operations,
+    disaster recovery, security incident response, and enterprise-grade
+    crisis management with full audit trails and rollback capabilities.
+
+  prerequisites:
+    - "EXECUTION_SA_05 Audit Logs & Compliance completed"
+    - "All previous super admin modules completed"
+    - "System monitoring and health tracking active"
+    - "Background job system operational"
+
+  design_principles:
+    - "Emergency controls require multi-factor authorization"
+    - "All emergency actions are audited and reversible"
+    - "System overrides have time limits and automatic rollback"
+    - "Mass operations have safety mechanisms and progress tracking"
+    - "Disaster recovery is automated and testable"
+    - "Security incidents have structured response workflows"
+
+  scope:
+    include:
+      - emergency_shutdown_controls
+      - system_override_capabilities
+      - mass_tenant_operations
+      - disaster_recovery_controls
+      - security_incident_response
+      - service_degradation_controls
+      - emergency_access_management
+      - crisis_communication
+      - rollback_and_recovery
+    exclude:
+      - real-time_monitoring
+      - customer_facing_emergency_features
+      - automated_incident_resolution
+      - legal_emergency_procedures
+
+  backend_structure_additions:
+    internal/domain:
+      - emergency/
+    internal/emergency:
+      - service.go
+      - shutdown_manager.go
+      - override_manager.go
+      - mass_operations.go
+      - disaster_recovery.go
+      - incident_response.go
+    internal/repository:
+      - emergency_repository.go
+      - incident_repository.go
+      - recovery_repository.go
+    internal/http/handlers:
+      - emergency_handler.go
+      - incident_handler.go
+      - recovery_handler.go
+    internal/jobs:
+      - emergency_job.go
+      - recovery_job.go
+
+  database_schema:
+    emergency_controls:
+      fields:
+        - id (uuid, pk)
+        - control_type (shutdown | override | mass_operation | disaster_recovery)
+        - control_name
+        - description
+        - severity (low | medium | high | critical)
+        - requires_approval (boolean)
+        - approval_count_required
+        - auto_rollback_timeout_minutes
+        - is_active
+        - created_at
+        - updated_at
+
+    emergency_sessions:
+      fields:
+        - id (uuid, pk)
+        - emergency_control_id (fk)
+        - initiated_by (super_admin_id)
+        - status (pending | approved | active | completed | rolled_back | failed)
+        - parameters (jsonb)
+        - approval_votes (jsonb)
+        - executed_at (nullable)
+        - completed_at (nullable)
+        - rolled_back_at (nullable)
+        - rollback_reason (nullable)
+        - created_at
+        - updated_at
+
+    mass_operations:
+      fields:
+        - id (uuid, pk)
+        - operation_type (tenant_suspend | tenant_isolate | plan_change | addon_revoke)
+        - target_criteria (jsonb)
+        - affected_count
+        - processed_count
+        - failed_count
+        - status (pending | processing | completed | failed | rolled_back)
+        - progress_percentage
+        - error_details (jsonb, nullable)
+        - initiated_by (super_admin_id)
+        - created_at
+        - updated_at
+        - completed_at (nullable)
+
+    security_incidents:
+      fields:
+        - id (uuid, pk)
+        - incident_type (data_breach | security_violation | ddos_attack | unauthorized_access | system_compromise)
+        - severity (low | medium | high | critical)
+        - title
+        - description
+        - affected_systems (jsonb)
+        - impact_assessment (jsonb)
+        - status (open | investigating | contained | resolved | closed)
+        - assigned_to (super_admin_id, nullable)
+        - reported_by (super_admin_id)
+        - created_at
+        - updated_at
+        - resolved_at (nullable)
+
+    incident_actions:
+      fields:
+        - id (uuid, pk)
+        - incident_id (fk)
+        - action_type (isolate_system | revoke_access | backup_data | notify_stakeholders | legal_notification)
+        - description
+        - executed_by (super_admin_id)
+        - execution_status (pending | completed | failed)
+        - execution_details (jsonb, nullable)
+        - created_at
+        - updated_at
+        - executed_at (nullable)
+
+    disaster_recovery_plans:
+      fields:
+        - id (uuid, pk)
+        - plan_name
+        - disaster_type (data_loss | system_failure | security_breach | natural_disaster)
+        - recovery_steps (jsonb)
+        - rto_hours (Recovery Time Objective)
+        - rpo_hours (Recovery Point Objective)
+        - backup_requirements (jsonb)
+        - stakeholder_notifications (jsonb)
+        - is_active
+        - last_tested_at (nullable)
+        - test_results (jsonb, nullable)
+        - created_at
+        - updated_at
+
+    recovery_sessions:
+      fields:
+        - id (uuid, pk)
+        - disaster_recovery_plan_id (fk)
+        - triggered_by (super_admin_id)
+        - status (initiated | in_progress | completed | failed)
+        - current_step
+        - progress_percentage
+        - recovery_details (jsonb)
+        - initiated_at
+        - updated_at
+        - completed_at (nullable)
+
+    emergency_access:
+      fields:
+        - id (uuid, pk)
+        - access_type (break_glass | emergency_account | temporary_elevation)
+        - requester_id (super_admin_id)
+        - approver_id (super_admin_id, nullable)
+        - reason
+        - access_level
+        - expires_at
+        - status (pending | approved | granted | expired | revoked)
+        - access_log (jsonb)
+        - created_at
+        - updated_at
+
+    crisis_communications:
+      fields:
+        - id (uuid, pk)
+        - incident_id (nullable, fk)
+        - communication_type (internal_alert | external_notification | stakeholder_update | press_release)
+        - channel (email | sms | dashboard | slack | webhook)
+        - recipients (jsonb)
+        - subject
+        - message
+        - priority (low | medium | high | critical)
+        - status (draft | sent | failed)
+        - sent_by (super_admin_id)
+        - sent_at (nullable)
+        - created_at
+        - updated_at
+
+  emergency_shutdown_controls:
+  shutdown_types:
+    system_shutdown:
+      - graceful_shutdown_all_services
+      - force_shutdown_critical_services
+      - emergency_database_stop
+      - cache_flush_and_stop
+    
+    service_shutdown:
+      - api_server_shutdown
+      - background_worker_shutdown
+      - external_service_disconnect
+      - payment_gateway_disable
+    
+    tenant_shutdown:
+      - mass_tenant_suspend
+      - mass_tenant_isolate
+      - selective_service_disable
+      - emergency_tenant_terminate
+
+  shutdown_procedures:
+  emergency_shutdown:
+    endpoint: POST /api/v1/superadmin/emergency/shutdown
+    input:
+      - shutdown_type
+      - scope
+      - reason
+      - approval_votes (if required)
+    behavior:
+      - validate emergency authorization
+      - require multi-factor approval for critical shutdowns
+      - execute shutdown in phases
+      - notify all stakeholders
+      - log all actions
+      - set automatic rollback timer
+
+  shutdown_status:
+    endpoint: GET /api/v1/superadmin/emergency/shutdown/status
+    response:
+      - current_shutdown_status
+      - affected_services
+      - progress_details
+      - rollback_options
+
+  system_override_capabilities:
+  override_types:
+    security_overrides:
+      - bypass_authentication
+      - elevate_privileges_temporarily
+      - disable_rate_limiting
+      - override_ip_restrictions
+    
+    business_overrides:
+      - override_plan_limits
+      - skip_billing_validation
+      - bypass_feature_toggles
+      - override_tenant_restrictions
+    
+    system_overrides:
+      - disable_maintenance_mode
+      - override_health_checks
+      - bypass_dependency_checks
+      - force_service_start
+
+  override_management:
+  create_override:
+    endpoint: POST /api/v1/superadmin/emergency/overrides
+    input:
+      - override_type
+      - target_system
+      - parameters
+      - duration_minutes
+      - reason
+      - approval_required
+    behavior:
+      - validate override authority
+      - require approval for critical overrides
+      - set automatic expiration
+      - monitor override impact
+      - log override usage
+
+  override_status:
+    endpoint: GET /api/v1/superadmin/emergency/overrides
+    response:
+      - active_overrides
+      - override_history
+      - impact_assessment
+      - expiration_timers
+
+  mass_tenant_operations:
+  operation_types:
+    tenant_suspend:
+      - suspend_all_tenants
+      - suspend_by_criteria
+      - suspend_by_plan
+      - emergency_suspend
+    
+    tenant_isolate:
+      - isolate_all_tenants
+      - isolate_by_criteria
+      - emergency_isolate
+      - partial_isolation
+    
+    plan_operations:
+      - mass_plan_change
+      - emergency_plan_downgrade
+      - temporary_plan_override
+      - service_disable
+
+  mass_operation_management:
+  initiate_mass_operation:
+    endpoint: POST /api/v1/superadmin/emergency/mass-operations
+    input:
+      - operation_type
+      - target_criteria
+      - dry_run (boolean)
+      - batch_size
+      - approval_required
+    behavior:
+      - validate operation authority
+      - require approval for large-scale operations
+      - provide impact assessment
+      - execute in batches with progress tracking
+      - allow cancellation and rollback
+
+  operation_status:
+    endpoint: GET /api/v1/superadmin/emergency/mass-operations/{id}
+    response:
+      - operation_progress
+      - success_count
+      - failure_count
+      - error_details
+      - rollback_options
+
+  disaster_recovery_controls:
+  recovery_management:
+  trigger_recovery:
+    endpoint: POST /api/v1/superadmin/emergency/disaster-recovery
+    input:
+      - disaster_recovery_plan_id
+      - disaster_type
+      - severity
+      - affected_systems
+      - recovery_parameters
+    behavior:
+      - validate recovery authority
+      - execute recovery plan steps
+      - monitor recovery progress
+      - coordinate with stakeholders
+      - log recovery actions
+
+  recovery_status:
+    endpoint: GET /api/v1/superadmin/emergency/disaster-recovery/{session_id}
+    response:
+      - recovery_progress
+      - current_step
+      - estimated_completion
+      - issues_encountered
+      - rollback_options
+
+  backup_restoration:
+  restore_backup:
+    endpoint: POST /api/v1/superadmin/emergency/restore-backup
+    input:
+      - backup_id
+      - restoration_type (full | partial | point_in_time)
+      - target_systems
+      - approval_required
+    behavior:
+      - validate backup integrity
+      - require approval for production restoration
+      - execute restoration with rollback capability
+      - verify restoration success
+      - notify stakeholders
+
+  security_incident_response:
+  incident_management:
+  create_incident:
+    endpoint: POST /api/v1/superadmin/emergency/incidents
+    input:
+      - incident_type
+      - severity
+      - title
+      - description
+      - affected_systems
+      - initial_assessment
+    behavior:
+      - create incident record
+      - assign incident manager
+      - trigger notification workflows
+      - establish response timeline
+      - log incident creation
+
+  incident_actions:
+  execute_action:
+    endpoint: POST /api/v1/superadmin/emergency/incidents/{id}/actions
+    input:
+      - action_type
+      - description
+      - execution_parameters
+      - approval_required
+    behavior:
+      - validate action authority
+      - execute incident response actions
+      - coordinate with other systems
+      - monitor action effectiveness
+      - log action execution
+
+  incident_status:
+    endpoint: GET /api/v1/superadmin/emergency/incidents/{id}
+    response:
+      - incident_details
+      - timeline
+      - actions_taken
+      - current_status
+      - next_steps
+
+  service_degradation_controls:
+  degradation_management:
+  degrade_service:
+    endpoint: POST /api/v1/superadmin/emergency/degrade-service
+    input:
+      - service_name
+      - degradation_level (minimal | moderate | severe)
+      - degradation_type (throttling | feature_disable | read_only)
+      - duration_minutes
+      - reason
+    behavior:
+      - validate degradation authority
+      - implement service degradation
+      - monitor service performance
+      - notify affected users
+      - log degradation actions
+
+  service_status:
+    endpoint: GET /api/v1/superadmin/emergency/service-status
+    response:
+      - service_degradation_status
+      - performance_metrics
+      - user_impact_assessment
+      - recovery_timeline
+
+  emergency_access_management:
+  access_controls:
+  break_glass_access:
+    endpoint: POST /api/v1/superadmin/emergency/break-glass
+    input:
+      - access_level
+      - reason
+      - duration_minutes
+      - approval_required
+    behavior:
+      - validate break-glass authority
+      - require multi-factor approval
+      - grant temporary elevated access
+      - monitor access usage
+      - log all break-glass activities
+
+  emergency_accounts:
+    endpoint: POST /api/v1/superadmin/emergency/emergency-accounts
+    input:
+      - account_type
+      - permissions
+      - duration_minutes
+      - reason
+    behavior:
+      - create emergency access accounts
+      - set automatic expiration
+      - monitor account usage
+      - log account activities
+
+  crisis_communication:
+  communication_management:
+  send_communication:
+    endpoint: POST /api/v1/superadmin/emergency/communicate
+    input:
+      - communication_type
+      - channel
+      - recipients
+      - subject
+      - message
+      - priority
+    behavior:
+      - validate communication authority
+      - send emergency notifications
+      - track delivery status
+      - log communication activities
+
+  communication_history:
+    endpoint: GET /api/v1/superadmin/emergency/communications
+    response:
+      - communication_history
+      - delivery_status
+      - recipient_responses
+      - engagement_metrics
+
+  rollback_and_recovery:
+  rollback_management:
+  initiate_rollback:
+    endpoint: POST /api/v1/superadmin/emergency/rollback
+    input:
+      - emergency_session_id
+      - rollback_reason
+      - rollback_type (full | partial)
+    behavior:
+      - validate rollback authority
+      - execute rollback procedures
+      - verify system state
+      - notify stakeholders
+      - log rollback actions
+
+  rollback_status:
+    endpoint: GET /api/v1/superadmin/emergency/rollback/{session_id}
+    response:
+      - rollback_progress
+      - systems_restored
+      - issues_encountered
+      - verification_status
+
+  security_enhancements:
+  authorization:
+  required_permissions:
+    - emergency.shutdown
+    - emergency.override
+    - emergency.mass_operations
+    - emergency.disaster_recovery
+    - emergency.incident_response
+    - emergency.break_glass
+
+  multi_factor_approval:
+  - critical_emergency_actions: 3 approvals required
+  - high_severity_actions: 2 approvals required
+  - medium_severity_actions: 1 approval required
+  - low_severity_actions: no approval required
+
+  access_controls:
+  - emergency_access_time_limited
+  - break_glass_access_monitored
+  - all_actions_logged
+  - automatic_rollback_enabled
+
+  audit_requirements:
+  mandatory_events:
+    - emergency_control_initiated
+    - system_override_activated
+    - mass_operation_executed
+    - disaster_recovery_triggered
+    - security_incident_created
+    - break_glass_access_granted
+    - emergency_communication_sent
+    - rollback_executed
+
+  coding_rules:
+  - "All emergency actions require multi-factor approval"
+  - "Emergency sessions have automatic rollback timers"
+  - "Mass operations have progress tracking and cancellation"
+  - "Disaster recovery plans are testable and verifiable"
+  - "Security incidents have structured response workflows"
+  - "All emergency actions are audited and reversible"
+  - "Break-glass access is monitored and time-limited"
+  - "Crisis communications are tracked and verified"
+
+  output_expectations:
+  - "Comprehensive emergency control system"
+  - "System override capabilities"
+  - "Mass tenant operations"
+  - "Disaster recovery controls"
+  - "Security incident response"
+  - "Service degradation controls"
+  - "Emergency access management"
+  - "Crisis communication system"
+  - "Rollback and recovery capabilities"
+
+  stop_condition:
+  - "Emergency shutdown controls functional"
+  - "System overrides working with approval"
+  - "Mass operations safe and trackable"
+  - "Disaster recovery plans executable"
+  - "Security incident response structured"
+  - "Service degradation controllable"
+  - "Emergency access managed and monitored"
+  - "Crisis communications effective"
+  - "Rollback capabilities functional"
+  - "Super admin system complete and production-ready"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade emergency controls"
+  - "Include all security and audit features"
+  - "Ensure all emergency actions are reversible"
+  - "Follow super admin permission model"
+  - "Prepare for production deployment"

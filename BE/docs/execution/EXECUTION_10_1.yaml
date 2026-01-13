@@ -1,0 +1,144 @@
+EXECUTION_10_1_TECHNICIAN_MODULE_HARDENING:
+  goal: >
+    Harden technician module to reflect real-world field operations,
+    enforce task accountability, and integrate deterministically
+    with outage resolution logic.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_06_NETWORK_MANAGEMENT_MIKROTIK_RADIUS
+      - EXECUTION_09_1_MAPS_AND_OUTAGE_PROPAGATION_HARDENING
+      - EXECUTION_10_TECHNICIAN_MODULE
+
+  design_principles:
+    - Field tasks may fail or be cancelled
+    - No task is considered done without activity evidence
+    - Repair tasks must resolve outage state deterministically
+    - Technician actions must be auditable
+    - No cross-technician task manipulation
+
+  data_model_clarity:
+    technician_tasks:
+      additional_rules:
+        - When task_type = repair:
+            source_id:
+              description: >
+                Stores ID of related outage entity.
+              allowed_entity:
+                - odc
+                - odp
+                - client
+            source_type:
+              enum:
+                - odc
+                - odp
+                - client
+
+  task_status_definition:
+    status_enum:
+      allowed_values:
+        - assigned
+        - in_progress
+        - completed
+        - failed
+        - cancelled
+
+    allowed_transitions:
+      assigned:
+        - in_progress
+        - cancelled
+      in_progress:
+        - completed
+        - failed
+      completed: []
+      failed: []
+      cancelled: []
+
+    transition_rules:
+      - Invalid transitions must be rejected at domain/service layer
+      - No direct transition from assigned → completed
+      - No status change allowed after completed / failed / cancelled
+
+  tasks:
+    1_task_status_hardening:
+      description: Extend technician task lifecycle
+      definitions:
+        failed:
+          description: >
+            Task attempted but could not be completed
+            (e.g., customer unavailable, access blocked).
+        cancelled:
+          description: >
+            Task cancelled before execution
+            (e.g., duplicate assignment, admin decision).
+
+    2_task_completion_validation:
+      description: Enforce activity evidence before completion
+      rules:
+        - technician_tasks.status cannot transition to completed unless:
+            - At least one technician_activities record exists
+
+    3_repair_outage_resolution_rule:
+      description: Auto-resolve outage on repair completion
+      applies_to:
+        - technician_tasks.task_type = repair
+      rules:
+        - On status transition to completed:
+            actions:
+              - Update related entity (source_type + source_id).status → normal
+              - Insert outage_history record:
+                  entity_type: source_type
+                  entity_id: source_id
+                  reason: maintenance
+                  triggered_by: technician_id
+
+    4_status_update_authorization:
+      description: Prevent cross-technician manipulation
+      rules:
+        - When updating technician_tasks.status:
+            - If role = technician:
+                condition: technician_tasks.technician_id == current_user.id
+            - If role in [admin, owner]:
+                condition: always_allowed
+      enforcement:
+        - Must be validated at service layer
+        - Reject unauthorized updates with explicit error
+
+    5_technician_activity_audit:
+      description: Strengthen technician activity logging
+      rules:
+        - technician_activities is append-only (no delete)
+        - Required fields:
+            - technician_id
+            - task_id
+            - description
+            - photo_url (nullable)
+            - created_at
+
+  rbac_visibility_rules:
+    technician:
+      - view_assigned_tasks_only
+      - create_activity_logs
+      - update_own_task_status (with validation)
+    admin:
+      - view_all_tasks
+      - cancel_any_task
+    owner:
+      - same_as_admin
+    finance:
+      - no_access
+    collector:
+      - no_access
+
+  done_criteria:
+    - Task-to-outage linkage is unambiguous
+    - Status transitions are strictly validated
+    - Technician cannot modify other technicians’ tasks
+    - Repair tasks normalize outage state automatically
+    - Technician workflow fully auditable and realistic
+
+  note:
+    - This revision locks EXECUTION #10 behavior
+    - No frontend logic included
+    - Ready for production-grade implementation

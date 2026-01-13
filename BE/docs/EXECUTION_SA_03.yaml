@@ -1,0 +1,420 @@
+execution_prompt:
+  id: "RRNET_EXEC_SA_03_GLOBAL_PLAN_ADDON_MANAGEMENT"
+  purpose: >
+    Implement global plan and addon management system for super admin
+    including CRUD operations, pricing control, feature management,
+    usage analytics, and enterprise-grade security with comprehensive
+    audit trails and bulk operations.
+
+  prerequisites:
+    - "EXECUTION_SA_02 Tenant Management completed"
+    - "EXECUTION_04_1 Plan & Addon Migration completed"
+    - "EXECUTION_SA_01 Super Admin Auth completed"
+
+  design_principles:
+    - "Global plans serve as templates for tenant assignments"
+    - "Addons provide flexible extensions and customization"
+    - "Pricing changes affect future assignments only"
+    - "Feature toggles control plan capabilities"
+    - "All changes are audited and reversible"
+    - "Bulk operations have safety mechanisms"
+
+  scope:
+    include:
+      - plan_crud_operations
+      - addon_crud_operations
+      - pricing_management
+      - feature_toggle_management
+      - plan_addon_analytics
+      - bulk_operations
+      - tenant_assignment_tracking
+      - change_management
+    exclude:
+      - tenant_specific_pricing
+      - billing_invoice_logic
+      - payment_gateway_integration
+      - customer_facing_features
+
+  backend_structure_additions:
+    internal/domain:
+      - plan/
+      - addon/
+    internal/plan:
+      - service.go
+      - pricing_manager.go
+      - feature_manager.go
+      - analytics.go
+    internal/addon:
+      - service.go
+      - catalog_manager.go
+      - pricing_manager.go
+    internal/repository:
+      - plan_repository.go
+      - addon_repository.go
+      - plan_usage_repository.go
+    internal/http/handlers:
+      - plan_handler.go
+      - addon_handler.go
+      - plan_bulk_handler.go
+
+  database_schema:
+    plans:
+      fields:
+        - id (uuid, pk)
+        - code (unique)
+        - name
+        - description
+        - category (basic | pro | enterprise | custom)
+        - base_price
+        - currency
+        - billing_cycle (monthly | yearly)
+        - features (jsonb)
+        - limits (jsonb)
+        - is_active
+        - is_public
+        - sort_order
+        - created_at
+        - updated_at
+        - deleted_at (nullable)
+
+    plan_history:
+      fields:
+        - id (uuid, pk)
+        - plan_id (fk)
+        - operation_type (create | update | delete | price_change)
+        - old_values (jsonb, nullable)
+        - new_values (jsonb, nullable)
+        - performed_by (super_admin_id)
+        - reason
+        - created_at
+
+    addons:
+      fields:
+        - id (uuid, pk)
+        - code (unique)
+        - name
+        - description
+        - category (limit_extension | feature_unlock | service | marketplace)
+        - base_price
+        - pricing_model (fixed | per_unit | tiered)
+        - unit_name
+        - unit_amount
+        - features (jsonb)
+        - limits (jsonb)
+        - requires_approval
+        - is_active
+        - is_public
+        - sort_order
+        - created_at
+        - updated_at
+        - deleted_at (nullable)
+
+    addon_history:
+      fields:
+        - id (uuid, pk)
+        - addon_id (fk)
+        - operation_type (create | update | delete | price_change)
+        - old_values (jsonb, nullable)
+        - new_values (jsonb, nullable)
+        - performed_by (super_admin_id)
+        - reason
+        - created_at
+
+    plan_usage:
+      fields:
+        - id (uuid, pk)
+        - plan_id (fk)
+        - active_tenants_count
+        - total_tenants_count
+        - monthly_revenue
+        - recorded_at
+
+    addon_usage:
+      fields:
+        - id (uuid, pk)
+        - addon_id (fk)
+        - active_assignments_count
+        - total_assignments_count
+        - monthly_revenue
+        - recorded_at
+
+  plan_management:
+  create_plan:
+    endpoint: POST /api/v1/superadmin/plans
+    input:
+      - code
+      - name
+      - description
+      - category
+      - base_price
+      - billing_cycle
+      - features
+      - limits
+    behavior:
+      - validate code uniqueness
+      - validate pricing structure
+      - set default sort order
+      - log creation
+      - notify tenant managers
+    validation:
+      - code format (alphanumeric, underscores)
+      - price >= 0
+      - required features for category
+
+  update_plan:
+    endpoint: PUT /api/v1/superadmin/plans/{id}
+    input:
+      - name
+      - description
+      - base_price
+      - features
+      - limits
+    behavior:
+      - validate changes
+      - create history record
+      - update existing assignments if needed
+      - log modification
+    pricing_rules:
+      - price changes affect new assignments only
+      - existing tenants keep current price
+      - optional price grandfathering
+
+  delete_plan:
+    endpoint: DELETE /api/v1/superadmin/plans/{id}
+    behavior:
+      - check for active assignments
+      - prevent deletion if in use
+      - offer deactivation instead
+      - schedule data purge
+
+  plan_features:
+  feature_definitions:
+    standard_features:
+      - client_management
+      - billing
+      - network
+      - maps
+      - wa_notification
+      - collector
+      - technician
+      - addon_engine
+      - api_access
+      - reports
+      - multi_tenant
+
+  feature_management:
+    endpoint: PATCH /api/v1/superadmin/plans/{id}/features
+    input:
+      - features (jsonb)
+    behavior:
+      - validate feature definitions
+      - update plan capabilities
+      - notify affected tenants
+      - log changes
+
+  addon_management:
+  create_addon:
+    endpoint: POST /api/v1/superadmin/addons
+    input:
+      - code
+      - name
+      - description
+      - category
+      - base_price
+      - pricing_model
+      - unit_name
+      - unit_amount
+      - features
+      - limits
+      - requires_approval
+    behavior:
+      - validate code uniqueness
+      - validate pricing model
+      - set default sort order
+      - log creation
+    validation:
+      - pricing_model compatibility
+      - unit_amount > 0 for per_unit pricing
+
+  update_addon:
+    endpoint: PUT /api/v1/superadmin/addons/{id}
+    input:
+      - name
+      - description
+      - base_price
+      - features
+      - limits
+      - requires_approval
+    behavior:
+      - validate changes
+      - create history record
+      - handle active assignments
+      - log modification
+
+  addon_categories:
+  limit_extensions:
+    - extra_router
+    - extra_client
+    - extra_voucher
+    - extra_odp
+    - extra_client_maps
+    - extra_storage
+    - extra_bandwidth
+
+  feature_unlocks:
+    - advanced_reports
+    - api_access
+    - white_label
+    - custom_domains
+    - priority_support
+    - beta_features
+
+  service_addons:
+    - wa_premium
+    - backup_service
+    - monitoring_pro
+    - ssl_wildcard
+
+  pricing_management:
+  pricing_models:
+    fixed:
+      - one-time fee
+      - monthly recurring
+    per_unit:
+      - price per unit
+      - bulk discounts
+    tiered:
+      - quantity-based pricing
+      - volume discounts
+
+  price_change_policy:
+    - new_assignments_use_new_price
+    - existing_assignments_keep_current_price
+    - optional_price_migration
+    - price_lock_period (30 days)
+
+  bulk_operations:
+  bulk_price_update:
+    endpoint: POST /api/v1/superadmin/plans/bulk/price-update
+    input:
+      - plan_ids
+      - price_change_type (percentage | fixed)
+      - value
+      - effective_date
+    behavior:
+      - validate permissions
+      - calculate new prices
+      - preview changes
+      - schedule updates
+      - notify affected parties
+
+  bulk_feature_update:
+    endpoint: POST /api/v1/superadmin/plans/bulk/feature-update
+    input:
+      - plan_ids
+      - features_to_add
+      - features_to_remove
+    behavior:
+      - validate feature compatibility
+      - update plans
+      - notify affected tenants
+      - log changes
+
+  plan_addon_analytics:
+  usage_metrics:
+    endpoint: GET /api/v1/superadmin/plans/analytics
+    metrics:
+      - plan_adoption_rate
+      - revenue_per_plan
+      - feature_usage_stats
+      - churn_analysis
+      - addon_attach_rate
+
+  addon_analytics:
+    endpoint: GET /api/v1/superadmin/addons/analytics
+    metrics:
+      - addon_popularity
+      - revenue_per_addon
+      - approval_rate
+      - usage_correlation
+
+  change_management:
+  version_control:
+    - all changes create history records
+    - rollback capability for critical changes
+    - change approval workflow for major updates
+    - change calendar for scheduled updates
+
+  impact_analysis:
+    endpoint: POST /api/v1/superadmin/plans/{id}/impact-analysis
+    input:
+      - proposed_changes
+    behavior:
+      - analyze affected tenants
+      - calculate revenue impact
+      - identify breaking changes
+      - provide recommendations
+
+  security_enhancements:
+  authorization:
+    required_permissions:
+      - plan.create
+      - plan.update
+      - plan.delete
+      - plan.pricing.manage
+      - addon.create
+      - addon.update
+      - addon.delete
+      - addon.pricing.manage
+
+  validation_rules:
+    - code uniqueness and format
+    - pricing model validation
+    - feature compatibility checks
+    - limit value validation
+    - dependency validation
+
+  audit_requirements:
+  mandatory_events:
+    - plan_created
+    - plan_updated
+    - plan_deleted
+    - price_changed
+    - feature_toggled
+    - addon_created
+    - addon_updated
+    - addon_deleted
+    - bulk_operations
+
+  coding_rules:
+    - "All plan/addon operations must be audited"
+    - "Price changes must not affect existing assignments"
+    - "Feature toggles must be backward compatible"
+    - "Bulk operations must have preview capability"
+    - "All changes must be reversible"
+    - "Analytics must be real-time"
+
+  output_expectations:
+    - "Complete plan management system"
+    - "Comprehensive addon catalog"
+    - "Pricing management with policy controls"
+    - "Feature toggle system"
+    - "Usage analytics and reporting"
+    - "Bulk operations with safety mechanisms"
+    - "Change management with rollback"
+
+  stop_condition:
+    - "Super admin can manage complete plan lifecycle"
+    - "Addon catalog fully functional"
+    - "Pricing changes controlled and audited"
+    - "Feature toggles working"
+    - "Analytics providing insights"
+    - "Bulk operations safe and trackable"
+    - "Ready for tenant assignment integration"
+
+  instruction_to_ai:
+    - "Implement enterprise-grade plan/addon management"
+    - "Include all security and audit features"
+    - "Prepare for integration with tenant assignments"
+    - "Follow super admin permission model"
+    - "Do not implement tenant-specific logic"

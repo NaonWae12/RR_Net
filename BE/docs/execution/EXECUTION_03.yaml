@@ -1,0 +1,169 @@
+execution_prompt:
+  id: "RRNET_EXEC_03_RBAC_CAPABILITY_ENGINE"
+  purpose: >
+    Implement a flexible and extensible RBAC (Role-Based Access Control)
+    capability engine for RRNet SaaS. This step defines roles, capabilities,
+    and enforcement middleware without coupling to business modules.
+
+  prerequisites:
+    - "EXECUTION #2.1 Auth Hardening completed"
+    - "JWT auth with tenant context working"
+
+  rbac_design_principle:
+    model: role_to_capability
+    philosophy:
+      - "Capabilities are first-class citizens"
+      - "Roles are collections of capabilities"
+      - "No hardcoded role checks in handlers"
+
+  scope:
+    include:
+      - role_definitions
+      - capability_definitions
+      - role_capability_mapping
+      - rbac_service
+      - rbac_middleware
+      - route_guard_helpers
+    exclude:
+      - billing_rules
+      - feature_toggle_enforcement
+      - ui_visibility_logic
+      - super_admin_global_ops
+      - audit_log
+
+  backend_structure_additions:
+    internal/rbac:
+      - roles.go
+      - capabilities.go
+      - role_capability_map.go
+      - service.go
+    internal/http/middleware:
+      - rbac_middleware.go
+    internal/http/helpers:
+      - require_capability.go
+
+  roles:
+    predefined:
+      - super_admin
+      - owner
+      - admin
+      - finance
+      - hr
+      - technician
+      - collector
+      - client
+
+  capability_categories:
+    tenant:
+      - tenant.view
+      - tenant.update
+    user:
+      - user.create
+      - user.update
+      - user.disable
+      - user.view
+    client:
+      - client.create
+      - client.update
+      - client.view
+      - client.suspend
+    billing:
+      - billing.view
+      - billing.collect
+      - billing.confirm
+    network:
+      - network.view
+      - network.manage
+    maps:
+      - maps.view
+      - maps.update
+    system:
+      - system.settings
+
+  role_capability_mapping:
+    super_admin:
+      - "*"
+    owner:
+      - tenant.view
+      - tenant.update
+      - user.create
+      - user.update
+      - user.view
+      - client.view
+      - billing.view
+      - system.settings
+    admin:
+      - user.create
+      - user.update
+      - user.view
+      - client.create
+      - client.update
+      - client.view
+      - billing.view
+      - billing.collect
+      - network.manage
+      - maps.update
+    finance:
+      - billing.view
+      - billing.confirm
+    hr:
+      - user.create
+      - user.view
+    technician:
+      - network.view
+      - maps.view
+    collector:
+      - billing.collect
+      - billing.view
+    client:
+      - billing.view
+      - client.view
+
+  enforcement:
+    middleware:
+      behavior:
+        - read_capability_from_context
+        - compare_with_required
+        - deny_if_missing
+      error_response:
+        error: "Forbidden"
+        message: "You do not have permission to perform this action"
+
+    handler_helper:
+      usage: 'requireCapability("billing.view")'
+
+  jwt_integration:
+    claims_used:
+      - role
+    rules:
+      - "Do not trust role from request body"
+      - "Role must come from JWT only"
+
+  extensibility:
+    rules:
+      - "New capability must not require schema change"
+      - "Roles can be extended by modifying mapping only"
+      - "Future DB-driven RBAC allowed"
+
+  coding_rules:
+    - "No if role == admin checks"
+    - "All permission checks via capability engine"
+    - "Fail closed (deny by default)"
+    - "Keep RBAC independent from domain logic"
+
+  output_expectations:
+    - "RBAC core files implemented"
+    - "Middleware wired into router"
+    - "Example protected route"
+    - "Short documentation comment explaining usage"
+
+  stop_condition:
+    - "RBAC enforced via middleware"
+    - "Handlers protected by capabilities"
+    - "No dependency on billing or other modules"
+
+  instruction_to_ai:
+    - "Keep RBAC generic and reusable"
+    - "Do not implement UI logic"
+    - "Do not over-optimize"
+    - "Follow the execution roadmap strictly"

@@ -1,0 +1,181 @@
+execution_prompt:
+  id: "RRNET_EXEC_07_BILLING_ISOLIR_ENGINE"
+  purpose: >
+    Implement billing engine for ISP operations including invoice generation,
+    payment handling (gateway, manual, cash/collector), billing state machine,
+    and automatic isolir/unisolir integration with Network module.
+
+  prerequisites:
+    - "EXECUTION #5 Client Management completed"
+    - "EXECUTION #6 Network Management completed"
+    - "EXECUTION #4 Plan + Feature Toggle active"
+    - "EXECUTION #4.5 Notification Stub available"
+
+  design_principles:
+    - "Invoice is the single source of truth"
+    - "Billing is state-machine driven"
+    - "Isolir is triggered by billing events"
+    - "Payment methods are pluggable"
+    - "No money amount input by collector"
+
+  scope:
+    include:
+      - billing_package_model
+      - invoice_generation
+      - invoice_state_machine
+      - payment_methods
+      - collector_cash_flow_states
+      - isolir_unisolir_triggers
+      - billing_history
+      - overdue_detection
+    exclude:
+      - real_payment_gateway_sdk
+      - accounting_export
+      - tax_calculation
+      - refund_logic
+
+  backend_structure_additions:
+    internal/domain:
+      - billing/
+    internal/billing:
+      - service.go
+      - state_machine.go
+      - isolir_bridge.go
+      - payment_router.go
+    internal/billing/payments:
+      - gateway_stub.go
+      - manual.go
+      - cash_collector.go
+    internal/repository:
+      - invoice_repository.go
+      - payment_repository.go
+      - billing_package_repository.go
+    internal/http/handlers:
+      - invoice_handler.go
+      - payment_handler.go
+
+  database_schema:
+    billing_packages:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - name
+        - category (regular | hotspot)
+        - price
+        - billing_cycle (monthly)
+        - is_active
+
+    invoices:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - client_id
+        - package_id
+        - amount
+        - status (unpaid | visit_success | deposited | confirmed | paid | overdue)
+        - due_date
+        - created_at
+
+    payments:
+      fields:
+        - id (uuid, pk)
+        - invoice_id
+        - method (gateway | manual | cash)
+        - status
+        - created_at
+
+    isolir_history:
+      fields:
+        - id (uuid, pk)
+        - client_id
+        - reason
+        - created_at
+
+  invoice_state_machine:
+    states:
+      unpaid:
+        next: [visit_success, paid, overdue]
+      visit_success:
+        next: [deposited]
+      deposited:
+        next: [confirmed]
+      confirmed:
+        next: [paid]
+      overdue:
+        next: [paid]
+    rules:
+      - "Transitions only via service"
+      - "Every transition logged"
+
+  payment_methods:
+    gateway:
+      behavior: "external confirmation (stub)"
+    manual:
+      behavior: "admin marks paid"
+    cash_collector:
+      behavior:
+        - collector_marks_visit_success
+        - collector_marks_deposited
+        - finance_confirms
+
+  isolir_logic:
+    trigger_conditions:
+      - invoice_overdue
+    behavior:
+      - call_network_isolator
+      - log_isolir_history
+      - send_notification_event
+
+  overdue_detection:
+    schedule:
+      - daily_job
+    behavior:
+      - mark_invoice_overdue
+      - trigger_isolir
+
+  notification_hooks:
+    events:
+      - invoice_created
+      - invoice_overdue
+      - invoice_paid
+      - isolir_triggered
+    behavior:
+      - emit_event_only
+
+  rbac_integration:
+    required_capabilities:
+      billing_view: billing.view
+      billing_collect: billing.collect
+      billing_confirm: billing.confirm
+
+  feature_toggle:
+    required_feature: billing
+
+  retention_policy:
+    payment_history:
+      default:
+        basic: "1 year"
+        pro: "5 years"
+      overridable_by: super_admin
+
+  coding_rules:
+    - "All money flows through invoices"
+    - "No direct isolir calls from handlers"
+    - "Use state machine for safety"
+    - "Idempotent billing jobs"
+
+  output_expectations:
+    - "Billing domain & repositories"
+    - "Invoice state machine implementation"
+    - "Payment method routing"
+    - "Isolir integration working via stub"
+
+  stop_condition:
+    - "Invoices generated & paid"
+    - "Overdue triggers isolir"
+    - "Collector 3-phase flow functional"
+
+  instruction_to_ai:
+    - "Follow real ISP billing flows"
+    - "Do not over-abstract payment logic"
+    - "Prepare hooks for real payment gateway later"

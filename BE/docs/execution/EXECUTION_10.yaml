@@ -1,0 +1,128 @@
+execution_prompt:
+  id: "RRNET_EXEC_10_TECHNICIAN_MODULE"
+  purpose: >
+    Implement technician field operation management including task
+    assignment, activity logging, outage resolution tracking, and
+    integration with network topology and client data.
+
+  prerequisites:
+    - "EXECUTION #9 Maps & Outage Propagation completed"
+    - "RBAC enforced"
+    - "Client, Network, and Billing modules available"
+
+  design_principles:
+    - "Technician works on tasks, not raw clients"
+    - "Tasks may originate from outage, client request, or admin"
+    - "Activity is logged, not overwritten"
+    - "Technician can have multiple roles (e.g., collector)"
+
+  scope:
+    include:
+      - technician_task_model
+      - task_assignment_flow
+      - technician_activity_log
+      - outage_resolution_hooks
+      - client_service_tasks
+    exclude:
+      - gps_checkin
+      - shift_management
+      - payroll_calculation
+      - realtime_tracking
+
+  backend_structure_additions:
+    internal/domain:
+      - technician/
+    internal/technician:
+      - service.go
+      - task_flow.go
+      - activity_log.go
+    internal/repository:
+      - technician_task_repository.go
+      - technician_activity_repository.go
+    internal/http/handlers:
+      - technician_handler.go
+      - technician_task_handler.go
+
+  database_schema:
+    technician_tasks:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - technician_id (user_id)
+        - source (outage | client | admin)
+        - source_id
+        - task_type (install | repair | maintenance)
+        - status (assigned | in_progress | completed)
+        - created_at
+        - completed_at
+
+    technician_activities:
+      fields:
+        - id (uuid, pk)
+        - task_id
+        - description
+        - photo_url (nullable)
+        - created_at
+
+  task_flow:
+    create_task:
+      triggers:
+        - outage_created
+        - admin_manual
+        - client_request (future)
+    assign_task:
+      behavior:
+        - admin_assigns_technician
+    technician_workflow:
+      steps:
+        - view_assigned_tasks
+        - start_task
+        - add_activity_log
+        - complete_task
+
+  outage_integration:
+    behavior:
+      - when_task_completed:
+          - clear_outage_if_related
+          - log_resolution
+
+  visibility_rules:
+    technician:
+      can_view:
+        - own_tasks
+        - related_client_info
+        - related_odp_odc
+    admin:
+      can_view:
+        - all_tasks
+        - technician_performance_summary
+
+  rbac_integration:
+    required_capabilities:
+      technician_view: maps.view
+      technician_update: maps.update
+
+  feature_toggle:
+    required_feature: technician
+
+  coding_rules:
+    - "Tasks are immutable except status"
+    - "Activity logs append-only"
+    - "No direct outage mutation from handler"
+    - "Strict tenant isolation"
+
+  output_expectations:
+    - "Technician task lifecycle"
+    - "Activity logging"
+    - "Outage resolution integration"
+    - "API endpoints ready for frontend"
+
+  stop_condition:
+    - "Technician can resolve outage"
+    - "Activities recorded correctly"
+    - "System operationally complete"
+
+  instruction_to_ai:
+    - "Model real field technician workflow"
+    - "Avoid over-engineering"
+    - "Prepare for future GPS & shift modules"

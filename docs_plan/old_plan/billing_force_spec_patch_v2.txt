@@ -1,0 +1,228 @@
+billing_force_spec_patch_v2
+# ===================================================================
+# PATCH: billing_force_spec_v1 (Collector System + Payment Integration)
+# ===================================================================
+billing_force_spec_patch_v2:
+  meta:
+    patched_from: "role_and_collector_adjustments_v1"
+    module: "billing + cash collector"
+    timestamp: 2025-12-12
+
+  enduser_billing:
+    package_management:
+      admin:
+        can:
+          - create_package_regular
+          - create_package_hotspot
+          - edit_package
+          - delete_package
+          - assign_package_to_customer
+        package_fields:
+          regular:
+            - name
+            - price
+            - speed_down
+            - speed_up
+            - quota_gb (optional)
+            - radius_profile (optional)
+            - duration_days (if prepaid)
+          hotspot:
+            - name
+            - price
+            - profile_name
+            - duration_hours_or_days
+            - speed_limit
+            - multi_use_allowed
+
+    payment_sources:
+      supported:
+        - payment_gateway_api
+        - manual_input_finance
+        - manual_input_admin
+        - cash_collector (multi-phase)
+      gateway_flow:
+        - create_invoice
+        - generate_payment_link
+        - auto_confirm_on_gateway_callback
+        - post_payment: auto_unisolate_if_feature_enabled
+
+    payment_history:
+      behavior:
+        - "Every payment attempt (success/failed) logs an entry."
+        - "Collector visit attempts (success/failed) create history entries with contextual status."
+        - "Entries link to invoice + package for traceability."
+      retention_policy:
+        configurable_by_super_admin: true
+        default:
+          basic: 1   # in years
+          pro: 5     # in years
+        details:
+          - "Purge history older than retention period (monthly job)."
+          - "Super admin can override per-tenant."
+          - "Paid invoices may be preserved beyond retention if flagged important."
+
+  cash_collector_integration:
+    overview: "Full integration of Collector System with Billing and Payment History."
+    phases:
+      phase_1_visit_success:
+        triggered_by: collector
+        meaning: "Collector confirms customer paid on the spot."
+        system_effects:
+          - create_payment_history_entry:
+              status: collected_by_collector
+              amount: amount_due
+              source: collector
+          - set invoice.status = awaiting_setoran
+          - update task_item.visit_status = success
+          - notify_admin_finance_via_wa: true
+        ui_color: "#A3E635" # green-light
+
+      phase_1_visit_failed:
+        triggered_by: collector
+        meaning: "Collector attempted to collect but failed."
+        system_effects:
+          - create_payment_history_entry:
+              status: visit_failed
+              reason: collector_reason
+          - keep invoice.status = unpaid
+          - allow_retry: true
+        ui_color: "#EF4444" # red-light
+
+      phase_2_setoran_reported:
+        triggered_by: collector
+        meaning: "Collector reports cash handed to admin/finance."
+        system_effects:
+          - update task_item.setoran_status = setoran_reported_by_collector
+          - log payment_history_entry:
+              status: setoran_reported
+              source: collector
+          - notify_admin_to_confirm: true
+        ui_color: "#F97316" # orange
+
+      phase_2_setoran_confirmed_by_admin:
+        triggered_by: admin_or_finance
+        meaning: "Admin confirms collector has handed over money."
+        system_effects:
+          - update task_item.setoran_status = setoran_confirmed_by_admin
+          - append payment_history_entry:
+              status: setoran_confirmed_by_admin
+              source: admin
+        ui_color: "#FB923C" # orange-deep
+
+      phase_3_rekening_confirmed:
+        triggered_by: finance
+        meaning: "Finance confirms cash has entered business account."
+        system_effects:
+          - update task_item.rekening_status = deposited_confirmed_by_finance
+          - set invoice.status = paid
+          - append payment_history_entry:
+              status: deposited
+              source: finance
+          - trigger_wa_notification_to_owner: true
+          - auto_unisolate_customer_if_enabled: true
+        ui_color: "#059669" # green-strong
+
+    restrictions:
+      collector:
+        - cannot_mark_invoice_paid
+        - cannot_skip_phases
+        - cannot_edit_invoice_amount
+      admin_finance:
+        - cannot_bypass_phase3 unless super_admin_override
+
+    billing_dashboard:
+      summary_cards:
+        - total_invoices
+        - paid
+        - unpaid
+        - awaiting_setoran
+        - awaiting_rekening_confirmation
+        - overdue
+      collector_summary:
+        - amount_collected_today
+        - amount_pending_setoran
+        - amount_pending_rekening_confirmation
+        - total_customers_visited
+        - total_failed_visits
+
+  isolir_integration:
+    auto_isolir:
+      conditions:
+        - invoice_unpaid_until_due + grace_period
+      action:
+        - router_isolate_user
+        - radius_tag_user_isolated
+      logs:
+        - create_isolir_history_entry:
+            action: auto_isolir_unpaid
+            triggered_by: system
+
+    auto_unisolate_on_payment:
+      conditions:
+        - full_payment_confirmed (phase_3 or gateway)
+      action:
+        - router_unisolate_user
+        - radius_remove_isolate_tag
+      logs:
+        - create_isolir_history_entry:
+            action: auto_unisolate_payment
+            triggered_by: system
+
+    manual_isolir:
+      triggered_by: admin
+      logs:
+        - create_isolir_history_entry: manual_isolir_admin
+
+    manual_unisolate:
+      triggered_by: admin
+      logs:
+        - create_isolir_history_entry: manual_unisolate_admin
+
+  visibility_rules:
+    collector_visibility:
+      - customer_assigned_only
+      - no_access_to_full_billing_history
+      - access_recent_status_only (visit + invoice status)
+      - access_to_customer_location: true
+      - access_to_customer_contact: true
+
+    admin_visibility:
+      - full_enduser_billing
+      - isolated_users_list
+      - payment_history_full
+      - collector_progress_view
+
+    finance_visibility:
+      - full_finance_and_deposits
+      - reconciliation_dashboard
+      - collector_setoran_queue
+
+    owner_visibility:
+      - full_billing_monitoring
+      - receives_wa_when_rekening_confirmed
+
+    super_admin_visibility:
+      - no_tenant_internal_logs (collector logs hidden)
+      - only_saas_billing_related
+      - plan_limits
+      - feature_toggles
+
+  apis:
+    collector_payment_routes:
+      - POST /collector/tasks/:task_id/item/:item_id/visit
+      - POST /collector/tasks/:task_id/item/:item_id/report-setor
+      - POST /collector/tasks/:task_id/item/:item_id/admin-confirm-setor
+      - POST /collector/tasks/:task_id/item/:item_id/finance-confirm-deposit
+      - GET  /collector/tasks (admin: all, collector: assigned_only)
+      - GET  /collector/tasks/:id
+
+    billing_routes_extension:
+      - GET  /billing/collector-summary
+      - GET  /billing/reconciliation
+      - GET  /billing/payment-history
+      - POST /billing/package (admin)
+      - PATCH /billing/package/:id (admin)
+
+# ===================================================================
+# END PATCH
+# ===================================================================

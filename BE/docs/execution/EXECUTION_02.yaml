@@ -1,0 +1,162 @@
+execution_prompt:
+  id: "RRNET_EXEC_02_AUTH_TENANT_SUBDOMAIN"
+  purpose: >
+    Implement core authentication, tenant lifecycle, and sub-domain based
+    tenant resolution for RRNet SaaS. This step establishes multi-tenant
+    isolation and login flow, without advanced RBAC or billing logic.
+
+  prerequisites:
+    - "EXECUTION #1 backend foundations compiled and running"
+    - "PostgreSQL connection available"
+
+  tech_stack:
+    language: golang
+    auth_method: jwt_access_token
+    password_hash: bcrypt
+    multi_tenant_strategy: subdomain_based
+    database: postgresql
+
+  scope:
+    include:
+      - tenant_model_and_repository
+      - tenant_signup_flow
+      - subdomain_resolution_middleware
+      - user_model_and_repository
+      - auth_register_login_logout
+      - jwt_issue_and_verify
+      - password_hashing
+      - tenant_context_injection
+    exclude:
+      - advanced_rbac_policy_engine
+      - role_capability_matrix
+      - billing
+      - addons
+      - maps
+      - mikrotik
+      - wa_gateway
+      - collector
+      - hr
+      - technician
+
+  backend_structure_additions:
+    internal/domain:
+      - tenant/
+      - user/
+    internal/repository:
+      - tenant_repository.go
+      - user_repository.go
+    internal/auth:
+      - jwt.go
+      - password.go
+    internal/http/handlers:
+      - auth_handler.go
+      - tenant_handler.go
+    internal/http/middleware:
+      - auth_middleware.go
+      - tenant_context.go
+
+  database_schema:
+    tenants:
+      fields:
+        - id (uuid, pk)
+        - name
+        - slug (unique)
+        - status (active, suspended)
+        - created_at
+    users:
+      fields:
+        - id (uuid, pk)
+        - tenant_id (fk)
+        - username
+        - password_hash
+        - role (string, basic only)
+        - is_active
+        - created_at
+    constraints:
+      - "users.username unique per tenant"
+      - "tenants.slug globally unique"
+
+  tenant_signup:
+    behavior:
+      - create_tenant
+      - auto_generate_subdomain: "<tenant_slug>.rrnet.id"
+      - create_default_owner_user
+      - create_default_admin_user
+      - mark_password_as_default
+      - emit_event: tenant_created
+    notes:
+      - "Password change enforcement handled later"
+
+  subdomain_middleware:
+    behavior:
+      - extract_host_header
+      - parse_subdomain
+      - resolve_tenant_by_slug
+      - inject tenant_id into request context
+    rules:
+      - "Ignore www prefix"
+      - "Reject unknown subdomains with 404"
+      - "Allow health/version routes without tenant"
+
+  authentication:
+    register:
+      - endpoint: POST /api/v1/auth/register
+      - tenant_scoped
+      - hash_password
+    login:
+      - endpoint: POST /api/v1/auth/login
+      - tenant_scoped
+      - validate_password
+      - issue_jwt
+    logout:
+      - endpoint: POST /api/v1/auth/logout
+      - stateless (client discards token)
+
+  jwt:
+    claims:
+      - user_id
+      - tenant_id
+      - role
+      - exp
+    config:
+      access_token_ttl: "15m"
+      secret_from_env: JWT_SECRET
+
+  http_routes:
+    public:
+      - POST /api/v1/auth/login
+      - POST /api/v1/auth/register
+    protected:
+      - GET /api/v1/tenant/me
+      - GET /api/v1/user/me
+
+  middleware_chain:
+    order:
+      - request_id
+      - recover
+      - tenant_context
+      - auth (protected routes only)
+
+  coding_rules:
+    - "Keep logic simple and explicit"
+    - "No RBAC enforcement beyond role field"
+    - "Use repository pattern"
+    - "Return clear HTTP error responses"
+    - "Add TODO markers for RBAC expansion"
+
+  output_expectations:
+    - "New database migrations or SQL"
+    - "New Go files for auth & tenant"
+    - "Updated router wiring"
+    - "Short explanation of auth flow"
+
+  stop_condition:
+    - "Auth login works per sub-domain"
+    - "Tenant context injected correctly"
+    - "Stop before RBAC, billing, or feature toggles"
+
+  instruction_to_ai:
+    - "Use RRNet master spec for reference"
+    - "Treat sub-domain strictly as tenant identifier"
+    - "Do not implement custom domain or reseller logic"
+    - "Do not over-engineer RBAC"

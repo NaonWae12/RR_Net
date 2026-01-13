@@ -1,0 +1,418 @@
+execution_prompt:
+  id: "RRNET_EXEC_INTEGRATION_02_CROSS_MODULE_VALIDATION"
+  purpose: >
+    Implement comprehensive cross-module validation system for RRNet SaaS
+    including data consistency checks, workflow validation, API contract
+    verification, performance validation, and security validation across
+    all modules with automated validation execution and reporting.
+
+  prerequisites:
+    - "EXECUTION_INTEGRATION_01 Integration Tests completed"
+    - "All backend modules completed (01-10.1)"
+    - "All super admin modules completed (SA_01-SA_06)"
+    - "Test database environment available"
+
+  design_principles:
+    - "Cross-module validation ensures system integrity"
+    - "Data consistency is validated across all modules"
+    - "Workflows are validated end-to-end across modules"
+    - "API contracts are verified between all modules"
+    - "Performance is validated across module interactions"
+    - "Security is validated across module boundaries"
+
+  scope:
+    include:
+      - data_consistency_validation
+      - workflow_validation
+      - api_contract_validation
+      - performance_validation
+      - security_validation
+      - configuration_validation
+      - dependency_validation
+      - validation_automation
+    exclude:
+      - unit_module_validation
+      - frontend_validation
+      - load_testing
+      - penetration_testing
+
+  backend_structure_additions:
+    internal/validation:
+      - cross_module/
+      - workflows/
+      - contracts/
+      - performance/
+      - security/
+    internal/validation/cross_module:
+      - data_consistency.go
+      - workflow_validator.go
+      - dependency_validator.go
+    internal/validation/workflows:
+      - billing_workflow.go
+      - isolir_workflow.go
+      - collector_workflow.go
+      - outage_workflow.go
+    internal/validation/contracts:
+      - api_validator.go
+      - message_validator.go
+      - event_validator.go
+    internal/validation/performance:
+      - interaction_validator.go
+      - bottleneck_detector.go
+      - threshold_monitor.go
+    internal/validation/security:
+      - boundary_validator.go
+      - privilege_validator.go
+      - data_leak_validator.go
+
+  validation_categories:
+  data_consistency_validation:
+    tenant_data_integrity:
+      description: "Validate tenant data consistency across all modules"
+      checks:
+        - tenant_exists_in_all_related_tables
+        - tenant_status_consistent_across_modules
+        - tenant_limits_consistent_across_modules
+        - tenant_permissions_consistent_across_modules
+      validation_points:
+        - users table
+        - clients table
+        - invoices table
+        - routers table
+        - audit_logs table
+        - usage_metrics table
+
+    user_data_integrity:
+      description: "Validate user data consistency across modules"
+      checks:
+        - user_exists_in_all_related_tables
+        - user_roles_consistent_across_modules
+        - user_permissions_consistent_across_modules
+        - user_sessions_consistent_across_modules
+      validation_points:
+        - users table
+        - user_roles table
+        - sessions table
+        - audit_logs table
+        - authentication_logs table
+
+    client_data_integrity:
+      description: "Validate client data consistency across modules"
+      checks:
+        - client_exists_in_all_related_tables
+        - client_status_consistent_across_modules
+        - client_billing_consistent_across_modules
+        - client_network_consistent_across_modules
+      validation_points:
+        - clients table
+        - invoices table
+        - radius_users table
+        - client_topology table
+        - collector_assignments table
+
+    billing_data_integrity:
+      description: "Validate billing data consistency across modules"
+      checks:
+        - invoice_amount_matches_package_price
+        - payment_records_consistent_across_modules
+        - isolir_status_consistent_with_billing
+        - financial_reports_consistent_with_transactions
+      validation_points:
+        - invoices table
+        - payments table
+        - billing_packages table
+        - isolir_history table
+        - financial_reports table
+
+    network_data_integrity:
+      description: "Validate network data consistency across modules"
+      checks:
+        - router_status_consistent_across_modules
+        - radius_user_status_consistent_with_client_status
+        - network_profiles_consistent_with_billing_packages
+        - outage_status_consistent_across_modules
+      validation_points:
+        - routers table
+        - radius_users table
+        - network_profiles table
+        - outage_history table
+        - topology tables
+
+  workflow_validation:
+    billing_workflow_validation:
+      description: "Validate complete billing workflow across modules"
+      workflow_steps:
+        - invoice_creation
+        - invoice_delivery
+        - payment_processing
+        - invoice_status_update
+        - financial_report_update
+      validation_points:
+        - invoice_created_with_correct_amount
+        - notification_sent_to_client
+        - payment_processed_correctly
+        - invoice_status_updated
+        - financial_reports_updated
+
+    isolir_workflow_validation:
+      description: "Validate complete isolir workflow across modules"
+      workflow_steps:
+        - invoice_overdue_detection
+        - isolir_trigger
+        - network_user_disable
+        - notification_sent
+        - isolir_history_logged
+      validation_points:
+        - overdue_invoice_detected
+        - isolir_triggered_correctly
+        - network_user_disabled
+        - notification_sent_to_client
+        - isolir_history_logged
+
+    collector_workflow_validation:
+      description: "Validate complete collector workflow across modules"
+      workflow_steps:
+        - collector_assignment
+        - visit_success_marked
+        - deposit_marked
+        - finance_confirmation
+        - payment_processed
+      validation_points:
+        - assignment_created_correctly
+        - visit_success_marked_correctly
+        - deposit_marked_correctly
+        - finance_confirmation_processed
+        - payment_processed_correctly
+
+    outage_workflow_validation:
+      description: "Validate complete outage workflow across modules"
+      workflow_steps:
+        - outage_detection
+        - outage_propagation
+        - technician_task_creation
+        - outage_resolution
+        - notification_sent
+      validation_points:
+        - outage_detected_correctly
+        - outage_propagated_correctly
+        - technician_task_created
+        - outage_resolved_correctly
+        - notification_sent_to_affected_parties
+
+  api_contract_validation:
+    internal_api_validation:
+      description: "Validate internal API contracts between modules"
+      validation_points:
+        - authentication_service_contract
+        - tenant_service_contract
+        - billing_service_contract
+        - network_service_contract
+        - notification_service_contract
+      checks:
+        - request_format_validation
+        - response_format_validation
+        - error_code_validation
+        - authentication_requirement_validation
+        - authorization_requirement_validation
+
+    event_contract_validation:
+      description: "Validate event contracts between modules"
+      validation_points:
+        - billing_events
+        - network_events
+        - notification_events
+        - audit_events
+      checks:
+        - event_format_validation
+        - event_payload_validation
+        - event_routing_validation
+        - event_processing_validation
+
+    message_contract_validation:
+      description: "Validate message contracts between modules"
+      validation_points:
+        - email_messages
+        - sms_messages
+        - whatsapp_messages
+        - push_notifications
+      checks:
+        - message_format_validation
+        - template_validation
+        - recipient_validation
+        - delivery_validation
+
+  performance_validation:
+    module_interaction_performance:
+      description: "Validate performance of module interactions"
+      validation_points:
+        - authentication_to_tenant_resolution
+        - billing_to_network_integration
+        - collector_to_billing_integration
+        - maps_to_technician_integration
+      checks:
+        - response_time_validation
+        - throughput_validation
+        - resource_usage_validation
+        - scalability_validation
+
+    database_interaction_performance:
+      description: "Validate performance of database interactions across modules"
+      validation_points:
+        - cross_module_queries
+        - transaction_performance
+        - connection_pool_usage
+        - index_effectiveness
+      checks:
+        - query_performance_validation
+        - transaction_performance_validation
+        - resource_usage_validation
+        - scalability_validation
+
+    background_job_performance:
+      description: "Validate performance of background jobs across modules"
+      validation_points:
+        - billing_jobs
+        - notification_jobs
+        - network_sync_jobs
+        - cleanup_jobs
+      checks:
+        - job_processing_time_validation
+        - queue_depth_validation
+        - resource_usage_validation
+        - scalability_validation
+
+  security_validation:
+    privilege_escalation_validation:
+      description: "Validate privilege escalation controls across modules"
+      validation_points:
+        - authentication_to_authorization
+        - tenant_context_to_module_access
+        - role_to_permission_mapping
+        - feature_toggle_enforcement
+      checks:
+        - authentication_validation
+        - authorization_validation
+        - privilege_escalation_prevention
+        - feature_toggle_enforcement
+
+    data_boundary_validation:
+      description: "Validate data boundaries between modules"
+      validation_points:
+        - tenant_data_isolation
+        - user_data_isolation
+        - sensitive_data_protection
+        - audit_data_integrity
+      checks:
+        - data_isolation_validation
+        - data_leak_prevention
+        - sensitive_data_encryption
+        - audit_trail_integrity
+
+    api_boundary_validation:
+      description: "Validate API boundaries between modules"
+      validation_points:
+        - internal_api_security
+        - external_api_security
+        - authentication_enforcement
+        - authorization_enforcement
+      checks:
+        - api_security_validation
+        - authentication_enforcement_validation
+        - authorization_enforcement_validation
+        - rate_limiting_validation
+
+  configuration_validation:
+    module_configuration_validation:
+      description: "Validate module configuration consistency"
+      validation_points:
+        - database_configuration
+        - cache_configuration
+        - queue_configuration
+        - service_configuration
+      checks:
+        - configuration_consistency_validation
+        - configuration_completeness_validation
+        - configuration_validity_validation
+        - configuration_security_validation
+
+    dependency_validation:
+      description: "Validate module dependencies"
+      validation_points:
+        - service_dependencies
+        - database_dependencies
+        - external_service_dependencies
+        - internal_module_dependencies
+      checks:
+        - dependency_availability_validation
+        - dependency_version_validation
+        - dependency_security_validation
+        - dependency_performance_validation
+
+  validation_automation:
+  automated_validation_execution:
+    description: "Automated validation execution system"
+    behavior:
+      - schedule_validations
+      - execute_validations
+      - collect_validation_results
+      - generate_validation_reports
+      - notify_on_validation_failures
+
+  validation_reporting:
+    description: "Comprehensive validation reporting system"
+    behavior:
+      - generate_validation_summary
+      - identify_validation_failures
+      - provide_failure_details
+      - track_validation_trends
+      - generate_improvement_recommendations
+
+  validation_enforcement:
+    description: "Validation enforcement system"
+    behavior:
+      - prevent_deployment_on_validation_failure
+      - require_validation_approval_for_changes
+      - track_validation_history
+      - enforce_validation_policies
+
+  security_enhancements:
+  validation_security:
+    description: "Security for validation system"
+    behavior:
+      - validate_validation_permissions
+      - protect_validation_data
+      - audit_validation_activities
+      - secure_validation_communications
+
+  coding_rules:
+    - "Validations must be comprehensive"
+    - "Validations must be automated"
+    - "Validations must be repeatable"
+    - "Validations must have clear success criteria"
+    - "Validations must provide actionable failure information"
+    - "Validations must be secure"
+
+  output_expectations:
+    - "Comprehensive cross-module validation system"
+    - "Automated validation execution"
+    - "Validation reporting and analytics"
+    - "Validation enforcement mechanisms"
+    - "Security for validation system"
+
+  stop_condition:
+    - "Data consistency validated across all modules"
+    - "Workflows validated across all modules"
+    - "API contracts validated across all modules"
+    - "Performance validated across all modules"
+    - "Security validated across all modules"
+    - "Configuration validated across all modules"
+    - "Dependencies validated across all modules"
+    - "Validation automation functional"
+    - "Ready for performance benchmarking"
+
+  instruction_to_ai:
+    - "Implement comprehensive cross-module validation"
+    - "Focus on system integrity and consistency"
+    - "Ensure validations are automated and repeatable"
+    - "Provide clear validation reporting"
+    - "Do not implement unit module validations"

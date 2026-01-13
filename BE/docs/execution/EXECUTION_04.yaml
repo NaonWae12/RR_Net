@@ -1,0 +1,167 @@
+execution_prompt:
+  id: "RRNET_EXEC_04_PLAN_ADDON_FEATURE_TOGGLE"
+  purpose: >
+    Implement SaaS monetization core: plans, limits, add-ons,
+    and feature toggles. This engine determines what a tenant
+    can access at runtime and serves as the single source of truth
+    for feature availability.
+
+  prerequisites:
+    - "EXECUTION #3 RBAC Capability Engine completed"
+    - "Tenant context resolution working"
+
+  design_principles:
+    - "Plan defines default limits & features"
+    - "Add-on can extend or override plan limits"
+    - "Feature toggle resolves to boolean at runtime"
+    - "No feature logic hardcoded in business modules"
+
+  scope:
+    include:
+      - plan_model
+      - addon_model
+      - tenant_plan_assignment
+      - tenant_addon_assignment
+      - feature_toggle_resolver
+      - limit_resolver
+      - admin_management_api
+    exclude:
+      - billing_payment_logic
+      - wa_notification_send
+      - client_management
+      - network_logic
+      - ui_visibility_rules
+
+  backend_structure_additions:
+    internal/domain:
+      - plan/
+      - addon/
+      - feature/
+    internal/repository:
+      - plan_repository.go
+      - addon_repository.go
+      - tenant_plan_repository.go
+    internal/service:
+      - feature_resolver.go
+      - limit_resolver.go
+    internal/http/handlers:
+      - plan_handler.go
+      - addon_handler.go
+
+  database_schema:
+    plans:
+      fields:
+        - id (uuid, pk)
+        - name
+        - category (basic, pro, enterprise)
+        - features (jsonb)
+        - limits (jsonb)
+        - price
+        - is_active
+    addons:
+      fields:
+        - id (uuid, pk)
+        - name
+        - type (limit_extension, feature_unlock)
+        - effects (jsonb)
+        - price
+        - is_active
+    tenant_plans:
+      fields:
+        - tenant_id
+        - plan_id
+        - started_at
+    tenant_addons:
+      fields:
+        - tenant_id
+        - addon_id
+        - custom_config (jsonb)
+        - started_at
+
+  features:
+    examples:
+      - client_management
+      - billing
+      - network
+      - maps
+      - wa_notification
+      - collector
+      - technician
+      - addon_engine
+
+  limits:
+    examples:
+      - max_router
+      - max_client
+      - max_voucher
+      - max_odc
+      - max_odp
+      - max_client_map
+      - wa_quota
+
+  feature_resolution:
+    order:
+      - tenant_addons
+      - tenant_plan
+      - default_false
+    behavior:
+      - "Addon can enable disabled plan feature"
+      - "Addon can increase plan limit"
+      - "Highest value wins for limits"
+
+  limit_resolution:
+    behavior:
+      - "Return integer limit"
+      - "Return unlimited when configured"
+
+  admin_apis:
+    plan:
+      - POST /api/v1/plans
+      - PUT /api/v1/plans/{id}
+      - GET /api/v1/plans
+    addon:
+      - POST /api/v1/addons
+      - PUT /api/v1/addons/{id}
+      - GET /api/v1/addons
+    tenant:
+      - POST /api/v1/tenants/{id}/plan
+      - POST /api/v1/tenants/{id}/addons
+
+  enforcement_usage_example:
+    feature:
+      code: |
+        if !featureResolver.Has(ctx, "maps") {
+          return forbidden
+        }
+    limit:
+      code: |
+        if currentClientCount >= limitResolver.Get(ctx, "max_client") {
+          return limitExceeded
+        }
+
+  rbac_integration:
+    required_capabilities:
+      manage_plans: system.settings
+      assign_plan: tenant.update
+
+  coding_rules:
+    - "Features & limits stored as data, not code"
+    - "Resolvers must be pure functions"
+    - "Do not hardcode plan names"
+    - "All modules must ask resolver before execution"
+
+  output_expectations:
+    - "Database schema & migrations"
+    - "Plan/Add-on CRUD APIs"
+    - "Feature & limit resolver services"
+    - "Example usage in handler"
+
+  stop_condition:
+    - "Tenant feature availability resolved correctly"
+    - "Limits enforced at service layer"
+    - "No billing logic implemented yet"
+
+  instruction_to_ai:
+    - "Implement generic engines, not business rules"
+    - "Follow master RRNet force_spec"
+    - "Keep code extensible for add-on marketplace"

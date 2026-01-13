@@ -1,0 +1,172 @@
+addon_engine_force_spec_patch_v1
+# ============================================================================
+# PATCH: addon_engine_force_spec_v1 (Add-on Marketplace + Limits Integration)
+# ============================================================================
+addon_engine_force_spec_patch_v1:
+  meta:
+    patched_from: "role_and_collector_adjustments + maps + billing"
+    module: "addon_engine"
+    timestamp: 2025-12-12
+
+  addon_engine:
+    overview: >
+      Add-on Engine is the central system for extending tenant capabilities.
+      Supports:
+        - Feature Add-ons
+        - Resource Add-ons (limits)
+        - Marketplace Add-ons
+        - Custom Add-on Requests (require super admin approval)
+        - Auto-billing integration
+        - Dynamic tenant plan expansion
+
+    addon_types:
+      - feature_addon:
+          description: "Enable additional feature modules (e.g., WA Broadcast, HR, Maps Expansion)."
+      - resource_addon:
+          description: "Increase limits such as router count, ODP nodes, client map nodes, collector quota."
+      - marketplace_addon:
+          description: "Optional paid modules or tools (GPS attendance future, marketing tools, voucher expansions)."
+
+    builtin_addons:
+      - extra_ODP_maps:
+          type: resource_addon
+          increases: odp_limit
+          available_for: [pro, business, enterprise]
+      - extra_client_maps:
+          type: resource_addon
+          increases: client_map_limit
+          available_for: [basic, pro, business, enterprise]
+      - extra_router_limit:
+          type: resource_addon
+          increases: router_limit
+      - extra_collector_quota:
+          type: resource_addon
+          increases: collector_limit
+      - extra_WA_quota:
+          type: resource_addon
+          increases: wa_message_limit
+      - voucher_expansion:
+          type: feature_addon
+          enables: bulk_voucher_tools
+
+    addon_flow:
+      user_roles:
+        super_admin:
+          - create_addon_catalog
+          - set_addon_pricing
+          - approve_custom_addon_request
+          - reject_custom_addon_request
+          - override_tenant_addon_limits
+        owner:
+          - purchase_addon
+          - request_custom_addon
+          - manage_addon_subscriptions
+        admin:
+          - manage_addon_subscriptions (regular addons)
+          - request_custom_addon
+          - cannot_approve_custom_addon
+        technician:
+          - no_addon_access
+        hr:
+          - no_addon_access
+        finance:
+          - view_addon_billing
+          - cannot_add_or_remove_addon
+        collector:
+          - no_addon_access
+
+    addon_purchase_flow:
+      standard_addon_purchase:
+        steps:
+          - tenant selects addon from marketplace
+          - system calculates price dynamically
+          - tenant confirms purchase
+          - payment processed via billing_saas engine
+          - after payment_success → addon activated instantly
+          - limits updated in tenant_features_and_limits
+      custom_addon_request:
+        steps:
+          - tenant submits "Add-on Other" form
+          - admin/owner sets description + desired feature/limit
+          - ticket created for super_admin
+          - super_admin reviews:
+              approve → set price → send invoice to tenant
+              reject → notify tenant with reasons
+          - tenant pays invoice → addon active
+
+    addon_activation_effects:
+      on_activation:
+        - update tenant_limits:
+            limit_fields_affected: true
+            examples:
+              - odp_limit += addon_value
+              - client_map_limit += addon_value
+              - router_limit += addon_value
+              - wa_message_quota += addon_value
+        - enable_feature_if_needed: true
+        - generate_billing_record (SaaS-billing)
+        - log_to_tenant_activity
+      on_deactivation:
+        - validate limits_before_removal:
+            - if removal causes limit violation → block until tenant reduces usage
+        - disable_related_features
+        - stop_recurring_charges (if recurring addon)
+        - log_to_tenant_activity
+
+    ui_components:
+      tenant_ui:
+        - addon_marketplace_page
+        - addon_subscription_page
+        - addon_usage_and_limits_page
+        - addon_custom_request_form
+      super_admin_ui:
+        - addon_catalog_manager
+        - addon_approval_panel
+        - addon_pricing_manager
+        - addon_global_usage_dashboard
+
+    addon_limits_model:
+      table: addon_limits
+      fields:
+        - tenant_id
+        - limit_type: [router, odp, client_maps, collector, wa_quota, voucher]
+        - base_value
+        - addon_value
+        - total_limit = base_value + addon_value
+
+    addon_billing_integration:
+      events:
+        - addon_purchased
+        - addon_invoice_created
+        - addon_invoice_paid
+        - addon_activated
+        - addon_deactivated
+      rules:
+        - "Every addon purchase triggers SaaS invoice."
+        - "Addon prices managed by super admin."
+        - "Recurring addons generate monthly invoice."
+      wa_notifications:
+        - on_addon_invoice_created → notify owner/admin
+        - on_addon_invoice_paid → notify owner
+
+    api:
+      tenant_side:
+        - GET  /addons/marketplace
+        - POST /addons/purchase
+        - POST /addons/request-custom
+        - GET  /addons/subscriptions
+      super_admin_side:
+        - POST /addons/catalog
+        - PATCH /addons/catalog/:id
+        - POST /addons/custom/:request_id/approve
+        - POST /addons/custom/:request_id/reject
+        - PATCH /addons/override/:tenant_id
+
+    acceptance_criteria:
+      - "Add-on marketplace visible only to owner/admin."
+      - "Custom-addons require super admin approval."
+      - "Resource-addons instantly increase limits."
+      - "Feature-addons enable features instantly after payment."
+      - "Addon billing integrated fully with SaaS billing."
+      - "Deactivation blocked if usage > remaining limit."
+      - "Add-ons appear in tenant billing history."

@@ -1,0 +1,155 @@
+execution_prompt:
+  id: "RRNET_EXEC_06_NETWORK_MANAGEMENT"
+  purpose: >
+    Implement core network management for ISP operations including
+    router inventory, Mikrotik API abstraction, RADIUS user model,
+    and synchronization workers. This module bridges clients with
+    actual network enforcement.
+
+  prerequisites:
+    - "EXECUTION #5 Client Management completed"
+    - "Asynq worker system running"
+    - "Feature toggle engine available"
+
+  design_principles:
+    - "Network logic is async-first"
+    - "Vendor abstraction over Mikrotik"
+    - "Network state stored locally (source of truth)"
+    - "Idempotent sync operations"
+
+  scope:
+    include:
+      - router_inventory
+      - mikrotik_provider_interface
+      - radius_user_model
+      - network_profile_model
+      - sync_workers
+      - isolir_unisolir_hooks
+    exclude:
+      - full_bandwidth_shaping_logic
+      - voucher_generation
+      - live_device_monitoring
+      - map_visualization
+      - advanced_radius_attributes
+
+  backend_structure_additions:
+    internal/domain:
+      - network/
+    internal/network:
+      - service.go
+      - provider.go
+      - isolator.go
+    internal/network/providers:
+      - mikrotik_stub.go
+    internal/jobs:
+      - network_sync_job.go
+      - isolir_job.go
+    internal/repository:
+      - router_repository.go
+      - radius_user_repository.go
+      - network_profile_repository.go
+    internal/http/handlers:
+      - router_handler.go
+      - network_profile_handler.go
+
+  database_schema:
+    routers:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - name
+        - ip_address
+        - username
+        - password_encrypted
+        - status (active | inactive)
+        - created_at
+
+    network_profiles:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - name
+        - type (pppoe | hotspot)
+        - bandwidth_profile
+        - created_at
+
+    radius_users:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - client_id
+        - username
+        - password
+        - profile_id
+        - status (active | isolated)
+        - created_at
+
+  mikrotik_provider_interface:
+    methods:
+      - CreateUser(ctx, user)
+      - UpdateUser(ctx, user)
+      - DisableUser(ctx, user)
+      - EnableUser(ctx, user)
+
+  mikrotik_stub:
+    behavior:
+      - log_action_only
+      - always_success
+
+  network_sync:
+    triggers:
+      - client_created
+      - client_updated
+      - profile_assigned
+    behavior:
+      - enqueue_sync_job
+      - update_local_state
+
+  isolir_hooks:
+    behavior:
+      - on_billing_overdue (future)
+      - call_isolator_service
+    notes:
+      - "Actual billing trigger implemented in EXECUTION #7"
+
+  network_apis:
+    routers:
+      - POST /api/v1/routers
+      - GET /api/v1/routers
+    profiles:
+      - POST /api/v1/network-profiles
+      - GET /api/v1/network-profiles
+
+  rbac_integration:
+    required_capabilities:
+      routers_manage: network.manage
+      profiles_manage: network.manage
+
+  feature_toggle:
+    required_feature: network
+
+  security_notes:
+    - "Encrypt router credentials at rest"
+    - "Never expose passwords via API"
+
+  coding_rules:
+    - "No direct Mikrotik calls from handlers"
+    - "All network ops async via jobs"
+    - "Keep provider swappable"
+    - "Fail safe on network errors"
+
+  output_expectations:
+    - "Network domain models"
+    - "Mikrotik provider interface & stub"
+    - "Async sync jobs"
+    - "Isolir hooks ready for billing"
+
+  stop_condition:
+    - "Clients can be synced to network layer"
+    - "Isolir/unisolir can be invoked"
+    - "No real Mikrotik calls yet"
+
+  instruction_to_ai:
+    - "Implement abstraction first, not vendor detail"
+    - "Follow RRNet master spec"
+    - "Prepare for billing integration"

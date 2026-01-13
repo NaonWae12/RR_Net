@@ -1,0 +1,95 @@
+core_system_force_spec_v1_patch_v1
+# === PATCH: core_system_force_spec_v1 (RBAC + Tenant creation_flow) ===
+core_system_force_spec_v1_patch_v1:
+  meta:
+    patched_from: "role_and_collector_adjustments_v1"
+    author: "merged-by-assistant"
+    timestamp: 2025-12-12
+
+  tenant:
+    creation_flow:
+      - "When tenant created automatically create two default users: owner_default and admin_default."
+      - "System auto-generates username and temp_password for both."
+      - "Send WA to owner/admin with credentials and login link."
+      - "Show security banner in UI reminding user to change password on first login (no panel lock)."
+      - "Admin default user should be created with 'admin' role and has HR+Finance capabilities by default."
+
+  rbac:
+    summary: "RBAC with tenant-scoped roles + super_admin global role. Includes new 'collector' role and admin extended capabilities."
+    role_definitions:
+      global:
+        - super_admin
+      tenant_scoped:
+        - owner:
+            description: "Full tenant privileges; in basic plans owner acts as admin"
+            default_assign: "first user on tenant creation"
+        - admin:
+            description: "Operational manager: includes admin + HR + Finance capabilities within tenant."
+            default_assign: "created as default admin on tenant signup"
+            capabilities:
+              - manage_users
+              - create_user_with_default_credentials
+              - assign_multi_roles_to_user
+              - create_role_client
+              - create_role_hr
+              - create_role_finance
+              - create_role_technician
+              - full_hr_capabilities
+              - full_finance_capabilities
+              - billing_saas_access (view/pay/notify_owner)
+              - manage_packages (regular/hotspot)
+              - manage_routers_and_radius
+              - send_wa_broadcast
+              - manage_addons_within_tenant
+              - collector_management (assign tasks, view progress)
+        - hr:
+            description: "Manage employees, attendance, payroll. Note: admin also has these rights."
+            capabilities:
+              - manage_employees
+              - manage_attendance
+              - approve_leaves
+              - create_payroll_entries
+        - finance:
+            description: "Finance tasks (invoicing, reconciliation). Note: admin also has these rights."
+            capabilities:
+              - manage_enduser_payments
+              - record_manual_payments
+              - reconcile_collector_setor
+              - confirm_deposit_to_account
+        - technician:
+            description: "Router operations and field tasks. Can be assigned collector role for collection duties."
+            capabilities:
+              - router_operations_view_and_basic_actions
+              - log_technician_activity
+              - view_maps_nodes (ODC/ODP/Client)
+              - if_assigned_collector_role: inherits_collector_capabilities
+        - collector:
+            description: "Field cash collector role. Limited tenant-scope access to assigned customers only."
+            capabilities:
+              - view_assigned_customer_list_only
+              - view_customer_contact_and_map_point
+              - view_package_and_amount_due
+              - perform_visit_actions (mark success/failed, attach photo, note)
+              - report_setoran_to_admin
+              - view_own_collection_history
+            restrictions:
+              - cannot_mark_invoice_paid
+              - cannot_edit_invoice_amount
+              - cannot_access_other_customers
+              - cannot_manage_network_or_hr_or_finance
+
+    runtime_authorization:
+      middleware_order:
+        - authenticate_jwt
+        - tenant_resolver
+        - load_tenant_features
+        - check_feature_toggle
+        - check_limits
+        - rbac_authorize
+
+    notes:
+      - "Technician may have multiple roles; system supports role composition (e.g., technician + collector)."
+      - "Admin default created on signup will have HR+Finance capabilities; Admin can create employee users and optionally create system accounts for them (username + temp password auto-send via WA)."
+      - "Collector logs and tenant-internal payment histories are tenant-visible only (owner/admin/finance). Super admin does NOT access tenant-internal collector logs by default."
+
+# === END PATCH ===

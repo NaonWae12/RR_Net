@@ -1,0 +1,555 @@
+execution_prompt:
+  id: "RRNET_EXEC_INTEGRATION_04_SECURITY_AUDIT"
+  purpose: >
+    Implement comprehensive security audit system for RRNet SaaS
+    including vulnerability scanning, penetration testing, security
+    configuration review, compliance validation, and security monitoring
+    across all modules with automated security testing and reporting.
+
+  prerequisites:
+    - "EXECUTION_INTEGRATION_03 Performance Benchmarking completed"
+    - "All backend modules completed (01-10.1)"
+    - "All super admin modules completed (SA_01-SA_06)"
+    - "Security monitoring infrastructure available"
+
+  design_principles:
+    - "Security audit covers all system layers"
+    - "Vulnerability scanning identifies potential threats"
+    - "Penetration testing validates security controls"
+    - "Security configuration review ensures proper setup"
+    - "Compliance validation meets regulatory requirements"
+    - "Security monitoring provides real-time threat detection"
+
+  scope:
+    include:
+      - vulnerability_scanning
+      - penetration_testing
+      - security_configuration_review
+      - code_security_review
+      - dependency_security_check
+      - infrastructure_security_check
+      - compliance_validation
+      - security_monitoring
+      - security_reporting
+      - security_automation
+    exclude:
+      - unit_security_tests
+      - frontend_security_tests
+      - physical_security
+      - social_engineering_tests
+
+  backend_structure_additions:
+    internal/security:
+      - audit/
+      - scanning/
+      - monitoring/
+      - compliance/
+      - reporting/
+    internal/security/audit:
+      - security_auditor.go
+      - vulnerability_scanner.go
+      - penetration_tester.go
+      - configuration_reviewer.go
+    internal/security/scanning:
+      - dependency_scanner.go
+      - infrastructure_scanner.go
+      - code_scanner.go
+    internal/security/monitoring:
+      - threat_detector.go
+      - security_monitor.go
+      - incident_responder.go
+    internal/security/compliance:
+      - compliance_validator.go
+      - policy_checker.go
+      - regulatory_auditor.go
+    internal/security/reporting:
+      - security_reporter.go
+      - vulnerability_reporter.go
+      - compliance_reporter.go
+
+  security_audit_categories:
+  vulnerability_scanning:
+    application_vulnerabilities:
+      description: "Scan for application-level vulnerabilities"
+      scan_types:
+        - sql_injection_scan
+        - xss_scan
+        - csrf_scan
+        - authentication_bypass_scan
+        - authorization_bypass_scan
+        - input_validation_scan
+      scanning_tools:
+        - owasp_zap
+        - burp_suite
+        - custom_scanners
+      scan_frequency:
+        - daily_scans
+        - pre_deployment_scans
+        - on_demand_scans
+
+    infrastructure_vulnerabilities:
+      description: "Scan for infrastructure-level vulnerabilities"
+      scan_types:
+        - network_vulnerability_scan
+        - operating_system_scan
+        - database_vulnerability_scan
+        - container_vulnerability_scan
+        - cloud_configuration_scan
+      scanning_tools:
+        - nessus
+        - openvas
+        - qualys
+        - custom_scanners
+      scan_frequency:
+        - weekly_scans
+        - monthly_scans
+        - on_demand_scans
+
+    dependency_vulnerabilities:
+      description: "Scan for third-party dependency vulnerabilities"
+      scan_types:
+        - go_module_vulnerability_scan
+        - javascript_dependency_scan
+        - container_image_scan
+        - infrastructure_as_code_scan
+      scanning_tools:
+        - snyk
+        - dependency_check
+        - trivy
+        - custom_scanners
+      scan_frequency:
+        - daily_scans
+        - pre_commit_scans
+        - on_demand_scans
+
+  penetration_testing:
+    external_penetration_testing:
+      description: "Test system security from external perspective"
+      test_scenarios:
+        - authentication_attack_simulation
+        - authorization_attack_simulation
+        - data_exfiltration_simulation
+        - denial_of_service_simulation
+        - social_engineering_simulation
+      testing_tools:
+        - metasploit
+        - burp_suite
+        - custom_attack_simulation
+      test_frequency:
+        - quarterly_tests
+        - pre_deployment_tests
+        - on_demand_tests
+
+    internal_penetration_testing:
+      description: "Test system security from internal perspective"
+      test_scenarios:
+        - privilege_escalation_simulation
+        - lateral_movement_simulation
+        - data_access_simulation
+        - internal_network_attack_simulation
+      testing_tools:
+        - metasploit
+        - custom_internal_simulation
+      test_frequency:
+        - quarterly_tests
+        - on_demand_tests
+
+    api_penetration_testing:
+      description: "Test API security and robustness"
+      test_scenarios:
+        - api_authentication_attack
+        - api_authorization_attack
+        - api_parameter_attack
+        - api_rate_limit_attack
+        - api_injection_attack
+      testing_tools:
+        - postman_security_tests
+        - custom_api_simulation
+      test_frequency:
+        - monthly_tests
+        - pre_deployment_tests
+        - on_demand_tests
+
+  security_configuration_review:
+    application_security_configuration:
+      description: "Review application security configurations"
+      review_areas:
+        - authentication_configuration
+        - authorization_configuration
+        - session_configuration
+        - encryption_configuration
+        - logging_configuration
+        - error_handling_configuration
+      review_frequency:
+        - monthly_reviews
+        - pre_deployment_reviews
+        - on_demand_reviews
+
+    infrastructure_security_configuration:
+      description: "Review infrastructure security configurations"
+      review_areas:
+        - network_configuration
+        - firewall_configuration
+        - database_configuration
+        - container_configuration
+        - cloud_configuration
+      review_frequency:
+        - monthly_reviews
+        - quarterly_reviews
+        - on_demand_reviews
+
+    security_policy_review:
+      description: "Review security policy implementation"
+      review_areas:
+        - password_policy
+        - access_control_policy
+        - data_classification_policy
+        - incident_response_policy
+        - backup_recovery_policy
+      review_frequency:
+        - quarterly_reviews
+        - annual_reviews
+        - on_demand_reviews
+
+  code_security_review:
+    static_code_analysis:
+      description: "Analyze source code for security vulnerabilities"
+      analysis_tools:
+        - gosec
+        - semgrep
+        - sonarqube
+        - custom_code_analysis
+      analysis_frequency:
+        - pre_commit_analysis
+        - pull_request_analysis
+        - nightly_analysis
+        - on_demand_analysis
+
+    dynamic_code_analysis:
+      description: "Analyze running application for security vulnerabilities"
+      analysis_tools:
+        - owasp_zap
+        - burp_suite
+        - custom_runtime_analysis
+      analysis_frequency:
+        - pre_deployment_analysis
+        - nightly_analysis
+        - on_demand_analysis
+
+    security_code_review:
+      description: "Manual security code review by security experts"
+      review_focus:
+        - authentication_logic
+        - authorization_logic
+        - data_handling_logic
+        - encryption_logic
+        - error_handling_logic
+      review_frequency:
+        - pull_request_review
+        - pre_deployment_review
+        - quarterly_review
+
+  dependency_security_check:
+    third_party_dependency_analysis:
+      description: "Analyze third-party dependencies for security vulnerabilities"
+      analysis_types:
+        - known_vulnerability_check
+        - license_compliance_check
+        - supply_chain_analysis
+        - dependency_tree_analysis
+      analysis_tools:
+        - snyk
+        - dependency_check
+        - custom_dependency_analysis
+      analysis_frequency:
+        - daily_analysis
+        - pre_commit_analysis
+        - on_demand_analysis
+
+    container_image_analysis:
+      description: "Analyze container images for security vulnerabilities"
+      analysis_types:
+        - base_image_vulnerability_check
+        - application_layer_vulnerability_check
+        - configuration_vulnerability_check
+      analysis_tools:
+        - trivy
+        - clair
+        - custom_container_analysis
+      analysis_frequency:
+        - pre_deployment_analysis
+        - nightly_analysis
+        - on_demand_analysis
+
+  infrastructure_security_check:
+    network_security_check:
+      description: "Check network security configuration and implementation"
+      check_areas:
+        - firewall_rules
+        - network_segmentation
+        - intrusion_detection
+        - vpn_configuration
+        - dns_security
+      check_frequency:
+        - weekly_checks
+        - monthly_checks
+        - on_demand_checks
+
+    cloud_security_check:
+      description: "Check cloud security configuration and implementation"
+      check_areas:
+        - iam_configuration
+        - s3_bucket_configuration
+        - vpc_configuration
+        - security_group_configuration
+        - logging_configuration
+      check_frequency:
+        - weekly_checks
+        - monthly_checks
+        - on_demand_checks
+
+    database_security_check:
+      description: "Check database security configuration and implementation"
+      check_areas:
+        - access_control
+        - encryption_configuration
+        - audit_configuration
+        - backup_security
+        - network_security
+      check_frequency:
+        - weekly_checks
+        - monthly_checks
+        - on_demand_checks
+
+  compliance_validation:
+    gdpr_compliance_validation:
+      description: "Validate GDPR compliance across all system components"
+      validation_areas:
+        - data_protection_principles
+        - data_subject_rights
+        - consent_management
+        - data_breach_notification
+        - data_processing_records
+      validation_frequency:
+        - quarterly_validation
+        - annual_validation
+        - on_demand_validation
+
+    sox_compliance_validation:
+      description: "Validate SOX compliance across financial components"
+      validation_areas:
+        - financial_reporting_controls
+        - access_controls
+        - audit_trails
+        - change_management
+        - data_integrity
+      validation_frequency:
+        - quarterly_validation
+        - annual_validation
+        - on_demand_validation
+
+    industry_compliance_validation:
+      description: "Validate industry-specific compliance requirements"
+      validation_areas:
+        - iso_27001_compliance
+        - pci_dss_compliance
+        - hipaa_compliance
+        - industry_standards
+      validation_frequency:
+        - quarterly_validation
+        - annual_validation
+        - on_demand_validation
+
+  security_monitoring:
+    real_time_security_monitoring:
+      description: "Monitor security events in real-time"
+      monitoring_areas:
+        - authentication_events
+        - authorization_events
+        - data_access_events
+        - network_events
+        - system_events
+      monitoring_tools:
+        - siem_system
+        - log_analysis
+        - threat_intelligence
+        - anomaly_detection
+      monitoring_frequency:
+        - real_time_monitoring
+        - continuous_monitoring
+
+    threat_detection:
+      description: "Detect and analyze security threats"
+      detection_types:
+        - malware_detection
+        - intrusion_detection
+        - data_exfiltration_detection
+        - anomaly_detection
+        - behavioral_analysis
+      detection_tools:
+        - ids_ips
+        - edr_system
+        - behavioral_analysis
+        - threat_intelligence
+      detection_frequency:
+        - real_time_detection
+        - continuous_detection
+
+    incident_response:
+      description: "Respond to security incidents"
+      response_procedures:
+        - incident_identification
+        - incident_containment
+        - incident_eradication
+        - incident_recovery
+        - post_incident_analysis
+      response_tools:
+        - incident_management_system
+        - forensic_tools
+        - communication_tools
+        - documentation_tools
+      response_frequency:
+        - on_incident_occurrence
+        - periodic_drills
+
+  security_reporting:
+    vulnerability_reports:
+      description: "Generate comprehensive vulnerability reports"
+      report_types:
+        - vulnerability_summary_report
+        - vulnerability_detail_report
+        - vulnerability_trend_report
+        - vulnerability_remediation_report
+      report_frequency:
+        - weekly_reports
+        - monthly_reports
+        - quarterly_reports
+        - on_demand_reports
+
+    compliance_reports:
+      description: "Generate comprehensive compliance reports"
+      report_types:
+        - gdpr_compliance_report
+        - sox_compliance_report
+        - industry_compliance_report
+        - security_policy_compliance_report
+      report_frequency:
+        - monthly_reports
+        - quarterly_reports
+        - annual_reports
+        - on_demand_reports
+
+    security_metrics_reports:
+      description: "Generate security metrics and analytics reports"
+      report_types:
+        - security_dashboard_report
+        - threat_landscape_report
+        - security_performance_report
+        - security_trend_report
+      report_frequency:
+        - daily_reports
+        - weekly_reports
+        - monthly_reports
+        - on_demand_reports
+
+  security_automation:
+    automated_security_scanning:
+      description: "Automate security scanning processes"
+      automation_areas:
+        - vulnerability_scanning
+        - code_security_analysis
+        - dependency_security_check
+        - infrastructure_security_check
+      automation_tools:
+        - ci_cd_integration
+        - scheduling_system
+        - notification_system
+        - remediation_system
+      automation_frequency:
+        - continuous_automation
+        - scheduled_automation
+        - event_triggered_automation
+
+    automated_security_response:
+      description: "Automate security incident response"
+      automation_areas:
+        - threat_detection
+        - incident_triage
+        - incident_containment
+        - incident_notification
+      automation_tools:
+        - soar_system
+        - automated_playbooks
+        - notification_system
+        - documentation_system
+      automation_frequency:
+        - real_time_automation
+        - event_triggered_automation
+
+  security_enhancements:
+  security_policies:
+    description: "Define and implement security policies"
+    policy_areas:
+      - acceptable_use_policy
+      - access_control_policy
+      - data_classification_policy
+      - incident_response_policy
+      - security_training_policy
+    policy_implementation:
+      - policy_documentation
+      - policy_communication
+      - policy_enforcement
+      - policy_review
+
+  security_training:
+    description: "Provide security training for development and operations teams"
+    training_areas:
+      - secure_coding_practices
+      - security_awareness
+      - incident_response_procedures
+      - compliance_requirements
+    training_frequency:
+      - onboarding_training
+      - annual_training
+      - ad_hoc_training
+
+  coding_rules:
+    - "Security audits must be comprehensive"
+    - "Security audits must be automated"
+    - "Security audits must be repeatable"
+    - "Security audits must have clear remediation paths"
+    - "Security audits must be documented"
+    - "Security audits must be integrated with CI/CD"
+
+  output_expectations:
+    - "Comprehensive security audit system"
+    - "Automated vulnerability scanning"
+    - "Penetration testing capabilities"
+    - "Security configuration review"
+    - "Code security analysis"
+    - "Dependency security checking"
+    - "Infrastructure security validation"
+    - "Compliance validation"
+    - "Security monitoring and threat detection"
+    - "Security reporting and analytics"
+    - "Security automation and response"
+
+  stop_condition:
+    - "Vulnerability scanning functional for all components"
+    - "Penetration testing capabilities implemented"
+    - "Security configuration review working"
+    - "Code security analysis integrated"
+    - "Dependency security checking automated"
+    - "Infrastructure security validation functional"
+    - "Compliance validation working"
+    - "Security monitoring providing real-time insights"
+    - "Security reporting comprehensive"
+    - "Security automation functional"
+    - "Backend system production-ready and secure"
+
+  instruction_to_ai:
+    - "Implement comprehensive security audit system"
+    - "Focus on all security aspects of the system"
+    - "Ensure security audits are automated and repeatable"
+    - "Provide clear security insights and remediation paths"
+    - "Do not implement physical security or social engineering tests"

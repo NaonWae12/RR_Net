@@ -1,0 +1,126 @@
+execution_prompt:
+  id: "RRNET_EXEC_02_1_AUTH_HARDENING"
+  purpose: >
+    Harden authentication and tenant entry behavior after initial
+    Auth + Tenant implementation. This step improves API consistency,
+    validation, and prepares future password policy enforcement
+    without refactoring core logic.
+
+  prerequisites:
+    - "EXECUTION #2 Auth + Tenant already implemented"
+    - "JWT auth flow working"
+
+  scope:
+    include:
+      - standard_error_response_format
+      - input_validation_rules
+      - default_password_flag
+      - domain_root_behavior
+    exclude:
+      - rbac_enforcement
+      - billing
+      - feature_toggle
+      - ui_changes
+      - wa_notifications
+
+  api_standards:
+    error_response_format:
+      content_type: application/json
+      schema:
+        error: string
+        message: string
+        details: optional
+      examples:
+        - error: "InvalidCredentials"
+          message: "Username atau password salah"
+        - error: "ValidationError"
+          message: "Input tidak valid"
+          details:
+            field: "password"
+            rule: "min_length_8"
+
+    success_response_guideline:
+      rule: "Always return explicit success flag"
+      example:
+        success: true
+        data: {}
+
+  input_validation:
+    register:
+      username:
+        min_length: 4
+        allowed_chars: "alphanumeric + underscore"
+      password:
+        min_length: 8
+        must_contain:
+          - number
+        notes:
+          - "Do not enforce special character yet"
+    login:
+      notes:
+        - "Generic error message for invalid username/password"
+
+  database_changes:
+    users_table:
+      add_fields:
+        - name: is_default_password
+          type: boolean
+          default: true
+          description: >
+            Indicates user still uses system-generated password.
+            Will be used later for force-password-change flow.
+
+  auth_logic_adjustments:
+    register_flow:
+      - set is_default_password = false
+    default_user_creation:
+      - owner_default_user:
+          is_default_password: true
+      - admin_default_user:
+          is_default_password: true
+
+  domain_root_behavior:
+    main_domain:
+      domain: "rrnet.id"
+      behavior:
+        - allow_no_tenant_context
+        - route_to: public_landing_or_signup
+      notes:
+        - "Do not resolve tenant for root domain"
+        - "Tenant context middleware must bypass this"
+
+    unknown_subdomain:
+      behavior:
+        - return_404_json
+        - message: "Tenant not found"
+
+  middleware_updates:
+    tenant_context:
+      rules:
+        - bypass_for:
+            - "/health"
+            - "/version"
+            - main_domain
+        - strict_subdomain_validation: true
+
+  coding_rules:
+    - "Do not refactor existing auth flow"
+    - "Add validation at handler level"
+    - "Reuse existing error helpers or create one if missing"
+    - "Add TODO comments for force-password-change feature"
+
+  output_expectations:
+    - "Updated user model and migration"
+    - "Centralized error helper"
+    - "Updated auth handlers with validation"
+    - "Short note explaining hardening decisions"
+
+  stop_condition:
+    - "Auth behavior unchanged functionally"
+    - "API errors are consistent"
+    - "System ready for RBAC step"
+
+  instruction_to_ai:
+    - "Treat this as a refinement, not a redesign"
+    - "Keep changes minimal and isolated"
+    - "Do not introduce breaking API changes"

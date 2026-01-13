@@ -1,0 +1,118 @@
+EXECUTION_08_1_COLLECTOR_SYSTEM_HARDENING:
+  goal: >
+    Harden collector operational module to ensure
+    financial consistency with billing/payments,
+    and define clear task creation lifecycle.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_07_1_BILLING_AND_ISOLIR_HARDENING
+      - EXECUTION_08_COLLECTOR_SYSTEM
+
+  design_principles:
+    - Payments table is single source of truth for financial state
+    - Collector module drives payment phase transitions
+    - Assignment lifecycle must be explicit and auditable
+
+  tasks:
+
+    1_collector_assignment_schema:
+      description: Collector task management
+      steps:
+        - Create table collector_assignments:
+            fields:
+              - id (uuid)
+              - tenant_id (fk)
+              - collector_id (fk)
+              - invoice_id (fk)
+              - client_id (fk)
+              - status (enum: assigned | visit_success | deposited | confirmed | failed)
+              - assigned_at
+              - updated_at
+      note:
+        - collector_assignments is operational
+        - payments table remains financial authority
+
+    2_assignment_creation_logic:
+      description: How collector tasks are created
+      steps:
+        - Automatic creation:
+            trigger:
+              - Daily cron / scheduled job
+            rule:
+              - Find invoices:
+                  - due_date < now()
+                  - payment.status != success
+                  - payment.method = cash
+            action:
+              - Create collector_assignment with status = assigned
+        - Manual creation:
+            actor:
+              - admin / owner / finance
+            action:
+              - Assign specific invoice to collector
+      output:
+        - Deterministic assignment lifecycle
+
+    3_phase_transition_and_payment_sync:
+      description: Sync collector actions to payments table
+      rules:
+        - Every phase change MUST update payments table
+      steps:
+        - On visit_success:
+            collector_assignments.status = visit_success
+            payments:
+              - collector_id set
+              - collected_at = now()
+              - status = pending
+        - On deposited:
+            collector_assignments.status = deposited
+            payments:
+              - deposited_at = now()
+        - On confirmed:
+            collector_assignments.status = confirmed
+            payments:
+              - confirmed_at = now()
+              - status = success
+        - On failed visit:
+            collector_assignments.status = failed
+            payments:
+              - status remains pending
+      note:
+        - No payment marked success without confirmed phase
+
+    4_visibility_and_access_rules:
+      description: RBAC for collector module
+      rules:
+        - collector:
+            - view only assigned tasks
+            - update phase status
+        - admin / finance:
+            - view all assignments
+            - confirm deposit
+        - owner:
+            - read-only overview
+
+    5_reporting_support:
+      description: Support daily collection reporting
+      steps:
+        - Provide queries for:
+            - total assigned per day
+            - total collected (visit_success)
+            - total deposited
+            - total confirmed
+            - remaining unpaid
+      note:
+        - Used for UI summary & reconciliation
+
+  done_criteria:
+    - Collector phase updates always reflected in payments table
+    - Assignment creation flow clearly defined (auto & manual)
+    - No financial state divergence between modules
+    - Collector system fully auditable
+
+  note:
+    - This execution hardens EXECUTION #8
+    - Collector module is now finance-consistent
+    - Ready for Finance & Owner dashboards

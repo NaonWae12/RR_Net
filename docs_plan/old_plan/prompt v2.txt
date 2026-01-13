@@ -1,0 +1,697 @@
+prompt v2
+SaaS-System-Spec:
+  meta:
+    name: "ISP-SaaS-Management-System"
+    version: "1.0.0"
+    description: >
+      Multi-tenant SaaS platform for ISP operations: Mikrotik integration,
+      billing, voucher management, HCM, payment gateway, WA gateway, client CRM,
+      router automation. Backend Golang, Frontend Next.js (MVVM), PostgreSQL+PostGIS.
+    author: "requested-by-user"
+    purpose: "Master spec file for Cursor (AI) to generate project code & infra"
+    note:
+      - "This file is the FORCE-finalized spec (modular + combined)."
+      - "Architecture rules are global (see 'global_rules.architecture')."
+
+  global_rules:
+    architecture:
+      frontend_style: "MVVM"
+      frontend_notes:
+        - "View: UI components / pages (stateless as much as possible)."
+        - "ViewModel: per-page/per-container logic (state, API calls, transformations)."
+        - "Model: types, DTOs, API client."
+        - "Every container that has logic -> separate ViewModel + component files."
+        - "Prioritize reusable UI components (buttons, form, table, modal, map markers)."
+      backend_style: "Modular per-feature (monorepo, microservice-like folders)"
+      backend_notes:
+        - "One repo (monorepo) with 'modules/<feature>' layout; not separate deploy units."
+        - "1 endpoint -> 1 handler file. 1 feature -> 1 service file."
+        - "Shared utilities in /internal or /pkg (db, logger, error formatter, auth middleware)."
+        - "Keep code minimal lines via reusable helpers and wrappers (routerOS, radius, wa, payment)."
+      code_style:
+        language_be: "Golang (idiomatic)"
+        language_fe: "TypeScript (Next.js)"
+        naming_convention: "kebab-case for URLs, camelCase for JS/TS vars, snake_case for DB fields"
+        testing: "unit + integration (mocks for router/3rd-party)"
+      modularity:
+        - "Split heavy pages into containers; each container with own ViewModel if contains behavior."
+        - "Backend modules: billing, voucher, mikrotik, radius, maps, tenant, auth, hr, wa."
+      cursor_instructions:
+        - "Treat architecture rules as PRIMARY: generate code following MVVM and per-feature modular BE."
+        - "When in doubt follow global_rules.architecture."
+
+  structure:
+    - core_system
+    - network_modules
+    - billing_system
+    - communication
+    - hr_module
+    - maps_module
+    - super_admin
+    - addon_engine
+    - integrations
+    - data_model_summary
+    - devops_and_deployment
+    - frontend_architecture
+    - backend_architecture
+    - coding_guidelines
+    - prompt_usage
+
+  core_system:
+    auth:
+      chosen_method: "JWT access + Refresh tokens"
+      token_properties:
+        access_token:
+          type: "JWT"
+          ttl_minutes: 15
+          payload_fields:
+            - user_id
+            - tenant_id
+            - role_ids
+            - features
+            - permissions (optional)
+        refresh_token:
+          type: "UUID or JWT"
+          ttl_days: 30
+          storage: "DB or Redis (store/blacklist)"
+      flows:
+        login: "email/password -> verify -> issue access+refresh"
+        refresh: "refresh -> validate -> issue new access (rotate refresh optionally)"
+        logout: "invalidate refresh token"
+      security:
+        password_hash: "bcrypt"
+        jwt_signing: "RS256 recommended (private key in vault/KMS)"
+        token_revocation: "store refresh token ids; blacklist revoked tokens"
+    tenant:
+      model_summary:
+        - id: "uuid"
+        - name: "string"
+        - plan: "enum (basic|pro|business|enterprise)"
+        - enabled_features: "jsonb array"
+        - limits: "jsonb {max_router, max_user, max_voucher, max_odp, max_client_maps}"
+        - addons: "jsonb"
+        - domain: "string (optional custom domain)"
+        - created_at: "timestamp"
+      plan_types:
+        basic:
+          price_id: "basic"
+          default:
+            max_router: 2
+            max_user: 250
+            max_voucher: 15000
+            max_odp: 20
+            max_client_maps: 250
+        pro:
+          price_id: "pro"
+          default:
+            max_router: 5
+            max_user: 1000
+            max_voucher: 35000
+            max_odp: 50
+            max_client_maps: 1000
+        business:
+          price_id: "business"
+          default:
+            max_router: 10
+            max_user: 5000
+            max_voucher: unlimited
+            max_odp: 150
+            max_client_maps: 4000
+        enterprise:
+          price_id: "enterprise"
+          default:
+            unlimited: true
+      feature_toggle_modes:
+        simple:
+          description: "Enable a feature group (basic/pro/business) in one click"
+          behavior: "activates all default features in group"
+        advance:
+          description: "Enable/disable per-feature individually"
+          behavior: "single-feature toggles applied individually"
+      tenant_override:
+        override_behavior: "super_admin can override limits per tenant; overrides saved in tenant.limits"
+        billing_effect: "overrides are billed as add-ons"
+
+    rbac:
+      roles_global:
+        - super_admin: "full system control (SaaS owner)"
+      tenant_roles:
+        - owner: "full tenant privileges; can act as admin"
+        - admin:
+            description: "manage tenant users, routers, billing for tenant; can create sub-owner accounts"
+            special: "can pay tenant invoices to SaaS system and create sub-owner (investor) accounts"
+        - finance: "finance tasks (invoicing, reconciliation) - not default on tenant creation"
+        - HR: "manage employee, absensi, payroll (renamed from employee)"
+        - technician: "router, voucher, isolir, field tasks"
+        - client:
+            description: "end-customer category - not super-admin role; subdivisions exist"
+            client_categories: ["regular", "hotspot", "member", "custom by admin"]
+      permissions:
+        example_list:
+          - router.read
+          - router.write
+          - voucher.manage
+          - billing.read
+          - billing.write
+          - tenant.settings
+          - hr.manage
+      policy_notes:
+        - "owner role doubles as admin for basic plans (no RBAC by default)."
+        - "Tenant admin can create sub-owner accounts for investor flows."
+
+  network_modules:
+    mikrotik:
+      purpose: "Router management for Hotspot & PPPoE"
+      connector_lib: "routeros-go"
+      core_features:
+        - router_crud
+        - test_connection
+        - list_hotspot_active_users
+        - list_pppoe_active_sessions
+        - list_hotspot_accounts
+        - list_pppoe_secrets
+        - dhcp_leases
+        - disconnect_user
+        - add_remove_user
+        - update_profile
+        - push_vouchers (optional)
+        - metrics (uptime/cpu/mem)
+        - sync_now
+      sync_behavior:
+        default_interval_seconds: 300
+        short_polling_session_seconds: 10-30
+        caching: "Redis (TTL configurable)"
+      tenant_integration:
+        enforce_limits: "on router add -> check tenant.limits.max_router + addons.extra_router"
+        auto_push_voucher: "configurable per-tenant"
+      security:
+        credentials_storage: "encrypted (vault/KMS recommended) in DB"
+        credential_scope: "tenant-scoped"
+      apis:
+        - GET /api/v1/routers
+        - POST /api/v1/routers
+        - GET /api/v1/routers/:id
+        - PATCH /api/v1/routers/:id
+        - DELETE /api/v1/routers/:id
+        - POST /api/v1/routers/:id/test-connection
+        - GET /api/v1/routers/:id/sessions
+        - GET /api/v1/routers/:id/users
+        - GET /api/v1/routers/:id/dhcp-leases
+        - POST /api/v1/routers/:id/sessions/:session_id/disconnect
+        - POST /api/v1/routers/:id/push-vouchers
+      business_rules:
+        - cache sessions & fallback to live call if cache miss
+        - disconnect -> immediate call + log + optional retry job
+        - voucher push uses background queue
+        - auto-isolir: implemented by firewall rule or profile switch
+      ui_pages:
+        - routers_list
+        - router_detail (tabs: overview, active_users, accounts, dhcp, sync_logs, settings)
+        - voucher_push
+
+    radius:
+      purpose: "Authentication & Accounting for Hotspot & PPPoE"
+      integration_mode: "FreeRADIUS -> REST call to backend"
+      auth_endpoint: "/radius/auth"
+      acct_endpoint: "/radius/acct"
+      auth_flow:
+        - FreeRADIUS calls POST /radius/auth with username,password,nas details
+        - Backend validates: user exists, tenant active, not isolated, not expired, limit checks
+        - Backend returns ACCEPT or REJECT (with reason codes)
+      accounting:
+        - POST /radius/acct receives start/stop/interim data
+        - Store session records (start/stop/bytes)
+        - Use data for billing, voucher usage, reports
+      voucher_handling:
+        - voucher validation occurs in /radius/auth
+        - voucher expiry / single-use checks performed by backend
+      isolir_integration:
+        - tenant unpaid -> backend responds REJECT causing login fail
+        - user unpaid -> REJECT
+      data_models:
+        - radius_users (can be merged with router_users)
+        - radius_sessions
+
+    voucher:
+      purpose: "Voucher package & batch generation"
+      design_choices:
+        - recommended_mode: "Server-only validation (no push to Mikrotik) — modern & scalable"
+        - optional_push_mode: "Auto-push to Mikrotik when tenant enables setting"
+      package_model:
+        - name
+        - price
+        - profile
+        - duration_hours
+        - expiration_days
+        - speed_limit
+        - multi_use_flag
+      batch_generator:
+        - options: count, prefix, charset, length, export (CSV/PDF)
+        - post-generation: optional auto-push queue
+      limits:
+        - tenant-level voucher_limit enforced
+      ui_pages:
+        - package_list
+        - batch_generator
+        - voucher_list
+        - voucher_settings
+
+  billing_system:
+    saas_billing:
+      purpose: "Billing Tenant -> pay SaaS owner"
+      items:
+        - base_plan
+        - addons
+        - override_charges
+        - taxes (optional)
+      pricing:
+        base_prices:
+          basic: 150000
+          pro: 400000
+          business: 950000
+          enterprise: "custom"
+      invoice_flow:
+        - scheduled_generation_day: configurable per SaaS (default: 1)
+        - generate_invoice -> notify tenant (WA/email)
+        - payment_methods: bank_transfer (manual), payment_gateway (auto)
+        - payment_confirmation: auto if gateway, manual approval if offline
+        - grace_period_days: configurable
+        - overdue_actions: reminders -> isolate tenant panel after grace
+      auto_isolir_rules:
+        - isolate_panel_when_overdue: true
+        - note: "do NOT shut down tenant routers; only lock panel and tenant functionality"
+      ui_pages:
+        - saas_billing_dashboard
+        - tenant_invoices
+        - invoice_detail
+      reports:
+        - revenue_report_monthly
+        - tenant_payment_summary
+
+    enduser_billing:
+      purpose: "Billing End-User (tenant bills their customers)"
+      features:
+        - package_catalog (tenant-configurable)
+        - invoice_generation (manual/auto)
+        - payment_gateway_support (if tenant opts in)
+        - auto_isolir_enduser: configurable per-tenant
+      package_types:
+        - prepaid (voucher-based)
+        - postpaid (monthly subscription)
+      invoice_flow:
+        - generate invoice -> notify customer (WA/email)
+        - payment options: manual input by tenant, gateway
+        - on unpaid -> run auto-isolir if enabled
+      ui_pages:
+        - tenant_customer_list
+        - tenant_invoice_list
+        - customer_payment_page (public-facing)
+      note:
+        - "Tenant finances are separate from SaaS finances; tenant controls end-user billing policies."
+
+    upstream_billing:
+      purpose: "RT/RW Net pays upstream provider (expense tracking)"
+      provider_management:
+        - provider_name
+        - service_id
+        - monthly_cost
+        - billing_cycle
+        - upload_receipt
+      invoice_flow:
+        - record upstream invoice (auto/manual)
+        - reminders to tenant admin
+        - optional payment via gateway or external
+      financial_reports:
+        - income_vs_cost (tenant level)
+        - export csv/pdf
+      ui_pages:
+        - upstream_providers
+        - upstream_invoices
+        - profit_dashboard
+
+  communication:
+    wa_gateway:
+      supported_providers:
+        - fonnte_free_tier
+        - wwebjs_local (no pricing)
+      recommended: "Fonnte (free tier) or wwebjs"
+      settings_per_tenant:
+        - api_url
+        - api_key
+        - sender_number
+        - enabled_events
+      events_supported:
+        - invoice_created
+        - invoice_due_reminder
+        - invoice_overdue
+        - invoice_paid
+        - tenant_isolated
+        - tenant_unisolated
+        - voucher_generated
+        - voucher_batch_notifications
+        - upstream_reminder
+      templates:
+        - placeholder_fields:
+          - "{name}"
+          - "{amount}"
+          - "{due_date}"
+          - "{invoice_code}"
+          - "{voucher_code}"
+      broadcast_rules:
+        throttling:
+          default_rate_per_second: 10
+          queueing: true
+        retry_policy:
+          attempts: 3
+          backoff: "exponential"
+      ui_pages:
+        - wa_settings
+        - wa_templates
+        - wa_broadcast
+        - wa_logs
+
+  hr_module:
+    scope: "Lightweight HCM for tenant operations"
+    roles_allowed:
+      - owner
+      - admin
+      - HR
+      - technician (limited)
+    features:
+      employee_management:
+        fields: [name, role, phone, address, salary_base, status, joined_at, photo_url]
+      attendance:
+        modes_supported:
+          - manual
+          - gps_future_placeholder: "GPS check-in planned for future; disabled in v1"
+        manual_flow: "HR or admin input or employee self-check via form"
+      leave_requests:
+        - apply -> HR/admin approve/decline
+      payroll:
+        - basic_formula: "base + overtime - deductions"
+        - generate_slip_pdf
+      technician_activity:
+        - checkin_logs
+        - photo_upload (optional)
+        - notes
+      ui_pages:
+        - employees_list
+        - attendance
+        - payroll
+        - leave_requests
+
+  maps_module:
+    entities:
+      - odc
+      - odp
+      - client
+    topology:
+      - "visualize directional links: ODC -> ODP -> Client"
+      - "store edges/links as topology objects referencing node ids"
+    features:
+      - add_edit_delete_nodes
+      - assign_client_to_odp
+      - auto_suggest_nearest_odp (haversine)
+      - capacity_port_tracking (ODP)
+      - status_indicators:
+          - ok
+          - warning (near capacity)
+          - full
+          - outage (gangguan)
+      - cascading_outage_rules:
+          - if odc outage -> mark all connected odp & client as outage
+          - if odp outage -> mark all connected client as outage
+          - if client outage -> mark only client
+    layers:
+      - ODC_layer
+      - ODP_layer
+      - Client_layer
+    clustering: "cluster markers for performance"
+    map_tiles:
+      provider: "OpenStreetMap (Leaflet.js recommended)"
+    add_on_limits:
+      extra_ODP_maps: "increases ODP limit per tenant"
+      extra_client_maps: "increases client map points per tenant"
+    ui_pages:
+      - maps_dashboard
+      - odp_list
+      - odc_list
+      - client_locations
+      - assign_page
+    data_models:
+      odc:
+        fields: [id, tenant_id, name, lat, lng, notes, created_at]
+      odp:
+        fields: [id, tenant_id, odc_id, name, lat, lng, capacity, used_ports, status]
+      client_location:
+        fields: [id, tenant_id, client_id, lat, lng, odp_id, status, notes]
+    behaviors:
+      - "visual lines drawn between ODC->ODP and ODP->Client"
+      - "outage indicator cascade implemented server-side and pushed to UI"
+
+  super_admin:
+    scope: "Platform owner control panel"
+    capabilities:
+      tenant_management:
+        - list_tenants
+        - tenant_detail
+        - change_plan
+        - override_limits
+        - activate/deactivate tenant
+        - isolate/unisolate tenant panel
+      feature_toggle:
+        modes: ["simple", "advance"]
+        simple_behavior: "activate group of features"
+        advance_behavior: "single-feature toggles"
+      addons_management:
+        - create_edit_addon
+        - set_price
+        - set_default_limits
+        - view_pending_requests
+        - approve_reject_requests
+      billing_control:
+        - list_all_invoices
+        - mark_paid
+        - generate_global_reports
+      domain_settings:
+        - manage_global_domain
+        - manage_tenant_custom_domain
+      monitoring:
+        - basic_server_metrics
+        - worker_queue_status
+      audit_logs:
+        - view_login_activity
+        - view_key_admin_actions
+    ui_pages:
+      - dashboard
+      - tenants
+      - tenant_detail
+      - addons
+      - billing
+      - feature_toggle
+      - domain
+
+  addon_engine:
+    addons:
+      - extra_router
+      - extra_user_pack
+      - extra_ODP_maps
+      - extra_client_maps
+      - payment_gateway_premium
+      - white_label
+      - ai_agent_admin
+    addon_lifecycle:
+      request:
+        - tenant_requests_addon (UI form)
+        - if addon.auto_active -> auto-activate (billing charge)
+        - if addon.requires_approval -> create request (super_admin action)
+      approval:
+        - super_admin_approve -> activate_addon -> invoice generated if payable
+        - super_admin_reject -> notify_tenant
+      billing:
+        - addon_pricing: configurable by super_admin
+        - addon_billing_cycle: monthly by default
+      limits_extension:
+        - addon updates tenant.limits dynamically
+      ui_pages:
+        - addons_marketplace
+        - addon_request_page
+        - addon_admin_panel
+
+  integrations:
+    mikrotik_radius_sync: "radius <-> mikrotik <-> backend flows"
+    billing_radius_isolir: "billing status drives radius reject logic for isolir"
+    maps_hr_technician: "technician activity links to maps for check-in"
+    wa_billing_notifications: "WA gateway used for billing notifications"
+    storage:
+      - minio/s3: "file uploads (slips, receipts, photos)"
+    ci_cd:
+      - github_actions: "recommended pipeline example"
+    monitoring:
+      - prometheus
+      - grafana
+      - sentry (optional)
+
+  data_model_summary:
+    tenants: "id, name, plan, enabled_features(jsonb), limits(jsonb), addons(jsonb), domain"
+    users: "id, tenant_id, name, email, password_hash, role_id, status, created_at"
+    roles: "id, tenant_id, name, permissions(jsonb)"
+    routers: "id, tenant_id, name, host, port, cred_encrypted, status, sync_interval"
+    radius_users: "id, tenant_id, username, password_hash, category, profile, expire_at"
+    radius_sessions: "id, tenant_id, router_id, username, session_id, start_at, stop_at, bytes"
+    vouchers: "id, tenant_id, code, package_id, status, used_by, used_at"
+    employees: "id, tenant_id, name, role, phone, salary_base, status"
+    maps:
+      odc: "id, tenant_id, name, lat, lng"
+      odp: "id, tenant_id, odc_id, name, lat, lng, capacity, used_ports"
+      client_location: "id, tenant_id, client_id, lat, lng, odp_id, status"
+    billing:
+      invoices: "id, tenant_id, amount, due_date, status, details(jsonb)"
+      payments: "id, invoice_id, method, amount, status, paid_at"
+    addons: "id, name, price, is_auto_active, description"
+
+  devops_and_deployment:
+    repo_layout:
+      - /frontend (Next.js MVVM)
+      - /backend (Golang monorepo)
+      - /infra (docker-compose, k8s manifests future)
+      - /docs
+      - /scripts
+    docker:
+      approach: "use Docker for all services (Postgres, Redis, backend, frontend, worker, minio)"
+      note: "On production use Docker Compose for simple deploy or Kubernetes for scale"
+    docker_compose_recommendation:
+      services:
+        - postgres:
+            image: "postgres:16"
+            volumes: "postgres_data:/var/lib/postgresql/data"
+            env: [POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB]
+        - redis:
+            image: "redis:7"
+        - backend:
+            build: "./backend"
+            depends_on: ["postgres","redis"]
+            env_file: ".env.backend"
+        - frontend:
+            build: "./frontend"
+            ports: "3000:3000"
+            env_file: ".env.frontend"
+        - worker:
+            build: "./backend"
+            command: "worker"
+            depends_on: ["redis","postgres"]
+        - minio:
+            image: "minio/minio"
+            env: [MINIO_ROOT_USER, MINIO_ROOT_PASSWORD]
+      volumes:
+        - postgres_data: {}
+    infra_notes:
+      - "Store secrets in Vault/KMS; avoid plaintext in repo."
+      - "For Windows dev: prefer WSL2 + Docker Engine (no Docker Desktop mandatory)."
+    ci_cd:
+      recommended_pipeline:
+        - lint
+        - unit_tests
+        - build_images
+        - integration_tests (with testcontainers)
+        - push_images
+        - deploy_to_stage
+    observability:
+      - metrics: "Prometheus (expose metrics endpoints from backend & workers)"
+      - tracing: "OpenTelemetry optional"
+      - logging: "structured logs (JSON) shipped to centralized sink"
+
+  frontend_architecture:
+    framework: "Next.js (App Router)"
+    pattern: "MVVM"
+    folder_structure_recommended:
+      - /src
+        - /modules
+          - /<module>
+            - /views (pages / containers)
+            - /viewmodels (logic)
+            - /components (reusable small UI)
+            - /models (types, DTOs)
+            - /styles
+    state_management:
+      - "Zustand for local/global state"
+      - "React Query for server state & caching"
+    components_guidelines:
+      - "Create small reusable components (Button, Modal, Table, FormField)."
+      - "Avoid inline complex logic in View components; delegate to ViewModel."
+      - "Use composition over inheritance."
+    maps_integration:
+      - library: "Leaflet.js"
+      - tiles: "OpenStreetMap"
+    runtime_notes:
+      - "Use environment variables via NEXT_PUBLIC_* prefix for client config."
+      - "Implement i18n if needed (future)."
+
+  backend_architecture:
+    language: "Golang"
+    monorepo_layout:
+      - /cmd
+        - /api (main server)
+        - /worker (background jobs)
+      - /internal
+        - /modules
+          - /auth
+          - /tenant
+          - /mikrotik
+          - /radius
+          - /voucher
+          - /billing
+          - /maps
+          - /hr
+          - /wa
+      - /pkg (reusable libs)
+        - db
+        - logger
+        - errors
+        - middleware
+        - kafka/rabbitmq clients (if used)
+    service_principles:
+      - "1 endpoint -> 1 handler file"
+      - "Business logic in services, DB in repositories"
+      - "Middleware chain: auth -> tenant resolver -> feature toggle -> limit check -> rbac"
+    background_jobs:
+      - queue: "Asynq (Redis) recommended"
+      - job_examples: ["sync_router", "push_voucher", "reconcile_sessions", "send_wa", "invoice_generation"]
+    env_management:
+      - use .env for dev, env vars in infra for prod
+      - sensitive: JWT_PRIVATE_KEY, DB_PASSWORD, MINIO_SECRET, KMS keys
+
+  coding_guidelines:
+    general:
+      - "Keep functions short and single-responsibility."
+      - "Write unit tests for critical logic."
+      - "Use DTOs to validate incoming requests."
+    frontend:
+      - "ViewModels should contain all async calls."
+      - "Components should be presentational & stateless when possible."
+    backend:
+      - "Repository pattern for DB access."
+      - "Service layer for business logic."
+      - "Centralized error handling and response formatter."
+    reusable_components:
+      - "Create UI primitives and shared libraries."
+      - "Create BE client wrappers for Mikrotik, WA, Payment, Radius."
+
+  prompt_usage:
+    usage_notes:
+      - "This YAML is the MASTER SPEC for Cursor. Feed whole file as project_spec."
+      - "Prefer modular consumption: modules can be provided one-by-one to Cursor if incremental generation desired."
+      - "Cursor must respect global_rules.architecture above as PRIMARY guideline."
+    generation_modes:
+      - "Full generation: generate entire backend + frontend + infra"
+      - "Incremental generation: provide module spec and request code for that module only"
+    artifacts_expected:
+      - "Folder skeletons for frontend and backend following specified architectures"
+      - "Dockerfile + docker-compose for local dev"
+      - "OpenAPI spec for backend endpoints (derived from each module's 'apis' list)"
+      - "Sample migrations for core tables"
+      - "Sample unit tests and integration tests skeletons"
+
+  final_notes:
+    - "Revisions collected but not auto-applied beyond this document; this YAML is vetted with user's requested changes and is ready to be consumed by Cursor."
+    - "If you want, I can now split this YAML into separate module files (one file per module) for stepwise Cursor execution."

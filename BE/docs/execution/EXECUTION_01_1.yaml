@@ -1,0 +1,148 @@
+EXECUTION_01_1_BACKEND_FOUNDATION_HARDENING:
+  goal: >
+    Harden backend foundation agar production-grade:
+    config tervalidasi, dependency injection rapi,
+    health check aktif, migration siap, middleware jelas,
+    dan standar testability dari awal.
+
+  scope:
+    applies_to: backend_only
+    language: golang
+    stage: pre-business-logic
+    must_not_include:
+      - business rules
+      - billing logic
+      - network/mikrotik logic
+      - frontend code
+
+  tasks:
+    1_config_management:
+      description: Structured & validated configuration
+      steps:
+        - Create internal/config/config.go
+        - Define Config struct:
+            fields:
+              - App:
+                  - Name
+                  - Env
+                  - Port
+              - Database:
+                  - URL
+                  - MaxOpenConns
+                  - MaxIdleConns
+              - Redis:
+                  - URL
+              - Auth:
+                  - JWTSecret
+                  - TokenTTL
+              - Server:
+                  - ReadTimeout
+                  - WriteTimeout
+        - Load env vars into Config struct
+        - Validate on startup:
+            rules:
+              - Port must be integer
+              - DATABASE_URL must be valid URL
+              - JWT_SECRET must not be empty
+        - Fail-fast if validation fails
+      output:
+        - config object injected via constructors (no global access)
+
+    2_bootstrap_and_dependency_injection:
+      description: Explicit initialization order & DI
+      steps:
+        - Update main.go startup order:
+            order:
+              1: Load & validate Config
+              2: Initialize Logger (from config)
+              3: Initialize PostgreSQL client
+              4: Initialize Redis client
+              5: Initialize Asynq client & worker
+              6: Initialize HTTP Router (inject deps)
+              7: Initialize HTTP Server
+        - Each init step must:
+            - return error
+            - log structured error
+            - abort startup if failed
+      output:
+        - Clear bootstrap flow
+        - No hidden dependency creation
+
+    3_health_check_system:
+      description: Active health checks for infra
+      steps:
+        - Create internal/health package
+        - Implement checks:
+            - PostgreSQL ping
+            - Redis ping
+        - Expose GET /health endpoint
+        - Response format:
+            json:
+              status: healthy | degraded | unhealthy
+              timestamp: RFC3339
+              checks:
+                db: ok | error message
+                redis: ok | error message
+      output:
+        - Kubernetes / Docker ready health endpoint
+
+    4_database_migration:
+      description: Migration system from day one
+      steps:
+        - Add migrations/ folder at project root
+        - Integrate golang-migrate (or similar)
+        - Create initial migration:
+            tables:
+              - tenants (id, name, status, created_at)
+              - users (id, tenant_id, username, password_hash, created_at)
+        - Add CLI or startup hook:
+            - migrate up
+            - migrate down
+      output:
+        - Schema versioned
+        - Safe future DB evolution
+
+    5_middleware_ordering:
+      description: Explicit middleware order
+      steps:
+        - Define middleware stack order:
+            1: RecoverPanicMiddleware
+            2: RequestIDMiddleware
+            3: RequestLoggerMiddleware
+            4: TenantContextMiddleware
+            5: AuthMiddleware (route-specific)
+        - Document middleware order in code comments
+      output:
+        - Predictable request lifecycle
+        - Safer auth & logging
+
+    6_testability_baseline:
+      description: Enforce testing standard
+      steps:
+        - For each infra package:
+            - add *_test.go file
+        - Implement minimal tests:
+            - Config validation test
+            - Health check handler test (mock DB/Redis)
+        - Testing rules:
+            - no heavy integration yet
+            - no business logic tests
+      output:
+        - Testing culture established
+        - CI-ready structure
+
+  constraints:
+    - Do not refactor existing business modules
+    - Do not introduce feature logic
+    - Focus on infra robustness only
+
+  done_criteria:
+    - App fails fast on bad config
+    - /health reports real infra status
+    - Migration runs successfully
+    - Middleware order documented & enforced
+    - Tests pass
+
+  note:
+    - This execution upgrades EXECUTION_01
+    - This is mandatory before scaling to ISP modules

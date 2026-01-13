@@ -1,0 +1,142 @@
+execution_prompt:
+  id: "RRNET_EXEC_05_CLIENT_CUSTOMER_MANAGEMENT"
+  purpose: >
+    Implement ISP end-customer (subscriber) management.
+    This module represents real internet users (PPPoE / Hotspot / Member)
+    that will later be billed, isolated, mapped, and serviced.
+
+  prerequisites:
+    - "EXECUTION #4.5 Notification Service Stub completed"
+    - "RBAC + Feature Toggle working"
+
+  design_principles:
+    - "Client belongs to exactly one tenant"
+    - "Client lifecycle is explicit (active, suspended, isolated)"
+    - "Billing, Network, and Maps depend on this module"
+    - "Client type affects future behavior, not core model"
+
+  scope:
+    include:
+      - client_domain_model
+      - client_crud_api
+      - client_category_handling
+      - client_status_lifecycle
+      - client_address_and_geo
+      - package_assignment_stub
+    exclude:
+      - billing_invoice_generation
+      - payment_processing
+      - mikrotik_or_radius_calls
+      - isolir_execution
+      - map_visualization
+      - voucher_logic
+
+  backend_structure_additions:
+    internal/domain:
+      - client/
+    internal/repository:
+      - client_repository.go
+    internal/service:
+      - client_service.go
+    internal/http/handlers:
+      - client_handler.go
+
+  database_schema:
+    clients:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - name
+        - phone
+        - category (regular | hotspot | member)
+        - status (active | suspended | isolated)
+        - address
+        - latitude
+        - longitude
+        - package_id (nullable)
+        - created_at
+        - updated_at
+      indexes:
+        - tenant_id
+        - status
+        - category
+
+  client_categories:
+    regular:
+      description: "PPPoE client"
+    hotspot:
+      description: "Hotspot user"
+    member:
+      description: "Reseller / affiliate client"
+
+  client_status_lifecycle:
+    allowed_transitions:
+      - active -> suspended
+      - suspended -> active
+      - active -> isolated
+      - isolated -> active
+    notes:
+      - "Isolir execution handled later by Network module"
+
+  client_crud_api:
+    endpoints:
+      - POST /api/v1/clients
+      - GET /api/v1/clients
+      - GET /api/v1/clients/{id}
+      - PUT /api/v1/clients/{id}
+      - PATCH /api/v1/clients/{id}/status
+      - DELETE /api/v1/clients/{id}
+    behavior:
+      - tenant_scoped
+      - paginated_list
+      - searchable_by_name_phone
+
+  rbac_integration:
+    required_capabilities:
+      create: client.create
+      update: client.update
+      view: client.view
+      suspend: client.suspend
+
+  feature_toggle_integration:
+    required_feature: client_management
+    behavior:
+      - "Return forbidden if feature disabled"
+
+  package_assignment:
+    current_behavior:
+      - "Store package_id only"
+      - "No validation against billing yet"
+    future_note:
+      - "Will integrate with billing packages in EXECUTION #7"
+
+  notification_hooks:
+    events:
+      - client_created
+      - client_suspended
+      - client_reactivated
+    behavior:
+      - "Emit event only, no WA send yet"
+
+  coding_rules:
+    - "Client is ISP subscriber, not SaaS user"
+    - "Always scope by tenant_id"
+    - "Do not mix billing logic"
+    - "Use service layer for state changes"
+    - "Validate status transitions"
+
+  output_expectations:
+    - "Client domain model & repository"
+    - "CRUD APIs with RBAC + feature enforcement"
+    - "Status lifecycle enforcement"
+    - "Example API request/response"
+
+  stop_condition:
+    - "Admin can CRUD clients"
+    - "Clients stored per tenant"
+    - "Ready to be consumed by Network & Billing modules"
+
+  instruction_to_ai:
+    - "Follow RRNet force_spec definitions"
+    - "Keep module clean and independent"
+    - "Do not anticipate billing logic"

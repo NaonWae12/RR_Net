@@ -1,0 +1,362 @@
+patch baru untuk modul Role & Cash Collection
+role_and_collector_adjustments_v1:
+  meta:
+    version: "1.0"
+    description: >
+      Finalized role capability adjustments and Cash-Collector system spec.
+      This YAML patches the previous role capability spec with:
+        - Admin extended capabilities (HR + Finance)
+        - New role: collector
+        - Technician may be assigned multi-role including collector
+        - 3-phase cash collection verification flow with UI colors
+        - Admin-managed internet package creation (regular / hotspot)
+        - Payment history auto-reset policy (configurable by super admin)
+        - Isolir history per-customer
+        - Visibility & notification rules (WA)
+    note:
+      - "This file is a FORCE adjustment to be merged into master spec (do NOT create final prompt yet)."
+
+  roles:
+    super_admin:
+      notes:
+        - "No change to global super_admin visibility from prior spec, but tenant-internal logs are NOT visible to super_admin (tenant-only)."
+    owner:
+      notes:
+        - "Default owner created at tenant signup (auto)."
+        - "Receives WA notifications on SaaS-billing payments and confirmed 'money-in-rekening' events."
+    admin:
+      description: "Operational manager inside tenant: includes Admin + HR + Finance capabilities (full within tenant)."
+      can:
+        - all_owner_capabilities_except_superadmin_only_actions
+        - create_default_users_on_tenant_signup: true
+        - manage_users:
+            - create_user_with_default_credentials: true
+            - create_role_client: true
+            - create_role_hr: true
+            - create_role_finance: true
+            - create_role_technician: true
+            - assign_multi_roles_to_user: true
+        - billing_saas:
+            - view_saas_invoices: true
+            - pay_saas_invoice: true
+            - trigger_saas_payment_via_gateway: true
+            - input_manual_payment_record: true
+            - after_payment_notify_owner_via_wa: true
+        - enduser_billing:
+            - create_package (regular/hotspot)
+            - manage_packages
+            - create_customer_invoice
+            - mark_invoice_paid (after finance confirmation)
+            - configure_auto_isolir
+        - hr:
+            - full_hr_capabilities (create/edit employees, payroll, leaves)
+        - finance:
+            - full_finance_capabilities (record upstream invoices, confirm deposits)
+        - voucher:
+            - manage_voucher_packages
+            - generate_voucher_batches
+        - maps_and_network:
+            - manage_odc_odp_client (as owner scope permits)
+            - manage_routers
+        - wa:
+            - send_broadcast
+            - manage_tenant_wa_settings
+        - collector_management:
+            - assign_collectors_to_routes
+            - create_collector_tasks
+            - view_collector_progress
+      creation_flow:
+        - "When tenant created automatically create two default users: owner_default and admin_default."
+        - "System auto-generates username and temp_password for both."
+        - "Send WA to owner/admin with credentials and link; show banner in UI reminding to change password."
+        - "No panel lock if not changed (per user request)."
+
+    hr:
+      notes:
+        - "HR role still exist; admin also has HR rights. If an employee is assigned HR role, they can be created as system user by admin."
+      can:
+        - manage_employees
+        - manage_attendance
+        - approve_leaves
+        - view_payroll
+        - create_payroll_entries (if admin allows)
+
+    finance:
+      notes:
+        - "Finance role still exist; admin also has Finance rights. Admin can create finance users similarly."
+      can:
+        - manage_enduser_payments
+        - record_manual_payments
+        - reconcile_collector_setor
+        - confirm_deposit_to_account (money-in-rekening)
+        - notify_owner_on_deposit
+
+    technician:
+      notes:
+        - "Technician can be assigned collector role in addition to technician capabilities (multi-role)."
+      can:
+        - all_technician_capabilities
+        - if assigned_collector_role: inherits collector capabilities (see below)
+
+    collector:
+      description: "Field cash collector role. Assigned tasks only; limited tenant-scope access."
+      can:
+        - view_assigned_customer_list_only: true
+        - view_customer_details_for_assignment:
+            - name: true
+            - address: true
+            - phone: true
+            - map_point: true
+            - billing_amount (from package): true
+            - due_date: true
+            - customer_notes: true
+        - perform_collection_actions:
+            - mark_visit_attempt(status: [success, failed])
+            - attach_photo_proof: true
+            - record_note: true
+            - mark_setoran_to_admin (phase2) : true
+            - view_their_own_collection_history: true
+        - cannot:
+            - mark_invoice_paid (final)
+            - edit_invoice_amount
+            - access_other_customers
+            - access_network_settings
+            - access_hr_payroll
+      ui_views:
+        - collector_task_list
+        - collector_task_detail (map + phone + invoice_preview)
+        - collector_visit_entry (success/fail/photo)
+        - collector_deposit_entry (marks money is handed to admin/finance)
+      mobile_ux_notes:
+        - "Minimal UI, offline capable (cache assignments), photo upload, quick status buttons."
+
+  packages_management:
+    admin_can_create_packages: true
+    package_categories:
+      - regular:
+          description: "PPPoe / dedicated internet packages for customers"
+          fields:
+            - name
+            - price
+            - speed_down
+            - speed_up
+            - quota_gb (optional)
+            - billing_type: [prepaid, postpaid]
+            - radius_profile (optional)
+            - duration_days (for prepaid)
+      - hotspot:
+          description: "Hotspot access packages (voucher-like or account-based)"
+          fields:
+            - name
+            - price
+            - profile_name
+            - duration_hours_or_days
+            - speed_limit
+            - multi_use_allowed (bool)
+    ui_pages:
+      - package_list
+      - package_create_edit
+      - package_assign_to_customer
+    apis:
+      - GET /api/v1/tenant/:tenant_id/packages
+      - POST /api/v1/tenant/:tenant_id/packages
+      - PATCH /api/v1/tenant/:tenant_id/packages/:id
+      - DELETE /api/v1/tenant/:tenant_id/packages/:id
+
+  collector_system:
+    overview: "Cash collection system with 3-phase verification and assignment-only visibility."
+    roles_involved:
+      - collector
+      - admin
+      - finance
+      - owner (notification)
+    key_tables:
+      - collector_tasks:
+          fields:
+            - id: uuid
+            - tenant_id: uuid
+            - collector_id: uuid (user id)
+            - date_assigned: date
+            - assigned_by: user_id
+            - status: [pending, in_progress, partial, completed]
+            - created_at
+            - updated_at
+      - collector_task_items:
+          fields:
+            - id: uuid
+            - task_id: uuid
+            - customer_id: uuid
+            - invoice_id: uuid (optional)
+            - package_id: uuid
+            - amount_due: numeric
+            - due_date: date
+            - visit_status: [pending, success, failed]
+            - visit_time: timestamp (nullable)
+            - visit_photo_url (nullable)
+            - visit_note (nullable)
+            - setoran_status: [not_setor, setoran_reported_by_collector, setoran_confirmed_by_admin]
+            - rekening_status: [not_deposited, deposited_confirmed_by_finance]
+            - created_at
+            - updated_at
+      - collector_logs:
+          fields:
+            - id
+            - task_item_id
+            - collector_id
+            - action: [visit_attempt, setoran_reported, setoran_verified, setoran_deposited]
+            - meta jsonb (gps, photo_url, amount, reason)
+            - timestamp
+    3_phase_verification:
+      phase_1:
+        key: "visit_success"
+        actor: "collector"
+        description: "Collector confirms customer paid on-spot (records visit_success)."
+        ui_color: "#A3E635" # light green
+        implications:
+          - "Record visit entry and create collector log."
+          - "Set collector_task_item.visit_status = success"
+          - "Do NOT mark invoice as PAID."
+          - "Create payment_history_entry with status = 'collected_by_collector' (pending_setor)."
+      phase_2:
+        key: "setoran_reported"
+        actor: "collector -> admin/finance"
+        description: "Collector reports money handed to admin/finance (setor). Admin/Finance marks 'setoran_reported' -> then confirms as setoran_received_by_admin."
+        ui_color: "#F97316" # orange
+        implications:
+          - "collector_task_item.setoran_status -> setoran_reported_by_collector"
+          - "Admin/Finance sees pending setoran and can confirm."
+          - "If admin confirms, set setoran_status -> setoran_confirmed_by_admin"
+          - "Create payment_history entry with status 'setoran_confirmed_by_admin' (awaiting_rekening_deposit)."
+      phase_3:
+        key: "rekening_confirmed"
+        actor: "finance"
+        description: "Finance confirms money deposited to tenant business account. After this final confirmation invoice is marked PAID."
+        ui_color: "#059669" # solid green
+        implications:
+          - "collector_task_item.rekening_status -> deposited_confirmed_by_finance"
+          - "System marks corresponding invoice as PAID (create payment record with method = cash_collector)."
+          - "Trigger WA notification to owner: 'Money deposited to account'."
+          - "Append final payment_history row with status 'deposited' and reference to bank transaction (if any)."
+    payment_history_behavior:
+      - "Every collector action writes an entry to payment_history with appropriate status (collected_by_collector, setoran_confirmed, deposited)."
+      - "Failed visit also records a payment_history entry with status 'visit_failed' and reason."
+      - "Collector entries do NOT auto-mark invoice paid until Phase 3."
+    retry_and_reassignment:
+      - "If visit_failed, task_item remains pending; can be rescheduled into next day's task."
+      - "System supports auto-split tasks across collectors if many customers."
+    UI_progress_tracking:
+      - task_overview: total_assigned, visited_count, collected_count, pending_count
+      - per-day_summary: show customers_visited vs target_count
+      - per-collector_summary: show amount_collected_today, setoran_pending, setoran_confirmed
+    notifications:
+      - on_phase1_success: notify admin (WA) with visit summary
+      - on_phase2_setor_reported: notify admin/finance to confirm (WA)
+      - on_phase3_rekening_confirmed: notify owner & admin (WA)
+    security_considerations:
+      - "Collector photo proof recommended; store in tenant-limited storage (MinIO)."
+      - "Collector actions audited in tenant logs (visible to owner/admin/finance)."
+      - "Super admin does NOT view collector logs (tenant-only)."
+    apis:
+      - POST /api/v1/tenant/:tenant_id/collector/tasks (admin create)
+      - GET  /api/v1/tenant/:tenant_id/collector/tasks (collector: assigned_only; admin: all)
+      - GET  /api/v1/tenant/:tenant_id/collector/tasks/:id
+      - POST /api/v1/tenant/:tenant_id/collector/tasks/:id/item/:item_id/visit (collector report visit_success/failed)
+      - POST /api/v1/tenant/:tenant_id/collector/tasks/:id/item/:item_id/report-setor (collector reports setoran)
+      - POST /api/v1/tenant/:tenant_id/collector/tasks/:id/item/:item_id/admin-confirm-setor (admin/finance confirm setoran)
+      - POST /api/v1/tenant/:tenant_id/collector/tasks/:id/item/:item_id/finance-confirm-deposit (finance confirm rekening deposit)
+      - GET  /api/v1/tenant/:tenant_id/collector/reports/daily
+      - GET  /api/v1/tenant/:tenant_id/collector/reports/collector-summary
+
+  payment_history_reset_policy:
+    overview: "Automatic archival / purge of old payment history; configurable by super admin per tenant or global default."
+    defaults:
+      basic: 1  # years
+      pro: 5    # years
+    configuration:
+      - "Super admin can set global default years: payment_history_retention_years"
+      - "Super admin can override per-tenant retention in tenant.billing_info.payment_history_retention_years"
+    behavior:
+      - "Purge only affects historical payment_history records older than retention period."
+      - "Paid invoices and essential financial records (for compliance) can be flagged 'do_not_purge' by super admin."
+      - "Purge runs as background job (monthly) and stores audit of purged counts (tenant-only)."
+
+  isolir_history:
+    purpose: "Track isolir events per-customer to help build cooperative policies."
+    model:
+      table: isolir_history
+      fields:
+        - id
+        - tenant_id
+        - customer_id
+        - action: ["auto_isolir_unpaid","manual_isolir_admin","auto_unisolate_payment","manual_unisolate_admin"]
+        - reason: text
+        - triggered_by: ["system","admin_user_id"]
+        - invoice_reference: invoice_id (nullable)
+        - timestamp
+    visibility:
+      - owner: view
+      - admin: view
+      - finance: view
+      - collector: do not view
+      - super_admin: do not view (tenant-only)
+    UI_pages:
+      - customer_isolir_history (customer_detail_tab)
+      - tenant_isolir_report
+
+  visibility_and_data_access_rules:
+    tenants_logs:
+      - "Collector logs and tenant payment_history are tenant-visible only (owner/admin/finance)."
+      - "Super admin DOES NOT have direct access to tenant collector logs or tenant internal payment_history unless tenant flags admin consent (not default)."
+    customer_data_for_collector:
+      - allowed_fields:
+        - name
+        - address
+        - phone_number
+        - map_coordinate
+        - package_info (name, price)
+        - due_date
+      - forbidden_fields:
+        - full_billing_history (only recent relevant entries)
+        - sensitive_personal_id (e.g., national id) unless explicit consent
+    owner_admin_supervision:
+      - "Admin & Owner can view collector logs and progress."
+      - "Owner receives WA on final deposit confirmation."
+
+  acceptance_criteria_collector_system:
+    - "Collector role exists and has access only to assigned task lists."
+    - "Technician can be assigned collector role (multi-role), inheriting collector permissions."
+    - "3-phase flow works: visit_success -> setoran_reported -> rekening_confirmed, with distinct UI colors."
+    - "Invoice only marks PAID after phase 3 (finance confirmation)."
+    - "Payment history entries are created for each phase and for failed visits."
+    - "Admin can create packages (regular/hotspot) and assign to customers."
+    - "Payment history auto-purge runs per tenant configuration set by super admin."
+    - "Isolir history recorded per-customer and visible to tenant staff only."
+
+  ui_and_reports:
+    collector_ui:
+      - mobile_friendly_task_list
+      - task_detail_map_view
+      - quick_action_buttons (success / failed / photo / report_setor)
+      - offline_mode_cache
+    admin_ui:
+      - collector_task_scheduler
+      - collector_progress_dashboard
+      - per-collector_summary
+      - pending_setoran_queue
+      - confirm_setoran_modal
+    reports:
+      - daily_collection_report
+      - collector_performance_report
+      - pending_setoran_report
+      - deposit_reconciliation_report
+
+  security_and_compliance:
+    - "All collector photos & proof stored in tenant-scoped storage with retention policy."
+    - "Payment-related data purge adheres to tenant-specific retention settings."
+    - "Access control enforced via tenant RBAC; collector cannot elevate privileges."
+    - "Audit trail for finance confirmation stored (tenant-side)."
+
+  next_steps_integration_notes:
+    - "Merge this YAML into master role capability spec and network/billing modules."
+    - "Add API contract validation tests for collector endpoints."
+    - "Add mobile UI skeleton for collector tasks (Next.js mobile pages or progressive web app)."

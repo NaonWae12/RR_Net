@@ -1,0 +1,155 @@
+EXECUTION_04_1_PLAN_ADDON_MIGRATION_AND_SEEDING:
+  goal: >
+    Make Plan, Add-on, and Feature Toggle engine immediately usable
+    with clean JSONB schema, initial seed data, and tenant assignment tables.
+
+  scope:
+    applies_to: backend_only
+    depends_on:
+      - EXECUTION_01_1_BACKEND_FOUNDATION_HARDENING
+      - EXECUTION_03_1_RBAC_MIGRATION_AND_SEEDING
+      - EXECUTION_04_PLAN_ADDON_FEATURE_ENGINE
+
+  design_rules:
+    jsonb_schema:
+      features:
+        type: map[string]bool
+        description: Feature toggles per plan/addon
+      limits:
+        type: map[string]int
+        description: >
+          Absolute numeric limits per resource.
+          Use -1 to indicate unlimited.
+          Add-on limits are absolute values and combined via resolution rules.
+    examples:
+      features:
+        billing: true
+        maps: false
+        wa_notification: true
+      limits:
+        router: 5
+        client: 500
+        voucher: -1
+
+  tasks:
+    1_plan_addon_schema_migration:
+      description: Create plans, addons, and tenant assignment tables
+      steps:
+        - Add migration under migrations/
+        - Create table plans:
+            fields:
+              - id (uuid)
+              - code (unique)
+              - name
+              - price
+              - features (jsonb)
+              - limits (jsonb)
+              - is_active
+              - created_at
+        - Create table addons:
+            fields:
+              - id (uuid)
+              - code (unique)
+              - name
+              - price
+              - features (jsonb)
+              - limits (jsonb)
+              - requires_approval (bool)
+              - is_active
+              - created_at
+        - Create table tenant_plans:
+            fields:
+              - tenant_id (fk)
+              - plan_id (fk)
+              - activated_at
+            constraints:
+              - unique(tenant_id)
+        - Create table tenant_addons:
+            fields:
+              - tenant_id (fk)
+              - addon_id (fk)
+              - activated_at
+              - status (active | pending | rejected)
+            constraints:
+              - unique(tenant_id, addon_id)
+
+    2_seed_default_plans:
+      description: Seed base SaaS plans
+      rules:
+        - Seeder must be idempotent
+      steps:
+        - Insert plan BASIC:
+            code: basic
+            features:
+              billing: true
+              wa_notification: true
+              maps: false
+              addons: false
+            limits:
+              router: 1
+              client: 100
+              voucher: 100
+              odp: 0
+              odc: 0
+            price: fixed
+        - Insert plan PRO:
+            code: pro
+            features:
+              billing: true
+              wa_notification: true
+              maps: true
+              addons: true
+              collector: true
+            limits:
+              router: -1
+              client: -1
+              voucher: -1
+              odp: -1
+              odc: -1
+            price: fixed
+        - Use ON CONFLICT DO NOTHING
+
+    3_seed_default_addons:
+      description: Seed built-in addons
+      rules:
+        - Seeder must be idempotent
+      steps:
+        - Insert addon extra_odp_maps:
+            features:
+              maps: true
+            limits:
+              odp: 10
+            requires_approval: false
+        - Insert addon extra_client_maps:
+            features:
+              maps: true
+            limits:
+              client: 100
+            requires_approval: false
+        - Insert addon custom_request:
+            features: {}
+            limits: {}
+            requires_approval: true
+        - Use ON CONFLICT DO NOTHING
+
+    4_feature_toggle_resolution_rules:
+      description: Define how plan + addon features and limits are resolved
+      rules:
+        - Final features = merge(plan.features, addon.features)
+        - Addon may only enable features (cannot disable plan features)
+        - Final limit per key:
+            - if plan limit == -1 → unlimited
+            - else final = plan_limit + sum(addon_limits)
+        - Addon limits ignored if plan limit == -1
+
+  done_criteria:
+    - Plans, addons, tenant_plans, tenant_addons tables exist
+    - Fresh DB has usable BASIC and PRO plans
+    - Add-ons use absolute limit values
+    - Feature & limit resolution deterministic and clean
+    - Safe for repeated seeding and CI/CD
+
+  note:
+    - Data model is clean and additive
+    - No arithmetic semantics embedded in DB values
+    - Engine ready for tenant onboarding flow

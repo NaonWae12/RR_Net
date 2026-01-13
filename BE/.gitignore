@@ -1,0 +1,12 @@
+# Build and tooling artifacts
+/bin/
+/dist/
+/coverage/
+
+# Dependency metadata
+/vendor/
+
+# Env/config
+.env
+.env.local
+

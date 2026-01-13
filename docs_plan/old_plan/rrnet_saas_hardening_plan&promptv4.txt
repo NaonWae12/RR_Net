@@ -1,0 +1,291 @@
+rrnet_saas_hardening_plan&promptv4_spec:
+meta:
+purpose: "Production-ready hardening untuk semua RRNet SaaS modules"
+applies_to: ["plan_1.1-1.10", "prompt_v4", "execution_prompts"]
+mode: "overlay_enhancement"
+version: "1.0.0"
+
+=========================================================
+1. NAMING CONVENTION ENFORCEMENT
+=========================================================
+naming_standards:
+database:
+  convention: "snake_case"
+  table_prefixes: 
+    - tenant_ (tenant scoped)
+    - saas_ (saas specific)
+    - sys_ (system wide)
+  examples:
+    - "tenant_routers" (bukan "routers")
+    - "saas_invoices" (bukan "invoices")
+    - "sys_audit_logs" (bukan "audit_logs")
+
+api:
+  url_pattern: "/api/v1/{module}/{resource}"
+  payload_format: "snake_case"
+  response_format: "snake_case"
+  examples:
+    - "POST /api/v1/network/routers"
+    - "GET /api/v1/billing/saas-invoices"
+
+frontend:
+  files: "PascalCase.tsx" (RouterList.tsx)
+  components: "PascalCase" (DataTable)
+  hooks: "camelCase" (useRouterList)
+  types: "PascalCase" (RouterType)
+
+backend:
+  files: "snake_case.go" (router_service.go)
+  structs: "PascalCase" (RouterService)
+  functions: "camelCase" (createRouter)
+  constants: "UPPER_SNAKE_CASE" (MAX_ROUTER_LIMIT)
+
+=========================================================
+2. ERROR HANDLING & RECOVERY PATTERNS
+=========================================================
+error_handling:
+api_responses:
+  standard_format:
+    success:
+      status: "success"
+      data: {}
+      meta: {timestamp, request_id}
+    error:
+      status: "error"
+      error_code: "VALIDATION_FAILED"
+      message: "User-friendly message"
+      details: {field: "error"}
+      request_id: "uuid"
+
+error_categories:
+  validation_errors: "400"
+  authorization_errors: "403"
+  not_found_errors: "404"
+  rate_limit_errors: "429"
+  internal_errors: "500"
+  service_unavailable: "503"
+
+recovery_strategies:
+  circuit_breaker:
+    threshold: 5 failures
+    timeout: 30s
+    half_open_requests: 3
+  
+  retry_patterns:
+    database_operations: "exponential_backoff"
+    external_api_calls: "linear_backoff"
+    background_jobs: "fixed_interval"
+
+=========================================================
+3. SECURITY HARDENING
+=========================================================
+security_layers:
+authentication:
+  jwt_claims:
+    standard: ["sub", "tid", "iat", "exp", "role"]
+    custom: ["fingerprint", "session_id"]
+  refresh_token:
+    rotation: true
+    storage: "encrypted_db"
+    max_active_per_user: 3
+
+authorization:
+  middleware_order:
+    1: "authenticate_jwt"
+    2: "tenant_resolver"
+    3: "rate_limit_check"
+    4: "feature_toggle_check"
+    5: "rbac_authorize"
+    6: "limit_enforcement"
+
+input_validation:
+  rules:
+    - "never trust client input"
+    - "validate all request bodies"
+    - "sanitize all string inputs"
+    - "validate file uploads"
+    - "check sql injection patterns"
+
+rate_limiting:
+  strategies:
+    per_tenant: "1000 requests/hour"
+    per_user: "100 requests/minute"
+    per_ip: "1000 requests/hour"
+    wa_messages: "10 messages/second"
+
+=========================================================
+4. PERFORMANCE OPTIMIZATION
+=========================================================
+database_optimizations:
+indexing_strategy:
+  - "tenant_id on all tenant tables"
+  - "status columns for filtering"
+  - "created_at for time-based queries"
+  - "spatial indexes for maps"
+
+query_patterns:
+  - "use prepared statements"
+  - "implement pagination properly"
+  - "avoid N+1 queries"
+  - "use connection pooling"
+
+caching_strategy:
+  layers:
+    - "application cache (Redis)"
+    - "database query cache"
+    - "CDN for static assets"
+  ttl_policies:
+    - "user sessions: 15 minutes"
+    - "router status: 1 minute"
+    - "maps data: 5 minutes"
+    - "configuration: 1 hour"
+
+frontend_optimizations:
+  code_splitting:
+    - "per module lazy loading"
+    - "vendor chunk separation"
+    - "dynamic imports for heavy components"
+  
+  state_management:
+    - "global state: Zustand persist"
+    - "module state: local component state"
+    - "server state: React Query"
+
+=========================================================
+5. BACKGROUND JOB PRIORITIES
+=========================================================
+queue_management:
+priority_levels:
+  critical: "billing_isolir, payment_processing"
+  high: "router_sync, outage_propagation"
+  normal: "wa_notifications, report_generation"
+  low: "analytics, cleanup_jobs"
+
+retry_policies:
+  critical: "5 attempts, exponential backoff"
+  high: "3 attempts, linear backoff"
+  normal: "2 attempts, fixed delay"
+  low: "1 attempt, fail fast"
+
+dead_letter_queue:
+  enabled: true
+  monitoring: "alert after 10 failures"
+  manual_recovery: "admin panel access"
+
+=========================================================
+6. MONITORING & OBSERVABILITY
+=========================================================
+logging_strategy:
+structured_logs:
+  format: "json"
+  fields: ["timestamp", "level", "service", "trace_id", "user_id", "tenant_id", "message"]
+  levels: ["error", "warn", "info", "debug"]
+
+business_metrics:
+  - "user_registration_rate"
+  - "invoice_conversion_rate"
+  - "router_sync_success_rate"
+  - "wa_delivery_rate"
+  - "outage_resolution_time"
+
+technical_metrics:
+  - "api_response_time_p95"
+  - "database_connection_pool"
+  - "redis_memory_usage"
+  - "background_job_queue_depth"
+
+alerting_rules:
+  critical: "service_down, database_unreachable"
+  warning: "high_error_rate, slow_queries"
+  info: "queue_depth_high, memory_usage"
+
+=========================================================
+7. TESTING STRATEGY
+=========================================================
+testing_pyramid:
+unit_tests:
+  coverage_target: "80%"
+  focus: "business logic, utilities"
+  
+integration_tests:
+  coverage_target: "60%"
+  focus: "api endpoints, database operations"
+
+e2e_tests:
+  coverage_target: "critical_paths"
+  focus: "user journeys, billing flows"
+
+performance_tests:
+  load_testing: "simulated concurrent users"
+  stress_testing: "system breaking points"
+  
+security_tests:
+  penetration_testing: "quarterly"
+  vulnerability_scanning: "monthly"
+
+=========================================================
+8. DEPLOYMENT HARDENING
+=========================================================
+container_security:
+  base_images: "distroless/alpine"
+  non_root_user: true
+  read_only_filesystem: true
+  resource_limits: "cpu/memory"
+
+network_security:
+  internal_services: "mTLS"
+  external_apis: "HTTPS only"
+  database: "SSL/TLS required"
+
+backup_strategy:
+  database: "daily_full + hourly_incremental"
+  files: "daily_snapshot"
+  retention: "30 days"
+  testing: "monthly_restore_test"
+
+=========================================================
+9. COMPLIANCE & AUDIT
+=========================================================
+audit_trail:
+  events: "all data modifications, admin actions, auth events"
+  storage: "immutable logs"
+  retention: "7 years"
+  access: "role_based"
+
+data_protection:
+  encryption: "at_rest + in_transit"
+  pii_handling: "masking + access controls"
+  gdpr_compliance: "right_to_deletion"
+
+=========================================================
+10. PRODUCTION READINESS CHECKLIST
+=========================================================
+go_live_requirements:
+security:
+  - [ ] all secrets in vault/kms
+  - [ ] ssl certificates valid
+  - [ ] security headers configured
+  - [ ] rate limiting active
+
+performance:
+  - [ ] load testing completed
+  - [ ] caching configured
+  - [ ] database optimized
+  - [ ] cdn configured
+
+monitoring:
+  - [ ] alerts configured
+  - [ ] dashboards ready
+  - [ ] log aggregation active
+  - [ ] health checks implemented
+
+backup:
+  - [ ] backup strategy tested
+  - [ ] restore procedures documented
+  - [ ] disaster recovery plan ready
+
+documentation:
+  - [ ] api documentation complete
+  - [ ] runbooks created
+  - [ ] architecture diagrams updated
+  - [ ] troubleshooting guides ready

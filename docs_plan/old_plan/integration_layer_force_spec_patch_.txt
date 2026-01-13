@@ -1,0 +1,219 @@
+integration_layer_force_spec_patch_v1
+# ============================================================================
+# PATCH: integration_layer_force_spec_v1 (Global System Integration)
+# ============================================================================
+integration_layer_force_spec_patch_v1:
+  meta:
+    patched_from:
+      - billing_force_spec_patch_v2
+      - maps_force_spec_patch_v1
+      - addon_engine_force_spec_patch_v1
+      - super_admin_force_spec_patch_v1
+      - core_system_force_spec_v1
+    module: "integration_layer"
+    timestamp: 2025-12-12
+
+  integration_layer:
+    overview: >
+      Integration Layer provides event-driven coordination between all modules:
+      Billing, Isolir, WA Gateway, Maps, Add-ons, Technician tasks, Router/Radius,
+      Super Admin controls, Feature Toggles, and Tenant Limits.
+
+    event_bus:
+      type: internal_event_bus
+      implementation: redis_streams_or_asynq
+      purpose:
+        - async_processing
+        - decouple services
+        - reliable_event_retry
+      major_event_topics:
+        - billing_events
+        - collector_events
+        - payment_events
+        - outage_events
+        - technician_events
+        - addon_events
+        - plan_events
+        - wa_events
+
+    # ==============================
+    # BILLING → ISOLIR → WA
+    # ==============================
+    billing_to_isolir_flow:
+      triggers:
+        - invoice_due_unpaid
+        - invoice_overdue
+        - overdue_after_grace_period
+      actions:
+        - mark_customer_isolated
+        - sync_isolir_to_router
+        - sync_radius_attributes_isolated
+        - create_isolir_history_entry
+      wa_notifications:
+        - notify_customer_unpaid (optional, if tenant enables)
+        - notify_customer_isolated (optional)
+      worker_jobs:
+        - job_name: "auto_isolir_worker"
+          schedule: daily
+          tasks:
+            - scan_all_unpaid_invoices
+            - identify_eligible_for_isolir
+            - trigger_isolir_event
+
+    payment_to_unisolate_flow:
+      triggers:
+        - payment_confirmed (gateway)
+        - payment_confirmed (finance phase_3)
+      actions:
+        - clear_customer_isolation
+        - sync_router_unisolate
+        - remove_radius_isolate_tag
+        - create_isolir_history_entry
+      wa_notifications:
+        - notify_customer_reconnected (optional)
+      worker_jobs:
+        - job_name: "auto_unisolate_worker"
+          schedule: realtime_event
+
+    # ==============================
+    # ADDON → LIMITS → BILLING SAAS
+    # ==============================
+    addon_billing_integration:
+      triggers:
+        - addon_purchased
+        - addon_invoice_paid
+      actions:
+        - update_tenant_limits
+        - activate_feature_if_required
+      billing:
+        - addon_purchase_generates_saas_invoice
+      wa_notifications:
+        - notify_owner_addon_invoice_created
+        - notify_owner_addon_activated
+
+    # ==============================
+    # COLLECTOR SYSTEM → BILLING → WA
+    # ==============================
+    collector_integration:
+      phase_1:
+        event: collector_visit_success
+        actions:
+          - update_invoice_status_to_awaiting_setoran
+          - create_payment_history_entry(type: collected_by_collector)
+          - send_wa_to_admin("Collector collected cash")
+      phase_2:
+        event: collector_setoran_confirmed_by_admin
+        actions:
+          - update_task_item_status
+          - create_payment_history_entry(type: setoran_confirmed)
+          - send_wa_to_finance("Setoran ready for deposit")
+      phase_3:
+        event: finance_deposit_confirmed
+        actions:
+          - mark_invoice_paid
+          - create_payment_history_entry(type: deposited)
+          - auto_unisolate_if_enabled
+          - send_wa_to_owner("Deposit confirmed & invoice paid")
+
+    # ==============================
+    # MAPS OUTAGE → WA → TECH
+    # ==============================
+    outage_integration:
+      triggers:
+        - outage_set_on_odc
+        - outage_set_on_odp
+        - outage_set_on_client
+        - outage_cleared
+      propagation:
+        - odc_outage → propagate to all odp + clients
+        - odp_outage → propagate to all clients
+        - client_outage → local only
+      wa_notifications:
+        - notify_admin_of_outage
+        - notify_owner_of_outage
+        - notify_customers(if toggled by tenant)
+      technician_tasks:
+        - auto_generate_technician_tasks_if_outage_large
+      logs:
+        - create_outage_history_entry
+
+    # ==============================
+    # TECHNICIAN → MAPS → WA
+    # ==============================
+    technician_integration:
+      triggers:
+        - technician_activity_logged
+        - technician_outage_fix
+      actions:
+        - update_maps_status
+        - attach_photos
+        - send_wa_to_admin("Technician reported update")
+      visibility_sync:
+        - update_radius_or_router_status_if_relevant
+
+    # ==============================
+    # ROUTER / RADIUS → BILLING
+    # ==============================
+    router_radius_integration:
+      events:
+        - customer_online
+        - customer_offline
+        - radius_auth_failed
+      actions:
+        - optional_billing_hooks (data usage, online tracking)
+        - write_radius_log
+        - notify_admin_on_router_errors (optional)
+
+    # ==============================
+    # SUPER ADMIN → ALL MODULES (Global)
+    # ==============================
+    super_admin_integration:
+      capabilities:
+        - plan_management
+        - tenant_limits_override
+        - addon_catalog_management
+        - saas_billing_control
+        - feature_toggle_global
+        - domain_route_management
+        - wa_provider_management
+        - impersonate_tenant_admin
+      restrictions:
+        - cannot_view_tenant_internal_payment_history
+        - cannot_view_collector_logs
+        - cannot_view_customer_private_data
+      worker_jobs:
+        - purge_payment_history_worker
+        - purge_collector_logs_worker
+        - plan_reconciliation_worker
+        - addon_subscription_billing_worker
+
+    # ==============================
+    # UI INTEGRATION FLOWS
+    # ==============================
+    ui_integration:
+      billing_ui:
+        - show_unisolate_button_after_payment
+        - show_collector_chain_progress
+      maps_ui:
+        - reflect_outage_status_with_colors
+        - technician_photo_overlay
+      addon_ui:
+        - update_limits_dynamically_after_purchase
+      super_admin_ui:
+        - highlight_tenant_over_limit
+      collector_ui:
+        - only_show_assigned_clients
+
+    # ==============================
+    # ACCEPTANCE CRITERIA
+    # ==============================
+    acceptance_criteria:
+      - "Billing triggers isolir correctly."
+      - "Unisolir triggers after payment confirmation."
+      - "Collector multi-phase flows update invoice + payment history correctly."
+      - "Outage propagates ODC→ODP→Client."
+      - "Add-on purchases update tenant limits in realtime."
+      - "WA notifications fire at all expected events."
+      - "Event bus handles all async tasks with retries."
+      - "Super admin sees global info only (no internal tenant logs)."
+      - "Technician & collector roles operate independently but may combine."

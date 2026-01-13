@@ -1,0 +1,150 @@
+execution_prompt:
+  id: "RRNET_EXEC_09_MAPS_OUTAGE_PROPAGATION"
+  purpose: >
+    Implement network topology mapping (ODC → ODP → Client) with
+    visual-ready data structures and automatic outage propagation.
+    This module provides operational visibility for admins,
+    technicians, and collectors.
+
+  prerequisites:
+    - "EXECUTION #5 Client Management completed"
+    - "EXECUTION #6 Network Management completed"
+    - "RBAC enforced"
+    - "Feature toggle engine available"
+
+  design_principles:
+    - "Topology is hierarchical"
+    - "Outage propagates downward only"
+    - "Manual override allowed per node"
+    - "Maps are data-first, visualization later"
+
+  scope:
+    include:
+      - odc_model
+      - odp_model
+      - topology_relationships
+      - outage_state_engine
+      - propagation_logic
+      - technician_linkage
+    exclude:
+      - frontend_map_rendering
+      - realtime_streaming
+      - route_optimization
+      - GIS_analytics
+
+  backend_structure_additions:
+    internal/domain:
+      - maps/
+    internal/maps:
+      - topology_service.go
+      - outage_service.go
+      - propagation.go
+    internal/repository:
+      - odc_repository.go
+      - odp_repository.go
+      - topology_repository.go
+      - outage_history_repository.go
+    internal/http/handlers:
+      - maps_handler.go
+      - outage_handler.go
+
+  database_schema:
+    odc:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - name
+        - latitude
+        - longitude
+        - status (normal | outage)
+        - created_at
+
+    odp:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - odc_id
+        - name
+        - latitude
+        - longitude
+        - status (normal | outage)
+        - created_at
+
+    client_topology:
+      fields:
+        - client_id
+        - odp_id
+
+    outage_history:
+      fields:
+        - id (uuid, pk)
+        - tenant_id
+        - node_type (odc | odp | client)
+        - node_id
+        - status (normal | outage)
+        - reason
+        - created_at
+
+  outage_propagation_rules:
+    odc_outage:
+      affects:
+        - all_odp_under_odc
+        - all_clients_under_odp
+    odp_outage:
+      affects:
+        - all_clients_under_odp
+    client_outage:
+      affects:
+        - client_only
+
+  outage_engine:
+    behavior:
+      - set_node_status
+      - propagate_downstream
+      - write_outage_history
+      - allow_manual_clear
+
+  visibility_rules:
+    admin:
+      can_view: full_topology
+      can_update: outage_status
+    technician:
+      can_view: assigned_area_only
+    collector:
+      can_view: client_location_only
+    client:
+      can_view: self_status_only
+
+  api_endpoints:
+    topology:
+      - POST /api/v1/maps/odc
+      - POST /api/v1/maps/odp
+      - GET /api/v1/maps/topology
+    outage:
+      - POST /api/v1/maps/outage
+      - POST /api/v1/maps/outage/clear
+
+  feature_toggle:
+    required_feature: maps
+
+  coding_rules:
+    - "Never propagate upward"
+    - "Status derived if parent in outage"
+    - "Manual override must be explicit"
+    - "All changes logged"
+
+  output_expectations:
+    - "Topology models & repositories"
+    - "Outage propagation logic"
+    - "Outage history tracking"
+    - "API ready for map visualization"
+
+  stop_condition:
+    - "Outage cascades correctly"
+    - "Client inherits outage from ODP/ODC"
+    - "Module ready for frontend map rendering"
+
+  instruction_to_ai:
+    - "Focus on correctness over performance"
+    - "Prepare data for future WebGL maps"
+    - "Follow RRNet outage rules strictly"

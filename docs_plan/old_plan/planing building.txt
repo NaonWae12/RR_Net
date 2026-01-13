@@ -1,0 +1,202 @@
+planing building
+project:
+  name: ISP-SaaS-Management-System
+  description: >
+    A multi-tenant SaaS platform for ISP operations including Mikrotik integration,
+    billing, voucher management, HRM/HCM, payment gateway, WA gateway, client CRM,
+    and router automation. Backend uses Golang, frontend uses Next.js, and PostgreSQL
+    with PostGIS extension for DB.
+
+tech_stack:
+  backend:
+    language: Golang
+    framework: Gin (or Echo)
+    orm: GORM
+    worker_queue: Asynq (Redis)
+    caching: Redis
+    authentication: JWT + RBAC
+    api_style: REST
+  frontend:
+    framework: Next.js (App Router)
+    ui: TailwindCSS + Shadcn UI
+    state: Zustand / React Query
+  database:
+    type: PostgreSQL
+    extensions:
+      - PostGIS
+    model: Single DB - Multi Tenant (shared schema)
+  storage:
+    file_storage: MinIO/S3
+  integration:
+    mikrotik: routeros-go library
+    radius: FreeRADIUS integration
+    payment_gateway: Midtrans / Tripay
+    wa_gateway: WhatsApp API self-hosted
+  devops:
+    container: Docker
+    proxy: Nginx
+    ci_cd: Github Actions (optional)
+    monitoring: Grafana + Prometheus (optional)
+
+build_plan:
+  block_1_project_bootstrap:
+    description: Initialize core frameworks and project structure
+    tasks:
+      - Setup monorepo or multi-repo structure
+      - Initialize Golang backend project with Gin/Echo
+      - Setup module structure (cmd/api, internal, pkg)
+      - Add environment manager (.env + config loader)
+      - Setup PostgreSQL + GORM connection
+      - Enable PostGIS extension in migrations
+      - Setup Redis connection
+      - Setup global error handler / logger middleware
+      - Initialize Next.js project
+      - Setup Tailwind + Shadcn UI
+      - Prepare Dockerfile for backend + frontend + postgres + redis
+
+  block_2_database_schema:
+    description: Build initial multi-tenant schema for core system (PostgreSQL)
+    tables:
+      - tenants
+      - users
+      - employees
+      - roles
+      - permissions
+      - routers
+      - client_accounts
+      - vouchers
+      - payments
+      - transactions
+      - hcm_attendance
+      - hcm_salary
+      - odp_maps     # uses PostGIS geometry/geography types
+      - client_maps  # uses PostGIS geometry/geography types
+    tasks:
+      - Implement tenant isolation strategy (tenant_id on all tables)
+      - Use JSONB for flexible data fields when needed
+      - Create migrations via goose or atlas
+      - Add initial seed for roles/permissions
+
+  block_3_backend_foundation:
+    description: Implement core backend foundation + auth + RBAC
+    tasks:
+      - JWT authentication (login, refresh, revoke)
+      - RBAC middleware (role, permissions)
+      - Tenant resolver middleware
+      - CRUD for tenants (super admin only)
+      - CRUD for users (admin panel)
+      - CRUD for employees (HCM base)
+      - Global pagination, filtering, sorting utils
+      - Error response formatter
+
+  block_4_frontend_foundation:
+    description: Build essential FE components and layouts
+    tasks:
+      - Dashboard layout + sidebar + header
+      - Login page + JWT handling + refresh
+      - Tenant switcher (if super admin)
+      - Global table component (sorting, pagination, search)
+      - Form builder components
+      - Global API fetcher with React Query
+      - Protected route wrapper
+
+  block_5_router_mikrotik_module:
+    description: Implement ISP router integration
+    tasks:
+      - Create router connection tester (ping API)
+      - Implement RouterOS-go client
+      - CRUD router management
+      - Fetch hotspot/pppoe active users
+      - Add voucher generator service
+      - Router sync scheduler (Asynq)
+
+  block_6_radius_module:
+    description: Basic FreeRADIUS integration
+    tasks:
+      - Setup communication method (SQL or REST module)
+      - User authentication handler
+      - Accounting logs writer (PostgreSQL table)
+      - Live session logger using Redis
+      - Auto-isolir basic version
+
+  block_7_billing_payment_module:
+    description: Payment gateway + invoice flow
+    tasks:
+      - Invoice model + CRUD
+      - Payment history model
+      - Payment gateway integration (Midtrans/Tripay)
+      - Webhook processor
+      - Payment reporting (basic)
+      - Revenue dashboard API
+
+  block_8_wa_gateway:
+    description: WhatsApp automation for reminders + isolir notifications
+    tasks:
+      - WA Gateway config
+      - Send message API
+      - Template messages for billing
+      - Worker for scheduled reminders
+
+  block_9_hcm_module:
+    description: HRM/HCM core features
+    tasks:
+      - Attendance (check-in/out)
+      - Cuti management
+      - Payroll basic
+      - Employee CRUD
+      - Export salary slip PDF
+
+  block_10_maps_module:
+    description: ODP & Client Maps
+    tasks:
+      - Integrate Leaflet.js on FE
+      - ODP CRUD + geolocation (PostGIS point)
+      - Client location CRUD (PostGIS point)
+      - Backend GIS query using ST_DWithin, ST_Distance, etc.
+      - Add spatial indexes for performance
+
+  block_11_multitenant_saas_layer:
+    description: final SaaS layer for enterprise
+    tasks:
+      - Super admin dashboard
+      - Tenant usage limits
+      - Subscription management
+      - Tenant onboarding wizard
+      - Tenant metrics / health monitor
+
+  block_12_hardening_and_scaling:
+    description: Prepare system for production-level traffic
+    tasks:
+      - Add rate limiting (Redis)
+      - Add request logging + audit log
+      - Optimize PostgreSQL indexes
+      - Add caching layer for router endpoints
+      - Setup Docker Compose for deployment (Postgres + Redis + MinIO)
+      - Add worker autoscaling rules
+
+release_plan:
+  phase_1_minimum_viable_product:
+    includes:
+      - Auth + RBAC
+      - Tenant basic
+      - Router CRUD + Mikrotik basic
+      - Voucher management
+      - Manual isolir
+      - Payment history (manual)
+      - Basic dashboard
+
+  phase_2_standard_pro:
+    includes:
+      - Payment gateway
+      - Auto-isolir
+      - Client maps
+      - HCM basic (absensi, cuti)
+      - ODP maps
+
+  phase_3_business_enterprise:
+    includes:
+      - Multi-tenant super admin panel
+      - High availability support
+      - White-label
+      - AI agent
+      - Mobile app

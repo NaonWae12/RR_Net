@@ -1,0 +1,557 @@
+execution_prompt:
+  id: "RRNET_EXEC_SA_04_SYSTEM_MONITORING_HEALTH"
+  purpose: >
+    Implement comprehensive system monitoring and health management
+    for super admin including real-time metrics, service status,
+    alert management, resource monitoring, tenant health tracking,
+    and enterprise-grade observability with historical analytics.
+
+  prerequisites:
+    - "EXECUTION_SA_03 Global Plan & Addon Management completed"
+    - "EXECUTION_01_1 Backend Foundation Hardening completed"
+    - "Background job system (Asynq) operational"
+
+  design_principles:
+    - "Real-time monitoring with historical context"
+    - "Multi-level alerting with escalation"
+    - "Tenant health impacts platform health"
+    - "Resource monitoring prevents issues"
+    - "All monitoring data is auditable"
+    - "Dashboard provides actionable insights"
+
+  scope:
+    include:
+      - system_health_monitoring
+      - service_status_tracking
+      - performance_metrics
+      - resource_monitoring
+      - tenant_health_monitoring
+      - background_job_monitoring
+      - external_service_monitoring
+      - alert_management
+      - dashboard_analytics
+      - historical_reporting
+    exclude:
+      - tenant_specific_monitoring
+      - customer_facing_dashboards
+      - automated_healing
+      - capacity_planning
+
+  backend_structure_additions:
+    internal/domain:
+      - monitoring/
+    internal/monitoring:
+      - service.go
+      - health_checker.go
+      - metrics_collector.go
+      - alert_manager.go
+      - dashboard_service.go
+    internal/repository:
+      - health_repository.go
+      - metrics_repository.go
+      - alert_repository.go
+    internal/http/handlers:
+      - monitoring_handler.go
+      - health_handler.go
+      - alert_handler.go
+    internal/jobs:
+      - monitoring_job.go
+      - cleanup_job.go
+
+  database_schema:
+    system_health:
+      fields:
+        - id (uuid, pk)
+        - service_name
+        - status (healthy | degraded | unhealthy | unknown)
+        - response_time_ms
+        - last_check_at
+        - uptime_percentage
+        - error_rate
+        - created_at
+        - updated_at
+
+    service_dependencies:
+      fields:
+        - id (uuid, pk)
+        - service_name
+        - dependency_name
+        - dependency_type (database | cache | external_api | internal_service)
+        - status
+        - last_check_at
+        - created_at
+        - updated_at
+
+    performance_metrics:
+      fields:
+        - id (uuid, pk)
+        - metric_name
+        - metric_type (counter | gauge | histogram)
+        - value
+        - labels (jsonb)
+        - recorded_at
+        - created_at
+
+    resource_metrics:
+      fields:
+        - id (uuid, pk)
+        - resource_type (cpu | memory | disk | network)
+        - resource_name
+        - usage_percentage
+        - available_amount
+        - total_amount
+        - recorded_at
+        - created_at
+
+    tenant_health:
+      fields:
+        - id (uuid, pk)
+        - tenant_id (fk)
+        - health_score (0-100)
+        - active_users
+        - error_rate
+        - response_time_ms
+        - last_activity_at
+        - recorded_at
+        - created_at
+
+    background_job_health:
+      fields:
+        - id (uuid, pk)
+        - queue_name
+        - job_type
+        - pending_count
+        - processing_count
+        - failed_count
+        - success_rate
+        - avg_processing_time_ms
+        - recorded_at
+        - created_at
+
+    external_service_health:
+      fields:
+        - id (uuid, pk)
+        - service_name
+        - service_type (payment_gateway | wa_gateway | mikrotik | email_service)
+        - endpoint_url
+        - status
+        - response_time_ms
+        - last_success_at
+        - last_failure_at
+        - error_message (nullable)
+        - created_at
+        - updated_at
+
+    alerts:
+      fields:
+        - id (uuid, pk)
+        - alert_type
+        - severity (info | warning | critical)
+        - title
+        - message
+        - source_service
+        - metadata (jsonb)
+        - status (active | acknowledged | resolved)
+        - acknowledged_by (nullable, super_admin_id)
+        - acknowledged_at (nullable)
+        - resolved_at (nullable)
+        - created_at
+        - updated_at
+
+    alert_rules:
+      fields:
+        - id (uuid, pk)
+        - name
+        - condition (jsonb)
+        - severity
+        - notification_channels (jsonb)
+        - is_active
+        - created_at
+        - updated_at
+
+  system_health_monitoring:
+  health_checks:
+    core_services:
+      - api_server
+      - database
+      - redis_cache
+      - background_worker
+      - file_storage
+    check_intervals:
+      - critical: 30 seconds
+      - normal: 1 minute
+      - background: 5 minutes
+
+  health_endpoints:
+    system_health:
+      endpoint: GET /api/v1/superadmin/health/system
+      response:
+        overall_status: string
+        services: array
+        last_updated: timestamp
+        uptime_percentage: number
+
+    service_health:
+      endpoint: GET /api/v1/superadmin/health/services
+      response:
+        services: array
+        dependencies: array
+        health_summary: object
+
+  performance_metrics:
+  metric_collection:
+    api_metrics:
+      - request_count
+      - response_time
+      - error_rate
+      - active_connections
+    database_metrics:
+      - connection_pool_usage
+      - query_time
+      - slow_query_count
+    cache_metrics:
+      - hit_rate
+      - memory_usage
+      - eviction_rate
+
+  metrics_endpoints:
+    real_time_metrics:
+      endpoint: GET /api/v1/superadmin/metrics/realtime
+      response:
+        api_metrics: object
+        database_metrics: object
+        cache_metrics: object
+        recorded_at: timestamp
+
+    historical_metrics:
+      endpoint: GET /api/v1/superadmin/metrics/history
+      input:
+        - metric_name
+        - time_range
+        - aggregation
+      response:
+        metrics: array
+        summary: object
+
+  resource_monitoring:
+  system_resources:
+    cpu_monitoring:
+      - usage_percentage
+      - load_average
+      - core_count
+    memory_monitoring:
+      - used_memory
+      - free_memory
+      - swap_usage
+    disk_monitoring:
+      - used_space
+      - free_space
+      - io_wait
+    network_monitoring:
+      - bandwidth_usage
+      - connection_count
+      - packet_loss
+
+  resource_endpoints:
+    current_usage:
+      endpoint: GET /api/v1/superadmin/resources/current
+      response:
+        cpu: object
+        memory: object
+        disk: object
+        network: object
+        recorded_at: timestamp
+
+    resource_trends:
+      endpoint: GET /api/v1/superadmin/resources/trends
+      input:
+        - resource_type
+        - time_range
+      response:
+        trends: array
+        predictions: array
+
+  tenant_health_monitoring:
+  tenant_metrics:
+    - active_user_count
+    - api_request_rate
+    - error_rate
+    - response_time
+    - feature_usage
+    - resource_consumption
+
+  health_scoring:
+    score_calculation:
+      - performance_weight: 40%
+      - availability_weight: 30%
+      - error_rate_weight: 20%
+      - resource_weight: 10%
+
+  tenant_health_endpoints:
+    overview:
+      endpoint: GET /api/v1/superadmin/tenants/health
+      response:
+        total_tenants: number
+        healthy_tenants: number
+        degraded_tenants: number
+        unhealthy_tenants: number
+        health_distribution: object
+
+    tenant_details:
+      endpoint: GET /api/v1/superadmin/tenants/{id}/health
+      response:
+        health_score: number
+        metrics: object
+        issues: array
+        recommendations: array
+
+  background_job_monitoring:
+  job_metrics:
+    - queue_depth
+    - processing_rate
+    - failure_rate
+    - retry_count
+    - processing_time
+
+  queue_monitoring:
+    critical_queues:
+      - billing
+      - notifications
+      - network_sync
+      - cleanup
+    monitoring_intervals:
+      - real_time: 10 seconds
+      - aggregated: 1 minute
+
+  job_health_endpoints:
+    queue_status:
+      endpoint: GET /api/v1/superadmin/jobs/queues
+      response:
+        queues: array
+        summary: object
+        alerts: array
+
+    job_details:
+      endpoint: GET /api/v1/superadmin/jobs/queues/{queue_name}
+      response:
+        queue_info: object
+        recent_jobs: array
+        performance_metrics: object
+
+  external_service_monitoring:
+  external_dependencies:
+    payment_gateways:
+      - midtrans
+      - tripay
+      - xendit
+    wa_gateways:
+      - fonnte
+      - wwebjs
+    other_services:
+      - email_service
+      - sms_service
+      - cdn_service
+
+  service_checks:
+    health_check_types:
+      - connectivity_test
+      - authentication_test
+      - functionality_test
+      - performance_test
+
+  external_health_endpoints:
+    service_status:
+      endpoint: GET /api/v1/superadmin/external/health
+      response:
+        services: array
+        overall_status: string
+        last_updated: timestamp
+
+    service_details:
+      endpoint: GET /api/v1/superadmin/external/health/{service_name}
+      response:
+        service_info: object
+        health_history: array
+        incidents: array
+
+  alert_management:
+  alert_types:
+    system_alerts:
+      - service_down
+      - high_error_rate
+      - resource_exhaustion
+      - database_connection_failure
+    business_alerts:
+      - tenant_isolation
+      - billing_failure
+      - payment_gateway_issues
+    security_alerts:
+      - brute_force_attack
+      - unauthorized_access
+      - data_breach_attempt
+
+  alert_rules:
+  rule_conditions:
+    metric_thresholds:
+      - error_rate > 5%
+      - response_time > 2000ms
+      - cpu_usage > 90%
+      - disk_usage > 85%
+    service_conditions:
+      - service_down > 1 minute
+      - database_connection_failed
+      - queue_depth > 1000
+
+  alert_endpoints:
+    active_alerts:
+      endpoint: GET /api/v1/superadmin/alerts/active
+      response:
+        alerts: array
+        summary: object
+        escalation_info: object
+
+    alert_history:
+      endpoint: GET /api/v1/superadmin/alerts/history
+      input:
+        - time_range
+        - severity
+        - status
+      response:
+        alerts: array
+        analytics: object
+
+    alert_management:
+      acknowledge:
+        endpoint: POST /api/v1/superadmin/alerts/{id}/acknowledge
+      resolve:
+        endpoint: POST /api/v1/superadmin/alerts/{id}/resolve
+
+  dashboard_analytics:
+  dashboard_data:
+    system_overview:
+      - overall_health_score
+      - active_services
+      - resource_usage
+      - active_alerts
+    performance_trends:
+      - response_time_trends
+      - error_rate_trends
+      - throughput_trends
+    business_metrics:
+      - tenant_growth
+      - active_users
+      - revenue_trends
+      - feature_adoption
+
+  dashboard_endpoints:
+    overview_dashboard:
+      endpoint: GET /api/v1/superadmin/dashboard/overview
+      response:
+        system_health: object
+        performance: object
+        business: object
+        alerts: array
+
+    detailed_dashboard:
+      endpoint: GET /api/v1/superadmin/dashboard/detailed
+      input:
+        - dashboard_type
+        - time_range
+      response:
+        data: object
+        charts: array
+        insights: array
+
+  historical_reporting:
+  report_types:
+    system_health_reports:
+      - daily_health_summary
+      - weekly_performance_report
+      - monthly_resource_report
+    business_reports:
+      - tenant_growth_report
+      - revenue_analytics
+      - feature_usage_report
+    incident_reports:
+      - incident_summary
+      - root_cause_analysis
+      - resolution_time_analysis
+
+  report_endpoints:
+    generate_report:
+      endpoint: POST /api/v1/superadmin/reports/generate
+      input:
+        - report_type
+        - time_range
+        - format (pdf | xlsx | csv)
+      behavior:
+        - generate report in background
+        - notify when ready
+        - provide download link
+
+    report_history:
+      endpoint: GET /api/v1/superadmin/reports/history
+      response:
+        reports: array
+        download_links: array
+
+  security_enhancements:
+  authorization:
+    required_permissions:
+      - system.monitor
+      - alerts.manage
+      - reports.generate
+      - health.view
+
+  access_controls:
+    - read_only_access for monitoring_viewers
+    - full_access for system_administrators
+    - alert_management for alert_managers
+
+  audit_requirements:
+  mandatory_events:
+    - health_check_executed
+    - alert_triggered
+    - alert_acknowledged
+    - alert_resolved
+    - report_generated
+    - configuration_changed
+
+  coding_rules:
+    - "All monitoring data must be timestamped"
+    - "Health checks must be non-intrusive"
+    - "Alerts must have clear severity levels"
+    - "Dashboard data must be real-time"
+    - "Historical data must be aggregated"
+    - "All configuration changes must be audited"
+
+  output_expectations:
+    - "Comprehensive system monitoring"
+    - "Real-time health status tracking"
+    - "Performance metrics collection"
+    - "Resource usage monitoring"
+    - "Tenant health assessment"
+    - "Background job monitoring"
+    - "External service monitoring"
+    - "Alert management system"
+    - "Dashboard analytics"
+    - "Historical reporting"
+
+  stop_condition:
+    - "System health monitoring functional"
+    - "Performance metrics collected"
+    - "Resource monitoring active"
+    - "Tenant health assessment working"
+    - "Background job monitoring operational"
+    - "External service monitoring active"
+    - "Alert management system functional"
+    - "Dashboard providing insights"
+    - "Historical reporting available"
+    - "Ready for emergency controls module"
+
+  instruction_to_ai:
+    - "Implement enterprise-grade monitoring system"
+    - "Include all security and audit features"
+    - "Prepare for integration with emergency controls"
+    - "Follow super admin permission model"
+    - "Ensure real-time data collection"
