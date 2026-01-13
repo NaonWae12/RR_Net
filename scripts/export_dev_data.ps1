@@ -86,7 +86,8 @@ $tables = @(
 foreach ($table in $tables) {
     $count = psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM $table;" 2>$null
     if ($count) {
-        Write-Host "    ${table}: $($count.Trim()) rows" -ForegroundColor Gray
+        $tableName = $table
+        Write-Host "    $tableName : $($count.Trim()) rows" -ForegroundColor Gray
     }
 }
 
@@ -95,12 +96,14 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "1. Upload file to VPS:" -ForegroundColor Yellow
-Write-Host "   scp ${OUTPUT_FILE} root@72.60.74.209:/opt/rrnet/" -ForegroundColor White
+$uploadCmd = "   scp $OUTPUT_FILE root@72.60.74.209:/opt/rrnet/"
+Write-Host $uploadCmd -ForegroundColor White
 Write-Host ""
 Write-Host "2. Import on VPS:" -ForegroundColor Yellow
 Write-Host "   ssh root@72.60.74.209" -ForegroundColor White
 Write-Host "   cd /opt/rrnet" -ForegroundColor White
-Write-Host "   ./scripts/import_dev_data.sh ${OUTPUT_FILE}" -ForegroundColor White
+$importCmd = "   ./scripts/import_dev_data.sh $OUTPUT_FILE"
+Write-Host $importCmd -ForegroundColor White
 Write-Host ""
 
 # Clean up password
