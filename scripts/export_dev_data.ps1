@@ -29,7 +29,7 @@ if (-not (Get-Command pg_dump -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "[1] Connecting to database..." -ForegroundColor Yellow
-Write-Host "    Host: $DB_HOST:$DB_PORT" -ForegroundColor Gray
+Write-Host "    Host: ${DB_HOST}:${DB_PORT}" -ForegroundColor Gray
 Write-Host "    Database: $DB_NAME" -ForegroundColor Gray
 Write-Host "    User: $DB_USER" -ForegroundColor Gray
 Write-Host ""
@@ -86,7 +86,7 @@ $tables = @(
 foreach ($table in $tables) {
     $count = psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM $table;" 2>$null
     if ($count) {
-        Write-Host "    $table : $($count.Trim()) rows" -ForegroundColor Gray
+        Write-Host "    ${table}: $($count.Trim()) rows" -ForegroundColor Gray
     }
 }
 
@@ -95,12 +95,12 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "1. Upload file to VPS:" -ForegroundColor Yellow
-Write-Host "   scp $OUTPUT_FILE root@72.60.74.209:/opt/rrnet/" -ForegroundColor White
+Write-Host "   scp ${OUTPUT_FILE} root@72.60.74.209:/opt/rrnet/" -ForegroundColor White
 Write-Host ""
 Write-Host "2. Import on VPS:" -ForegroundColor Yellow
 Write-Host "   ssh root@72.60.74.209" -ForegroundColor White
 Write-Host "   cd /opt/rrnet" -ForegroundColor White
-Write-Host "   ./scripts/import_dev_data.sh $OUTPUT_FILE" -ForegroundColor White
+Write-Host "   ./scripts/import_dev_data.sh ${OUTPUT_FILE}" -ForegroundColor White
 Write-Host ""
 
 # Clean up password
