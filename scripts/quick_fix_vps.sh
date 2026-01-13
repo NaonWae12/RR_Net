@@ -118,23 +118,37 @@ fi
 
 # Setup Frontend
 echo "[9] Setting up frontend..."
-cd $PROJECT_DIR/fe
+cd $PROJECT_DIR
 
-# Create .env.local if not exists
-if [ ! -f .env.local ]; then
-    cat > .env.local << EOF
-NEXT_PUBLIC_API_URL=http://$VPS_IP:8080
-EOF
-    echo "✓ Created fe/.env.local"
+# Check if fe is submodule and init if needed
+if [ -f .gitmodules ]; then
+    echo "Initializing git submodules..."
+    git submodule update --init --recursive 2>&1 | tail -5
 fi
 
-# Build frontend
-npm install 2>&1 | tail -5
-npm run build 2>&1 | tail -10
-if [ -d ".next" ]; then
-    echo "✓ Frontend built successfully"
+cd $PROJECT_DIR/fe
+
+# Check if package.json exists
+if [ ! -f package.json ]; then
+    echo "⚠️  Frontend package.json not found. May be submodule issue."
+    echo "   Run: git submodule update --init --recursive"
 else
-    echo "⚠️  Frontend build may have issues. Check logs above."
+    # Create .env.local if not exists
+    if [ ! -f .env.local ]; then
+        cat > .env.local << EOF
+NEXT_PUBLIC_API_URL=http://$VPS_IP:8080
+EOF
+        echo "✓ Created fe/.env.local"
+    fi
+
+    # Build frontend
+    npm install 2>&1 | tail -10
+    npm run build 2>&1 | tail -15
+    if [ -d ".next" ]; then
+        echo "✓ Frontend built successfully"
+    else
+        echo "⚠️  Frontend build may have issues. Check logs above."
+    fi
 fi
 
 # Create systemd services
