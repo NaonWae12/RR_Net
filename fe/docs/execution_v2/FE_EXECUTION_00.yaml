@@ -1,0 +1,586 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_00_FOUNDATION"
+  purpose: >
+    Implement comprehensive frontend foundation for RRNet SaaS including
+    component library setup, global state management, form validation,
+    error handling system, API client with retry logic, testing setup,
+    and component documentation with enterprise-grade architecture.
+
+  prerequisites:
+    - "Next.js 14+ with App Router installed"
+    - "TypeScript configured"
+    - "TailwindCSS installed"
+    - "Backend API endpoints available"
+    - "Node.js 18+ environment"
+
+  design_principles:
+    - "Component-first architecture with reusability"
+    - "Type-safe development with TypeScript"
+    - "Global state management with Zustand"
+    - "Form validation with react-hook-form + zod"
+    - "Error handling with boundaries and toast notifications"
+    - "API client with retry logic and token refresh"
+    - "Testing with Jest and React Testing Library"
+    - "Component documentation with Storybook"
+
+  scope:
+    include:
+      - component_library_setup
+      - global_state_management
+      - form_validation_system
+      - error_handling_system
+      - api_client_setup
+      - testing_infrastructure
+      - component_documentation
+      - development_tools
+    exclude:
+      - business_logic_pages
+      - authentication_pages
+      - tenant_specific_features
+      - super_admin_features
+
+  frontend_structure_additions:
+  src/
+    components/
+      ui/ (shadcn/ui components)
+      forms/ (form components)
+      tables/ (table components)
+      charts/ (chart components)
+      common/ (reusable components)
+    stores/
+      authStore.ts
+      globalStore.ts
+      notificationStore.ts
+    lib/
+      api/
+        apiClient.ts
+        auth.ts
+        types.ts
+      utils/
+        errors.ts
+        validation.ts
+        helpers.ts
+      hooks/
+        useApi.ts
+        useAuth.ts
+        useLocalStorage.ts
+      providers/
+        AuthProvider.tsx
+        ErrorBoundary.tsx
+        ToastProvider.tsx
+    styles/
+      globals.css
+      components.css
+    __tests__/
+      components/
+      hooks/
+      utils/
+    .storybook/
+      main.ts
+      preview.ts
+      stories/
+
+  component_library_setup:
+  shadcn_ui_installation:
+    description: "Install and configure shadcn/ui component library"
+    steps:
+      - install shadcn/ui CLI
+      - configure components.json
+      - install core components:
+          - Button
+          - Input
+          - Label
+          - Select
+          - Checkbox
+          - Radio
+          - Switch
+          - Textarea
+          - Card
+          - Dialog
+          - Sheet
+          - Table
+          - Badge
+          - Avatar
+          - Progress
+          - Alert
+          - Toast
+      - configure tailwind.config.js for shadcn/ui
+      - setup components.json for customization
+
+  custom_components:
+    description: "Create custom components extending shadcn/ui"
+    components:
+      DataTable:
+        features:
+          - pagination
+          - sorting
+          - filtering
+          - bulk actions
+          - export functionality
+        props:
+          - data: array
+          - columns: array
+          - loading: boolean
+          - pagination: object
+          - onRowClick: function
+          - onBulkAction: function
+
+      FormField:
+        features:
+          - label
+          - description
+          - error
+          - required
+        props:
+          - name: string
+          - label: string
+          - description?: string
+          - required?: boolean
+          - error?: string
+          - children: ReactNode
+
+      StatusBadge:
+        features:
+          - status variants
+          - custom colors
+        props:
+          - status: string
+          - variant?: enum
+          - size?: enum
+
+      LoadingSpinner:
+        features:
+          - different sizes
+          - overlay option
+        props:
+          - size?: enum
+          - overlay?: boolean
+
+      ConfirmDialog:
+        features:
+          - title customization
+          - action buttons
+          - loading state
+        props:
+          - title: string
+          - description: string
+          - onConfirm: function
+          - onCancel: function
+          - loading?: boolean
+
+  global_state_management:
+  zustand_store_setup:
+    description: "Setup Zustand for global state management"
+    stores:
+      authStore:
+        state:
+          - user: User | null
+          - token: string | null
+          - refreshToken: string | null
+          - isAuthenticated: boolean
+          - isLoading: boolean
+          - capabilities: string[]
+          - tenant: Tenant | null
+        actions:
+          - login: (credentials) => Promise<void>
+          - logout: () => void
+          - refreshToken: () => Promise<void>
+          - updateProfile: (data) => Promise<void>
+          - setTenant: (tenant) => void
+
+      globalStore:
+        state:
+          - theme: 'light' | 'dark'
+          - sidebarOpen: boolean
+          - notifications: Notification[]
+          - loading: Record<string, boolean>
+          - errors: Record<string, string>
+        actions:
+          - setTheme: (theme) => void
+          - toggleSidebar: () => void
+          - addNotification: (notification) => void
+          - removeNotification: (id) => void
+          - setLoading: (key, loading) => void
+          - setError: (key, error) => void
+          - clearError: (key) => void
+
+      notificationStore:
+        state:
+          - toasts: Toast[]
+        actions:
+          - showToast: (toast) => void
+          - hideToast: (id) => void
+          - clearAllToasts: () => void
+
+  form_validation_system:
+  react_hook_form_zod:
+    description: "Setup form validation with react-hook-form and zod"
+    dependencies:
+      - react-hook-form
+      - zod
+      - @hookform/resolvers
+    setup:
+      - create form validation schemas with zod
+      - create reusable form components
+      - setup error handling
+      - setup form submission handling
+
+  validation_schemas:
+    description: "Create common validation schemas"
+    schemas:
+      auth:
+        login:
+          email: z.string().email()
+          password: z.string().min(8)
+        register:
+          name: z.string().min(2)
+          email: z.string().email()
+          password: z.string().min(8)
+          confirmPassword: z.string()
+        changePassword:
+          currentPassword: z.string()
+          newPassword: z.string().min(8)
+          confirmPassword: z.string()
+
+      client:
+        create:
+          name: z.string().min(2)
+          phone: z.string().regex(/^[0-9+\-\s()]+$/)
+          email: z.string().email().optional()
+          address: z.string().min(5)
+          category: z.enum(['regular', 'hotspot', 'member'])
+        update:
+          name: z.string().min(2)
+          phone: z.string().regex(/^[0-9+\-\s()]+$/)
+          email: z.string().email().optional()
+          address: z.string().min(5)
+          category: z.enum(['regular', 'hotspot', 'member'])
+
+      billing:
+        package:
+          name: z.string().min(2)
+          price: z.number().min(0)
+          category: z.enum(['regular', 'hotspot'])
+          billingCycle: z.enum(['monthly', 'yearly'])
+
+  form_components:
+    description: "Create reusable form components"
+    components:
+      FormInput:
+        features:
+          - label
+          - description
+          - error
+          - required
+          - placeholder
+        props:
+          - name: string
+          - label: string
+          - description?: string
+          - required?: boolean
+          - placeholder?: string
+          - type?: 'text' | 'email' | 'password' | 'tel'
+
+      FormSelect:
+        features:
+          - options
+          - searchable
+          - multi-select
+          - clearable
+        props:
+          - name: string
+          - label: string
+          - options: Array<{value: string, label: string}>
+          - placeholder?: string
+          - searchable?: boolean
+          - multi?: boolean
+
+      FormCheckbox:
+        features:
+          - label
+          - description
+          - indeterminate
+        props:
+          - name: string
+          - label: string
+          - description?: string
+
+      FormRadio:
+        features:
+          - options
+          - inline
+        props:
+          - name: string
+          - label: string
+          - options: Array<{value: string, label: string}>
+          - inline?: boolean
+
+  error_handling_system:
+  error_boundary:
+    description: "Setup React Error Boundary for error handling"
+    features:
+      - catch JavaScript errors
+      - display fallback UI
+      - log errors to service
+      - provide retry mechanism
+    component:
+      - ErrorBoundary: React.Component
+      - FallbackComponent: React.Component
+      - ErrorDisplay: React.Component
+
+  toast_notification_system:
+    description: "Setup toast notification system"
+    features:
+      - success, error, warning, info variants
+      - auto-dismiss
+      - manual dismiss
+      - positioning
+      - stacking
+    components:
+      - ToastProvider: React.Component
+      - Toast: React.Component
+      - useToast: Hook
+
+  global_error_handler:
+    description: "Setup global error handling"
+    features:
+      - API error handling
+      - Network error handling
+      - Authentication error handling
+      - Validation error handling
+    utilities:
+      - handleApiError: (error) => void
+      - handleNetworkError: (error) => void
+      - handleAuthError: (error) => void
+      - handleValidationError: (error) => void
+
+  api_client_setup:
+  axios_client:
+    description: "Setup Axios client with interceptors"
+    features:
+      - request/response interceptors
+      - token injection
+      - token refresh
+      - error handling
+      - retry logic
+      - timeout handling
+    configuration:
+      - baseURL: process.env.NEXT_PUBLIC_API_URL
+      - timeout: 10000
+      - retry: 3
+      - retryDelay: 1000
+
+  api_interceptors:
+    request_interceptor:
+      - add Authorization header
+      - add tenant context
+      - add request ID
+      - log requests
+    response_interceptor:
+      - handle success responses
+      - handle error responses
+      - refresh token on 401
+      - retry on network errors
+      - log responses
+
+  api_services:
+    description: "Create API service modules"
+    services:
+      authService:
+        - login
+        - logout
+        - refreshToken
+        - getProfile
+        - updateProfile
+        - changePassword
+      clientService:
+        - getClients
+        - getClient
+        - createClient
+        - updateClient
+        - deleteClient
+      billingService:
+        - getInvoices
+        - getInvoice
+        - createInvoice
+        - updateInvoice
+        - deleteInvoice
+      networkService:
+        - getRouters
+        - getRouter
+        - createRouter
+        - updateRouter
+        - deleteRouter
+
+  api_types:
+    description: "Create TypeScript types for API"
+    types:
+      auth:
+        - User
+        - LoginRequest
+        - LoginResponse
+        - RefreshTokenRequest
+        - RefreshTokenResponse
+      client:
+        - Client
+        - CreateClientRequest
+        - UpdateClientRequest
+        - ClientListResponse
+      billing:
+        - Invoice
+        - Payment
+        - Package
+        - BillingListResponse
+      network:
+        - Router
+        - RouterUser
+        - Voucher
+        - NetworkListResponse
+
+  testing_infrastructure:
+  jest_setup:
+    description: "Setup Jest for unit testing"
+    configuration:
+      - jest.config.js
+      - setupTests.ts
+      - testEnvironment: jsdom
+      - moduleNameMapping: handle CSS/asset imports
+    test_utilities:
+      - renderWithProviders
+      - mockApi
+      - createMockStore
+      - userEvent setup
+      - screen cleanup
+
+  testing_utilities:
+    description: "Create testing utilities"
+    utilities:
+      - renderWithProviders: render with all providers
+      - mockApi: mock API responses
+      - createMockStore: create mock Zustand store
+      - waitForApi: wait for API calls
+      - mockNextRouter: mock Next.js router
+      - mockLocalStorage: mock localStorage
+
+  test_examples:
+    description: "Create example tests"
+    examples:
+      - component testing
+      - hook testing
+      - utility testing
+      - integration testing
+
+  component_documentation:
+  storybook_setup:
+    description: "Setup Storybook for component documentation"
+    configuration:
+      - .storybook/main.ts
+      - .storybook/preview.ts
+      - .storybook/decorators
+      - addon configurations
+    addons:
+      - @storybook/addon-essentials
+      - @storybook/addon-interactions
+      - @storybook/addon-docs
+      - @storybook/addon-controls
+
+  story_stories:
+    description: "Create stories for components"
+    stories:
+      - Button stories
+      - Input stories
+      - DataTable stories
+      - FormField stories
+      - StatusBadge stories
+      - LoadingSpinner stories
+      - ConfirmDialog stories
+
+  development_tools:
+  eslint_prettier:
+    description: "Setup ESLint and Prettier"
+    configuration:
+      - .eslintrc.json
+      - .prettierrc
+      - .prettierignore
+      - VSCode settings
+    rules:
+      - TypeScript rules
+      - React rules
+      - Accessibility rules
+      - Import rules
+
+  husky_pre_commit:
+    description: "Setup Git hooks with Husky"
+    hooks:
+      - pre-commit: lint-staged
+      - pre-push: test
+      - commit-msg: commitlint
+    tools:
+      - husky
+      - lint-staged
+      - commitlint
+
+  vscode_configuration:
+    description: "Setup VS Code configuration"
+    settings:
+      - TypeScript preferences
+      - ESLint integration
+      - Prettier integration
+      - recommended extensions
+    extensions:
+      - TypeScript
+      - ESLint
+      - Prettier
+      - TailwindCSS
+      - Storybook
+
+  coding_standards:
+  component_standards:
+    - Use TypeScript for all components
+    - Use forwardRef for all components
+    - Use proper prop types
+    - Use proper accessibility
+    - Use proper error boundaries
+    - Use proper loading states
+
+  hook_standards:
+    - Use proper TypeScript types
+    - Use proper error handling
+    - Use proper cleanup
+    - Use proper dependency arrays
+    - Use proper naming conventions
+
+  utility_standards:
+    - Use pure functions
+    - Use proper TypeScript types
+    - Use proper error handling
+    - Use proper documentation
+    - Use proper testing
+
+  output_expectations:
+  - "Complete component library setup"
+  - "Global state management with Zustand"
+  - "Form validation system with react-hook-form + zod"
+  - "Error handling system with boundaries and toast"
+  - "API client with retry logic and token refresh"
+  - "Testing infrastructure with Jest"
+  - "Component documentation with Storybook"
+  - "Development tools setup"
+
+  stop_condition:
+  - "shadcn/ui components installed and configured"
+  - "Zustand stores created and working"
+  - "Form validation system working"
+  - "Error handling system working"
+  - "API client working with backend"
+  - "Testing infrastructure working"
+  - "Storybook working"
+  - "Development tools configured"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade frontend foundation"
+  - "Focus on reusability and type safety"
+  - "Ensure all components are accessible"
+  - "Setup comprehensive testing"
+  - "Follow React best practices"
+  - "Do not implement business logic pages"

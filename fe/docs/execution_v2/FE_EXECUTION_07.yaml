@@ -1,0 +1,842 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_07_NETWORK"
+  purpose: >
+    Implement comprehensive network management system for RRNet SaaS
+    including router management, RADIUS user management, voucher
+    management, network monitoring, real-time status updates,
+    configuration management, and enterprise-grade responsive design
+    with accessibility and performance optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "FE_EXECUTION_03 Dashboard completed"
+    - "FE_EXECUTION_04 Client Management completed"
+    - "FE_EXECUTION_05 Billing completed"
+    - "FE_EXECUTION_06 Collector completed"
+    - "Network management APIs available"
+    - "Router APIs available"
+    - "RADIUS APIs available"
+    - "Voucher APIs available"
+    - "WebSocket connection for real-time updates"
+
+  design_principles:
+    - "Real-time network status monitoring via WebSocket"
+    - "Comprehensive router management with configuration"
+    - "RADIUS user management with authentication logs"
+    - "Voucher management with batch operations"
+    - "Network health monitoring and alerting"
+    - "Mobile-responsive design for field operations"
+    - "Accessibility-first with keyboard navigation"
+    - "Performance-optimized with virtual scrolling"
+    - "Enterprise-grade security and audit trails"
+
+  scope:
+    include:
+      - router_management
+      - radius_user_management
+      - voucher_management
+      - network_monitoring
+      - network_configuration
+      - real_time_status_updates
+      - network_health_monitoring
+      - mobile_responsive_design
+      - network_analytics
+      - network_security_features
+    exclude:
+      - super_admin_network_management
+      - customer_facing_network_portal
+      - advanced_network_analytics
+      - network_performance_optimization
+
+  frontend_structure_additions:
+  src/app/network/
+    - page.tsx (network overview)
+    - routers/
+      - page.tsx (router list)
+      - [id]/
+        - page.tsx (router detail)
+        - edit/
+          - page.tsx (router edit)
+        - config/
+          - page.tsx (router configuration)
+        - users/
+          - page.tsx (router users)
+        - logs/
+          - page.tsx (router logs)
+        - monitoring/
+          - page.tsx (router monitoring)
+    - radius/
+      - page.tsx (radius users)
+      - [id]/
+        - page.tsx (user detail)
+        - edit/
+          - page.tsx (user edit)
+        - logs/
+          - page.tsx (user logs)
+        - sessions/
+          - page.tsx (user sessions)
+    - vouchers/
+      - page.tsx (voucher list)
+      - [id]/
+        - page.tsx (voucher detail)
+        - edit/
+          - page.tsx (voucher edit)
+        - batches/
+          - page.tsx (batch management)
+        - generator/
+          - page.tsx (voucher generator)
+    - monitoring/
+      - page.tsx (network monitoring)
+      - health/
+        - page.tsx (network health)
+      - analytics/
+        - page.tsx (network analytics)
+      - alerts/
+        - page.tsx (network alerts)
+    - components/
+      - RouterList.tsx
+      - RouterCard.tsx
+      - RouterTable.tsx
+      - RouterDetail.tsx
+      - RouterConfig.tsx
+      - RouterStatus.tsx
+      - RouterLogs.tsx
+      - RouterMonitoring.tsx
+      - RadiusUserList.tsx
+      - RadiusUserCard.tsx
+      - RadiusUserTable.tsx
+      - RadiusUserDetail.tsx
+      - RadiusUserSessions.tsx
+      - VoucherList.tsx
+      - VoucherCard.tsx
+      - VoucherTable.tsx
+      - VoucherDetail.tsx
+      - VoucherGenerator.tsx
+      - VoucherBatch.tsx
+      - NetworkOverview.tsx
+      - NetworkHealth.tsx
+      - NetworkAnalytics.tsx
+      - NetworkAlerts.tsx
+      - NetworkStatus.tsx
+      - ConnectionTest.tsx
+      - BandwidthMonitor.tsx
+    - hooks/
+      - useRouters.ts
+      - useRadiusUsers.ts
+      - useVouchers.ts
+      - useNetworkMonitoring.ts
+      - useNetworkHealth.ts
+      - useNetworkAnalytics.ts
+      - useRealTimeUpdates.ts
+    - stores/
+      - networkStore.ts
+      - routerStore.ts
+      - radiusUserStore.ts
+      - voucherStore.ts
+      - networkMonitoringStore.ts
+    - types/
+      - network.ts
+      - router.ts
+      - radiusUser.ts
+      - voucher.ts
+      - networkMonitoring.ts
+    - utils/
+      - networkUtils.ts
+      - routerUtils.ts
+      - voucherUtils.ts
+
+  router_management:
+  router_list_component:
+    description: "Comprehensive router list with real-time status"
+    components:
+      RouterList:
+        features:
+          - real_time_status_updates
+          - advanced_filtering (status, type, location)
+          - search_functionality
+          - bulk_operations (restart, update config)
+          - export_functionality
+          - virtual_scrolling_for_large_lists
+          - mobile_responsive_design
+          - keyboard_navigation
+          - accessibility_features
+        props:
+          - filters: RouterFilters
+          - search: string
+          - selectedRouters: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onExport: (format) => void
+          - onRouterClick: (router) => void
+
+      RouterTable:
+        features:
+          - sortable_columns (name, status, ip, type, last_seen)
+          - filterable_columns (status, type, location)
+          - column_visibility_toggle
+          - row_selection_with_bulk_actions
+          - inline_actions (restart, edit, delete)
+          - status_badges_with_color_coding
+          - real_time_status_updates
+          - pagination_with_page_size_control
+        props:
+          - routers: Router[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (router) => void
+          - onSelectionChange: (ids) => void
+
+      RouterCard:
+        features:
+          - mobile_optimized_layout
+          - status_indicator_with_animation
+          - quick_action_buttons
+          - connection_status_display
+          - bandwidth_usage_indicator
+          - last_seen_timestamp
+          - configuration_summary
+        props:
+          - router: Router
+          - compact: boolean
+          - showActions: boolean
+          - onClick: (router) => void
+          - onRestart: (router) => void
+          - onEdit: (router) => void
+
+  router_detail_view:
+    description: "Comprehensive router detail with real-time monitoring"
+    components:
+      RouterDetail:
+        features:
+          - tabbed_interface (overview, config, users, logs, monitoring)
+          - real_time_status_updates
+          - configuration_management
+          - user_management
+          - log_viewing_with_filtering
+          - performance_monitoring
+          - connection_testing
+          - mobile_responsive_layout
+          - accessibility_navigation
+        props:
+          - routerId: string
+          - activeTab: string
+          - onTabChange: (tab) => void
+          - onEdit: () => void
+          - onRestart: () => void
+          - onTestConnection: () => void
+
+      RouterOverview:
+        features:
+          - router_information_display
+          - real_time_status_indicator
+          - connection_status_display
+          - bandwidth_usage_display
+          - uptime_display
+          - last_activity_display
+          - system_information_display
+        props:
+          - router: Router
+          - onEdit: () => void
+          - onRestart: () => void
+
+      RouterConfig:
+        features:
+          - configuration_form_with_validation
+          - template_based_configuration
+          - configuration_backup_and_restore
+          - configuration_validation
+          - real_time_preview
+          - mobile_responsive_form
+        props:
+          - routerId: string
+          - config: RouterConfig
+          - onSave: (config) => Promise<void>
+          - onBackup: () => void
+          - onRestore: (backup) => Promise<void>
+
+      RouterUsers:
+        features:
+          - user_list_with_filtering
+          - user_status_management
+          - user_authentication_logs
+          - user_session_monitoring
+          - bulk_user_operations
+          - real_time_user_updates
+        props:
+          - routerId: string
+          - filters: UserFilters
+          - onUserAction: (action, userIds) => void
+          - onExport: (format) => void
+
+      RouterLogs:
+        features:
+          - log_viewing_with_filtering
+          - log_level_filtering
+          - date_range_filtering
+          - real_time_log_updates
+          - log_export_functionality
+          - log_search_functionality
+        props:
+          - routerId: string
+          - filters: LogFilters
+          - onExport: (format) => void
+          - onSearch: (query) => void
+
+      RouterMonitoring:
+        features:
+          - real_time_performance_metrics
+          - bandwidth_usage_charts
+          - connection_quality_monitoring
+          - error_rate_tracking
+          - uptime_monitoring
+          - alert_configuration
+        props:
+          - routerId: string
+          - timeRange: TimeRange
+          - onAlertConfigChange: (config) => void
+
+  radius_user_management:
+  radius_user_components:
+    description: "RADIUS user management with authentication tracking"
+    components:
+      RadiusUserList:
+        features:
+          - user_list_with_filtering
+          - real_time_status_updates
+          - authentication_status_tracking
+          - bulk_user_operations
+          - user_search_functionality
+          - export_functionality
+          - virtual_scrolling_for_large_lists
+          - mobile_responsive_design
+        props:
+          - filters: UserFilters
+          - search: string
+          - selectedUsers: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onExport: (format) => void
+          - onUserClick: (user) => void
+
+      RadiusUserTable:
+        features:
+          - sortable_columns (username, status, last_login, router)
+          - filterable_columns (status, router, date_range)
+          - column_visibility_toggle
+          - row_selection_with_bulk_actions
+          - inline_actions (edit, delete, reset_password)
+          - authentication_status_badges
+          - real_time_status_updates
+        props:
+          - users: RadiusUser[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (user) => void
+          - onSelectionChange: (ids) => void
+
+      RadiusUserDetail:
+        features:
+          - user_information_display
+          - authentication_history
+          - session_monitoring
+          - user_configuration_management
+          - password_reset_functionality
+          - mobile_responsive_layout
+        props:
+          - userId: string
+          - onEdit: () => void
+          - onResetPassword: () => void
+          - onDisable: () => void
+
+      RadiusUserSessions:
+        features:
+          - active_session_monitoring
+          - session_history_with_filtering
+          - session_termination_capability
+          - session_analytics
+          - real_time_session_updates
+        props:
+          - userId: string
+          - filters: SessionFilters
+          - onTerminateSession: (sessionId) => void
+          - onExport: (format) => void
+
+  voucher_management:
+  voucher_components:
+    description: "Voucher management with batch operations"
+    components:
+      VoucherList:
+        features:
+          - voucher_list_with_filtering
+          - voucher_status_tracking
+          - batch_operations (generate, activate, deactivate)
+          - voucher_search_functionality
+          - export_functionality
+          - virtual_scrolling_for_large_lists
+          - mobile_responsive_design
+        props:
+          - filters: VoucherFilters
+          - search: string
+          - selectedVouchers: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onExport: (format) => void
+          - onVoucherClick: (voucher) => void
+
+      VoucherTable:
+        features:
+          - sortable_columns (code, status, created_at, expires_at)
+          - filterable_columns (status, package, date_range)
+          - column_visibility_toggle
+          - row_selection_with_bulk_actions
+          - inline_actions (edit, delete, activate)
+          - voucher_status_badges
+          - expiry_date_highlighting
+        props:
+          - vouchers: Voucher[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (voucher) => void
+          - onSelectionChange: (ids) => void
+
+      VoucherGenerator:
+        features:
+          - voucher_generation_wizard
+          - package_selection
+          - quantity_configuration
+          - code_formatting_options
+          - expiry_date_configuration
+          - preview_before_generation
+          - bulk_generation_with_progress
+          - export_functionality
+          - mobile_responsive_wizard
+        props:
+          - packages: VoucherPackage[]
+          - onGenerate: (config) => Promise<VoucherGenerationResult>
+          - onPreview: (config) => Promise<VoucherPreview>
+          - onCancel: () => void
+
+      VoucherBatch:
+        features:
+          - batch_management_interface
+          - batch_status_tracking
+          - batch_operation_history
+          - batch_export_functionality
+          - batch_deletion_capability
+          - mobile_responsive_layout
+        props:
+          - batchId: string
+          - onExport: (format) => void
+          - onDelete: () => void
+
+  network_monitoring:
+  monitoring_components:
+    description: "Network monitoring with real-time updates"
+    components:
+      NetworkOverview:
+        features:
+          - network_status_dashboard
+          - router_status_summary
+          - bandwidth_usage_overview
+          - connection_quality_monitoring
+          - alert_summary_display
+          - real_time_updates
+          - mobile_responsive_dashboard
+        props:
+          - timeRange: TimeRange
+          - onRouterClick: (routerId) => void
+          - onAlertClick: (alert) => void
+
+      NetworkHealth:
+        features:
+          - health_score_display
+          - health_metrics_charts
+          - health_trend_analysis
+          - health_alert_configuration
+          - health_recommendations
+          - real_time_health_updates
+        props:
+          - timeRange: TimeRange
+          - onAlertConfigChange: (config) => void
+
+      NetworkAnalytics:
+        features:
+          - network_performance_charts
+          - bandwidth_usage_analytics
+          - connection_quality_analytics
+          - user_activity_analytics
+          - trend_analysis
+          - export_functionality
+        props:
+          - timeRange: TimeRange
+          - analyticsType: AnalyticsType
+          - onExport: (format) => void
+
+      NetworkAlerts:
+        features:
+          - alert_list_with_filtering
+          - alert_severity_levels
+          - alert_acknowledgment
+          - alert_resolution_tracking
+          - alert_configuration
+          - real_time_alert_updates
+        props:
+          - filters: AlertFilters
+          - onAcknowledge: (alertId) => void
+          - onResolve: (alertId) => void
+          - onConfigure: () => void
+
+  real_time_status_updates:
+  websocket_integration:
+    description: "Real-time network status updates via WebSocket"
+    components:
+      NetworkStatusProvider:
+        features:
+          - websocket_connection_management
+          - real_time_status_updates
+          - connection_error_handling
+          - automatic_reconnection
+          - status_update_filtering
+        implementation:
+          - websocket_connection_management
+          - status_update_handling
+          - error_recovery_mechanisms
+          - automatic_reconnection_logic
+
+    real_time_events:
+      - router_status_changes
+      - user_authentication_events
+      - voucher_status_changes
+      - network_alerts
+      - bandwidth_usage_updates
+      - connection_quality_changes
+
+    update_mechanisms:
+      - incremental_status_updates
+      - batch_status_updates
+      - priority_based_updates
+      - throttled_updates
+      - cached_updates
+
+  mobile_responsive_design:
+  mobile_optimization:
+    description: "Mobile-responsive network management interface"
+    features:
+      - touch_optimized_interfaces
+      - mobile_navigation_patterns
+      - swipe_gestures_support
+      - offline_mode_support
+      - mobile_form_layouts
+      - mobile_chart_optimization
+    implementations:
+      - responsive_breakpoints
+      - touch_event_handling
+      - gesture_recognition
+      - mobile_component_variants
+      - offline_data_caching
+
+  accessibility_features:
+  a11y_implementation:
+    description: "Accessibility features for network management"
+    features:
+      - keyboard_navigation_support
+      - screen_reader_compatibility
+      - focus_management
+      - aria_labels_and_descriptions
+      - color_contrast_compliance
+      - reduced_motion_support
+    implementations:
+      - semantic_html_structure
+      - aria_attribute_implementation
+      - focus_trapping_and_management
+      - keyboard_shortcuts
+      - high_contrast_theme_support
+
+  performance_optimization:
+  performance_features:
+    description: "Performance optimization for network management"
+    features:
+      - virtual_scrolling_for_large_lists
+      - lazy_loading_of_components
+      - data_caching_strategies
+      - request_deduplication
+      - image_optimization
+      - bundle_splitting
+    implementations:
+      - virtual_list_implementation
+      - component_lazy_loading
+      - api_response_caching
+      - request_middleware
+      - image_compression_and_caching
+
+  state_management:
+  network_store:
+    description: "Network state management"
+    state:
+      - routers: Router[]
+      - selectedRouters: string[]
+      - filters: RouterFilters
+      - search: string
+      - pagination: PaginationState
+      - loading: boolean
+      - error: string | null
+      - realTimeUpdates: boolean
+      - networkHealth: NetworkHealth
+      - networkAlerts: NetworkAlert[]
+    actions:
+      - setRouters: (routers) => void
+      - setSelectedRouters: (ids) => void
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setPagination: (pagination) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+      - setRealTimeUpdates: (enabled) => void
+      - setNetworkHealth: (health) => void
+      - setNetworkAlerts: (alerts) => void
+
+  router_store:
+    description: "Router state management"
+    state:
+      - router: Router | null
+      - config: RouterConfig | null
+      - users: RadiusUser[]
+      - logs: RouterLog[]
+      - monitoring: RouterMonitoring | null
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setRouter: (router) => void
+      - setConfig: (config) => void
+      - setUsers: (users) => void
+      - setLogs: (logs) => void
+      - setMonitoring: (monitoring) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  hooks:
+  use_routers:
+    description: "Router management hook"
+    features:
+      - router_data_fetching
+      - router_crud_operations
+      - real_time_status_updates
+      - bulk_operations
+    return_values:
+      - routers: Router[]
+      - loading: boolean
+      - error: string | null
+      - pagination: PaginationState
+      - filters: RouterFilters
+      - search: string
+      - selectedRouters: string[]
+      - getRouters: (filters) => Promise<Router[]>
+      - createRouter: (router) => Promise<Router>
+      - updateRouter: (id, router) => Promise<Router>
+      - deleteRouter: (id) => Promise<void>
+      - bulkAction: (action, ids) => Promise<BulkActionResult>
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setSelectedRouters: (ids) => void
+
+  use_radius_users:
+    description: "RADIUS user management hook"
+    features:
+      - user_data_fetching
+      - user_crud_operations
+      - authentication_tracking
+      - session_monitoring
+    return_values:
+      - users: RadiusUser[]
+      - loading: boolean
+      - error: string | null
+      - pagination: PaginationState
+      - filters: UserFilters
+      - search: string
+      - selectedUsers: string[]
+      - getUsers: (filters) => Promise<RadiusUser[]>
+      - createUser: (user) => Promise<RadiusUser>
+      - updateUser: (id, user) => Promise<RadiusUser>
+      - deleteUser: (id) => Promise<void>
+      - resetPassword: (id) => Promise<void>
+      - getSessions: (userId) => Promise<UserSession[]>
+      - terminateSession: (sessionId) => Promise<void>
+
+  use_vouchers:
+    description: "Voucher management hook"
+    features:
+      - voucher_data_fetching
+      - voucher_generation
+      - batch_operations
+      - voucher_status_tracking
+    return_values:
+      - vouchers: Voucher[]
+      - loading: boolean
+      - error: string | null
+      - pagination: PaginationState
+      - filters: VoucherFilters
+      - search: string
+      - selectedVouchers: string[]
+      - getVouchers: (filters) => Promise<Voucher[]>
+      - generateVouchers: (config) => Promise<VoucherGenerationResult>
+      - activateVouchers: (ids) => Promise<void>
+      - deactivateVouchers: (ids) => Promise<void>
+      - deleteVouchers: (ids) => Promise<void>
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setSelectedVouchers: (ids) => void
+
+  use_network_monitoring:
+    description: "Network monitoring hook"
+    features:
+      - network_health_monitoring
+      - real_time_updates
+      - alert_management
+      - analytics_data_fetching
+    return_values:
+      - networkHealth: NetworkHealth
+      - networkAlerts: NetworkAlert[]
+      - analytics: NetworkAnalytics
+      - loading: boolean
+      - error: string | null
+      - realTimeEnabled: boolean
+      - getNetworkHealth: () => Promise<NetworkHealth>
+      - getNetworkAlerts: (filters) => Promise<NetworkAlert[]>
+      - getNetworkAnalytics: (timeRange) => Promise<NetworkAnalytics>
+      - acknowledgeAlert: (alertId) => void
+      - resolveAlert: (alertId) => void
+      - setRealTimeEnabled: (enabled) => void
+
+  api_integration:
+  network_apis:
+    description: "Network management API integration"
+    endpoints:
+      - GET /network/routers: get router list
+      - GET /network/routers/{id}: get router details
+      - POST /network/routers: create router
+      - PUT /network/routers/{id}: update router
+      - DELETE /network/routers/{id}: delete router
+      - POST /network/routers/{id}/restart: restart router
+      - GET /network/routers/{id}/config: get router config
+      - PUT /network/routers/{id}/config: update router config
+      - GET /network/routers/{id}/users: get router users
+      - GET /network/routers/{id}/logs: get router logs
+      - GET /network/routers/{id}/monitoring: get router monitoring
+      - GET /network/radius/users: get RADIUS users
+      - GET /network/radius/users/{id}: get RADIUS user details
+      - POST /network/radius/users: create RADIUS user
+      - PUT /network/radius/users/{id}: update RADIUS user
+      - DELETE /network/radius/users/{id}: delete RADIUS user
+      - POST /network/radius/users/{id}/reset-password: reset user password
+      - GET /network/radius/users/{id}/sessions: get user sessions
+      - DELETE /network/radius/users/{id}/sessions/{sessionId}: terminate session
+      - GET /network/vouchers: get voucher list
+      - GET /network/vouchers/{id}: get voucher details
+      - POST /network/vouchers/generate: generate vouchers
+      - POST /network/vouchers/{id}/activate: activate voucher
+      - POST /network/vouchers/{id}/deactivate: deactivate voucher
+      - DELETE /network/vouchers/{id}: delete voucher
+      - GET /network/health: get network health
+      - GET /network/alerts: get network alerts
+      - GET /network/analytics: get network analytics
+      - POST /network/alerts/{id}/acknowledge: acknowledge alert
+      - POST /network/alerts/{id}/resolve: resolve alert
+
+    api_methods:
+      - getRouters: (filters) => Promise<Router[]>
+      - getRouter: (id) => Promise<Router>
+      - createRouter: (router) => Promise<Router>
+      - updateRouter: (id, router) => Promise<Router>
+      - deleteRouter: (id) => Promise<void>
+      - restartRouter: (id) => Promise<void>
+      - getRouterConfig: (id) => Promise<RouterConfig>
+      - updateRouterConfig: (id, config) => Promise<RouterConfig>
+      - getRouterUsers: (id) => Promise<RadiusUser[]>
+      - getRouterLogs: (id, filters) => Promise<RouterLog[]>
+      - getRouterMonitoring: (id) => Promise<RouterMonitoring>
+      - getRadiusUsers: (filters) => Promise<RadiusUser[]>
+      - getRadiusUser: (id) => Promise<RadiusUser>
+      - createRadiusUser: (user) => Promise<RadiusUser>
+      - updateRadiusUser: (id, user) => Promise<RadiusUser>
+      - deleteRadiusUser: (id) => Promise<void>
+      - resetUserPassword: (id) => Promise<void>
+      - getUserSessions: (id) => Promise<UserSession[]>
+      - terminateSession: (userId, sessionId) => Promise<void>
+      - getVouchers: (filters) => Promise<Voucher[]>
+      - getVoucher: (id) => Promise<Voucher>
+      - generateVouchers: (config) => Promise<VoucherGenerationResult>
+      - activateVouchers: (ids) => Promise<void>
+      - deactivateVouchers: (ids) => Promise<void>
+      - deleteVouchers: (ids) => Promise<void>
+      - getNetworkHealth: () => Promise<NetworkHealth>
+      - getNetworkAlerts: (filters) => Promise<NetworkAlert[]>
+      - getNetworkAnalytics: (timeRange) => Promise<NetworkAnalytics>
+      - acknowledgeAlert: (alertId) => Promise<void>
+      - resolveAlert: (alertId) => Promise<void>
+
+  testing:
+  component_testing:
+    description: "Network component testing"
+    test_files:
+      - RouterList.test.tsx
+      - RouterTable.test.tsx
+      - RouterDetail.test.tsx
+      - RouterConfig.test.tsx
+      - RadiusUserList.test.tsx
+      - RadiusUserTable.test.tsx
+      - VoucherList.test.tsx
+      - VoucherGenerator.test.tsx
+      - NetworkOverview.test.tsx
+      - NetworkHealth.test.tsx
+
+    test_utilities:
+      - mock_network_data
+      - mock_api_responses
+      - test_providers
+      - user_event_setup
+
+  integration_testing:
+    description: "Network integration testing"
+    test_scenarios:
+      - router_management_workflow
+      - radius_user_management_workflow
+      - voucher_management_workflow
+      - network_monitoring_integration
+      - real_time_updates_integration
+
+  output_expectations:
+  - "Complete router management system"
+  - "RADIUS user management with authentication tracking"
+  - "Voucher management with batch operations"
+  - "Network monitoring with real-time updates"
+  - "Mobile-responsive design"
+  - "Accessibility compliance"
+  - "Performance optimization"
+  - "Comprehensive testing coverage"
+
+  stop_condition:
+  - "Router CRUD operations functional"
+  - "RADIUS user management working"
+  - "Voucher management with batch operations"
+  - "Network monitoring with real-time updates"
+  - "Mobile-responsive design implemented"
+  - "Accessibility features working"
+  - "Performance optimized"
+  - "Testing coverage complete"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade network management system"
+  - "Focus on real-time updates and monitoring"
+  - "Ensure mobile responsiveness and accessibility"
+  - "Implement comprehensive testing"
+  - "Follow React best practices"
+  - "Do not implement super admin features"

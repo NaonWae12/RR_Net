@@ -1,0 +1,7 @@
+User Management (Tenant)
+USER:
+  GET /users
+  POST /users:
+    side_effect:
+      - generate default password
+      - send WA credential

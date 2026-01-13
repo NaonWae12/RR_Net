@@ -1,0 +1,770 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_04_CLIENT_MANAGEMENT"
+  purpose: >
+    Implement comprehensive client management system for RRNet SaaS
+    including CRUD operations, advanced filtering, bulk operations,
+    client details, billing integration, network integration, and
+    enterprise-grade responsive design with accessibility and performance
+    optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "FE_EXECUTION_03 Dashboard completed"
+    - "Client management APIs available"
+    - "Network management APIs available"
+    - "Billing APIs available"
+
+  design_principles:
+    - "Comprehensive CRUD operations with soft delete awareness"
+    - "Advanced filtering and search capabilities"
+    - "Bulk operations with progress tracking"
+    - "Integration with billing and network systems"
+    - "Mobile-responsive design with touch optimization"
+    - "Accessibility-first with keyboard navigation"
+    - "Performance-optimized with virtual scrolling"
+    - "Real-time updates for critical information"
+
+  scope:
+    include:
+      - client_crud_operations
+      - client_list_with_filtering
+      - client_detail_view
+      - client_creation_editing_forms
+      - client_status_management
+      - client_category_handling
+      - client_billing_integration
+      - client_network_integration
+      - client_location_mapping
+      - client_activity_history
+      - bulk_operations
+      - export_functionality
+      - search_functionality
+      - mobile_responsive_design
+    exclude:
+      - super_admin_client_management
+      - customer_facing_client_portal
+      - mobile_app_client_management
+      - advanced_analytics_features
+
+  frontend_structure_additions:
+  src/app/clients/
+    - page.tsx (client list)
+    - [id]/
+      - page.tsx (client detail)
+      - edit/
+        - page.tsx (client edit)
+      - billing/
+        - page.tsx (client billing)
+      - network/
+        - page.tsx (client network)
+      - activities/
+        - page.tsx (client activities)
+    - create/
+      - page.tsx (client creation)
+    - import/
+      - page.tsx (client import)
+    - components/
+      - ClientList.tsx
+      - ClientCard.tsx
+      - ClientTable.tsx
+      - ClientDetail.tsx
+      - ClientForm.tsx
+      - ClientStatusBadge.tsx
+      - ClientCategoryBadge.tsx
+      - ClientSearch.tsx
+      - ClientFilters.tsx
+      - ClientBulkActions.tsx
+      - ClientExport.tsx
+      - ClientImport.tsx
+      - ClientLocation.tsx
+      - ClientBilling.tsx
+      - ClientNetwork.tsx
+      - ClientActivities.tsx
+    - hooks/
+      - useClients.ts
+      - useClient.ts
+      - useClientFilters.ts
+      - useClientSearch.ts
+      - useClientBulkActions.ts
+      - useClientExport.ts
+      - useClientImport.ts
+    - stores/
+      - clientStore.ts
+      - clientFilterStore.ts
+    - types/
+      - client.ts
+      - clientFilters.ts
+      - clientForm.ts
+    - utils/
+      - clientUtils.ts
+      - clientValidation.ts
+
+  client_crud_operations:
+  client_list_component:
+    description: "Comprehensive client list with advanced features"
+    components:
+      ClientList:
+        features:
+          - virtual_scrolling_for_large_datasets
+          - advanced_filtering_and_search
+          - bulk_selection_and_actions
+          - export_functionality
+          - real_time_updates
+          - mobile_responsive_design
+          - keyboard_navigation
+          - accessibility_features
+        props:
+          - filters: ClientFilters
+          - search: string
+          - selectedClients: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onExport: (format) => void
+          - onClientClick: (client) => void
+
+      ClientTable:
+        features:
+          - sortable_columns
+          - filterable_columns
+          - resizable_columns
+          - column_visibility_toggle
+          - row_selection
+          - row_expansion
+          - inline_editing
+          - pagination_with_page_size_control
+        props:
+          - data: Client[]
+          - columns: TableColumn[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (client) => void
+          - onSelectionChange: (ids) => void
+
+      ClientCard:
+        features:
+          - mobile_optimized_layout
+          - quick_actions
+          - status_indicators
+          - category_badges
+          - contact_information
+          - billing_status
+          - network_status
+        props:
+          - client: Client
+          - compact: boolean
+          - showActions: boolean
+          - onClick: (client) => void
+          - onEdit: (client) => void
+          - onDelete: (client) => void
+
+  client_detail_view:
+    description: "Comprehensive client detail view"
+    components:
+      ClientDetail:
+        features:
+          - tabbed_interface
+          - real_time_status_updates
+          - related_information_links
+          - quick_action_buttons
+          - activity_timeline
+          - mobile_responsive_layout
+          - accessibility_navigation
+        props:
+          - clientId: string
+          - activeTab: string
+          - onTabChange: (tab) => void
+          - onEdit: () => void
+          - onDelete: () => void
+
+      ClientOverview:
+        features:
+          - client_information_display
+          - status_indicators
+          - contact_details
+          - category_badge
+          - registration_date
+          - last_activity
+        props:
+          - client: Client
+          - onEdit: () => void
+
+      ClientBilling:
+        features:
+          - current_package_display
+          - billing_history
+          - payment_status
+          - outstanding_invoices
+          - payment_methods
+          - billing_actions
+        props:
+          - clientId: string
+          - onManageBilling: () => void
+
+      ClientNetwork:
+        features:
+          - network_profile_display
+          - connection_status
+          - bandwidth_usage
+          - last_connection
+          - network_actions
+          - technical_details
+        props:
+          - clientId: string
+          - onManageNetwork: () => void
+
+      ClientActivities:
+        features:
+          - activity_timeline
+          - filterable_activities
+          - activity_details
+          - export_functionality
+          - real_time_updates
+        props:
+          - clientId: string
+          - filters: ActivityFilters
+          - onExport: (format) => void
+
+  client_creation_editing_forms:
+    description: "Client creation and editing forms"
+    components:
+      ClientForm:
+        features:
+          - multi_step_form_wizard
+          - real_time_validation
+          - field_dependencies
+          - auto_save_draft
+          - form_progress_indicator
+          - mobile_responsive_layout
+          - accessibility_validation
+        props:
+          - client?: Client
+          - mode: 'create' | 'edit'
+          - onSave: (client) => Promise<void>
+          - onCancel: () => void
+          - onSaveDraft: (client) => void
+
+      ClientBasicInfo:
+        features:
+          - name_validation
+          - phone_validation_with_formatting
+          - email_validation
+          - address_with_autocomplete
+          - category_selection
+          - status_selection
+        props:
+          - values: ClientBasicInfo
+          - errors: FormErrors
+          - onChange: (field, value) => void
+          - onBlur: (field) => void
+
+      ClientBillingInfo:
+        features:
+          - package_selection
+          - billing_cycle_selection
+          - custom_pricing_options
+          - discount_configuration
+          - billing_start_date
+        props:
+          - values: ClientBillingInfo
+          - availablePackages: Package[]
+          - errors: FormErrors
+          - onChange: (field, value) => void
+
+      ClientNetworkInfo:
+        features:
+          - network_profile_selection
+          - bandwidth_configuration
+          - connection_type_selection
+          - technical_parameters
+          - qos_settings
+        props:
+          - values: ClientNetworkInfo
+          - availableProfiles: NetworkProfile[]
+          - errors: FormErrors
+          - onChange: (field, value) => void
+
+  client_status_management:
+    description: "Client status management system"
+    components:
+      ClientStatusBadge:
+        features:
+          - status_color_coding
+          - status_descriptions
+          - status_transitions
+          - accessibility_labels
+          - animation_effects
+        props:
+          - status: ClientStatus
+          - showDescription: boolean
+          - onClick: () => void
+
+      ClientStatusModal:
+        features:
+          - status_change_confirmation
+          - status_transition_rules
+          - impact_assessment
+          - notification_options
+          - audit_log_preview
+        props:
+          - client: Client
+          - currentStatus: ClientStatus
+          - onStatusChange: (newStatus) => Promise<void>
+          - onCancel: () => void
+
+  client_category_handling:
+    description: "Client category management"
+    components:
+      ClientCategoryBadge:
+        features:
+          - category_color_coding
+          - category_descriptions
+          - category_icons
+          - accessibility_labels
+        props:
+          - category: ClientCategory
+          - showDescription: boolean
+
+      ClientCategorySelector:
+        features:
+          - category_selection_with_descriptions
+          - category_filtering
+          - category_permissions
+          - custom_category_creation
+        props:
+          - selectedCategory: ClientCategory
+          - availableCategories: ClientCategory[]
+          - onChange: (category) => void
+          - allowCustom: boolean
+
+  client_billing_integration:
+    description: "Client billing integration"
+    components:
+      ClientBillingSummary:
+        features:
+          - current_package_display
+          - billing_cycle_information
+          - next_billing_date
+          - outstanding_amount
+          - payment_status
+          - quick_payment_action
+        props:
+          - clientId: string
+          - onMakePayment: () => void
+          - onViewDetails: () => void
+
+      ClientInvoices:
+        features:
+          - invoice_list_with_filtering
+          - invoice_status_badges
+          - payment_status_indicators
+          - download_options
+          - payment_actions
+        props:
+          - clientId: string
+          - filters: InvoiceFilters
+          - onPayInvoice: (invoiceId) => void
+          - onDownloadInvoice: (invoiceId) => void
+
+  client_network_integration:
+    description: "Client network integration"
+    components:
+      ClientNetworkStatus:
+        features:
+          - connection_status_indicator
+          - bandwidth_usage_display
+          - last_connection_time
+          - technical_details
+          - network_actions
+        props:
+          - clientId: string
+          - onManageNetwork: () => void
+          - onRefresh: () => void
+
+      ClientNetworkProfile:
+        features:
+          - profile_configuration_display
+          - bandwidth_limits
+          - connection_type
+          - qos_settings
+          - technical_parameters
+        props:
+          - clientId: string
+          - onEditProfile: () => void
+
+  client_location_mapping:
+    description: "Client location mapping"
+    components:
+      ClientLocation:
+        features:
+          - interactive_map_display
+          - address_autocomplete
+          - coordinate_selection
+          - location_validation
+          - map_integration
+        props:
+          - location: ClientLocation
+          - onLocationChange: (location) => void
+          - onValidate: () => boolean
+
+      ClientLocationModal:
+        features:
+          - map_interface
+          - address_search
+          - coordinate_selection
+          - location_confirmation
+          - save_location
+        props:
+          - initialLocation: ClientLocation
+          - onSave: (location) => void
+          - onCancel: () => void
+
+  client_activity_history:
+    description: "Client activity history tracking"
+    components:
+      ClientActivityTimeline:
+        features:
+          - chronological_activity_display
+          - activity_filtering
+          - activity_details
+          - export_options
+          - real_time_updates
+        props:
+          - clientId: string
+          - activities: Activity[]
+          - filters: ActivityFilters
+          - onExport: (format) => void
+
+      ClientActivityDetails:
+        features:
+          - activity_information_display
+          - related_actions
+          - user_information
+          - timestamp_display
+          - audit_trail
+        props:
+          - activity: Activity
+          - onRelatedAction: (action) => void
+
+  bulk_operations:
+    description: "Bulk operations for clients"
+    components:
+      ClientBulkActions:
+        features:
+          - bulk_selection_interface
+          - action_selection_menu
+          - progress_tracking
+          - error_handling
+          - confirmation_dialogs
+          - result_summary
+        props:
+          - selectedClients: string[]
+          - onAction: (action, clients) => Promise<BulkActionResult>
+          - onProgress: (progress) => void
+
+      BulkActionModal:
+        features:
+          - action_configuration
+          - impact_assessment
+          - confirmation_interface
+          - progress_display
+          - result_summary
+        props:
+          - action: BulkAction
+          - clients: Client[]
+          - onExecute: (config) => Promise<BulkActionResult>
+          - onCancel: () => void
+
+  export_functionality:
+    description: "Client export functionality"
+    components:
+      ClientExport:
+        features:
+          - export_format_selection
+          - field_selection
+          - filter_application
+          - progress_tracking
+          - download_management
+          - export_history
+        props:
+          - filters: ClientFilters
+          - selectedFields: string[]
+          - onExport: (config) => Promise<ExportResult>
+          - onProgress: (progress) => void
+
+      ExportHistory:
+        features:
+          - export_history_display
+          - download_links
+          - export_details
+          - repeat_export
+          - delete_export
+        props:
+          - exports: ExportHistory[]
+          - onRepeat: (export) => void
+          - onDelete: (exportId) => void
+
+  search_functionality:
+    description: "Advanced client search functionality"
+    components:
+      ClientSearch:
+        features:
+          - real_time_search
+          - search_suggestions
+          - search_history
+          - advanced_search_options
+          - search_filters
+          - result_highlighting
+        props:
+          - onSearch: (query) => void
+          - onFilter: (filters) => void
+          - onResultClick: (client) => void
+
+      AdvancedSearch:
+        features:
+          - multi_field_search
+          - boolean_operators
+          - range_filters
+          - date_range_filters
+          - saved_searches
+        props:
+          - onSearch: (criteria) => void
+          - onSaveSearch: (search) => void
+          - onLoadSearch: (search) => void
+
+  mobile_responsive_design:
+    mobile_optimization:
+    description: "Mobile-responsive client management"
+    features:
+      - touch_optimized_interfaces
+      - mobile_navigation_patterns
+      - swipe_gestures
+      - mobile_form_layouts
+      - offline_data_caching
+      - mobile_quick_actions
+    implementations:
+      - responsive_breakpoints
+      - touch_event_handling
+      - mobile_component_variants
+      - offline_data_storage
+      - gesture_recognition
+
+  accessibility_features:
+    a11y_implementation:
+    description: "Accessibility features for client management"
+    features:
+      - keyboard_navigation
+      - screen_reader_support
+      - focus_management
+      - aria_labels
+      - color_contrast
+      - text_scaling
+    implementations:
+      - semantic_html_structure
+      - aria_attribute_implementation
+      - focus_trapping_and_management
+      - keyboard_shortcuts
+      - high_contrast_theme_support
+
+  performance_optimization:
+    performance_features:
+    description: "Performance optimization for client management"
+    features:
+      - virtual_scrolling
+      - lazy_loading
+      - data_caching
+      - image_optimization
+      - bundle_splitting
+      - request_deduplication
+    implementations:
+      - virtual_list_implementation
+      - component_lazy_loading
+      - api_response_caching
+      - image_compression_and_caching
+      - code_splitting_by_route
+
+  state_management:
+  client_store:
+    description: "Client state management"
+    state:
+      - clients: Client[]
+      - selectedClients: string[]
+      - filters: ClientFilters
+      - search: string
+      - pagination: PaginationState
+      - loading: boolean
+      - error: string | null
+      - bulkActionProgress: BulkActionProgress
+    actions:
+      - setClients: (clients) => void
+      - setSelectedClients: (ids) => void
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setPagination: (pagination) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+      - setBulkActionProgress: (progress) => void
+
+  client_filter_store:
+    description: "Client filter state management"
+    state:
+      - activeFilters: ClientFilters
+      - savedFilters: SavedFilter[]
+      - filterHistory: FilterHistory[]
+    actions:
+      - setActiveFilters: (filters) => void
+      - saveFilter: (filter) => void
+      - deleteFilter: (filterId) => void
+      - addToHistory: (filters) => void
+
+  hooks:
+  use_clients:
+    description: "Client management hook"
+    features:
+      - client_data_fetching
+      - client_crud_operations
+      - bulk_operations
+      - export_functionality
+    return_values:
+      - clients: Client[]
+      - loading: boolean
+      - error: string | null
+      - pagination: PaginationState
+      - filters: ClientFilters
+      - search: string
+      - selectedClients: string[]
+      - createClient: (client) => Promise<Client>
+      - updateClient: (id, client) => Promise<Client>
+      - deleteClient: (id) => Promise<void>
+      - bulkAction: (action, ids) => Promise<BulkActionResult>
+      - exportClients: (config) => Promise<ExportResult>
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setSelectedClients: (ids) => void
+
+  use_client:
+    description: "Individual client hook"
+    features:
+      - client_data_fetching
+      - client_updates
+      - client_activities
+      - client_billing_info
+      - client_network_info
+    return_values:
+      - client: Client | null
+      - loading: boolean
+      - error: string | null
+      - activities: Activity[]
+      - billingInfo: BillingInfo | null
+      - networkInfo: NetworkInfo | null
+      - updateClient: (client) => Promise<Client>
+      - deleteClient: () => Promise<void>
+      - refresh: () => void
+
+  use_client_filters:
+    description: "Client filter management hook"
+    features:
+      - filter_management
+      - saved_filters
+      - filter_history
+      - filter_validation
+    return_values:
+      - filters: ClientFilters
+      - savedFilters: SavedFilter[]
+      - filterHistory: FilterHistory[]
+      - setFilters: (filters) => void
+      - saveFilter: (name, filters) => void
+      - deleteFilter: (filterId) => void
+      - clearFilters: () => void
+      - validateFilters: (filters) => boolean
+
+  api_integration:
+  client_apis:
+    description: "Client management API integration"
+    endpoints:
+      - GET /clients: get client list
+      - GET /clients/{id}: get client details
+      - POST /clients: create client
+      - PUT /clients/{id}: update client
+      - DELETE /clients/{id}: delete client
+      - POST /clients/bulk: bulk operations
+      - GET /clients/{id}/activities: get client activities
+      - GET /clients/{id}/billing: get client billing info
+      - GET /clients/{id}/network: get client network info
+      - POST /clients/export: export clients
+      - GET /clients/search: search clients
+
+    api_methods:
+      - getClients: (filters, pagination) => Promise<ClientListResponse>
+      - getClient: (id) => Promise<Client>
+      - createClient: (client) => Promise<Client>
+      - updateClient: (id, client) => Promise<Client>
+      - deleteClient: (id) => Promise<void>
+      - bulkAction: (action, ids) => Promise<BulkActionResult>
+      - getClientActivities: (id, filters) => Promise<Activity[]>
+      - getClientBillingInfo: (id) => Promise<BillingInfo>
+      - getClientNetworkInfo: (id) => Promise<NetworkInfo>
+      - exportClients: (config) => Promise<ExportResult>
+      - searchClients: (query) => Promise<Client[]>
+
+  testing:
+  component_testing:
+    description: "Client management component testing"
+    test_files:
+      - ClientList.test.tsx
+      - ClientTable.test.tsx
+      - ClientCard.test.tsx
+      - ClientDetail.test.tsx
+      - ClientForm.test.tsx
+      - ClientFilters.test.tsx
+      - ClientBulkActions.test.tsx
+      - ClientExport.test.tsx
+
+    test_utilities:
+      - mock_client_data
+      - mock_api_responses
+      - test_providers
+      - user_event_setup
+      - accessibility_testing
+
+  integration_testing:
+    description: "Client management integration testing"
+    test_scenarios:
+      - client_crud_workflow
+      - bulk_operations_workflow
+      - export_functionality_workflow
+      - search_and_filter_workflow
+      - mobile_responsive_workflow
+
+  output_expectations:
+  - "Complete client management system"
+  - "Advanced CRUD operations with soft delete awareness"
+  - "Comprehensive filtering and search capabilities"
+  - "Bulk operations with progress tracking"
+  - "Integration with billing and network systems"
+  - "Mobile-responsive design"
+  - "Accessibility compliance"
+  - "Performance optimization"
+  - "Comprehensive testing coverage"
+
+  stop_condition:
+  - "Client CRUD operations functional"
+  - "Advanced filtering and search working"
+  - "Bulk operations with progress tracking"
+  - "Mobile-responsive design implemented"
+  - "Accessibility features working"
+  - "Performance optimized"
+  - "Integration with billing and network systems"
+  - "Testing coverage complete"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade client management system"
+  - "Focus on comprehensive CRUD operations and filtering"
+  - "Ensure mobile responsiveness and accessibility"
+  - "Implement performance optimizations"
+  - "Follow React best practices"
+  - "Do not implement super admin features"

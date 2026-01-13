@@ -1,0 +1,2 @@
+TECHNICIAN: GET /technician/tasks
+  POST /technician/tasks/{id}/status

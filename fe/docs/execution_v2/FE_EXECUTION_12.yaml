@@ -1,0 +1,671 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_12_COMMON_COMPONENTS"
+  purpose: >
+    Implement comprehensive common components library for RRNet SaaS
+    including advanced data tables, chart components, file upload,
+    form generators, modal systems, and utility components with
+    enterprise-grade reusability and customization capabilities.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "shadcn/ui components installed"
+    - "Chart.js or Recharts installed"
+    - "React Hook Form + Zod configured"
+    - "File upload backend APIs available"
+
+  design_principles:
+    - "Highly reusable and configurable components"
+    - "Type-safe props with TypeScript"
+    - "Accessibility-first design"
+    - "Responsive design for all screen sizes"
+    - "Consistent design system"
+    - "Performance optimized with React.memo"
+
+  scope:
+    include:
+      - advanced_data_tables
+      - chart_components
+      - file_upload_components
+      - form_generators
+      - modal_systems
+      - utility_components
+      - layout_components
+      - feedback_components
+    exclude:
+      - business_specific_components
+    - page_specific_components
+    - super_admin_components
+
+  frontend_structure_additions:
+  src/components/
+    tables/
+      - DataTable.tsx
+      - DataTableColumn.tsx
+      - DataTableActions.tsx
+      - DataTableFilters.tsx
+      - DataTablePagination.tsx
+      - DataTableExport.tsx
+    charts/
+      - LineChart.tsx
+      - BarChart.tsx
+      - PieChart.tsx
+      - GaugeChart.tsx
+      - HeatMap.tsx
+      - ChartContainer.tsx
+      - ChartLegend.tsx
+    uploads/
+      - FileUpload.tsx
+      - FileUploadProgress.tsx
+      - FilePreview.tsx
+      - FileGallery.tsx
+      - ImageCropper.tsx
+      - DocumentViewer.tsx
+    forms/
+      - FormGenerator.tsx
+      - FormField.tsx
+      - FormSection.tsx
+      - FormValidation.tsx
+      - FormWizard.tsx
+      - FormActions.tsx
+    modals/
+      - Modal.tsx
+      - ConfirmModal.tsx
+      - FormModal.tsx
+      - ImageModal.tsx
+      - VideoModal.tsx
+      - Drawer.tsx
+    utilities/
+      - LoadingSpinner.tsx
+      - StatusBadge.tsx
+      - ProgressIndicator.tsx
+      - SkeletonLoader.tsx
+      - EmptyState.tsx
+      - ErrorBoundary.tsx
+    layouts/
+      - PageLayout.tsx
+      - SidebarLayout.tsx
+      - CardLayout.tsx
+      - TabLayout.tsx
+      - AccordionLayout.tsx
+      - GridLayout.tsx
+    feedback/
+      - Toast.tsx
+      - Alert.tsx
+      - Notification.tsx
+      - Tooltip.tsx
+      - Popover.tsx
+      - Dropdown.tsx
+
+  advanced_data_tables:
+  DataTable:
+    description: "Advanced data table with comprehensive features"
+    features:
+      - pagination_with_page_size_control
+      - sorting_on_multiple_columns
+      - filtering_on_all_columns
+      - searching_with_debounce
+      - row_selection_with_bulk_actions
+      - column_visibility_toggle
+      - export_functionality
+      - responsive_design
+      - virtual_scrolling_for_large_datasets
+      - row_expansion
+      - sticky_headers
+    props:
+      data: array
+      columns: array<DataTableColumn>
+      loading: boolean
+      pagination: PaginationConfig
+      onRowClick: (row) => void
+      onBulkAction: (action, rows) => void
+      onExport: (format) => void
+      searchable: boolean
+      filterable: boolean
+      selectable: boolean
+      expandable: boolean
+
+  DataTableColumn:
+    description: "Configurable column component"
+    features:
+      - custom_cell_renderers
+      - sortable_configuration
+      - filter_configuration
+      - width_configuration
+      - alignment_options
+      - formatting_options
+    props:
+      key: string
+      title: string
+      dataIndex: string
+      sortable: boolean
+      filterable: boolean
+      width: number | string
+      align: 'left' | 'center' | 'right'
+      render: (value, row) => ReactNode
+      filterComponent: ReactNode
+
+  DataTableFilters:
+    description: "Advanced filtering component"
+    features:
+      - text_filters
+      - date_range_filters
+      - select_filters
+      - multi_select_filters
+      - number_range_filters
+      - custom_filter_components
+    props:
+      columns: array<DataTableColumn>
+      onFilterChange: (filters) => void
+      filters: FilterState
+      availableFilters: string[]
+
+  chart_components:
+  ChartContainer:
+    description: "Container for all chart components"
+    features:
+      - responsive_design
+      - loading_states
+      - error_handling
+      - legend_configuration
+      - tooltip_configuration
+      - export_options
+      - theme_support
+    props:
+      title: string
+      subtitle?: string
+      loading: boolean
+      error?: string
+      legend: LegendConfig
+      tooltip: TooltipConfig
+      exportable: boolean
+      theme: 'light' | 'dark'
+
+  LineChart:
+    description: "Interactive line chart component"
+    features:
+      - multiple_lines
+      - time_series_data
+      - zoom_and_pan
+      - crosshair
+      - annotations
+      - trend_lines
+      - data_point_formatting
+    props:
+      data: ChartData
+      xAxis: AxisConfig
+      yAxis: AxisConfig
+      lines: LineConfig[]
+      annotations?: Annotation[]
+      zoomable: boolean
+      crosshair: boolean
+
+  BarChart:
+    description: "Interactive bar chart component"
+    features:
+      - vertical_and_horizontal
+      - grouped_and_stacked
+      - animated_transitions
+      - value_labels
+      - drill_down_capability
+      - color_customization
+    props:
+      data: ChartData
+      orientation: 'vertical' | 'horizontal'
+      grouped: boolean
+      stacked: boolean
+      animated: boolean
+      showValues: boolean
+      colorScheme: string[]
+
+  PieChart:
+    description: "Interactive pie chart component"
+    features:
+      - donut_mode
+      - exploded_slices
+      - percentage_labels
+      - legend_options
+      - interactive_tooltips
+      - color_customization
+    props:
+      data: PieChartData
+      donut: boolean
+      explode: number[]
+      showPercentages: boolean
+      legend: LegendConfig
+      colors: string[]
+
+  GaugeChart:
+    description: "Gauge chart for KPI visualization"
+    features:
+      - multiple_gauges
+      - custom_ranges
+      - animated_needles
+      - threshold_colors
+      - value_labels
+      - unit_display
+    props:
+      value: number
+      min: number
+      max: number
+      ranges: GaugeRange[]
+      thresholds: GaugeThreshold[]
+      unit?: string
+      animated: boolean
+
+  file_upload_components:
+  FileUpload:
+    description: "Advanced file upload component"
+    features:
+      - drag_and_drop
+      - multiple_file_selection
+      - file_type_validation
+      - file_size_validation
+      - progress_tracking
+      - preview_generation
+      - retry_mechanism
+      - chunk_upload_for_large_files
+      - image_crop_functionality
+    props:
+      accept: string[]
+      maxSize: number
+      multiple: boolean
+      onUpload: (files) => Promise<UploadResult[]>
+      onProgress: (progress) => void
+      preview: boolean
+      crop: boolean
+      chunkSize: number
+
+  FileUploadProgress:
+    description: "File upload progress indicator"
+    features:
+      - progress_bar
+      - upload_speed
+      - time_remaining
+      - cancel_option
+      - retry_option
+      - file_preview
+    props:
+      file: File
+      progress: number
+      speed: number
+      timeRemaining: number
+      onCancel: () => void
+      onRetry: () => void
+
+  FilePreview:
+    description: "File preview component"
+    features:
+      - image_preview
+      - document_preview
+      - video_preview
+      - audio_preview
+      - file_metadata
+      - download_option
+      - delete_option
+    props:
+      file: File
+      preview: boolean
+      metadata: boolean
+      downloadable: boolean
+      deletable: boolean
+
+  form_generators:
+  FormGenerator:
+    description: "Dynamic form generator from schema"
+    features:
+      - schema_based_generation
+      - conditional_fields
+      - field_dependencies
+      - validation_integration
+      - custom_field_components
+      - multi_step_forms
+      - auto_save
+      - form_reset
+    props:
+      schema: FormSchema
+      initialValues: Record<string, any>
+      onSubmit: (values) => void
+      onFieldChange: (field, value) => void
+      validation: ValidationSchema
+      multiStep: boolean
+      autoSave: boolean
+
+  FormField:
+    description: "Dynamic form field component"
+    features:
+      - multiple_field_types
+      - custom_validations
+      - conditional_visibility
+      - field_dependencies
+      - help_text
+      - placeholder_text
+      - disabled_state
+    props:
+      name: string
+      type: FieldType
+      label: string
+      placeholder?: string
+      helpText?: string
+      validation: ValidationRule[]
+      conditional: ConditionalRule[]
+      disabled: boolean
+
+  FormWizard:
+    description: "Multi-step form wizard"
+    features:
+      - step_navigation
+      - progress_indicator
+      - step_validation
+      - save_and_continue
+      - jump_to_steps
+      - summary_review
+      - completion_handler
+    props:
+      steps: WizardStep[]
+      onComplete: (values) => void
+      onStepChange: (step) => void
+      allowJump: boolean
+      showSummary: boolean
+
+  modal_systems:
+  Modal:
+    description: "Base modal component"
+    features:
+      - multiple_sizes
+      - backdrop_options
+      - close_on_escape
+      - close_on_backdrop
+      - custom_header
+      - custom_footer
+      - animation_options
+      - focus_management
+    props:
+      isOpen: boolean
+      onClose: () => void
+      size: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+      backdrop: boolean
+      closeOnEscape: boolean
+      closeOnBackdrop: boolean
+      title?: string
+      footer?: ReactNode
+      animation: AnimationConfig
+
+  ConfirmModal:
+    description: "Confirmation modal for destructive actions"
+    features:
+      - confirmation_message
+      - danger_styling
+      - custom_actions
+      - input_validation
+      - checkbox_confirmation
+      - countdown_timer
+    props:
+      isOpen: boolean
+      onClose: () => void
+      onConfirm: () => void
+      title: string
+      message: string
+      confirmText: string
+      cancelText: string
+      danger: boolean
+      requireConfirmation: boolean
+      countdown?: number
+
+  FormModal:
+    description: "Modal with form content"
+    features:
+      - form_integration
+      - validation_handling
+      - submit_loading
+      - error_display
+      - success_actions
+      - reset_on_close
+    props:
+      isOpen: boolean
+      onClose: () => void
+      form: FormConfig
+      onSubmit: (values) => Promise<void>
+      submitText: string
+      resetOnClose: boolean
+
+  utility_components:
+  LoadingSpinner:
+    description: "Animated loading spinner"
+    features:
+      - multiple_sizes
+      - custom_colors
+      - overlay_mode
+      - text_labels
+      - animation_variants
+    props:
+      size: 'sm' | 'md' | 'lg'
+      color: string
+      overlay: boolean
+      text?: string
+      variant: 'spinner' | 'dots' | 'pulse'
+
+  StatusBadge:
+    description: "Status indicator badge"
+    features:
+      - multiple_status_types
+      - custom_colors
+      - icon_support
+      - pulse_animation
+      - tooltip_support
+    props:
+      status: string
+      variant: 'default' | 'success' | 'warning' | 'error'
+      icon?: ReactNode
+      pulse: boolean
+      tooltip?: string
+
+  ProgressIndicator:
+    description: "Progress indicator component"
+    features:
+      - linear_and_circular
+      - percentage_display
+      - custom_colors
+      - animated_progress
+      - step_indicators
+    props:
+      value: number
+      max: number
+      type: 'linear' | 'circular'
+      showPercentage: boolean
+      color: string
+      animated: boolean
+      steps?: string[]
+
+  SkeletonLoader:
+    description: "Skeleton loading component"
+    features:
+      - multiple_element_types
+      - custom_animation
+      - repeat_count
+      - random_width
+      - theme_support
+    props:
+      type: 'text' | 'avatar' | 'card' | 'custom'
+      lines?: number
+      width?: string | number
+      height?: string | number
+      animated: boolean
+
+  EmptyState:
+    description: "Empty state component"
+    features:
+      - custom_illustrations
+      - action_buttons
+      - descriptive_text
+      - search_suggestions
+      - help_links
+    props:
+      illustration?: ReactNode
+      title: string
+      description: string
+      action?: {
+        text: string
+        onClick: () => void
+      }
+      search?: boolean
+      help?: {
+        text: string
+        link: string
+      }
+
+  layout_components:
+  PageLayout:
+    description: "Standard page layout component"
+    features:
+      - header_configuration
+      - sidebar_integration
+      - breadcrumb_navigation
+      - page_actions
+      - content_padding
+      - responsive_design
+    props:
+      title: string
+      subtitle?: string
+      breadcrumbs: Breadcrumb[]
+      actions?: ReactNode
+      header?: ReactNode
+      sidebar?: ReactNode
+      padding: number
+
+  CardLayout:
+    description: "Card-based layout component"
+    features:
+      - grid_configuration
+      - card_sizing
+      - responsive_columns
+      - gap_configuration
+      - card_actions
+    props:
+      columns: number
+      gap: number
+      responsive: ResponsiveConfig
+      children: ReactNode
+
+  TabLayout:
+    description: "Tab-based layout component"
+    features:
+      - horizontal_and_vertical
+      - tab_badges
+      - lazy_loading
+      - tab_validation
+      - keyboard_navigation
+    props:
+      tabs: TabConfig[]
+      defaultTab: string
+      vertical: boolean
+      lazy: boolean
+      validation: TabValidation
+
+  feedback_components:
+  Toast:
+    description: "Toast notification component"
+    features:
+      - multiple_positions
+      - auto_dismiss
+      - manual_dismiss
+      - action_buttons
+      - progress_bar
+      - rich_content
+    props:
+      type: 'success' | 'error' | 'warning' | 'info'
+      title: string
+      message?: string
+      duration?: number
+      action?: {
+        label: string
+        onClick: () => void
+      }
+      progress: boolean
+
+  Alert:
+    description: "Alert banner component"
+    features:
+      - multiple_variants
+      - dismissible
+      - icon_support
+      - rich_content
+      - animation_options
+    props:
+      variant: 'info' | 'success' | 'warning' | 'error'
+      title?: string
+      message: string
+      dismissible: boolean
+      icon?: ReactNode
+
+  Tooltip:
+    description: "Tooltip component"
+    features:
+      - multiple_positions
+      - delay_configuration
+      - rich_content
+      - arrow_options
+      - trigger_options
+    props:
+      content: ReactNode
+      position: 'top' | 'bottom' | 'left' | 'right'
+      delay: number
+      arrow: boolean
+      trigger: 'hover' | 'click' | 'focus'
+
+  coding_standards:
+  component_standards:
+    - Use TypeScript for all components
+    - Use proper prop types and interfaces
+    - Use React.memo for performance
+    - Use proper accessibility attributes
+    - Use proper error boundaries
+    - Use consistent naming conventions
+
+  hook_standards:
+    - Use proper TypeScript types
+    - Use proper error handling
+    - Use proper cleanup
+    - Use proper dependency arrays
+    - Use proper custom hooks
+
+  performance_standards:
+    - Use React.memo for expensive components
+    - Use useMemo for expensive calculations
+    - Use useCallback for function references
+    - Use proper code splitting
+    - Use proper lazy loading
+
+  accessibility_standards:
+    - Use ARIA attributes
+    - Use semantic HTML
+    - Use keyboard navigation
+    - Use screen reader support
+    - Use focus management
+
+  output_expectations:
+  - "Advanced data table component"
+  - "Comprehensive chart components"
+  - "File upload with progress tracking"
+  - "Dynamic form generator"
+  - "Modal system with variants"
+  - "Utility components library"
+  - "Layout components"
+  - "Feedback components"
+
+  stop_condition:
+  - "All components are reusable and configurable"
+  - "Components are type-safe with TypeScript"
+  - "Components are accessible"
+  - "Components are responsive"
+  - "Components are performance optimized"
+  - "Components have proper error handling"
+  - "Components have proper documentation"
+  - "Ready for use across all modules"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade common components"
+  - "Focus on reusability and configurability"
+  - "Ensure accessibility and performance"
+  - "Provide comprehensive TypeScript types"
+  - "Follow React best practices"
+  - "Do not implement business-specific logic"

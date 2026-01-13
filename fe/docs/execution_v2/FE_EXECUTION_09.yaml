@@ -1,0 +1,868 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_09_TECHNICIAN"
+  purpose: >
+    Implement comprehensive technician management system for RRNet SaaS
+    including task assignment and scheduling, activity logging with photo
+    capture, mobile-optimized field interface, real-time updates,
+    performance tracking, and enterprise-grade responsive design with
+    accessibility and performance optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "FE_EXECUTION_03 Dashboard completed"
+    - "FE_EXECUTION_04 Client Management completed"
+    - "FE_EXECUTION_05 Billing completed"
+    - "FE_EXECUTION_06 Collector completed"
+    - "FE_EXECUTION_07 Network completed"
+    - "FE_EXECUTION_08 Maps completed"
+    - "Technician APIs available"
+    - "Client management APIs available"
+    - "Maps APIs available"
+    - "WebSocket connection for real-time updates"
+
+  design_principles:
+    - "Mobile-first design optimized for field operations"
+    - "Task management with assignment and scheduling"
+    - "Activity logging with photo capture and GPS tracking"
+    - "Real-time updates and notifications"
+    - "Performance tracking and reporting"
+    - "Integration with maps and outage systems"
+    - "Offline mode support with data synchronization"
+    - "Accessibility-first with touch optimization"
+    - "Performance-optimized for mobile devices"
+
+  scope:
+    include:
+      - task_management
+      - activity_logging
+      - mobile_field_interface
+      - scheduling_system
+      - performance_tracking
+      - real_time_updates
+      - photo_capture_system
+      - gps_location_tracking
+      - mobile_optimized_design
+      - offline_mode_support
+      - technician_analytics
+      - task_prioritization
+      - resource_management
+    exclude:
+      - super_admin_technician_management
+      - advanced_resource_optimization
+      - customer_facing_technician_portal
+      - mobile_app_technician_features
+
+  frontend_structure_additions:
+  src/app/technician/
+    - page.tsx (technician dashboard)
+    - tasks/
+      - page.tsx (task list)
+      - [id]/
+        - page.tsx (task detail)
+        - edit/
+          - page.tsx (task edit)
+        - activities/
+          - page.tsx (task activities)
+        - photos/
+          - page.tsx (task photos)
+    - schedule/
+      - page.tsx (schedule calendar)
+      - [id]/
+        - page.tsx (schedule detail)
+    - performance/
+      - page.tsx (performance metrics)
+      - analytics/
+        - page.tsx (performance analytics)
+    - resources/
+      - page.tsx (resource management)
+      - tools/
+        - page.tsx (technician tools)
+    - components/
+      - TechnicianDashboard.tsx
+      - TaskList.tsx
+      - TaskCard.tsx
+      - TaskTable.tsx
+      - TaskDetail.tsx
+      - TaskForm.tsx
+      - TaskScheduler.tsx
+      - ActivityLog.tsx
+      - PhotoCapture.tsx
+      - GPSTracker.tsx
+      - PerformanceMetrics.tsx
+      - TechnicianAnalytics.tsx
+      - ResourceManager.tsx
+      - TechnicianTools.tsx
+      - MobileTaskInterface.tsx
+      - OfflineIndicator.tsx
+    - hooks/
+      - useTechnician.ts
+      - useTasks.ts
+      - useSchedule.ts
+      - usePerformance.ts
+      - usePhotoCapture.ts
+      - useGPSTracking.ts
+      - useOfflineMode.ts
+    - stores/
+      - technicianStore.ts
+      - taskStore.ts
+      - scheduleStore.ts
+      - performanceStore.ts
+      - offlineStore.ts
+    - types/
+      - technician.ts
+      - task.ts
+      - schedule.ts
+      - performance.ts
+    - utils/
+      - technicianUtils.ts
+      - taskUtils.ts
+      - offlineUtils.ts
+
+  task_management:
+  task_system:
+    description: "Comprehensive task management for technicians"
+    components:
+      TaskList:
+        features:
+          - mobile_optimized_task_list
+          - task_filtering (status, priority, type, location)
+          - task_search_functionality
+          - task_sorting (priority, due_date, distance)
+          - bulk_task_operations
+          - real_time_task_updates
+          - offline_mode_support
+          - touch_optimized_interface
+          - task_status_badges
+          - priority_indicators
+          - location_distance_display
+        props:
+          - filters: TaskFilters
+          - search: string
+          - sortBy: string
+          - sortOrder: string
+          - selectedTasks: string[]
+          - onSelectionChange: (ids) => void
+          - onTaskClick: (task) => void
+          - onBulkAction: (action, ids) => void
+
+      TaskCard:
+        features:
+          - mobile_optimized_task_card
+          - task_status_indicator
+          - priority_badge
+          - client_information_display
+          - location_distance_display
+          - due_date_countdown
+          - quick_action_buttons
+          - swipe_gestures
+          - task_progress_indicator
+        props:
+          - task: Task
+          - compact: boolean
+          - showActions: boolean
+          - onClick: (task) => void
+          - onComplete: (task) => void
+          - onNavigate: (task) => void
+
+      TaskDetail:
+        features:
+          - comprehensive_task_information
+          - client_details_with_navigation
+          - location_information_with_map
+          - task_timeline_display
+          - activity_logging_interface
+          - photo_capture_interface
+          - task_completion_workflow
+          - mobile_responsive_layout
+          - offline_mode_support
+        props:
+          - taskId: string
+          - activeTab: string
+          - onTabChange: (tab) => void
+          - onComplete: () => void
+          - onNavigate: () => void
+          - onLogActivity: (activity) => void
+          - onCapturePhoto: (photo) => void
+
+      TaskForm:
+        features:
+          - multi_step_task_creation
+          - client_selection_with_search
+          - task_type_selection
+          - priority_assignment
+          - due_date_scheduling
+          - location_assignment
+          - resource_allocation
+          - task_dependencies
+          - mobile_responsive_form
+          - offline_mode_support
+        props:
+          - task?: Task
+          - mode: 'create' | 'edit'
+          - clients: Client[]
+          - onSave: (task) => Promise<void>
+          - onCancel: () => void
+          - onSaveDraft: (task) => void
+
+    task_features:
+      - task_creation: create new tasks with details
+      - task_assignment: assign tasks to technicians
+      - task_scheduling: schedule tasks with due dates
+      - task_prioritization: set task priorities
+      - task_dependencies: manage task dependencies
+      - task_status_tracking: track task completion
+      - task_progress_monitoring: monitor task progress
+      - task_escalation: escalate tasks when needed
+
+  activity_logging:
+  activity_system:
+    description: "Comprehensive activity logging system"
+    components:
+      ActivityLog:
+        features:
+          - chronological_activity_display
+          - activity_filtering (type, date, technician)
+          - activity_search_functionality
+          - photo_gallery_integration
+          - location_tracking_display
+          - time_tracking_display
+          - mobile_optimized_interface
+          - offline_mode_support
+        props:
+          - taskId: string
+          - filters: ActivityFilters
+          - search: string
+          - onExport: (format) => void
+          - onActivityClick: (activity) => void
+
+      ActivityForm:
+        features:
+          - activity_type_selection
+          - activity_description_field
+          - photo_capture_interface
+          - location_capture_interface
+          - time_tracking_fields
+          - notes_field
+          - mobile_responsive_form
+          - offline_mode_support
+        props:
+          - taskId: string
+          - activity?: Activity
+          - onSave: (activity) => Promise<void>
+          - onCancel: () => void
+
+    activity_features:
+      - activity_logging: log all technician activities
+      - photo_logging: capture photos with activities
+      - location_logging: capture location with activities
+      - time_logging: track time spent on activities
+      - notes_logging: add notes to activities
+      - activity_filtering: filter activities by type/date
+      - activity_search: search activities by keywords
+
+  mobile_field_interface:
+  mobile_optimization:
+    description: "Mobile-optimized interface for field operations"
+    components:
+      MobileTaskInterface:
+        features:
+          - touch_optimized_task_management
+          - swipe_gesture_support
+          - large_touch_targets
+          - mobile_navigation_patterns
+          - offline_mode_indicator
+          - battery_optimization
+          - data_compression
+          - quick_action_buttons
+          - status_indicators
+          - progress_bars
+        props:
+          - tasks: Task[]
+          - onTaskAction: (action, task) => void
+          - onNavigate: (task) => void
+          - onRefresh: () => void
+
+      MobileTaskCard:
+        features:
+          - mobile_optimized_card_layout
+          - swipe_actions
+          - touch_optimized_buttons
+          - status_badges
+          - priority_indicators
+          - location_distance
+          - due_date_countdown
+          - quick_actions
+        props:
+          - task: Task
+          - onSwipeLeft: (task) => void
+          - onSwipeRight: (task) => void
+          - onComplete: (task) => void
+          - onNavigate: (task) => void
+
+    mobile_features:
+      - touch_optimization: large touch targets
+      - swipe_gestures: swipe for actions
+      - mobile_navigation: mobile-friendly navigation
+      - offline_support: work offline with cached data
+      - battery_optimization: optimize for battery life
+      - data_compression: compress data for mobile
+      - quick_actions: quick action buttons
+      - status_indicators: clear status indicators
+      - progress_bars: visual progress indicators
+
+  scheduling_system:
+  schedule_system:
+    description: "Task scheduling and calendar system"
+    components:
+      TaskScheduler:
+        features:
+          - calendar_view_with_task_display
+          - drag_and_drop_task_scheduling
+          - conflict_detection
+          - resource_availability_checking
+          - mobile_responsive_calendar
+          - offline_mode_support
+          - time_zone_support
+          - recurring_task_support
+        props:
+          - tasks: Task[]
+          - resources: Resource[]
+          - onTaskSchedule: (task, time) => void
+          - onConflictResolve: (conflict) => void
+          - onResourceAllocate: (resource, task) => void
+
+      ScheduleCalendar:
+        features:
+          - monthly/weekly/daily_views
+          - task_color_coding_by_priority
+          - task_filtering
+          - task_search
+          - mobile_responsive_calendar
+          - offline_mode_support
+        props:
+          - view: 'month' | 'week' | 'day'
+          - tasks: Task[]
+          - filters: ScheduleFilters
+          - search: string
+          - onDateSelect: (date) => void
+          - onTaskClick: (task) => void
+
+    scheduling_features:
+      - calendar_integration: integrate with calendar systems
+      - drag_and_drop: drag tasks to schedule
+      - conflict_detection: detect scheduling conflicts
+      - resource_management: manage resource availability
+      - time_zone_support: support multiple time zones
+      - recurring_tasks: support recurring task patterns
+      - mobile_optimization: mobile-friendly calendar interface
+
+  performance_tracking:
+  performance_system:
+    description: "Technician performance tracking and analytics"
+    components:
+      PerformanceMetrics:
+        features:
+          - task_completion_metrics
+          - time_tracking_metrics
+          - quality_metrics
+          - efficiency_metrics
+          - performance_charts
+          - leaderboards
+          - mobile_responsive_display
+          - export_functionality
+        props:
+          - technicianId: string
+          - timeRange: DateRange
+          - metrics: PerformanceMetrics[]
+          - onExport: (format) => void
+
+      TechnicianAnalytics:
+        features:
+          - performance_trends
+          - efficiency_analysis
+          - quality_metrics
+          - comparison_charts
+          - achievement_badges
+          - mobile_responsive_display
+        props:
+          - technicianId: string
+          - timeRange: DateRange
+          - comparisonData: ComparisonData[]
+          - onExport: (format) => void
+
+    performance_features:
+      - task_completion: track task completion rates
+      - time_tracking: track time spent on tasks
+      - quality_metrics: track quality of work
+      - efficiency_metrics: track technician efficiency
+      - leaderboards: compare technician performance
+      - achievements: award achievements for performance
+
+  real_time_updates:
+  websocket_integration:
+    description: "Real-time updates for technician system"
+    components:
+      TechnicianProvider:
+        features:
+          - websocket_connection_management
+          - real_time_task_updates
+          - real_time_activity_updates
+          - real_time_performance_updates
+          - connection_error_handling
+          - automatic_reconnection
+          - mobile_optimization
+        implementation:
+          - websocket_connection_management
+          - real_time_update_handling
+          - error_recovery_mechanisms
+          - automatic_reconnection_logic
+          - mobile_optimization_strategies
+
+    real_time_events:
+      - task_status_changes
+      - new_task_assignments
+      - activity_updates
+      - performance_updates
+      - system_notifications
+      - emergency_alerts
+
+    update_mechanisms:
+      - incremental_updates: update only changed data
+      - full_refresh: complete data refresh
+      - task_specific: update specific tasks
+      - batch_updates: batch multiple updates
+      - throttled_updates: limit update frequency
+
+  photo_capture_system:
+  photo_system:
+    description: "Photo capture system for technician activities"
+    components:
+      PhotoCapture:
+        features:
+          - camera_interface
+          - photo_preview
+          - photo_annotation
+          - photo_validation
+          - offline_photo_storage
+          - photo_compression
+          - multiple_photo_support
+          - camera_switching
+          - flash_control
+          - timestamp_capture
+          - gps_location_tagging
+          - mobile_optimized_interface
+        props:
+          - onCapture: (photo) => void
+          - onRetake: () => void
+          - maxPhotos: number
+          - requiredPhotos: number
+          - allowAnnotation: boolean
+          - requireLocation: boolean
+
+      PhotoGallery:
+        features:
+          - photo_gallery_display
+          - photo_viewer
+          - photo_annotation_display
+          - photo_export
+          - photo_sharing
+          - mobile_optimized_gallery
+        props:
+          - photos: Photo[]
+          - onDelete: (photoId) => void
+          - onShare: (photo) => void
+          - onExport: (format) => void
+
+    photo_features:
+      - camera_capture: capture photos from camera
+      - photo_annotation: annotate photos with notes
+      - photo_validation: validate photo requirements
+      - offline_storage: store photos offline
+      - photo_compression: compress photos for mobile
+      - location_tagging: tag photos with GPS location
+      - timestamp_capture: capture photo timestamp
+
+  gps_location_tracking:
+  gps_system:
+    description: "GPS location tracking for technicians"
+    components:
+      GPSTracker:
+        features:
+          - real_time_location_tracking
+          - location_accuracy_monitoring
+          - location_history_logging
+          - geofence_support
+          - battery_optimization
+          - background_tracking
+          - mobile_optimized_interface
+        props:
+          - onLocationUpdate: (location) => void
+          - onGeofenceEnter: (fence) => void
+          - onGeofenceExit: (fence) => void
+          - accuracyThreshold: number
+
+      LocationHistory:
+        features:
+          - location_history_display
+          - route_visualization
+          - speed_tracking
+          - distance_calculation
+          - export_functionality
+          - mobile_optimized_display
+        props:
+          - history: LocationHistory[]
+          - onExport: (format) => void
+
+    gps_features:
+      - real_time_tracking: track technician location in real-time
+      - accuracy_monitoring: monitor GPS accuracy
+      - location_history: maintain location history
+      - geofence_support: support geofence boundaries
+      - battery_optimization: optimize for battery usage
+      - background_tracking: track in background
+
+  offline_mode_support:
+  offline_functionality:
+    description: "Offline mode support for technician system"
+    components:
+      OfflineManager:
+        features:
+          - offline_data_storage
+          - sync_status_display
+          - conflict_resolution
+          - offline_queue_management
+          - storage_usage_monitoring
+          - data_compression
+          - mobile_optimized_interface
+        implementation:
+          - offline_data_storage
+          - sync_status_management
+          - conflict_detection_and_resolution
+          - queue_management
+          - storage_usage_monitoring
+          - data_compression_strategies
+
+      OfflineQueue:
+        features:
+          - operation_queue_display
+          - queue_priority_management
+          - retry_mechanism
+          - conflict_resolution
+          - progress_tracking
+        props:
+          - operations: OfflineOperation[]
+          - onRetry: (operation) => void
+          - onResolve: (operation) => void
+
+    offline_features:
+      - data_storage: store data offline
+      - sync_status: display sync status
+      - conflict_resolution: resolve sync conflicts
+      - queue_management: manage offline operations
+      - storage_monitoring: monitor storage usage
+      - data_compression: compress data for storage
+
+  technician_analytics:
+  analytics_system:
+    description: "Technician analytics and reporting system"
+    components:
+      TechnicianAnalytics:
+        features:
+          - performance_analytics
+          - efficiency_analytics
+          - quality_analytics
+          - comparison_analytics
+          - trend_analysis
+          - mobile_responsive_display
+          - export_functionality
+        props:
+          - technicianId: string
+          - timeRange: DateRange
+          - analyticsType: AnalyticsType
+          - onExport: (format) => void
+
+      PerformanceCharts:
+        features:
+          - task_completion_charts
+          - time_tracking_charts
+          - quality_metrics_charts
+          - efficiency_charts
+          - comparison_charts
+          - interactive_charts
+          - mobile_optimized_charts
+        props:
+          - data: AnalyticsData[]
+          - chartType: ChartType
+          - timeRange: TimeRange
+          - onDrillDown: (data) => void
+
+    analytics_features:
+      - performance_metrics: track technician performance
+      - efficiency_metrics: track technician efficiency
+      - quality_metrics: track work quality
+      - comparison_metrics: compare with peers
+      - trend_analysis: analyze performance trends
+      - export_functionality: export analytics data
+
+  task_prioritization:
+  prioritization_system:
+    description: "Task prioritization system for technicians"
+    components:
+      TaskPrioritizer:
+        features:
+          - priority_scoring_algorithm
+          - priority_visualization
+          - priority_adjustment
+          - conflict_resolution
+          - mobile_optimized_interface
+        props:
+          - tasks: Task[]
+          - onPriorityChange: (taskId, priority) => void
+          - onConflictResolve: (conflict) => void
+
+    prioritization_features:
+      - priority_scoring: score tasks by priority
+      - priority_visualization: visualize task priorities
+      - priority_adjustment: adjust task priorities
+      - conflict_resolution: resolve priority conflicts
+      - mobile_optimization: mobile-friendly interface
+
+  resource_management:
+  resource_system:
+    description: "Resource management for technicians"
+    components:
+      ResourceManager:
+        features:
+          - resource_availability_tracking
+          - resource_allocation
+          - resource_utilization
+          - resource_optimization
+          - mobile_responsive_interface
+        props:
+          - resources: Resource[]
+          - onAllocate: (resource, task) => void
+          - onOptimize: () => void
+
+    resource_features:
+      - availability_tracking: track resource availability
+      - resource_allocation: allocate resources to tasks
+      - utilization_monitoring: monitor resource utilization
+      - optimization_suggestions: suggest optimizations
+      - mobile_optimization: mobile-friendly interface
+
+  state_management:
+  technician_store:
+    description: "Technician state management"
+    state:
+      - technician: Technician | null
+      - tasks: Task[]
+      - selectedTasks: string[]
+      - filters: TaskFilters
+      - search: string
+      - performance: PerformanceMetrics | null
+      - activities: Activity[]
+      - photos: Photo[]
+      - location: Location | null
+      - offlineMode: boolean
+      - syncStatus: SyncStatus
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setTechnician: (technician) => void
+      - setTasks: (tasks) => void
+      - setSelectedTasks: (ids) => void
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setPerformance: (performance) => void
+      - setActivities: (activities) => void
+      - setPhotos: (photos) => void
+      - setLocation: (location) => void
+      - setOfflineMode: (offline) => void
+      - setSyncStatus: (status) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  task_store:
+    description: "Task state management"
+    state:
+      - tasks: Task[]
+      - selectedTasks: string[]
+      - filters: TaskFilters
+      - search: string
+      - pagination: PaginationState
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setTasks: (tasks) => void
+      - setSelectedTasks: (ids) => void
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setPagination: (pagination) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  hooks:
+  use_technician:
+    description: "Technician management hook"
+    features:
+      - technician_data_fetching
+      - task_management
+      - performance_tracking
+      - activity_logging
+      - photo_capture
+      - gps_tracking
+      - offline_mode_support
+    return_values:
+      - technician: Technician | null
+      - tasks: Task[]
+      - performance: PerformanceMetrics | null
+      - activities: Activity[]
+      - photos: Photo[]
+      - location: Location | null
+      - offlineMode: boolean
+      - syncStatus: SyncStatus
+      - loading: boolean
+      - error: string | null
+      - getTasks: (filters) => Promise<Task[]>
+      - createTask: (task) => Promise<Task>
+      - updateTask: (id, task) => Promise<Task>
+      - completeTask: (id) => Promise<void>
+      - logActivity: (activity) => Promise<Activity>
+      - capturePhoto: (photo) => Promise<Photo>
+      - updateLocation: (location) => Promise<void>
+      - setOfflineMode: (offline) => void
+
+  use_tasks:
+    description: "Task management hook"
+    features:
+      - task_data_fetching
+      - task_crud_operations
+      - task_filtering
+      - task_search
+      - task_prioritization
+      - task_scheduling
+    return_values:
+      - tasks: Task[]
+      - loading: boolean
+      - error: string | null
+      - pagination: PaginationState
+      - filters: TaskFilters
+      - search: string
+      - selectedTasks: string[]
+      - getTasks: (filters) => Promise<Task[]>
+      - createTask: (task) => Promise<Task>
+      - updateTask: (id, task) => Promise<Task>
+      - deleteTask: (id) => Promise<void>
+      - completeTask: (id) => Promise<void>
+      - setTaskPriority: (id, priority) => Promise<void>
+      - scheduleTask: (id, schedule) => Promise<void>
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setSelectedTasks: (ids) => void
+
+  api_integration:
+  technician_apis:
+    description: "Technician API integration"
+    endpoints:
+      - GET /technician/profile: get technician profile
+      - GET /technician/tasks: get technician tasks
+      - GET /technician/tasks/{id}: get task details
+      - POST /technician/tasks: create task
+      - PUT /technician/tasks/{id}: update task
+      - DELETE /technician/tasks/{id}: delete task
+      - POST /technician/tasks/{id}/complete: complete task
+      - GET /technician/activities: get technician activities
+      - POST /technician/activities: log activity
+      - GET /technician/photos: get technician photos
+      - POST /technician/photos: upload photo
+      - GET /technician/performance: get performance metrics
+      - GET /technician/analytics: get analytics data
+      - POST /technician/location: update location
+      - GET /technician/sync: get sync status
+      - POST /technician/sync: trigger sync
+
+    api_methods:
+      - getTechnicianProfile: () => Promise<Technician>
+      - getTechnicianTasks: (filters) => Promise<Task[]>
+      - getTask: (id) => Promise<Task>
+      - createTask: (task) => Promise<Task>
+      - updateTask: (id, task) => Promise<Task>
+      - deleteTask: (id) => Promise<void>
+      - completeTask: (id) => Promise<void>
+      - getTechnicianActivities: (filters) => Promise<Activity[]>
+      - logActivity: (activity) => Promise<Activity>
+      - getTechnicianPhotos: (filters) => Promise<Photo[]>
+      - uploadPhoto: (photo) => Promise<Photo>
+      - getPerformanceMetrics: (timeRange) => Promise<PerformanceMetrics>
+      - getAnalytics: (timeRange, type) => Promise<AnalyticsData>
+      - updateLocation: (location) => Promise<void>
+      - getSyncStatus: () => Promise<SyncStatus>
+      - triggerSync: () => Promise<void>
+
+  testing:
+  component_testing:
+    description: "Technician component testing"
+    test_files:
+      - TechnicianDashboard.test.tsx
+      - TaskList.test.tsx
+      - TaskCard.test.tsx
+      - TaskDetail.test.tsx
+      - TaskForm.test.tsx
+      - ActivityLog.test.tsx
+      - PhotoCapture.test.tsx
+      - GPSTracker.test.tsx
+      - PerformanceMetrics.test.tsx
+
+    test_utilities:
+      - mock_technician_data
+      - mock_task_data
+      - mock_activity_data
+      - mock_photo_data
+      - test_providers
+
+  integration_testing:
+    description: "Technician integration testing"
+    test_scenarios:
+      - task_management_workflow
+      - activity_logging_workflow
+      - photo_capture_workflow
+      - gps_tracking_workflow
+      - offline_mode_integration
+      - mobile_responsive_integration
+
+  output_expectations:
+  - "Complete technician management system"
+  - "Task management with scheduling and prioritization"
+  - "Activity logging with photo capture"
+  - "Mobile-optimized field interface"
+  - "Real-time updates and notifications"
+  - "Performance tracking and analytics"
+  - "GPS location tracking"
+  - "Offline mode support"
+  - "Mobile-responsive design"
+  - "Accessibility compliance"
+  - "Performance optimization"
+
+  stop_condition:
+  - "Task management functional with scheduling"
+  - "Activity logging working with photo capture"
+  - "Mobile-optimized interface working"
+  - "Real-time updates functional"
+  - "Performance tracking working"
+  - "GPS location tracking working"
+  - "Offline mode support functional"
+  - "Mobile-responsive design implemented"
+  - "Accessibility features working"
+  - "Performance optimized"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement mobile-first technician system"
+  - "Focus on field operations optimization"
+  - "Ensure offline mode functionality"
+  - "Implement real-time updates and notifications"
+  - "Follow mobile accessibility best practices"
+  - "Optimize for battery usage and performance"
+  - "Do not implement super admin features"

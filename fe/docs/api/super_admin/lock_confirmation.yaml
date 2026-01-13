@@ -1,0 +1,9 @@
+LOCK_CONFIRMATION:
+  backend_spec: frozen
+  api_contract: frozen
+  super_admin_scope: separated
+  frontend_safe: true
+  cursor_instruction:
+    - do_not_infer_endpoint
+    - follow_enum_strict
+    - no_business_logic_on_fe

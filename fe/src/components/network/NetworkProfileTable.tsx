@@ -1,0 +1,124 @@
+"use client";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { NetworkProfile } from "@/lib/api/types";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { useNetworkStore } from "@/stores/networkStore";
+import { useNotificationStore } from "@/stores/notificationStore";
+import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
+
+interface NetworkProfileTableProps {
+  profiles: NetworkProfile[] | null | undefined;
+  loading: boolean;
+}
+
+function formatSpeed(kbps: number): string {
+  if (kbps >= 1000) {
+    return `${(kbps / 1000).toFixed(1)} Mbps`;
+  }
+  return `${kbps} Kbps`;
+}
+
+export function NetworkProfileTable({ profiles, loading }: NetworkProfileTableProps) {
+  const router = useRouter();
+  const { deleteProfile } = useNetworkStore();
+  const { showToast } = useNotificationStore();
+
+  const handleView = (id: string) => {
+    router.push(`/network/profiles/${id}`);
+  };
+
+  const handleEdit = (id: string) => {
+    router.push(`/network/profiles/${id}/edit`);
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete profile "${name}"?`)) {
+      return;
+    }
+    try {
+      await deleteProfile(id);
+      showToast({
+        title: "Profile deleted",
+        description: `Profile "${name}" has been successfully deleted.`,
+        variant: "success",
+      });
+    } catch (error: any) {
+      showToast({
+        title: "Failed to delete profile",
+        description: error.message || "An unexpected error occurred.",
+        variant: "error",
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-48">
+        <LoadingSpinner size={40} />
+      </div>
+    );
+  }
+
+  if (!profiles || profiles.length === 0) {
+    return (
+      <div className="text-center py-8 text-slate-500">
+        No network profiles found. Create your first profile to get started.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Download</TableHead>
+            <TableHead>Upload</TableHead>
+            <TableHead>Priority</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {profiles.map((profile) => (
+            <TableRow key={profile.id}>
+              <TableCell className="font-medium">{profile.name}</TableCell>
+              <TableCell>{formatSpeed(profile.download_speed)}</TableCell>
+              <TableCell>{formatSpeed(profile.upload_speed)}</TableCell>
+              <TableCell>{profile.priority}</TableCell>
+              <TableCell>
+                {profile.is_active ? (
+                  <span className="text-xs font-medium text-green-600">Active</span>
+                ) : (
+                  <span className="text-xs text-slate-400">Inactive</span>
+                )}
+              </TableCell>
+              <TableCell className="flex space-x-2">
+                <Button variant="outline" size="sm" onClick={() => handleView(profile.id)}>
+                  View
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleEdit(profile.id)}>
+                  Edit
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => handleDelete(profile.id, profile.name)}>
+                  Delete
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+

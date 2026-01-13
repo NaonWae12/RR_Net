@@ -1,0 +1,790 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_08_MAPS"
+  purpose: >
+    Implement comprehensive network topology mapping system for RRNet SaaS
+    including ODC-ODP-Client hierarchy visualization, outage propagation
+    display, interactive map controls, technician activity overlay,
+    mobile-optimized interface, offline support, and enterprise-grade
+    responsive design with accessibility and performance optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "FE_EXECUTION_03 Dashboard completed"
+    - "FE_EXECUTION_04 Client Management completed"
+    - "FE_EXECUTION_05 Billing completed"
+    - "FE_EXECUTION_06 Collector completed"
+    - "FE_EXECUTION_07 Network completed"
+    - "Maps APIs available"
+    - "Technician APIs available"
+    - "Client management APIs available"
+    - "WebSocket connection for real-time updates"
+
+  design_principles:
+    - "Interactive topology visualization with hierarchical relationships"
+    - "Real-time outage propagation with cascade effects"
+    - "Mobile-optimized map interface with touch controls"
+    - "Technician activity overlay with location tracking"
+    - "Offline mode support with cached map data"
+    - "Accessibility-first with keyboard navigation and screen reader support"
+    - "Performance-optimized with virtual rendering for large topologies"
+    - "Enterprise-grade with comprehensive filtering and search"
+
+  scope:
+    include:
+      - topology_visualization
+      - outage_propagation_display
+      - odc_odp_client_management
+      - interactive_map_controls
+      - technician_activity_overlay
+      - mobile_optimized_interface
+      - offline_mode_support
+      - search_and_filtering
+      - map_analytics
+      - export_functionality
+    exclude:
+      - super_admin_map_management
+      - advanced_gis_features
+      - route_optimization
+      - customer_facing_map_portal
+      - mobile_app_map_features
+
+  frontend_structure_additions:
+  src/app/maps/
+    - page.tsx (maps overview)
+    - topology/
+      - page.tsx (topology view)
+      - [id]/
+        - page.tsx (topology detail)
+        - edit/
+          - page.tsx (topology edit)
+    - odc/
+      - page.tsx (ODC list)
+      - [id]/
+        - page.tsx (ODC detail)
+        - edit/
+          - page.tsx (ODC edit)
+    - odp/
+      - page.tsx (ODP list)
+      - [id]/
+        - page.tsx (ODP detail)
+        - edit/
+          - page.tsx (ODP edit)
+    - client/
+      - page.tsx (Client list)
+      - [id]/
+        - page.tsx (Client detail)
+        - edit/
+          - page.tsx (Client edit)
+    - outage/
+      - page.tsx (outage management)
+      - [id]/
+        - page.tsx (outage detail)
+    - technician/
+      - page.tsx (technician activities)
+      - [id]/
+        - page.tsx (technician detail)
+    - components/
+      - TopologyMap.tsx
+      - ODCList.tsx
+      - ODCCard.tsx
+      - ODCTable.tsx
+      - ODCDetail.tsx
+      - ODPList.tsx
+      - ODPCard.tsx
+      - ODPTable.tsx
+      - ODPDetail.tsx
+      - ClientList.tsx
+      - ClientCard.tsx
+      - ClientTable.tsx
+      - ClientDetail.tsx
+      - OutageManager.tsx
+      - OutageCard.tsx
+      - OutageTimeline.tsx
+      - TechnicianActivity.tsx
+      - TechnicianCard.tsx
+      - MapControls.tsx
+      - MapSearch.tsx
+      - MapFilters.tsx
+      - MapLegend.tsx
+      - MapExport.tsx
+      - OfflineIndicator.tsx
+    - hooks/
+      - useTopology.ts
+      - useODC.ts
+      - useODP.ts
+      - useClient.ts
+      - useOutage.ts
+      - useTechnicianActivity.ts
+      - useMapControls.ts
+      - useOfflineMode.ts
+    - stores/
+      - topologyStore.ts
+      - mapStore.ts
+      - outageStore.ts
+      - technicianStore.ts
+      - offlineStore.ts
+    - types/
+      - topology.ts
+      - odc.ts
+      - odp.ts
+      - client.ts
+      - outage.ts
+      - technician.ts
+      - map.ts
+    - utils/
+      - topologyUtils.ts
+      - mapUtils.ts
+      - outageUtils.ts
+      - offlineUtils.ts
+
+  topology_visualization:
+  topology_map_component:
+    description: "Interactive network topology visualization"
+    components:
+      TopologyMap:
+        features:
+          - hierarchical_visualization (ODC → ODP → Client)
+          - interactive_node_selection
+          - real_time_status_updates
+          - zoom_and_pan_controls
+          - layer_toggle (ODC, ODP, Client)
+          - search_and_filter_functionality
+          - mobile_optimized_controls
+          - keyboard_navigation
+          - accessibility_attributes
+          - offline_mode_support
+          - performance_optimization
+        props:
+          - topology: TopologyData
+          - selectedNodes: string[]
+          - filters: TopologyFilters
+          - search: string
+          - onNodeClick: (node) => void
+          - onSelectionChange: (nodes) => void
+          - onFilterChange: (filters) => void
+          - onSearch: (search) => void
+
+      NodeRenderer:
+        features:
+          - node_type_specific_rendering
+          - status_based_coloring
+          - hover_effects
+          - selection_highlighting
+          - accessibility_labels
+          - touch_optimized_interaction
+        props:
+          - node: TopologyNode
+          - selected: boolean
+          - hovered: boolean
+          - onClick: (node) => void
+          - onHover: (node) => void
+
+      ConnectionRenderer:
+        features:
+          - hierarchical_connection_rendering
+          - status_based_connection_styling
+          - connection_animation
+          - accessibility_labels
+        props:
+          - connections: Connection[]
+          - status: ConnectionStatus
+          - animated: boolean
+
+    visualization_features:
+      - hierarchical_layout: ODC → ODP → Client structure
+      - status_color_coding: normal, outage, degraded, maintenance
+      - interactive_selection: click to select nodes
+      - real_time_updates: WebSocket status updates
+      - zoom_controls: zoom in/out, fit to bounds
+      - pan_controls: drag to pan, touch gestures
+      - layer_visibility: toggle ODC, ODP, Client layers
+      - search_functionality: search nodes by name or ID
+      - advanced_filtering: filter by status, type, location
+      - export_functionality: export map as image or data
+
+  outage_propagation_display:
+  outage_visualization:
+    description: "Outage propagation visualization and management"
+    components:
+      OutageManager:
+        features:
+          - outage_creation_interface
+          - outage_propagation_preview
+          - outage_resolution_interface
+          - outage_timeline_display
+          - impact_assessment_display
+          - mobile_optimized_interface
+          - accessibility_support
+        props:
+          - topology: TopologyData
+          - activeOutages: Outage[]
+          - onCreateOutage: (outage) => void
+          - onResolveOutage: (outageId) => void
+          - onPreviewPropagation: (outage) => void
+
+      OutageCard:
+        features:
+          - outage_information_display
+          - affected_nodes_display
+          - impact_assessment_display
+          - resolution_actions
+          - status_badge_with_animation
+          - mobile_optimized_layout
+        props:
+          - outage: Outage
+          - onResolve: () => void
+          - onEdit: () => void
+
+      OutageTimeline:
+        features:
+          - chronological_outage_display
+          - outage_status_transitions
+          - affected_nodes_timeline
+          - resolution_timeline
+          - export_functionality
+        props:
+          - outageId: string
+          - onExport: (format) => void
+
+    propagation_features:
+      - cascade_visualization: show how outage propagates
+      - impact_assessment: calculate affected nodes
+      - preview_mode: preview outage before applying
+      - resolution_workflow: guided resolution process
+      - notification_integration: notify affected parties
+      - audit_logging: log all outage changes
+
+  odc_odp_client_management:
+  hierarchy_management:
+    description: "ODC-ODP-Client hierarchy management"
+    components:
+      ODCList:
+        features:
+          - odc_list_with_filtering
+          - odc_status_management
+          - odc_location_display
+          - odc_capacity_display
+          - mobile_optimized_list
+          - bulk_operations
+        props:
+          - filters: ODCFilters
+          - search: string
+          - selectedODCs: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+
+      ODPList:
+        features:
+          - odp_list_with_filtering
+          - odp_status_management
+          - odp_location_display
+          - odp_parent_odc_display
+          - mobile_optimized_list
+          - bulk_operations
+        props:
+          - filters: ODPFilters
+          - search: string
+          - selectedODPs: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+
+      ClientList:
+        features:
+          - client_list_with_filtering
+          - client_status_management
+          - client_location_display
+          - client_parent_odp_display
+          - mobile_optimized_list
+          - bulk_operations
+        props:
+          - filters: ClientFilters
+          - search: string
+          - selectedClients: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+
+    management_features:
+      - hierarchical_crud: create, edit, delete ODC/ODP/Client
+      - relationship_management: assign ODP to ODC, Client to ODP
+      - location_management: manage GPS coordinates
+      - capacity_management: manage port capacity
+      - status_management: manage node status
+      - bulk_operations: bulk status changes, bulk deletion
+
+  interactive_map_controls:
+  map_control_components:
+    description: "Interactive map control components"
+    components:
+      MapControls:
+        features:
+          - zoom_controls (zoom in/out, fit to bounds)
+          - pan_controls (drag, touch gestures)
+          - layer_visibility_toggle
+          - search_interface
+          - filter_interface
+          - export_interface
+          - fullscreen_mode
+          - accessibility_controls
+          - mobile_optimized_layout
+        props:
+          - map: MapInstance
+          - layers: LayerConfig[]
+          - onLayerToggle: (layer) => void
+          - onSearch: (search) => void
+          - onFilter: (filters) => void
+          - onExport: (format) => void
+
+      MapSearch:
+        features:
+          - real_time_search
+          - search_suggestions
+          - search_history
+          - search_filters
+          - mobile_optimized_interface
+        props:
+          - map: MapInstance
+          - onSearch: (search) => void
+          - onSuggestionSelect: (suggestion) => void
+
+      MapFilters:
+        features:
+          - status_filter
+          - type_filter
+          - location_filter
+          - custom_filter_interface
+          - filter_persistence
+          - mobile_optimized_interface
+        props:
+          - availableFilters: FilterConfig[]
+          - activeFilters: FilterState
+          - onFilterChange: (filters) => void
+
+      MapLegend:
+        features:
+          - status_legend
+          - type_legend
+          - interactive_legend
+          - accessibility_labels
+          - mobile_optimized_display
+        props:
+          - legendConfig: LegendConfig
+          - onLegendItemClick: (item) => void
+
+    control_features:
+      - zoom_controls: zoom in/out, fit to bounds, zoom to level
+      - pan_controls: drag to pan, touch gestures, keyboard navigation
+      - layer_controls: toggle visibility of different layers
+      - search_functionality: real-time search with suggestions
+      - filter_functionality: advanced filtering with persistence
+      - export_functionality: export map as image or data
+      - accessibility_controls: keyboard navigation, screen reader support
+      - mobile_optimization: touch-optimized controls
+
+  technician_activity_overlay:
+  technician_overlay:
+    description: "Technician activity overlay on map"
+    components:
+      TechnicianActivity:
+        features:
+          - technician_location_display
+          - activity_timeline_display
+          - photo_gallery_display
+          - activity_filtering
+          - real_time_updates
+          - mobile_optimized_interface
+        props:
+          - technicianId: string
+          - map: MapInstance
+          - filters: ActivityFilters
+          - onActivityClick: (activity) => void
+
+      TechnicianCard:
+        features:
+          - technician_information_display
+          - current_activity_display
+          - location_display
+          - contact_information
+          - mobile_optimized_layout
+        props:
+          - technician: Technician
+          - onContact: () => void
+          - onNavigate: () => void
+
+      ActivityTimeline:
+        features:
+          - chronological_activity_display
+          - activity_filtering
+          - photo_gallery_integration
+          - location_integration
+          - export_functionality
+        props:
+          - technicianId: string
+          - filters: ActivityFilters
+          - onActivityClick: (activity) => void
+          - onExport: (format) => void
+
+    overlay_features:
+      - location_markers: technician GPS locations
+      - activity_markers: activity locations with icons
+      - timeline_integration: connect activities to timeline
+      - photo_integration: display activity photos
+      - real_time_updates: live technician location updates
+      - filter_functionality: filter by activity type, date range
+      - mobile_optimization: touch-optimized interface
+
+  mobile_optimized_interface:
+  mobile_optimization:
+    description: "Mobile-optimized map interface"
+    features:
+      - touch_optimized_controls
+      - gesture_recognition
+      - mobile_layout_adaptation
+      - offline_mode_support
+      - battery_optimization
+      - reduced_data_usage
+      - progressive_loading
+    implementations:
+      - touch_event_handling
+      - gesture_recognition
+      - responsive_breakpoints
+      - offline_data_caching
+      - battery_usage_monitoring
+      - data_compression
+      - lazy_loading
+
+  offline_mode_support:
+  offline_functionality:
+    description: "Offline mode support for maps"
+    features:
+      - offline_map_caching
+      - offline_topology_data
+      - offline_outage_data
+      - offline_activity_data
+      - sync_status_display
+      - conflict_resolution
+      - offline_mode_indicator
+    implementations:
+      - map_tile_caching
+      - topology_data_caching
+      - outage_data_caching
+      - activity_data_caching
+      - sync_mechanism
+      - conflict_detection
+      - status_indicators
+
+  search_and_filtering:
+  search_functionality:
+    description: "Advanced search and filtering for maps"
+    components:
+      MapSearch:
+        features:
+          - real_time_search
+          - search_suggestions
+          - search_history
+          - search_filters
+          - mobile_optimized_interface
+        props:
+          - map: MapInstance
+          - onSearch: (search) => void
+          - onSuggestionSelect: (suggestion) => void
+
+      MapFilters:
+        features:
+          - status_filter
+          - type_filter
+          - location_filter
+          - custom_filter_interface
+          - filter_persistence
+          - mobile_optimized_interface
+        props:
+          - availableFilters: FilterConfig[]
+          - activeFilters: FilterState
+          - onFilterChange: (filters) => void
+
+    search_features:
+      - real_time_search: search as you type
+      - search_suggestions: intelligent suggestions
+      - search_history: recent searches
+      - search_filters: filter search results
+      - mobile_optimization: touch-optimized search
+
+  map_analytics:
+  analytics_components:
+    description: "Map analytics and reporting"
+    components:
+      MapAnalytics:
+        features:
+          - topology_analytics
+          - outage_analytics
+          - technician_performance_analytics
+          - usage_analytics
+          - export_functionality
+          - mobile_optimized_interface
+        props:
+          - timeRange: DateRange
+          - analyticsType: AnalyticsType
+          - onExport: (format) => void
+
+      TopologyAnalytics:
+        features:
+          - node_distribution_charts
+          - connection_analytics
+          - capacity_utilization_charts
+          - growth_trends
+          - interactive_charts
+        props:
+          - topology: TopologyData
+          - timeRange: DateRange
+          - onDrillDown: (data) => void
+
+    analytics_features:
+      - topology_analytics: node distribution, connections, capacity
+      - outage_analytics: outage frequency, duration, impact
+      - technician_performance: activity efficiency, response time
+      - usage_analytics: map usage patterns, popular areas
+      - export_functionality: export analytics data
+
+  export_functionality:
+  export_components:
+    description: "Export functionality for maps"
+    components:
+      MapExport:
+        features:
+          - image_export (PNG, JPEG)
+          - data_export (JSON, CSV, KML)
+          - report_generation
+          - custom_export_options
+          - mobile_optimized_interface
+        props:
+          - map: MapInstance
+          - exportType: ExportType
+          - options: ExportOptions
+          - onExport: (result) => void
+
+    export_features:
+      - image_export: export map as image
+      - data_export: export topology data
+      - report_generation: generate map reports
+      - custom_options: custom export options
+      - mobile_optimization: mobile-optimized export
+
+  state_management:
+  topology_store:
+    description: "Topology state management"
+    state:
+      - topology: TopologyData | null
+      - selectedNodes: string[]
+      - filters: TopologyFilters
+      - search: string
+      - loading: boolean
+      - error: string | null
+      - realTimeEnabled: boolean
+    actions:
+      - setTopology: (topology) => void
+      - setSelectedNodes: (nodes) => void
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+      - setRealTimeEnabled: (enabled) => void
+
+  map_store:
+    description: "Map state management"
+    state:
+      - mapInstance: MapInstance | null
+      - layers: LayerConfig[]
+      - viewBounds: Bounds | null
+      - zoomLevel: number
+      - center: Coordinate | null
+      - offlineMode: boolean
+      - syncStatus: SyncStatus
+    actions:
+      - setMapInstance: (map) => void
+      - setLayers: (layers) => void
+      - setViewBounds: (bounds) => void
+      - setZoomLevel: (zoom) => void
+      - setCenter: (center) => void
+      - setOfflineMode: (offline) => void
+      - setSyncStatus: (status) => void
+
+  outage_store:
+    description: "Outage state management"
+    state:
+      - outages: Outage[]
+      - selectedOutage: string | null
+      - filters: OutageFilters
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setOutages: (outages) => void
+      - setSelectedOutage: (outageId) => void
+      - setFilters: (filters) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  technician_store:
+    description: "Technician state management"
+    state:
+      - technicians: Technician[]
+      - selectedTechnician: string | null
+      - activities: TechnicianActivity[]
+      - filters: ActivityFilters
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setTechnicians: (technicians) => void
+      - setSelectedTechnician: (technicianId) => void
+      - setActivities: (activities) => void
+      - setFilters: (filters) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  hooks:
+  use_topology:
+    description: "Topology management hook"
+    features:
+      - topology_data_fetching
+      - topology_updates
+      - node_selection
+      - filtering_and_search
+    return_values:
+      - topology: TopologyData | null
+      - selectedNodes: string[]
+      - filters: TopologyFilters
+      - search: string
+      - loading: boolean
+      - error: string | null
+      - getTopology: () => Promise<TopologyData>
+      - updateTopology: (topology) => Promise<TopologyData>
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setSelectedNodes: (nodes) => void
+
+  use_map:
+    description: "Map management hook"
+    features:
+      - map_instance_management
+      - layer_visibility_control
+      - view_bounds_management
+      - offline_mode_support
+    return_values:
+      - mapInstance: MapInstance | null
+      - layers: LayerConfig[]
+      - viewBounds: Bounds | null
+      - zoomLevel: number
+      - center: Coordinate | null
+      - offlineMode: boolean
+      - syncStatus: SyncStatus
+      - setMapInstance: (map) => void
+      - setLayers: (layers) => void
+      - setViewBounds: (bounds) => void
+      - setZoomLevel: (zoom) => void
+      - setCenter: (center) => void
+      - setOfflineMode: (offline) => void
+
+  use_outage:
+    description: "Outage management hook"
+    features:
+      - outage_data_fetching
+      - outage_creation
+      - outage_resolution
+      - outage_propagation
+    return_values:
+      - outages: Outage[]
+      - selectedOutage: string | null
+      - filters: OutageFilters
+      - loading: boolean
+      - error: string | null
+      - getOutages: () => Promise<Outage[]>
+      - createOutage: (outage) => Promise<Outage>
+      - resolveOutage: (outageId) => Promise<void>
+      - setFilters: (filters) => void
+      - setSelectedOutage: (outageId) => void
+
+  api_integration:
+  maps_apis:
+    description: "Maps API integration"
+    endpoints:
+      - GET /maps/topology: get topology data
+      - GET /maps/odc: get ODC list
+      - GET /maps/odp: get ODP list
+      - GET /maps/clients: get client list
+      - GET /maps/outages: get outage list
+      - POST /maps/outages: create outage
+      - PUT /maps/outages/{id}: update outage
+      - DELETE /maps/outages/{id}: resolve outage
+      - GET /maps/technician/activities: get technician activities
+      - GET /maps/analytics: get map analytics
+      - POST /maps/export: export map data
+
+    api_methods:
+      - getTopology: () => Promise<TopologyData>
+      - getODCs: (filters) => Promise<ODC[]>
+      - getODPs: (filters) => Promise<ODP[]>
+      - getClients: (filters) => Promise<Client[]>
+      - getOutages: (filters) => Promise<Outage[]>
+      - createOutage: (outage) => Promise<Outage>
+      - updateOutage: (id, outage) => Promise<Outage>
+      - resolveOutage: (id) => Promise<void>
+      - getTechnicianActivities: (filters) => Promise<TechnicianActivity[]>
+      - getMapAnalytics: (timeRange, type) => Promise<MapAnalytics>
+      - exportMapData: (exportConfig) => Promise<ExportResult>
+
+  testing:
+  component_testing:
+    description: "Maps component testing"
+    test_files:
+      - TopologyMap.test.tsx
+      - OutageManager.test.tsx
+      - MapControls.test.tsx
+      - TechnicianActivity.test.tsx
+      - MapSearch.test.tsx
+      - MapFilters.test.tsx
+
+    test_utilities:
+      - mock_topology_data
+      - mock_map_instance
+      - mock_outage_data
+      - mock_technician_data
+      - test_map_providers
+
+  integration_testing:
+    description: "Maps integration testing"
+    test_scenarios:
+      - topology_visualization_integration
+      - outage_propagation_integration
+      - technician_activity_integration
+      - offline_mode_integration
+      - mobile_responsive_integration
+
+  output_expectations:
+  - "Complete topology visualization system"
+  - "Outage propagation display and management"
+  - "ODC-ODP-Client hierarchy management"
+  - "Interactive map controls with search and filtering"
+  - "Technician activity overlay"
+  - "Mobile-optimized interface"
+  - "Offline mode support"
+  - "Map analytics and export functionality"
+
+  stop_condition:
+  - "Topology visualization functional with hierarchy"
+  - "Outage propagation working with cascade effects"
+  - "ODC-ODP-Client management functional"
+  - "Interactive map controls working"
+  - "Technician activity overlay functional"
+  - "Mobile-optimized interface working"
+  - "Offline mode support functional"
+  - "Search and filtering working"
+  - "Analytics and export working"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade topology visualization system"
+  - "Focus on hierarchical relationships and outage propagation"
+  - "Ensure mobile optimization and accessibility"
+  - "Implement offline mode support"
+  - "Follow React best practices"
+  - "Do not implement super admin features"

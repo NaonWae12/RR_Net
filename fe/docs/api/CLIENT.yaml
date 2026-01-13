@@ -1,0 +1,7 @@
+Client / Customer
+CLIENT:
+  GET /clients
+  POST /clients
+  DELETE /clients/{id}:
+    behavior: soft_delete
+

@@ -1,0 +1,3 @@
+MAPS: GET /maps/topology
+
+OUTAGE: POST /outage/manual

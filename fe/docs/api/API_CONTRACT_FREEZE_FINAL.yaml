@@ -1,0 +1,42 @@
+API_CONTRACT_FREEZE_FINAL:
+  status: LOCKED
+  version: v1.0
+  change_policy:
+    allowed:
+      - add_new_endpoint
+      - add_optional_field
+    forbidden:
+      - rename_field
+      - remove_field
+      - change_enum_value
+      - change_response_shape
+
+  standards:
+    protocol: REST
+    format: JSON
+    auth:
+      type: JWT
+      header: Authorization: Bearer <token>
+
+  tenant_resolution:
+    method: subdomain
+    fallback: X-Tenant-ID (internal only)
+
+  response_convention:
+    success:
+      data: object | array
+      meta?: object
+    error:
+      error: string
+      message: string
+      details?: object
+
+  pagination:
+    query:
+      page: number
+      limit: number
+    response:
+      meta:
+        page: number
+        limit: number
+        total: number

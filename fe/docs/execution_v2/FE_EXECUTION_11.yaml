@@ -1,0 +1,539 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_11_SUPER_ADMIN"
+  purpose: >
+    Implement comprehensive super admin UI for RRNet SaaS including
+    dashboard, tenant management, global plan/addon management,
+    system monitoring, audit logs viewer, and emergency controls
+    with enterprise-grade interface and real-time capabilities.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "Super Admin backend APIs available"
+    - "WebSocket connection for real-time updates"
+
+  design_principles:
+    - "Super admin UI operates in global context"
+    - "Real-time monitoring with WebSocket updates"
+    - "Enterprise-grade data visualization"
+    - "Comprehensive audit trail viewing"
+    - "Emergency controls with confirmation flows"
+    - "Multi-tenant management capabilities"
+
+  scope:
+    include:
+      - super_admin_dashboard
+      - tenant_management_ui
+      - global_plan_management
+      - global_addon_management
+      - system_monitoring_dashboard
+      - audit_logs_viewer
+      - emergency_controls_ui
+      - compliance_dashboard
+    exclude:
+      - tenant_specific_features
+      - customer_facing_ui
+      - technical_user_interfaces
+      - mobile_optimization
+
+  frontend_structure_additions:
+  src/app/sa/
+    dashboard/
+      - page.tsx
+      - components/
+        - SystemHealthCard.tsx
+        - TenantMetricsCard.tsx
+        - RevenueChart.tsx
+        - AlertSummaryCard.tsx
+        - RecentActivities.tsx
+    tenants/
+      - page.tsx
+      - components/
+        - TenantList.tsx
+        - TenantForm.tsx
+        - TenantDetails.tsx
+        - TenantStatusModal.tsx
+        - DomainManagement.tsx
+        - UsageMetrics.tsx
+    plans/
+      - page.tsx
+      - components/
+        - PlanList.tsx
+        - PlanForm.tsx
+        - PlanDetails.tsx
+        - FeatureToggles.tsx
+        - PricingManager.tsx
+        - UsageAnalytics.tsx
+    addons/
+      - page.tsx
+      - components/
+        - AddonList.tsx
+        - AddonForm.tsx
+        - AddonDetails.tsx
+        - PricingManager.tsx
+        - UsageAnalytics.tsx
+        - RequestManager.tsx
+    monitoring/
+      - page.tsx
+      - components/
+        - SystemHealth.tsx
+        - PerformanceMetrics.tsx
+        - ResourceUsage.tsx
+        - ServiceStatus.tsx
+        - AlertManager.tsx
+        - HealthDashboard.tsx
+    audit/
+      - page.tsx
+      - components/
+        - AuditLogList.tsx
+        - AuditLogDetails.tsx
+        - ComplianceReports.tsx
+        - DataSubjectRequests.tsx
+        - ExportManager.tsx
+        - FilterControls.tsx
+    emergency/
+      - page.tsx
+      - components/
+        - EmergencyControls.tsx
+        - ShutdownManager.tsx
+        - SystemOverrides.tsx
+        - MassOperations.tsx
+        - DisasterRecovery.tsx
+        - CrisisCommunication.tsx
+    compliance/
+      - page.tsx
+      - components/
+        - ComplianceDashboard.tsx
+        - GDPRManager.tsx
+        - PolicyManager.tsx
+        - RegulatoryReports.tsx
+        - DataProtection.tsx
+
+  super_admin_dashboard:
+  dashboard_layout:
+    description: "Main super admin dashboard with comprehensive overview"
+    components:
+      SystemHealthCard:
+        features:
+          - overall_system_health_score
+          - service_status_indicators
+          - resource_usage_gauges
+          - real_time_updates
+        data_sources:
+          - /sa/health endpoint
+          - /sa/metrics endpoint
+          - WebSocket updates
+
+      TenantMetricsCard:
+        features:
+          - total_tenant_count
+          - active_vs_suspended_chart
+          - tenant_growth_trend
+          - plan_distribution
+        data_sources:
+          - /sa/tenants endpoint
+          - /sa/analytics endpoint
+
+      RevenueChart:
+        features:
+          - monthly_revenue_trend
+          - plan_revenue_breakdown
+          - addon_revenue_analysis
+          - forecast_projections
+        data_sources:
+          - /sa/analytics/revenue endpoint
+          - WebSocket updates
+
+      AlertSummaryCard:
+        features:
+          - active_alerts_count
+          - alert_severity_breakdown
+          - recent_alerts_list
+          - quick_actions
+        data_sources:
+          - /sa/alerts endpoint
+          - WebSocket updates
+
+      RecentActivities:
+        features:
+          - recent_system_activities
+          - admin_action_timeline
+          - security_events
+          - filter_by_type
+        data_sources:
+          - /sa/audit/logs endpoint
+          - WebSocket updates
+
+  tenant_management_ui:
+  tenant_list:
+    description: "Comprehensive tenant management interface"
+    features:
+      - advanced_filtering (status, plan, usage)
+      - bulk_operations (suspend, unsuspend, delete)
+      - tenant_impersonation
+      - export_functionality
+      - real_time_status_updates
+    components:
+      - DataTable with tenant data
+      - FilterPanel
+      - BulkActionModal
+      - ImpersonationModal
+      - ExportModal
+
+  tenant_form:
+    description: "Tenant creation and editing form"
+    features:
+      - basic_information_fields
+      - plan_assignment
+      - custom_domain_setup
+      - limit_configuration
+      - feature_toggle_management
+    components:
+      - Form with validation
+      - PlanSelector
+      - DomainManager
+      - LimitConfiguration
+      - FeatureToggleManager
+
+  tenant_details:
+    description: "Detailed tenant information and management"
+    features:
+      - tenant_overview
+      - usage_metrics
+      - billing_history
+      - activity_logs
+      - emergency_controls
+    components:
+      - TenantOverview
+      - UsageMetrics
+      - BillingHistory
+      - ActivityTimeline
+      - EmergencyControls
+
+  global_plan_management:
+  plan_list:
+    description: "Global plan management interface"
+    features:
+      - plan_listing_with_search
+      - plan_comparison
+      - usage_analytics
+      - bulk_operations
+      - version_history
+    components:
+      - PlanComparisonTable
+      - UsageAnalyticsChart
+      - BulkOperationModal
+      - VersionHistory
+
+  plan_form:
+    description: "Plan creation and editing form"
+    features:
+      - plan_configuration
+      - feature_toggles
+      - limit_settings
+      - pricing_management
+      - preview_mode
+    components:
+      - PlanConfiguration
+      - FeatureToggleManager
+      - LimitSettings
+      - PricingManager
+      - PlanPreview
+
+  global_addon_management:
+  addon_list:
+    description: "Global addon management interface"
+    features:
+      - addon_catalog
+      - usage_analytics
+      - request_management
+      - pricing_management
+      - approval_workflow
+    components:
+      - AddonCatalog
+      - UsageAnalytics
+      - RequestManager
+      - PricingManager
+      - ApprovalWorkflow
+
+  addon_form:
+    description: "Addon creation and editing form"
+    features:
+      - addon_configuration
+      - pricing_setup
+      - approval_requirements
+      - usage_limits
+      - preview_mode
+    components:
+      - AddonConfiguration
+      - PricingSetup
+      - ApprovalRequirements
+      - UsageLimits
+      - AddonPreview
+
+  system_monitoring_dashboard:
+  system_health:
+    description: "Real-time system health monitoring"
+    features:
+      - service_status_dashboard
+      - performance_metrics
+      - resource_usage_monitoring
+      - alert_management
+      - health_trends
+    components:
+      - ServiceStatusGrid
+      - PerformanceMetricsChart
+      - ResourceUsageGauges
+      - AlertManager
+      - HealthTrendsChart
+
+  performance_metrics:
+    description: "Detailed performance metrics visualization"
+    features:
+      - response_time_charts
+      - throughput_monitoring
+      - error_rate_tracking
+      - bottleneck_identification
+      - trend_analysis
+    components:
+      - ResponseTimeChart
+      - ThroughputChart
+      - ErrorRateChart
+      - BottleneckDetector
+      - TrendAnalysis
+
+  audit_logs_viewer:
+  audit_log_list:
+    description: "Comprehensive audit log viewing interface"
+    features:
+      - advanced_filtering (date, user, action, resource)
+      - full_text_search
+      - export_functionality
+      - real_time_updates
+      - compliance_reporting
+    components:
+      - AuditLogTable
+      - AdvancedFilterPanel
+      - ExportManager
+      - ComplianceReportGenerator
+
+  audit_log_details:
+    description: "Detailed audit log information"
+    features:
+      - complete_audit_entry
+      - related_logs
+      - compliance_tags
+      - investigation_tools
+      - export_options
+    components:
+      - AuditLogDetails
+      - RelatedLogs
+      - ComplianceTags
+      - InvestigationTools
+
+  emergency_controls_ui:
+  emergency_dashboard:
+    description: "Emergency control center interface"
+    features:
+      - system_shutdown_controls
+      - emergency_overrides
+      - mass_operation_controls
+      - disaster_recovery_tools
+      - crisis_communication
+    components:
+      - EmergencyControlPanel
+      - SystemOverrideManager
+      - MassOperationManager
+      - DisasterRecoveryTools
+      - CrisisCommunication
+
+  confirmation_flows:
+    description: "Multi-step confirmation for emergency actions"
+    features:
+      - multi_factor_authentication
+      - approval_workflows
+      - impact_assessment
+      - countdown_timers
+      - rollback_options
+    components:
+      - MFAConfirmation
+      - ApprovalWorkflow
+      - ImpactAssessment
+      - CountdownTimer
+      - RollbackOptions
+
+  compliance_dashboard:
+  gdpr_compliance:
+    description: "GDPR compliance management interface"
+    features:
+      - data_subject_requests
+      - consent_management
+      - data_breach_reporting
+      - compliance_score
+      - documentation_manager
+    components:
+      - DataSubjectRequestManager
+      - ConsentManager
+      - DataBreachReporter
+      - ComplianceScore
+      - DocumentationManager
+
+  regulatory_reports:
+    description: "Regulatory reporting interface"
+    features:
+      - report_generation
+      - compliance_validation
+      - audit_trail
+      - submission_tracking
+      - archive_management
+    components:
+      - ReportGenerator
+      - ComplianceValidator
+      - AuditTrailViewer
+      - SubmissionTracker
+      - ArchiveManager
+
+  real_time_features:
+  websocket_integration:
+    description: "Real-time updates via WebSocket"
+    features:
+      - system_health_updates
+      - alert_notifications
+      - tenant_status_changes
+      - performance_metrics
+      - emergency_notifications
+    implementation:
+      - WebSocket connection management
+      - Event type handling
+      - UI state updates
+      - Error handling
+      - Reconnection logic
+
+  notification_system:
+    description: "Real-time notification system"
+    features:
+      - toast_notifications
+      - alert_banners
+      - progress_indicators
+      - emergency_alerts
+      - notification_history
+    components:
+      - ToastNotification
+      - AlertBanner
+      - ProgressIndicator
+      - EmergencyAlert
+      - NotificationHistory
+
+  security_features:
+  access_control:
+    description: "Super admin access control"
+    features:
+      - multi_factor_authentication
+      - session_management
+      - privilege_escalation
+      - audit_logging
+      - emergency_access
+    components:
+      - MFASetup
+      - SessionManager
+      - PrivilegeEscalation
+      - AuditLogger
+      - EmergencyAccess
+
+  audit_trail:
+    description: "Comprehensive audit trail for super admin actions"
+    features:
+      - action_logging
+      - change_tracking
+      - user_activity
+      - system_changes
+      - compliance_reporting
+    components:
+      - ActionLogger
+      - ChangeTracker
+      - UserActivityTracker
+      - SystemChangeLogger
+      - ComplianceReporter
+
+  data_visualization:
+  charts_and_graphs:
+    description: "Advanced data visualization components"
+    features:
+      - interactive_charts
+      - real_time_data
+      - drill_down_capabilities
+      - export_options
+      - responsive_design
+    chart_types:
+      - line_charts
+      - bar_charts
+      - pie_charts
+      - heat_maps
+      - gauges
+      - tables_with_pagination
+
+  export_functionality:
+    description: "Comprehensive export capabilities"
+    features:
+      - multiple_formats (PDF, Excel, CSV)
+      - scheduled_exports
+      - custom_reports
+      - data_filters
+      - delivery_options
+    components:
+      - ExportManager
+      - ReportScheduler
+      - CustomReportBuilder
+      - DataFilter
+      - DeliveryManager
+
+  coding_standards:
+  component_standards:
+    - Use TypeScript for all components
+    - Use proper prop types and interfaces
+    - Use proper accessibility attributes
+    - Use proper error boundaries
+    - Use proper loading states
+    - Use proper responsive design
+
+  hook_standards:
+    - Use proper TypeScript types
+    - Use proper error handling
+    - Use proper cleanup
+    - Use proper dependency arrays
+    - Use proper naming conventions
+
+  performance_standards:
+    - Use React.memo for expensive components
+    - Use useMemo for expensive calculations
+    - Use useCallback for function references
+    - Use proper code splitting
+    - Use proper lazy loading
+
+  output_expectations:
+  - "Complete super admin dashboard"
+  - "Tenant management interface"
+  - "Global plan and addon management"
+  - "System monitoring dashboard"
+  - "Audit logs viewer"
+  - "Emergency controls interface"
+  - "Compliance dashboard"
+  - "Real-time updates via WebSocket"
+
+  stop_condition:
+  - "Super admin can manage all tenants"
+  - "Global plans and addons manageable"
+  - "System monitoring functional"
+  - "Audit logs viewable and searchable"
+  - "Emergency controls working with confirmations"
+  - "Compliance dashboard functional"
+  - "Real-time updates working"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade super admin UI"
+  - "Focus on real-time capabilities"
+  - "Ensure comprehensive audit trails"
+  - "Provide proper confirmation flows for emergency actions"
+  - "Follow accessibility best practices"
+  - "Do not implement tenant-specific features"

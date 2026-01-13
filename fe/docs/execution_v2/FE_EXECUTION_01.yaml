@@ -1,0 +1,711 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_01_AUTH_TENANT_RESOLUTION"
+  purpose: >
+    Implement comprehensive authentication and tenant resolution system
+    for RRNet SaaS including login/logout flows, token management,
+    subdomain-based tenant resolution, role-based routing,
+    password management, and security features with enterprise-grade
+    authentication and multi-tenant architecture.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "Backend auth APIs available"
+    - "Backend tenant resolution APIs available"
+    - "Subdomain routing configured"
+
+  design_principles:
+    - "Secure authentication with JWT tokens"
+    - "Subdomain-based tenant resolution"
+    - "Role-based UI rendering and routing"
+    - "Token refresh with automatic retry"
+    - "Multi-factor authentication support"
+    - "Session management with timeout"
+    - "Security-first error handling"
+
+  scope:
+    include:
+      - authentication_flows
+      - tenant_resolution_system
+      - role_based_routing
+      - token_management
+      - password_management
+      - session_management
+      - security_features
+      - error_handling
+    exclude:
+      - super_admin_features
+      - business_logic_pages
+      - tenant_specific_features
+      - customer_facing_ui
+
+  frontend_structure_additions:
+  src/app/
+    (auth)/
+      - login/
+        - page.tsx
+        - components/
+          - LoginForm.tsx
+          - LoginValidation.tsx
+          - MFAVerification.tsx
+          - PasswordReset.tsx
+      - register/
+        - page.tsx
+        - components/
+          - RegisterForm.tsx
+          - RegistrationValidation.tsx
+          - TermsAndConditions.tsx
+      - forgot-password/
+        - page.tsx
+        - components/
+          - ForgotPasswordForm.tsx
+          - ResetPasswordForm.tsx
+          - ResetValidation.tsx
+      - change-password/
+        - page.tsx
+        - components/
+          - ChangePasswordForm.tsx
+          - PasswordValidation.tsx
+          - PasswordStrength.tsx
+    dashboard/
+      - page.tsx (protected)
+    components/
+      auth/
+        - AuthProvider.tsx
+        - AuthGuard.tsx
+        - RoleGuard.tsx
+        - TenantGuard.tsx
+        - TokenManager.tsx
+        - SessionManager.tsx
+      layout/
+        - AuthLayout.tsx
+        - PublicLayout.tsx
+        - ProtectedLayout.tsx
+    stores/
+      - authStore.ts
+      - tenantStore.ts
+    lib/
+      auth/
+        - authService.ts
+        - tokenService.ts
+        - tenantService.ts
+        - mfaService.ts
+      hooks/
+        - useAuth.ts
+        - useTenant.ts
+        - useTokenRefresh.ts
+        - usePermissions.ts
+      utils/
+        - authUtils.ts
+        - tenantUtils.ts
+        - securityUtils.ts
+
+  authentication_flows:
+  login_flow:
+    description: "Complete login flow with MFA support"
+    components:
+      LoginForm:
+        features:
+          - email/username_input
+          - password_input_with_visibility
+          - remember_me_option
+          - forgot_password_link
+          - mfa_prompt_if_required
+          - loading_states
+          - error_handling
+        props:
+          onSubmit: (credentials) => Promise<void>
+          loading: boolean
+          error?: string
+          mfaRequired: boolean
+
+      MFAVerification:
+        features:
+          - totp_code_input
+          - backup_code_option
+          - resend_code_option
+          - countdown_timer
+          - error_handling
+        props:
+          onVerify: (code) => Promise<void>
+          onUseBackup: () => void
+          onResend: () => void
+          timeRemaining: number
+          error?: string
+
+    flow_steps:
+      1: validate_credentials
+      2: check_mfa_requirement
+      3: verify_mfa_if_required
+      4: store_tokens
+      5: redirect_to_dashboard
+      6: set_tenant_context
+
+  registration_flow:
+    description: "User registration flow with validation"
+    components:
+      RegisterForm:
+        features:
+          - user_information_input
+          - password_strength_indicator
+          - terms_and_conditions
+          - email_verification
+          - tenant_invitation_code
+          - validation_feedback
+        props:
+          onSubmit: (userData) => Promise<void>
+          loading: boolean
+          error?: string
+          invitationCode?: string
+
+    flow_steps:
+      1: validate_user_input
+      2: check_invitation_code_if_provided
+      3: create_user_account
+      4: send_verification_email
+      5: redirect_to_login_with_message
+
+  password_reset_flow:
+    description: "Password reset flow with email verification"
+    components:
+      ForgotPasswordForm:
+        features:
+          - email_input
+          - validation_feedback
+          - success_confirmation
+          - resend_option
+        props:
+          onSubmit: (email) => Promise<void>
+          loading: boolean
+          error?: string
+          success?: boolean
+
+      ResetPasswordForm:
+        features:
+          - new_password_input
+          - confirm_password_input
+          - password_strength_indicator
+          - validation_feedback
+        props:
+          onSubmit: (passwordData) => Promise<void>
+          token: string
+          loading: boolean
+          error?: string
+
+    flow_steps:
+      1: request_password_reset
+      2: send_reset_email
+      3: verify_reset_token
+      4: update_password
+      5: redirect_to_login
+
+  change_password_flow:
+    description: "Password change flow for authenticated users"
+    components:
+      ChangePasswordForm:
+        features:
+          - current_password_input
+          - new_password_input
+          - confirm_password_input
+          - password_strength_indicator
+          - validation_feedback
+        props:
+          onSubmit: (passwordData) => Promise<void>
+          loading: boolean
+          error?: string
+          success?: boolean
+
+    flow_steps:
+      1: verify_current_password
+      2: validate_new_password
+      3: update_password
+      4: update_tokens_if_needed
+      5: show_success_message
+
+  tenant_resolution_system:
+  subdomain_resolver:
+    description: "Subdomain-based tenant resolution"
+    components:
+      TenantResolver:
+        features:
+          - subdomain_extraction
+          - tenant_validation
+          - fallback_handling
+          - error_handling
+        implementation:
+          - extract_subdomain_from_window.location.hostname
+          - validate_tenant_with_backend
+          - handle_invalid_subdomain
+          - cache_tenant_information
+
+    resolution_logic:
+      - parse_subdomain_from_url
+      - validate_tenant_exists
+      - check_tenant_status
+      - set_tenant_context
+      - handle_tenant_not_found
+      - handle_tenant_suspended
+
+  tenant_context:
+    description: "Tenant context management"
+    components:
+      TenantProvider:
+        features:
+          - tenant_state_management
+          - tenant_validation
+          - tenant_switching
+          - tenant_cache
+        state:
+          - tenant: Tenant | null
+          - loading: boolean
+          - error: string | null
+          - resolved: boolean
+
+    context_features:
+      - tenant_information_storage
+      - tenant_status_monitoring
+      - tenant_switching_for_admins
+      - tenant_cache_invalidation
+
+  role_based_routing:
+  route_guards:
+    description: "Role-based route protection"
+    components:
+      AuthGuard:
+        features:
+          - authentication_check
+          - redirect_unauthenticated
+          - loading_state
+          - error_handling
+        implementation:
+          - check_authentication_status
+          - redirect_to_login_if_needed
+          - show_loading_while_checking
+          - handle_authentication_errors
+
+      RoleGuard:
+        features:
+          - role_validation
+          - permission_check
+          - redirect_unauthorized
+          - custom_fallback
+        props:
+          requiredRoles: string[]
+          requiredPermissions: string[]
+          fallback?: ReactNode
+          children: ReactNode
+
+      TenantGuard:
+        features:
+          - tenant_validation
+          - tenant_status_check
+          - redirect_if_invalid
+          - custom_error_handling
+        props:
+          allowedStatuses: TenantStatus[]
+          fallback?: ReactNode
+          children: ReactNode
+
+    routing_logic:
+      - check_user_authentication
+      - validate_user_role
+      - check_tenant_status
+      - validate_required_permissions
+      - redirect_or_show_fallback
+
+  protected_routes:
+    description: "Protected route configuration"
+    implementation:
+      - route_level_guards
+      - layout_level_guards
+      - page_level_guards
+      - dynamic_route_generation
+    route_configuration:
+      - public_routes: ['/login', '/register', '/forgot-password']
+      - authenticated_routes: ['/dashboard', '/profile']
+      - role_specific_routes: ['/admin/*', '/technician/*']
+      - tenant_specific_routes: ['/tenant/*']
+
+  token_management:
+  token_service:
+    description: "JWT token management service"
+    features:
+      - token_storage
+      - token_refresh
+      - token_validation
+      - token_cleanup
+    implementation:
+      - store_tokens_in_secure_storage
+      - automatic_token_refresh
+      - token_expiration_handling
+      - secure_token_cleanup
+
+    token_operations:
+      - store_access_token
+      - store_refresh_token
+      - refresh_access_token
+      - validate_token_expiry
+      - clear_tokens_on_logout
+
+  token_manager_component:
+    description: "Token management component"
+    features:
+      - automatic_refresh
+      - error_handling
+      - retry_logic
+      - background_refresh
+    implementation:
+      - setup_token_refresh_timer
+      - handle_refresh_failures
+      - retry_failed_refreshes
+      - background_token_validation
+
+  session_management:
+  session_service:
+    description: "User session management"
+    features:
+      - session_tracking
+      - session_timeout
+      - session_validation
+      - session_cleanup
+    implementation:
+      - track_user_sessions
+      - implement_session_timeout
+      - validate_session_integrity
+      - cleanup_expired_sessions
+
+    session_operations:
+      - create_session
+      - extend_session
+      - validate_session
+      - terminate_session
+      - cleanup_expired_sessions
+
+  session_manager_component:
+    description: "Session management component"
+    features:
+      - activity_tracking
+      - idle_detection
+      - timeout_warnings
+      - auto_logout
+    implementation:
+      - track_user_activity
+      - detect_idle_state
+      - show_timeout_warnings
+      - automatic_logout_on_timeout
+
+  security_features:
+  security_utils:
+    description: "Security utility functions"
+    features:
+      - input_sanitization
+      - xss_prevention
+      - csrf_protection
+      - secure_headers
+    implementation:
+      - sanitize_user_inputs
+      - prevent_xss_attacks
+      - implement_csrf_tokens
+      - set_security_headers
+
+  password_security:
+    description: "Password security features"
+    features:
+      - password_strength_validation
+      - password_hashing
+      - password_history
+      - brute_force_protection
+    implementation:
+      - validate_password_strength
+      - hash_passwords_securely
+      - track_password_history
+      - prevent_brute_force_attacks
+
+  authentication_security:
+    description: "Authentication security features"
+    features:
+      - rate_limiting
+      - account_lockout
+      - suspicious_activity_detection
+      - security_logging
+    implementation:
+      - implement_rate_limiting
+      - lock_accounts_after_failures
+      - detect_suspicious_activities
+      - log_security_events
+
+  error_handling:
+  auth_error_handler:
+    description: "Authentication error handling"
+    features:
+      - error_categorization
+      - user_friendly_messages
+      - error_recovery
+      - error_logging
+    implementation:
+      - categorize_authentication_errors
+      - show_user_friendly_error_messages
+      - provide_error_recovery_options
+      - log_errors_for_monitoring
+
+    error_types:
+      - validation_errors
+      - authentication_errors
+      - authorization_errors
+      - network_errors
+      - server_errors
+
+  error_components:
+    description: "Error handling components"
+    components:
+      AuthErrorBoundary:
+        features:
+          - catch_authentication_errors
+          - show_error_fallback
+          - provide_recovery_options
+          - log_errors
+
+      ErrorMessage:
+        features:
+          - error_display
+          - recovery_actions
+          - help_links
+          - contact_support
+
+  api_integration:
+  auth_service:
+    description: "Authentication API service"
+    endpoints:
+      - POST /auth/login
+      - POST /auth/register
+      - POST /auth/logout
+      - POST /auth/refresh
+      - POST /auth/forgot-password
+      - POST /auth/reset-password
+      - POST /auth/change-password
+      - GET /auth/me
+      - POST /auth/mfa/setup
+      - POST /auth/mfa/verify
+
+    service_methods:
+      - login: (credentials) => Promise<LoginResponse>
+      - register: (userData) => Promise<RegisterResponse>
+      - logout: () => Promise<void>
+      - refreshToken: () => Promise<TokenResponse>
+      - forgotPassword: (email) => Promise<void>
+      - resetPassword: (data) => Promise<void>
+      - changePassword: (data) => Promise<void>
+      - getProfile: () => Promise<User>
+      - setupMFA: () => Promise<MFASetupResponse>
+      - verifyMFA: (code) => Promise<MFAVerifyResponse>
+
+  tenant_service:
+    description: "Tenant resolution API service"
+    endpoints:
+      - GET /tenant/by-subdomain/{subdomain}
+      - GET /tenant/me
+      - POST /tenant/switch
+
+    service_methods:
+      - getTenantBySubdomain: (subdomain) => Promise<Tenant>
+      - getCurrentTenant: () => Promise<Tenant>
+      - switchTenant: (tenantId) => Promise<void>
+
+  state_management:
+  auth_store:
+    description: "Authentication state management"
+    state:
+      - user: User | null
+      - token: string | null
+      - refreshToken: string | null
+      - isAuthenticated: boolean
+      - isLoading: boolean
+      - error: string | null
+      - mfaRequired: boolean
+      - permissions: string[]
+      - roles: string[]
+
+    actions:
+      - login: (credentials) => Promise<void>
+      - logout: () => void
+      - refreshToken: () => Promise<void>
+      - updateProfile: (data) => Promise<void>
+      - changePassword: (data) => Promise<void>
+      - setupMFA: () => Promise<void>
+      - verifyMFA: (code) => Promise<void>
+
+  tenant_store:
+    description: "Tenant state management"
+    state:
+      - tenant: Tenant | null
+      - loading: boolean
+      - error: string | null
+      - resolved: boolean
+
+    actions:
+      - resolveTenant: (subdomain) => Promise<void>
+      - switchTenant: (tenantId) => Promise<void>
+      - clearTenant: () => void
+
+  hooks:
+  use_auth:
+    description: "Authentication hook"
+    features:
+      - authentication_state
+      - login_logout_functions
+      - token_refresh
+      - error_handling
+    return_values:
+      - user: User | null
+      - isAuthenticated: boolean
+      - isLoading: boolean
+      - error: string | null
+      - login: (credentials) => Promise<void>
+      - logout: () => void
+      - refreshToken: () => Promise<void>
+
+  use_tenant:
+    description: "Tenant resolution hook"
+    features:
+      - tenant_state
+      - tenant_resolution
+      - tenant_switching
+    return_values:
+      - tenant: Tenant | null
+      - loading: boolean
+      - error: string | null
+      - resolveTenant: (subdomain) => Promise<void>
+      - switchTenant: (tenantId) => Promise<void>
+
+  use_permissions:
+    description: "Permissions hook"
+    features:
+      - permission_checking
+      - role_validation
+      - capability_checking
+    return_values:
+      - hasPermission: (permission) => boolean
+      - hasRole: (role) => boolean
+      - hasCapability: (capability) => boolean
+      - permissions: string[]
+      - roles: string[]
+      - capabilities: string[]
+
+  use_token_refresh:
+    description: "Token refresh hook"
+    features:
+      - automatic_refresh
+      - refresh_retry
+      - error_handling
+    return_values:
+      - refreshToken: () => Promise<void>
+      - isRefreshing: boolean
+      - refreshError: string | null
+
+  testing:
+  component_testing:
+    description: "Component testing setup"
+    test_files:
+      - LoginForm.test.tsx
+      - RegisterForm.test.tsx
+      - AuthGuard.test.tsx
+      - RoleGuard.test.tsx
+      - TenantResolver.test.tsx
+      - TokenManager.test.tsx
+
+    test_utilities:
+      - mock_auth_service
+      - mock_tenant_service
+      - mock_auth_store
+      - mock_tenant_store
+      - test_providers
+
+  integration_testing:
+    description: "Integration testing setup"
+    test_scenarios:
+      - login_flow_integration
+      - tenant_resolution_integration
+      - role_based_routing_integration
+      - token_refresh_integration
+      - session_timeout_integration
+
+  accessibility:
+  a11y_features:
+    description: "Accessibility features"
+    implementations:
+      - semantic_html_structure
+      - aria_labels_and_descriptions
+      - keyboard_navigation
+      - screen_reader_support
+      - focus_management
+      - color_contrast
+
+  accessibility_components:
+    - accessible_form_inputs
+    - error_announcements
+    - loading_announcements
+    - focus_trapping
+    - skip_links
+
+  performance:
+  performance_optimizations:
+    description: "Performance optimizations"
+    implementations:
+      - code_splitting_for_auth_pages
+      - lazy_loading_of_components
+      - memoization_of_expensive_operations
+      - efficient_state_updates
+      - optimized_api_calls
+
+  performance_monitoring:
+    - login_performance_tracking
+    - token_refresh_performance
+    - tenant_resolution_performance
+    - route_guard_performance
+
+  security_best_practices:
+  security_implementations:
+    description: "Security best practices"
+    implementations:
+      - secure_token_storage
+      - http_only_cookies_option
+      - csrf_token_implementation
+      - secure_headers_configuration
+      - input_validation_and_sanitization
+
+  security_monitoring:
+    - authentication_attempt_logging
+    - failed_login_tracking
+    - suspicious_activity_detection
+    - security_event_monitoring
+
+  output_expectations:
+  - "Complete authentication system with MFA support"
+  - "Subdomain-based tenant resolution"
+  - "Role-based routing and access control"
+  - "Token management with automatic refresh"
+  - "Session management with timeout"
+  - "Password management with security features"
+  - "Comprehensive error handling"
+  - "Accessibility compliance"
+  - "Performance optimizations"
+  - "Security best practices"
+
+  stop_condition:
+  - "Users can login with MFA"
+  - "Tenant resolution works via subdomain"
+  - "Role-based routing functional"
+  - "Token refresh working automatically"
+  - "Session timeout implemented"
+  - "Password change functional"
+  - "Error handling user-friendly"
+  - "Accessibility features working"
+  - "Performance optimized"
+  - "Security features implemented"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade authentication system"
+  - "Focus on security and user experience"
+  - "Ensure accessibility compliance"
+  - "Implement comprehensive error handling"
+  - "Follow React best practices"
+  - "Do not implement business logic pages"

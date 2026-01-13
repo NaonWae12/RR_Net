@@ -1,0 +1,581 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_03_DASHBOARD"
+  purpose: >
+    Implement comprehensive dashboard system for RRNet SaaS including
+    role-based dashboard layouts, real-time widget system, data
+    visualization, performance monitoring, and enterprise-grade
+    responsive design with accessibility and performance optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "Dashboard APIs available"
+    - "WebSocket connection for real-time updates"
+
+  design_principles:
+    - "Role-based dashboard layouts with different widgets"
+    - "Real-time data updates via WebSocket"
+    - "Responsive design for all screen sizes"
+    - "Performance-optimized with lazy loading"
+    - "Accessibility-first with keyboard navigation"
+    - "Customizable widget arrangement"
+    - "Data visualization with interactive charts"
+
+  scope:
+    include:
+      - role_based_dashboard_layouts
+      - widget_system
+      - data_visualization
+      - real_time_updates
+      - performance_monitoring
+      - custom_dashboard_configuration
+      - mobile_responsive_design
+      - accessibility_features
+    exclude:
+      - business_logic_pages
+      - super_admin_dashboard
+      - customer_facing_ui
+      - mobile_app_ui
+
+  frontend_structure_additions:
+  src/app/dashboard/
+    - page.tsx (main dashboard)
+    - components/
+      - DashboardLayout.tsx
+      - WidgetGrid.tsx
+      - WidgetContainer.tsx
+      - DashboardHeader.tsx
+      - DateRangeSelector.tsx
+      - QuickActions.tsx
+    - widgets/
+      - BillingSummaryWidget.tsx
+      - ClientCountWidget.tsx
+      - ActiveOutageWidget.tsx
+      - UnpaidInvoiceWidget.tsx
+      - RevenueChartWidget.tsx
+      - UserActivityWidget.tsx
+      - SystemHealthWidget.tsx
+      - RecentActivitiesWidget.tsx
+      - PerformanceMetricsWidget.tsx
+      - NotificationWidget.tsx
+    - hooks/
+      - useDashboard.ts
+      - useWidgets.ts
+      - useRealTimeUpdates.ts
+      - useDashboardConfig.ts
+    - stores/
+      - dashboardStore.ts
+      - widgetStore.ts
+    - types/
+      - dashboard.ts
+      - widgets.ts
+    - utils/
+      - widgetUtils.ts
+      - dashboardUtils.ts
+
+  role_based_dashboard_layouts:
+  dashboard_layouts:
+    description: "Different dashboard layouts for different roles"
+    layouts:
+      admin_dashboard:
+        features:
+          - comprehensive_overview
+          - business_metrics
+          - operational_controls
+          - financial_summary
+          - team_performance
+        widgets:
+          - BillingSummaryWidget
+          - ClientCountWidget
+          - RevenueChartWidget
+          - ActiveOutageWidget
+          - UnpaidInvoiceWidget
+          - UserActivityWidget
+          - RecentActivitiesWidget
+          - QuickActionsWidget
+
+      technician_dashboard:
+        features:
+          - task_overview
+          - outage_status
+          - performance_metrics
+          - schedule_view
+          - location_map
+        widgets:
+          - TaskOverviewWidget
+          - OutageStatusWidget
+          - PerformanceWidget
+          - ScheduleWidget
+          - LocationMapWidget
+          - RecentActivitiesWidget
+
+      collector_dashboard:
+        features:
+          - collection_overview
+          - assigned_clients
+          - collection_progress
+          - route_optimization
+          - daily_summary
+        widgets:
+          - CollectionOverviewWidget
+          - AssignedClientsWidget
+          - CollectionProgressWidget
+          - RouteOptimizationWidget
+          - DailySummaryWidget
+
+      finance_dashboard:
+        features:
+          - financial_overview
+          - revenue_tracking
+          - expense_monitoring
+          - payment_processing
+          - financial_reports
+        widgets:
+          - FinancialOverviewWidget
+          - RevenueTrackingWidget
+          - ExpenseMonitoringWidget
+          - PaymentProcessingWidget
+          - FinancialReportsWidget
+
+    layout_configuration:
+      - grid_system: 12-column responsive grid
+      - widget_sizing: configurable widget sizes
+      - drag_and_drop: widget arrangement
+      - layout_persistence: save user preferences
+      - responsive_breakpoints: mobile, tablet, desktop
+
+  widget_system:
+  widget_framework:
+    description: "Comprehensive widget system"
+    components:
+      WidgetContainer:
+        features:
+          - widget_wrapper
+          - loading_states
+          - error_handling
+          - refresh_functionality
+          - configuration_menu
+          - resize_handles
+          - drag_handles
+        props:
+          - widget: WidgetConfig
+          - isEditing: boolean
+          - onResize: (size) => void
+          - onMove: (position) => void
+          - onRefresh: () => void
+          - onConfigure: () => void
+
+      WidgetGrid:
+        features:
+          - grid_layout_system
+          - widget_arrangement
+          - responsive_behavior
+          - drag_and_drop
+          - auto_layout
+          - grid_persistence
+        props:
+          - widgets: WidgetConfig[]
+          - layout: GridLayoutConfig
+          - isEditing: boolean
+          - onLayoutChange: (layout) => void
+
+    widget_types:
+      chart_widgets:
+        - LineChartWidget
+        - BarChartWidget
+        - PieChartWidget
+        - GaugeChartWidget
+      metric_widgets:
+        - MetricCardWidget
+        - ProgressWidget
+        - StatusWidget
+        - CounterWidget
+      table_widgets:
+        - DataTableWidget
+        - ActivityFeedWidget
+        - TaskListWidget
+      form_widgets:
+        - QuickActionWidget
+        - SearchWidget
+        - FilterWidget
+
+  widget_configuration:
+    description: "Widget configuration system"
+    widget_schema:
+      - id: string
+      - type: WidgetType
+      - title: string
+      - size: WidgetSize
+      - position: WidgetPosition
+      - config: WidgetConfigData
+      - refreshInterval: number
+      - dataSource: string
+      - permissions: string[]
+      - enabled: boolean
+
+    configuration_interface:
+      - widget_selection_menu
+      - size_configuration
+      - position_configuration
+      - data_source_configuration
+      - refresh_interval_configuration
+      - permission_configuration
+
+  data_visualization:
+  chart_components:
+    description: "Data visualization components"
+    components:
+      DashboardChart:
+        features:
+          - responsive_charts
+          - interactive_tooltips
+          - legend_configuration
+          - animation_options
+          - export_functionality
+          - real_time_updates
+        props:
+          - data: ChartData
+          - type: ChartType
+          - config: ChartConfig
+          - realTime: boolean
+          - exportable: boolean
+
+      MetricCard:
+        features:
+          - metric_display
+          - trend_indicators
+          - comparison_values
+          - progress_bars
+          - status_indicators
+          - click_actions
+        props:
+          - metric: MetricData
+          - trend: TrendData
+          - comparison: ComparisonData
+          - progress: ProgressData
+          - status: StatusData
+          - onClick: () => void
+
+    chart_types:
+      - line_charts: time series data
+      - bar_charts: categorical data
+      - pie_charts: proportional data
+      - gauge_charts: kpi metrics
+      - scatter_charts: correlation data
+      - heat_maps: density data
+
+  real_time_updates:
+  websocket_integration:
+    description: "Real-time dashboard updates"
+    components:
+      RealTimeProvider:
+        features:
+          - websocket_connection
+          - data_streaming
+          - connection_management
+          - error_handling
+          - reconnection_logic
+          - data_filtering
+        implementation:
+          - websocket_connection_management
+          - real_time_data_streaming
+          - connection_state_management
+          - error_recovery_mechanisms
+          - automatic_reconnection
+          - data_filtering_and_routing
+
+    real_time_events:
+      - dashboard_data_updates
+      - widget_data_refreshes
+      - notification_updates
+      - system_status_changes
+      - user_activity_updates
+
+    update_mechanisms:
+      - incremental_updates: update only changed data
+      - full_refresh: complete data refresh
+      - widget_specific: update specific widgets
+      - batch_updates: batch multiple updates
+      - throttled_updates: limit update frequency
+
+  performance_monitoring:
+  dashboard_performance:
+    description: "Dashboard performance monitoring"
+    components:
+      PerformanceMonitor:
+        features:
+          - widget_rendering_time
+          - data_fetching_time
+          - memory_usage_tracking
+          - cpu_usage_tracking
+          - network_request_monitoring
+        implementation:
+          - performance_metrics_collection
+          - rendering_time_measurement
+          - resource_usage_tracking
+          - network_request_monitoring
+          - performance_alerting
+
+    optimization_strategies:
+      - lazy_loading: load widgets on demand
+      - virtual_scrolling: for large data sets
+      - data_caching: cache frequently accessed data
+      - component_memoization: memoize expensive components
+      - request_deduplication: avoid duplicate requests
+
+  custom_dashboard_configuration:
+  dashboard_customization:
+    description: "Dashboard customization system"
+    components:
+      DashboardConfigurator:
+        features:
+          - widget_selection
+          - layout_configuration
+          - widget_configuration
+          - theme_customization
+          - preset_management
+          - sharing_options
+        props:
+          - dashboard: DashboardConfig
+          - availableWidgets: WidgetType[]
+          - onSave: (config) => void
+          - onShare: (config) => void
+
+    customization_features:
+      - widget_selection: choose available widgets
+      - drag_and_drop: arrange widgets
+      - size_configuration: resize widgets
+      - theme_selection: choose dashboard theme
+      - preset_management: save/load presets
+      - sharing_options: share dashboard configurations
+
+  mobile_responsive_design:
+  mobile_optimization:
+    description: "Mobile-responsive dashboard design"
+    components:
+      MobileDashboard:
+        features:
+          - mobile_layout
+          - touch_optimization
+          - swipe_gestures
+          - mobile_navigation
+          - offline_support
+        implementation:
+          - responsive_breakpoints
+          - touch_event_handling
+          - gesture_recognition
+          - mobile_navigation_patterns
+          - offline_data_caching
+
+    mobile_features:
+      - collapsible_widgets: collapse widgets on mobile
+      - swipe_navigation: swipe between dashboard sections
+      - touch_optimized: optimize for touch interactions
+      - mobile_widgets: mobile-specific widgets
+      - offline_mode: work offline with cached data
+
+  accessibility_features:
+  a11y_implementation:
+    description: "Accessibility features for dashboard"
+    components:
+      AccessibleDashboard:
+        features:
+          - keyboard_navigation
+          - screen_reader_support
+          - focus_management
+          - color_contrast
+          - reduced_motion
+          - text_scaling
+        implementation:
+          - keyboard_navigation_patterns
+          - aria_labels_and_descriptions
+          - focus_trapping_and_management
+          - color_contrast_validation
+          - motion_preferences
+          - text_scaling_support
+
+    accessibility_features:
+      - keyboard_navigation: full keyboard support
+      - screen_reader_support: screen reader compatibility
+      - focus_management: proper focus handling
+      - color_contrast: WCAG compliant colors
+      - reduced_motion: respect motion preferences
+      - text_scaling: support text scaling
+
+  state_management:
+  dashboard_store:
+    description: "Dashboard state management"
+    state:
+      - widgets: WidgetConfig[]
+      - layout: GridLayoutConfig
+      - filters: DashboardFilters
+      - dateRange: DateRange
+      - realTimeEnabled: boolean
+      - isEditing: boolean
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setWidgets: (widgets) => void
+      - setLayout: (layout) => void
+      - setFilters: (filters) => void
+      - setDateRange: (range) => void
+      - toggleRealTime: () => void
+      - setEditing: (editing) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  widget_store:
+    description: "Widget state management"
+    state:
+      - availableWidgets: WidgetType[]
+      - widgetConfigs: Record<string, WidgetConfig>
+      - widgetData: Record<string, any>
+      - widgetLoading: Record<string, boolean>
+      - widgetErrors: Record<string, string>
+    actions:
+      - setAvailableWidgets: (widgets) => void
+      - setWidgetConfig: (id, config) => void
+      - setWidgetData: (id, data) => void
+      - setWidgetLoading: (id, loading) => void
+      - setWidgetError: (id, error) => void
+
+  hooks:
+  use_dashboard:
+    description: "Dashboard hook"
+    features:
+      - dashboard_state
+      - widget_management
+      - real_time_updates
+      - performance_monitoring
+    return_values:
+      - widgets: WidgetConfig[]
+      - layout: GridLayoutConfig
+      - filters: DashboardFilters
+      - dateRange: DateRange
+      - realTimeEnabled: boolean
+      - isEditing: boolean
+      - loading: boolean
+      - error: string | null
+      - setWidgets: (widgets) => void
+      - setLayout: (layout) => void
+      - setFilters: (filters) => void
+      - setDateRange: (range) => void
+      - toggleRealTime: () => void
+      - setEditing: (editing) => void
+
+  use_widgets:
+    description: "Widget management hook"
+    features:
+      - widget_configuration
+      - widget_data_management
+      - widget_lifecycle
+      - widget_performance
+    return_values:
+      - availableWidgets: WidgetType[]
+      - widgetConfigs: Record<string, WidgetConfig>
+      - widgetData: Record<string, any>
+      - widgetLoading: Record<string, boolean>
+      - widgetErrors: Record<string, string>
+      - setWidgetConfig: (id, config) => void
+      - setWidgetData: (id, data) => void
+      - refreshWidget: (id) => void
+      - removeWidget: (id) => void
+
+  use_real_time_updates:
+    description: "Real-time updates hook"
+    features:
+      - websocket_connection
+      - data_streaming
+      - update_handling
+      - connection_management
+    return_values:
+      - connected: boolean
+      - lastUpdate: Date | null
+      - error: string | null
+      - connect: () => void
+      - disconnect: () => void
+      - subscribe: (event, handler) => void
+      - unsubscribe: (event, handler) => void
+
+  api_integration:
+  dashboard_apis:
+    description: "Dashboard API integration"
+    endpoints:
+      - GET /dashboard/config: get dashboard configuration
+      - POST /dashboard/config: save dashboard configuration
+      - GET /dashboard/widgets: get available widgets
+      - GET /dashboard/data: get dashboard data
+      - GET /dashboard/widgets/{id}/data: get widget data
+      - POST /dashboard/widgets/{id}/refresh: refresh widget data
+
+    api_methods:
+      - getDashboardConfig: () => Promise<DashboardConfig>
+      - saveDashboardConfig: (config) => Promise<void>
+      - getAvailableWidgets: () => Promise<WidgetType[]>
+      - getDashboardData: (filters) => Promise<DashboardData>
+      - getWidgetData: (id, filters) => Promise<WidgetData>
+      - refreshWidgetData: (id) => Promise<WidgetData>
+
+  testing:
+  component_testing:
+    description: "Dashboard component testing"
+    test_files:
+      - DashboardLayout.test.tsx
+      - WidgetGrid.test.tsx
+      - WidgetContainer.test.tsx
+      - DashboardChart.test.tsx
+      - MetricCard.test.tsx
+      - RealTimeProvider.test.tsx
+
+    test_utilities:
+      - mock_dashboard_store
+      - mock_widget_store
+      - mock_websocket
+      - mock_api_responses
+      - test_dashboard_providers
+
+  integration_testing:
+    description: "Dashboard integration testing"
+    test_scenarios:
+      - dashboard_rendering_integration
+      - widget_configuration_integration
+      - real_time_updates_integration
+      - performance_monitoring_integration
+      - accessibility_integration
+
+  performance_testing:
+    description: "Dashboard performance testing"
+    test_scenarios:
+      - widget_rendering_performance
+      - data_fetching_performance
+      - real_time_update_performance
+      - memory_usage_testing
+      - mobile_performance_testing
+
+  output_expectations:
+  - "Complete dashboard system with role-based layouts"
+  - "Comprehensive widget system with customization"
+  - "Real-time data updates via WebSocket"
+  - "Performance monitoring and optimization"
+  - "Mobile-responsive design"
+  - "Accessibility compliance"
+  - "Comprehensive testing coverage"
+
+  stop_condition:
+  - "Role-based dashboards functional"
+  - "Widget system working with customization"
+  - "Real-time updates functional"
+  - "Mobile responsive design working"
+  - "Accessibility features implemented"
+  - "Performance optimized"
+  - "Testing coverage complete"
+  - "Ready for business module integration"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade dashboard system"
+  - "Focus on role-based layouts and customization"
+  - "Ensure real-time updates and performance"
+  - "Implement accessibility features"
+  - "Follow React best practices"
+  - "Do not implement business-specific widgets"

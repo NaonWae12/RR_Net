@@ -1,0 +1,770 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_10_TENANT_ADMIN"
+  purpose: >
+    Implement comprehensive tenant administration system for RRNet SaaS
+    including tenant settings management, user management with role
+    assignment, billing package management, feature toggle control,
+    system configuration, reporting and analytics, and enterprise-grade
+    responsive design with accessibility and performance optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "FE_EXECUTION_03 Dashboard completed"
+    - "FE_EXECUTION_04 Client Management completed"
+    - "FE_EXECUTION_05 Billing completed"
+    - "FE_EXECUTION_06 Collector completed"
+    - "FE_EXECUTION_07 Network completed"
+    - "FE_EXECUTION_08 Maps completed"
+    - "FE_EXECUTION_09 Technician completed"
+    - "Tenant admin APIs available"
+    - "User management APIs available"
+    - "Billing package APIs available"
+    - "Feature toggle APIs available"
+
+  design_principles:
+    - "Comprehensive tenant administration with role-based access"
+    - "User management with role assignment and permissions"
+    - "Billing package management with customization"
+    - "Feature toggle control with real-time updates"
+    - "System configuration with security and compliance"
+    - "Reporting and analytics with export functionality"
+    - "Mobile-responsive design with accessibility"
+    - "Performance-optimized with virtual scrolling"
+
+  scope:
+    include:
+      - tenant_settings_management
+      - user_management_with_roles
+      - billing_package_management
+      - feature_toggle_control
+      - system_configuration
+      - reporting_and_analytics
+      - tenant_analytics
+      - security_settings
+      - compliance_settings
+      - mobile_responsive_design
+    exclude:
+      - super_admin_features
+      - multi_tenant_management
+      - advanced_analytics
+      - customer_facing_portal
+
+  frontend_structure_additions:
+  src/app/admin/
+    - page.tsx (admin dashboard)
+    - tenant/
+      - page.tsx (tenant settings)
+      - [id]/
+        - page.tsx (tenant detail)
+        - edit/
+          - page.tsx (tenant edit)
+    - users/
+      - page.tsx (user management)
+      - [id]/
+        - page.tsx (user detail)
+        - edit/
+          - page.tsx (user edit)
+        - roles/
+          - page.tsx (role management)
+    - billing/
+      - page.tsx (billing packages)
+      - [id]/
+        - page.tsx (package detail)
+        - edit/
+          - page.tsx (package edit)
+    - features/
+      - page.tsx (feature toggles)
+      - [id]/
+        - page.tsx (feature detail)
+        - edit/
+          - page.tsx (feature edit)
+    - settings/
+      - page.tsx (system settings)
+      - security/
+        - page.tsx (security settings)
+      - compliance/
+        - page.tsx (compliance settings)
+    - reports/
+      - page.tsx (tenant reports)
+      - analytics/
+        - page.tsx (tenant analytics)
+    - components/
+      - AdminDashboard.tsx
+      - TenantSettings.tsx
+      - TenantDetail.tsx
+      - TenantForm.tsx
+      - UserList.tsx
+      - UserCard.tsx
+      - UserTable.tsx
+      - UserDetail.tsx
+      - UserForm.tsx
+      - RoleManager.tsx
+      - BillingPackageList.tsx
+      - BillingPackageCard.tsx
+      - BillingPackageTable.tsx
+      - BillingPackageDetail.tsx
+      - BillingPackageForm.tsx
+      - FeatureToggleList.tsx
+      - FeatureToggleCard.tsx
+      - FeatureToggleTable.tsx
+      - FeatureToggleDetail.tsx
+      - FeatureToggleForm.tsx
+      - SystemSettings.tsx
+      - SecuritySettings.tsx
+      - ComplianceSettings.tsx
+      - TenantReports.tsx
+      - TenantAnalytics.tsx
+      - MobileAdminInterface.tsx
+    - hooks/
+      - useTenantAdmin.ts
+      - useUsers.ts
+      - useBillingPackages.ts
+      - useFeatureToggles.ts
+      - useSystemSettings.ts
+      - useTenantReports.ts
+      - useTenantAnalytics.ts
+    - stores/
+      - tenantAdminStore.ts
+      - userStore.ts
+      - billingPackageStore.ts
+      - featureToggleStore.ts
+      - systemSettingsStore.ts
+      - reportStore.ts
+      - analyticsStore.ts
+    - types/
+      - tenant.ts
+      - user.ts
+      - billing.ts
+      - feature.ts
+      - settings.ts
+      - report.ts
+      - analytics.ts
+    - utils/
+      - tenantUtils.ts
+      - userUtils.ts
+      - billingUtils.ts
+      - featureUtils.ts
+
+  tenant_settings_management:
+  tenant_settings:
+    description: "Tenant settings management system"
+    components:
+      TenantSettings:
+        features:
+          - tenant_information_display
+          - tenant_configuration_management
+          - billing_settings_management
+          - security_settings_management
+          - compliance_settings_management
+          - notification_settings_management
+          - integration_settings_management
+          - mobile_responsive_layout
+          - accessibility_support
+        props:
+          - tenantId: string
+          - onSave: (settings) => void
+          - onReset: () => void
+
+      TenantForm:
+        features:
+          - multi_step_settings_wizard
+          - real_time_validation
+          - configuration_preview
+          - mobile_responsive_form
+          - accessibility_validation
+        props:
+          - tenant?: Tenant
+          - mode: 'create' | 'edit'
+          - onSave: (tenant) => Promise<void>
+          - onCancel: () => void
+
+    settings_features:
+      - basic_settings: name, contact, domain
+      - billing_settings: currency, tax rates, invoice settings
+      - security_settings: password policies, session settings
+      - compliance_settings: data retention, audit settings
+      - notification_settings: email templates, SMS settings
+      - integration_settings: API keys, webhook settings
+
+  user_management_with_roles:
+  user_system:
+    description: "User management with role assignment"
+    components:
+      UserList:
+        features:
+          - user_list_with_filtering
+          - role_assignment_interface
+          - bulk_user_operations
+          - user_status_management
+          - user_search_functionality
+          - mobile_responsive_list
+          - accessibility_support
+        props:
+          - filters: UserFilters
+          - search: string
+          - selectedUsers: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onUserClick: (user) => void
+
+      UserTable:
+        features:
+          - sortable_columns (name, email, role, status)
+          - filterable_columns (role, status, department)
+          - column_visibility_toggle
+          - row_selection_with_bulk_actions
+          - inline_actions (edit, delete, reset password)
+          - role_badges
+          - status_indicators
+          - mobile_responsive_table
+        props:
+          - users: User[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (user) => void
+          - onSelectionChange: (ids) => void
+
+      UserDetail:
+        features:
+          - user_information_display
+          - role_information_display
+          - activity_history
+          - login_history
+          - permission_display
+          - user_settings_management
+          - mobile_responsive_layout
+        props:
+          - userId: string
+          - onEdit: () => void
+          - onDelete: () => void
+          - onResetPassword: () => void
+          - onChangeRole: (role) => void
+
+      UserForm:
+        features:
+          - multi_step_user_wizard
+          - role_assignment_interface
+          - permission_configuration
+          - user_settings_configuration
+          - mobile_responsive_form
+          - accessibility_validation
+        props:
+          - user?: User
+          - mode: 'create' | 'edit'
+          - onSave: (user) => Promise<void>
+          - onCancel: () => void
+
+      RoleManager:
+        features:
+          - role_list_with_permissions
+          - permission_configuration_interface
+          - role_hierarchy_display
+          - role_duplication_interface
+          - mobile_responsive_layout
+          - accessibility_support
+        props:
+          - roles: Role[]
+          - permissions: Permission[]
+          - onRoleCreate: (role) => Promise<void>
+          - onRoleUpdate: (id, role) => Promise<void>
+          - onRoleDelete: (id) => Promise<void>
+          - onPermissionUpdate: (roleId, permissions) => Promise<void>
+
+    user_features:
+      - user_crud_operations: create, read, update, delete
+      - role_assignment: assign users to roles
+      - permission_management: manage role permissions
+      - bulk_operations: bulk user operations
+      - user_search: search users by name, email, role
+      - user_status_management: manage user status
+      - password_management: reset user passwords
+      - activity_tracking: track user activities
+
+  billing_package_management:
+  billing_system:
+    description: "Billing package management system"
+    components:
+      BillingPackageList:
+        features:
+          - package_list_with_filtering
+          - package_configuration_interface
+          - package_duplication_interface
+          - package_status_management
+          - package_search_functionality
+          - mobile_responsive_list
+          - accessibility_support
+        props:
+          - filters: PackageFilters
+          - search: string
+          - selectedPackages: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onPackageClick: (package) => void
+
+      BillingPackageTable:
+        features:
+          - sortable_columns (name, price, type, status)
+          - filterable_columns (type, status, price_range)
+          - column_visibility_toggle
+          - row_selection_with_bulk_actions
+          - inline_actions (edit, delete, activate, deactivate)
+          - price_display_with_currency
+          - mobile_responsive_table
+        props:
+          - packages: BillingPackage[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (package) => void
+          - onSelectionChange: (ids) => void
+
+      BillingPackageDetail:
+        features:
+          - package_information_display
+          - pricing_details_display
+          - feature_list_display
+          - usage_statistics_display
+          - customer_count_display
+          - revenue_tracking_display
+          - mobile_responsive_layout
+        props:
+          - packageId: string
+          - onEdit: () => void
+          - onDelete: () => void
+          - onActivate: () => void
+          - onDeactivate: () => void
+
+      BillingPackageForm:
+        features:
+          - multi_step_package_wizard
+          - pricing_configuration_interface
+          - feature_selection_interface
+          - mobile_responsive_form
+          - accessibility_validation
+        props:
+          - package?: BillingPackage
+          - mode: 'create' | 'edit'
+          - onSave: (package) => Promise<void>
+          - onCancel: () => void
+
+    billing_features:
+      - package_crud_operations: create, read, update, delete
+      - pricing_configuration: set pricing tiers and options
+      - feature_configuration: configure package features
+      - package_duplication: duplicate existing packages
+      - package_status_management: activate/deactivate packages
+      - usage_tracking: track package usage statistics
+      - revenue_tracking: track package revenue
+
+  feature_toggle_control:
+  feature_system:
+    description: "Feature toggle control system"
+    components:
+      FeatureToggleList:
+        features:
+          - feature_list_with_filtering
+          - feature_status_management
+          - feature_configuration_interface
+          - feature_grouping_interface
+          - feature_search_functionality
+          - mobile_responsive_list
+          - accessibility_support
+        props:
+          - filters: FeatureFilters
+          - search: string
+          - selectedFeatures: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onFeatureClick: (feature) => void
+
+      FeatureToggleTable:
+        features:
+          - sortable_columns (name, group, status, last_updated)
+          - filterable_columns (group, status, category)
+          - column_visibility_toggle
+          - row_selection_with_bulk_actions
+          - inline_actions (enable, disable, configure)
+          - status_indicators
+          - mobile_responsive_table
+        props:
+          - features: Feature[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (feature) => void
+          - onSelectionChange: (ids) => void
+
+      FeatureToggleDetail:
+        features:
+          - feature_information_display
+          - feature_configuration_display
+          - feature_dependencies_display
+          - feature_usage_statistics
+          - feature_history_timeline
+          - mobile_responsive_layout
+        props:
+          - featureId: string
+          - onEnable: () => void
+          - onDisable: () => void
+          - onConfigure: () => void
+
+      FeatureToggleForm:
+        features:
+          - feature_configuration_interface
+          - dependency_configuration
+          - mobile_responsive_form
+          - accessibility_validation
+        props:
+          - feature?: Feature
+          - mode: 'create' | 'edit'
+          - onSave: (feature) => Promise<void>
+          - onCancel: () => void
+
+    feature_features:
+      - feature_crud_operations: enable, disable, configure features
+      - feature_grouping: organize features into groups
+      - feature_dependencies: manage feature dependencies
+      - feature_status_management: enable/disable features
+      - feature_configuration: configure feature parameters
+      - feature_usage_tracking: track feature usage statistics
+      - feature_history: maintain feature change history
+
+  system_configuration:
+  settings_system:
+    description: "System configuration management"
+    components:
+      SystemSettings:
+        features:
+          - system_information_display
+          - configuration_interface
+          - security_settings_integration
+          - compliance_settings_integration
+          - mobile_responsive_layout
+          - accessibility_support
+        props:
+          - onSettingsChange: (settings) => void
+          - onReset: () => void
+
+      SecuritySettings:
+        features:
+          - password_policy_configuration
+          - session_management_settings
+          - api_access_settings
+          - security_audit_settings
+          - mobile_responsive_layout
+          - accessibility_support
+        props:
+          - settings: SecuritySettings
+          - onSave: (settings) => void
+          - onReset: () => void
+
+      ComplianceSettings:
+        features:
+          - data_retention_settings
+          - audit_log_settings
+          - compliance_reporting_settings
+          - privacy_policy_settings
+          - mobile_responsive_layout
+          - accessibility_support
+        props:
+          - settings: ComplianceSettings
+          - onSave: (settings) => void
+          - onReset: () => void
+
+    settings_features:
+      - system_configuration: configure system-wide settings
+      - security_configuration: configure security policies
+      - compliance_configuration: configure compliance requirements
+      - notification_configuration: configure notification settings
+      - integration_configuration: configure integrations
+
+  reporting_and_analytics:
+  reporting_system:
+    description: "Reporting and analytics system"
+    components:
+      TenantReports:
+        features:
+          - report_generation_interface
+          - report_template_management
+          - report_scheduling
+          - report_export_functionality
+          - mobile_responsive_layout
+          - accessibility_support
+        props:
+          - reports: Report[]
+          - onGenerate: (report) => void
+          - onSchedule: (report) => void
+          - onExport: (report, format) => void
+
+      TenantAnalytics:
+        features:
+          - analytics_dashboard
+          - usage_analytics
+          - performance_analytics
+          - financial_analytics
+          - custom_analytics
+          - mobile_responsive_dashboard
+          - accessibility_support
+        props:
+          - timeRange: DateRange
+          - analyticsType: AnalyticsType
+          - onExport: (data, format) => void
+
+    reporting_features:
+      - report_generation: generate various reports
+      - report_scheduling: schedule automated reports
+      - report_export: export reports in various formats
+      - analytics_dashboard: display analytics data
+      - usage_analytics: analyze usage patterns
+      - performance_analytics: analyze performance metrics
+      - financial_analytics: analyze financial data
+
+  mobile_responsive_design:
+  mobile_optimization:
+    description: "Mobile-responsive admin interface"
+    features:
+      - touch_optimized_interfaces
+      - mobile_navigation_patterns
+      - swipe_gestures_support
+      - mobile_form_layouts
+      - mobile_dashboard_widgets
+      - offline_mode_support
+      - battery_optimization
+      - reduced_data_usage
+    implementations:
+      - responsive_breakpoints
+      - touch_event_handling
+      - gesture_recognition
+      - mobile_component_variants
+      - offline_data_caching
+      - battery_usage_monitoring
+
+  accessibility_features:
+  a11y_implementation:
+    description: "Accessibility features for admin interface"
+    features:
+      - keyboard_navigation_support
+      - screen_reader_compatibility
+      - focus_management
+      - aria_labels_and_descriptions
+      - color_contrast_compliance
+      - text_scaling_support
+      - reduced_motion_support
+    implementations:
+      - semantic_html_structure
+      - aria_attribute_implementation
+      - focus_trapping_and_management
+      - keyboard_shortcuts
+      - high_contrast_theme_support
+
+  state_management:
+  tenant_admin_store:
+    description: "Tenant admin state management"
+    state:
+      - tenant: Tenant | null
+      - users: User[]
+      - roles: Role[]
+      - billingPackages: BillingPackage[]
+      - features: Feature[]
+      - settings: SystemSettings
+      - reports: Report[]
+      - analytics: AnalyticsData
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setTenant: (tenant) => void
+      - setUsers: (users) => void
+      - setRoles: (roles) => void
+      - setBillingPackages: (packages) => void
+      - setFeatures: (features) => void
+      - setSettings: (settings) => void
+      - setReports: (reports) => void
+      - setAnalytics: (analytics) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  hooks:
+  use_tenant_admin:
+    description: "Tenant admin management hook"
+    features:
+      - tenant_data_fetching
+      - user_management
+      - billing_package_management
+      - feature_toggle_control
+      - system_configuration
+      - reporting_and_analytics
+    return_values:
+      - tenant: Tenant | null
+      - users: User[]
+      - roles: Role[]
+      - billingPackages: BillingPackage[]
+      - features: Feature[]
+      - settings: SystemSettings
+      - reports: Report[]
+      - analytics: AnalyticsData
+      - loading: boolean
+      - error: string | null
+      - getTenant: () => Promise<Tenant>
+      - createTenant: (tenant) => Promise<Tenant>
+      - updateTenant: (id, tenant) => Promise<Tenant>
+      - deleteTenant: (id) => Promise<void>
+      - getUsers: (filters) => Promise<User[]>
+      - createUser: (user) => Promise<User>
+      - updateUser: (id, user) => Promise<User>
+      - deleteUser: (id) => Promise<void>
+      - getRoles: () => Promise<Role[]>
+      - createRole: (role) => Promise<Role>
+      - updateRole: (id, role) => Promise<Role>
+      - deleteRole: (id) => Promise<void>
+      - getBillingPackages: () => Promise<BillingPackage[]>
+      - createBillingPackage: (package) => Promise<BillingPackage>
+      - updateBillingPackage: (id, package) => Promise<BillingPackage>
+      - deleteBillingPackage: (id) => Promise<void>
+      - getFeatures: () => Promise<Feature[]>
+      - enableFeature: (featureId) => Promise<void>
+      - disableFeature: (featureId) => Promise<void>
+      - updateFeature: (id, feature) => Promise<Feature>
+      - getSettings: () => Promise<SystemSettings>
+      - updateSettings: (settings) => Promise<SystemSettings>
+      - getReports: () => Promise<Report[]>
+      - generateReport: (report) => Promise<Report>
+      - getAnalytics: (timeRange, type) => Promise<AnalyticsData>
+      - setSystemSettings: (settings) => void
+
+  api_integration:
+  tenant_admin_apis:
+    description: "Tenant admin API integration"
+    endpoints:
+      - GET /admin/tenant: get tenant information
+      - PUT /admin/tenant: update tenant information
+      - GET /admin/users: get user list
+      - POST /admin/users: create user
+      - GET /admin/users/{id}: get user details
+      - PUT /admin/users/{id}: update user
+      - DELETE /admin/users/{id}: delete user
+      - GET /admin/roles: get role list
+      - POST /admin/roles: create role
+      - GET /admin/roles/{id}: get role details
+      - PUT /admin/roles/{id}: update role
+      - DELETE /admin/roles/{id}: delete role
+      - GET /admin/billing/packages: get billing packages
+      - POST /admin/billing/packages: create billing package
+      - GET /admin/billing/packages/{id}: get billing package details
+      - PUT /admin/billing/packages/{id}: update billing package
+      - DELETE /admin/billing/packages/{id}: delete billing package
+      - GET /admin/features: get feature list
+      - POST /admin/features/{id}/enable: enable feature
+      - POST /admin/features/{id}/disable: disable feature
+      - PUT /admin/features/{id}: update feature
+      - GET /admin/settings: get system settings
+      - PUT /admin/settings: update system settings
+      - GET /admin/reports: get reports
+      - POST /admin/reports/generate: generate report
+      - GET /admin/analytics: get analytics data
+
+    api_methods:
+      - getTenant: () => Promise<Tenant>
+      - updateTenant: (tenant) => Promise<Tenant>
+      - getUsers: (filters) => Promise<User[]>
+      - createUser: (user) => Promise<User>
+      - getUser: (id) => Promise<User>
+      - updateUser: (id, user) => Promise<User>
+      - deleteUser: (id) => Promise<void>
+      - getRoles: () => Promise<Role[]>
+      - createRole: (role) => Promise<Role>
+      - getRole: (id) => Promise<Role>
+      - updateRole: (id, role) => Promise<Role>
+      - deleteRole: (id) => Promise<void>
+      - getBillingPackages: () => Promise<BillingPackage[]>
+      - createBillingPackage: (package) => Promise<BillingPackage>
+      - getBillingPackage: (id) => Promise<BillingPackage>
+      - updateBillingPackage: (id, package) => Promise<BillingPackage>
+      - deleteBillingPackage: (id) => Promise<void>
+      - getFeatures: () => Promise<Feature[]>
+      - enableFeature: (featureId) => Promise<void>
+      - disableFeature: (featureId) => Promise<void>
+      - updateFeature: (id, feature) => Promise<Feature>
+      - getSettings: () => Promise<SystemSettings>
+      - updateSettings: (settings) => Promise<SystemSettings>
+      - getReports: () => Promise<Report[]>
+      - generateReport: (report) => Promise<Report>
+      - getAnalytics: (timeRange, type) => Promise<AnalyticsData>
+
+  testing:
+  component_testing:
+    description: "Tenant admin component testing"
+    test_files:
+      - TenantSettings.test.tsx
+      - UserList.test.tsx
+      - UserTable.test.tsx
+      - UserDetail.test.tsx
+      - UserForm.test.tsx
+      - RoleManager.test.tsx
+      - BillingPackageList.test.tsx
+      - BillingPackageTable.test.tsx
+      - BillingPackageDetail.test.tsx
+      - BillingPackageForm.test.tsx
+      - FeatureToggleList.test.tsx
+      - FeatureToggleTable.test.tsx
+      - FeatureToggleDetail.test.tsx
+      - FeatureToggleForm.test.tsx
+      - SystemSettings.test.tsx
+      - SecuritySettings.test.tsx
+      - ComplianceSettings.test.tsx
+      - TenantReports.test.tsx
+      - TenantAnalytics.test.tsx
+
+    test_utilities:
+      - mock_tenant_data
+      - mock_user_data
+      - mock_billing_package_data
+      - mock_feature_data
+      - test_providers
+
+  integration_testing:
+    description: "Tenant admin integration testing"
+    test_scenarios:
+      - tenant_settings_workflow
+      - user_management_workflow
+      - billing_package_management_workflow
+      - feature_toggle_workflow
+      - system_configuration_workflow
+      - reporting_workflow
+      - analytics_workflow
+
+  output_expectations:
+  - "Complete tenant administration system"
+  - "User management with role assignment"
+  - "Billing package management"
+  - "Feature toggle control"
+  - "System configuration"
+  - "Reporting and analytics"
+  - "Mobile-responsive design"
+  - "Accessibility compliance"
+  - "Performance optimization"
+
+  stop_condition:
+  - "Tenant settings management functional"
+  - "User management with role assignment working"
+  - "Billing package management working"
+  - "Feature toggle control working"
+  - "System configuration working"
+  - "Reporting and analytics working"
+  - "Mobile-responsive design implemented"
+  - "Accessibility features working"
+  - "Performance optimized"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade tenant admin system"
+  - "Focus on user management and role assignment"
+  - "Ensure mobile responsiveness and accessibility"
+  - "Implement comprehensive reporting"
+  - "Follow React best practices"
+  - "Do not implement super admin features"

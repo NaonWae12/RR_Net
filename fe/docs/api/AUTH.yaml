@@ -1,0 +1,14 @@
+AUTH:
+  POST /auth/login:
+    response:
+      data:
+        access_token: string
+        refresh_token: string
+        user:
+          id: uuid
+          role: string
+          capabilities: string[]
+          is_default_password: boolean
+
+  POST /auth/refresh
+  POST /auth/logout

@@ -1,0 +1,5 @@
+SUPER_ADMIN_RULES:
+  path_prefix: /sa
+  auth_scope: global
+  tenant_context: forbidden
+  role_required: super_admin

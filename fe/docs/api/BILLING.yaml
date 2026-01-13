@@ -1,0 +1,5 @@
+BILLING: GET /invoices
+
+PAYMENT: POST /payments/cash/visit-success
+  POST /payments/cash/deposit
+  POST /payments/cash/confirm

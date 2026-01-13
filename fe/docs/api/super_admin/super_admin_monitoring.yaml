@@ -1,0 +1,2 @@
+SUPER_ADMIN_MONITORING: GET /sa/health
+  GET /sa/metrics

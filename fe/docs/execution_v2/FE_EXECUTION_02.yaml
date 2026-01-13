@@ -1,0 +1,820 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_02_DYNAMIC_ROUTES_LAYOUT"
+  purpose: >
+    Implement comprehensive dynamic routing and layout system for RRNet SaaS
+    including capability-based menu generation, role-aware page guards,
+    responsive sidebar navigation, breadcrumb system, theme switching,
+    and enterprise-grade layout components with accessibility and performance
+    optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "User capabilities and roles available"
+    - "Backend APIs for menu configuration"
+
+  design_principles:
+    - "Capability-based dynamic route generation"
+    - "Role-aware page protection and navigation"
+    - "Responsive layout with mobile optimization"
+    - "Accessibility-first navigation system"
+    - "Performance-optimized with code splitting"
+    - "Consistent design system across all layouts"
+    - "Theme support with dark/light modes"
+
+  scope:
+    include:
+      - dynamic_route_generation
+      - capability_based_navigation
+      - role_aware_page_guards
+      - responsive_layout_system
+      - sidebar_navigation
+      - breadcrumb_navigation
+      - theme_switching
+      - search_functionality
+      - quick_actions_menu
+      - help_documentation
+      - forbidden_not_found_handling
+    exclude:
+      - business_logic_pages
+      - super_admin_specific_layouts
+      - customer_facing_ui
+      - mobile_app_ui
+
+  frontend_structure_additions:
+  src/app/
+    layout/
+      - page.tsx (root layout)
+      - components/
+        - AppLayout.tsx
+        - PublicLayout.tsx
+        - AuthLayout.tsx
+        - SidebarLayout.tsx
+        - DashboardLayout.tsx
+        - MobileLayout.tsx
+    navigation/
+      - components/
+        - Sidebar.tsx
+        - SidebarItem.tsx
+        - SidebarGroup.tsx
+        - TopNavigation.tsx
+        - Breadcrumb.tsx
+        - QuickActions.tsx
+        - SearchNavigation.tsx
+        - HelpMenu.tsx
+      - hooks/
+        - useNavigation.ts
+        - useSidebar.ts
+        - useBreadcrumb.ts
+        - useSearch.ts
+      - stores/
+        - navigationStore.ts
+        - sidebarStore.ts
+        - themeStore.ts
+      - types/
+        - navigation.ts
+        - layout.ts
+        - theme.ts
+    guards/
+      - components/
+        - RouteGuard.tsx
+        - CapabilityGuard.tsx
+        - RoleGuard.tsx
+        - FeatureGuard.tsx
+        - NotFoundGuard.tsx
+        - ForbiddenGuard.tsx
+      - hooks/
+        - useRouteGuard.ts
+        - useCapabilityGuard.ts
+        - useRoleGuard.ts
+    theme/
+      - components/
+        - ThemeProvider.tsx
+        - ThemeToggle.tsx
+        - ThemeSelector.tsx
+      - hooks/
+        - useTheme.ts
+      - stores/
+        - themeStore.ts
+      - styles/
+        - globals.css
+        - themes.css
+        - components.css
+
+  dynamic_route_generation:
+  route_config_system:
+    description: "Dynamic route configuration based on user capabilities"
+    components:
+      RouteGenerator:
+        features:
+          - capability_based_route_filtering
+          - role_based_route_filtering
+          - feature_toggle_integration
+          - dynamic_route_registration
+          - route_metadata_management
+        implementation:
+          - filter_routes_by_capabilities
+          - generate_route_tree
+          - register_dynamic_routes
+          - cache_route_configurations
+
+    route_configuration:
+      description: "Route configuration schema and management"
+    route_schema:
+      - path: string
+      - name: string
+      - icon: ReactNode
+      - component: LazyComponent
+      - requiredCapabilities: string[]
+      - requiredRoles: string[]
+      - requiredFeatures: string[]
+      - children: RouteConfig[]
+      - metadata: RouteMetadata
+      - layout: LayoutType
+      - hidden: boolean
+      - external: boolean
+      - target: '_blank' | '_self'
+
+    route_types:
+      - public_routes: no authentication required
+      - authenticated_routes: authentication required
+      - role_specific_routes: specific roles required
+      - capability_specific_routes: specific capabilities required
+      - feature_specific_routes: specific features required
+      - admin_routes: admin capabilities required
+      - super_admin_routes: super admin role required
+
+  capability_based_navigation:
+  navigation_generator:
+    description: "Generate navigation based on user capabilities"
+    components:
+      NavigationGenerator:
+        features:
+          - capability_based_menu_generation
+          - hierarchical_menu_structure
+          - dynamic_menu_updates
+          - menu_caching
+          - menu_search_integration
+        implementation:
+          - parse_user_capabilities
+          - generate_menu_structure
+          - filter_menu_items
+          - cache_menu_configuration
+
+    menu_configuration:
+      description: "Menu configuration schema"
+    menu_schema:
+      - id: string
+      - label: string
+      - icon: ReactNode
+      - path: string
+      - requiredCapabilities: string[]
+      - requiredRoles: string[]
+      - requiredFeatures: string[]
+      - children: MenuItem[]
+      - badge: BadgeConfig
+      - external: boolean
+      - target: string
+      - hidden: boolean
+      - order: number
+
+    menu_types:
+      - main_menu: primary navigation
+      - secondary_menu: secondary navigation
+      - user_menu: user account menu
+      - quick_actions: quick action items
+      - help_menu: help and documentation
+
+  role_aware_page_guards:
+  route_guard_system:
+    description: "Comprehensive route guard system"
+    components:
+      RouteGuard:
+        features:
+          - authentication_check
+          - role_validation
+          - capability_validation
+          - feature_toggle_check
+          - custom_validation_rules
+          - redirect_handling
+          - loading_states
+        implementation:
+          - check_user_authentication
+          - validate_required_roles
+          - validate_required_capabilities
+          - check_feature_toggles
+          - handle_unauthorized_access
+          - show_loading_states
+
+      CapabilityGuard:
+        features:
+          - capability_validation
+          - multiple_capability_check
+          - capability_hierarchy_support
+          - custom_capability_logic
+        props:
+          capabilities: string | string[]
+          operator: 'AND' | 'OR'
+          fallback?: ReactNode
+          children: ReactNode
+
+      RoleGuard:
+        features:
+          - role_validation
+          - multiple_role_check
+          - role_hierarchy_support
+          - custom_role_logic
+        props:
+          roles: string | string[]
+          operator: 'AND' | 'OR'
+          fallback?: ReactNode
+          children: ReactNode
+
+      FeatureGuard:
+        features:
+          - feature_toggle_check
+          - multiple_feature_check
+          - custom_feature_logic
+        props:
+          features: string | string[]
+          operator: 'AND' | 'OR'
+          fallback?: ReactNode
+          children: ReactNode
+
+    guard_types:
+      - authentication_guard: check if user is authenticated
+      - authorization_guard: check if user has required permissions
+      - feature_guard: check if feature is enabled
+      - custom_guard: custom validation logic
+      - composite_guard: combine multiple guards
+
+  responsive_layout_system:
+  layout_components:
+    description: "Responsive layout component system"
+    components:
+      AppLayout:
+        features:
+          - responsive_design
+          - mobile_optimization
+          - accessibility_features
+          - theme_support
+          - loading_states
+          - error_boundaries
+        implementation:
+          - responsive_breakpoints
+          - mobile_navigation
+          - accessibility_attributes
+          - theme_integration
+          - loading_skeletons
+          - error_handling
+
+      SidebarLayout:
+        features:
+          - collapsible_sidebar
+          - mobile_responsive
+          - sidebar_state_persistence
+          - keyboard_navigation
+          - touch_gestures
+        implementation:
+          - sidebar_toggle_logic
+          - mobile_adaptation
+          - state_persistence
+          - keyboard_navigation
+          - touch_gesture_handling
+
+      DashboardLayout:
+        features:
+          - dashboard_grid_system
+          - widget_management
+          - drag_and_drop
+          - responsive_widgets
+          - widget_caching
+        implementation:
+          - grid_layout_system
+          - widget_management
+          - drag_drop_functionality
+          - responsive_widget_design
+          - widget_performance_optimization
+
+    layout_types:
+      - public_layout: for public pages
+      - auth_layout: for authentication pages
+      - dashboard_layout: for dashboard pages
+      - sidebar_layout: for pages with sidebar
+      - mobile_layout: for mobile devices
+      - fullscreen_layout: for fullscreen content
+
+  sidebar_navigation:
+  sidebar_components:
+    description: "Comprehensive sidebar navigation system"
+    components:
+      Sidebar:
+        features:
+          - collapsible_sections
+          - active_state_tracking
+          - keyboard_navigation
+          - touch_gestures
+          - search_functionality
+          - badge_notifications
+          - custom_actions
+        implementation:
+          - section_collapse_logic
+          - active_state_management
+          - keyboard_navigation
+          - touch_gesture_handling
+          - search_integration
+          - badge_system
+          - custom_action_handling
+
+      SidebarItem:
+        features:
+          - active_state
+          - hover_states
+          - keyboard_navigation
+          - accessibility_attributes
+          - custom_renderers
+          - badge_support
+        props:
+          - item: MenuItem
+          - active: boolean
+          - expanded: boolean
+          - onClick: (item) => void
+          - customRenderer: (item) => ReactNode
+
+      SidebarGroup:
+        features:
+          - collapsible_groups
+          - group_badges
+          - custom_group_headers
+          - nested_groups
+          - group_search_filtering
+        props:
+          - group: MenuGroup
+          - expanded: boolean
+          - onToggle: (expanded) => void
+          - customHeader: (group) => ReactNode
+
+    sidebar_features:
+      - collapsible_sections: expand/collapse menu sections
+      - active_state_tracking: highlight current page
+      - keyboard_navigation: full keyboard support
+      - touch_gestures: mobile touch support
+      - search_functionality: search menu items
+      - badge_notifications: show notification badges
+      - custom_actions: custom action buttons
+      - state_persistence: remember sidebar state
+
+  breadcrumb_navigation:
+  breadcrumb_components:
+    description: "Breadcrumb navigation system"
+    components:
+      Breadcrumb:
+        features:
+          - automatic_breadcrumb_generation
+          - custom_breadcrumb_items
+          - home_breadcrumb
+          - separator_customization
+          - max_items_limit
+          - accessibility_attributes
+        implementation:
+          - route_based_generation
+          - custom_item_support
+          - home_item_handling
+          - separator_customization
+          - item_limiting
+          - accessibility_implementation
+
+      BreadcrumbItem:
+        features:
+          - clickable_items
+          - custom_renderers
+          - icon_support
+          - accessibility_attributes
+          - dropdown_menus
+        props:
+          - item: BreadcrumbItem
+          - isLast: boolean
+          - onClick: (item) => void
+          - customRenderer: (item) => ReactNode
+
+    breadcrumb_features:
+      - automatic_generation: generate from route
+      - custom_items: override automatic generation
+      - home_item: always include home
+      - separator_customization: custom separators
+      - max_items: limit breadcrumb items
+      - accessibility: full accessibility support
+
+  theme_switching:
+  theme_system:
+    description: "Theme switching system"
+    components:
+      ThemeProvider:
+        features:
+          - multiple_theme_support
+          - theme_persistence
+          - system_theme_detection
+          - theme_transition_animations
+          - accessibility_theme_options
+        implementation:
+          - theme_state_management
+          - local_storage_persistence
+          - system_theme_detection
+          - transition_animations
+          - accessibility_options
+
+      ThemeToggle:
+        features:
+          - theme_switching
+          - system_theme_option
+          - theme_preview
+          - keyboard_shortcuts
+          - accessibility_labels
+        props:
+          - showSystemTheme: boolean
+          - onThemeChange: (theme) => void
+          - shortcut: string
+
+    theme_types:
+      - light_theme: default light theme
+      - dark_theme: dark theme
+      - system_theme: follow system preference
+      - high_contrast_theme: accessibility theme
+      - custom_themes: user-defined themes
+
+  search_functionality:
+  search_components:
+    description: "Global search functionality"
+    components:
+      SearchNavigation:
+        features:
+          - global_search
+          - menu_search
+          - page_search
+          - quick_navigation
+          - keyboard_shortcuts
+          - search_history
+        implementation:
+          - search_indexing
+          - search_filtering
+          - result_ranking
+          - keyboard_navigation
+          - history_tracking
+
+      SearchResults:
+        features:
+          - search_results_display
+          - result_highlighting
+          - category_filtering
+          - quick_actions
+          - accessibility_attributes
+        props:
+          - query: string
+          - results: SearchResult[]
+          - onResultClick: (result) => void
+          - categories: SearchCategory[]
+
+    search_features:
+      - global_search: search across all content
+      - menu_search: search menu items
+      - page_search: search page content
+      - quick_navigation: navigate to results
+      - keyboard_shortcuts: search shortcuts
+      - search_history: recent searches
+
+  quick_actions_menu:
+  quick_actions_components:
+    description: "Quick actions menu system"
+    components:
+      QuickActions:
+        features:
+          - contextual_actions
+          - custom_actions
+          - action_shortcuts
+          - action_categories
+          - action_permissions
+          - keyboard_shortcuts
+        implementation:
+          - context_detection
+          - action_filtering
+          - permission_validation
+          - shortcut_handling
+          - category_organization
+
+      QuickAction:
+        features:
+          - action_execution
+          - loading_states
+          - error_handling
+          - confirmation_dialogs
+          - accessibility_attributes
+        props:
+          - action: QuickAction
+          - onExecute: (action) => void
+          - loading: boolean
+          - error?: string
+
+    quick_actions_features:
+      - contextual_actions: context-aware actions
+      - custom_actions: user-defined actions
+      - action_shortcuts: keyboard shortcuts
+      - action_categories: organized by category
+      - action_permissions: permission-based actions
+
+  help_documentation:
+  help_components:
+    description: "Help and documentation system"
+    components:
+      HelpMenu:
+        features:
+          - help_categories
+          - documentation_links
+          - video_tutorials
+          - faq_section
+          - contact_support
+          - accessibility_help
+        implementation:
+          - help_content_organization
+          - documentation_integration
+          - tutorial_integration
+          - faq_integration
+          - support_integration
+
+      HelpContent:
+        features:
+          - markdown_rendering
+          - video_embedding
+          - interactive_tutorials
+          - search_functionality
+          - accessibility_features
+        props:
+          - content: HelpContent
+          - searchable: boolean
+          - interactive: boolean
+
+    help_features:
+      - help_categories: organized help content
+      - documentation_links: link to documentation
+      - video_tutorials: video tutorials
+      - faq_section: frequently asked questions
+      - contact_support: support contact options
+      - accessibility_help: accessibility help
+
+  forbidden_not_found_handling:
+  error_pages:
+    description: "Error page handling system"
+    components:
+      NotFoundPage:
+        features:
+          - custom_404_page
+          - search_suggestions
+          - helpful_links
+          - contact_options
+          - accessibility_attributes
+        implementation:
+          - custom_404_design
+          - search_integration
+          - link_suggestions
+          - contact_integration
+
+      ForbiddenPage:
+        features:
+          - custom_403_page
+          - permission_explanation
+          - contact_admin
+          - request_access
+          - accessibility_attributes
+        implementation:
+          - custom_403_design
+          - permission_explanation
+          - contact_admin_integration
+          - access_request_integration
+
+    error_features:
+      - custom_404_page: personalized 404 page
+      - search_suggestions: suggest relevant pages
+      - helpful_links: provide helpful links
+      - contact_options: contact support options
+      - accessibility_attributes: accessibility support
+
+  state_management:
+  navigation_store:
+    description: "Navigation state management"
+    state:
+      - currentRoute: RouteConfig | null
+      - menuItems: MenuItem[]
+      - sidebarOpen: boolean
+      - sidebarCollapsed: boolean
+      - breadcrumbs: BreadcrumbItem[]
+      - searchQuery: string
+      - searchResults: SearchResult[]
+      - quickActions: QuickAction[]
+      - theme: ThemeConfig
+    actions:
+      - setCurrentRoute: (route) => void
+      - setMenuItems: (items) => void
+      - toggleSidebar: () => void
+      - setSidebarCollapsed: (collapsed) => void
+      - setBreadcrumbs: (items) => void
+      - setSearchQuery: (query) => void
+      - setSearchResults: (results) => void
+      - setQuickActions: (actions) => void
+      - setTheme: (theme) => void
+
+  sidebar_store:
+    description: "Sidebar state management"
+    state:
+      - isOpen: boolean
+      - isCollapsed: boolean
+      - activeItem: string | null
+      - expandedGroups: string[]
+      - searchQuery: string
+      - filteredItems: MenuItem[]
+    actions:
+      - toggleSidebar: () => void
+      - setCollapsed: (collapsed) => void
+      - setActiveItem: (item) => void
+      - toggleGroup: (groupId) => void
+      - setSearchQuery: (query) => void
+      - setFilteredItems: (items) => void
+
+  theme_store:
+    description: "Theme state management"
+    state:
+      - currentTheme: string
+      - systemTheme: string
+      - customThemes: ThemeConfig[]
+      - themeTransition: boolean
+    actions:
+      - setTheme: (theme) => void
+      - setSystemTheme: (theme) => void
+      - addCustomTheme: (theme) => void
+      - removeCustomTheme: (themeId) => void
+      - setThemeTransition: (transition) => void
+
+  hooks:
+  use_navigation:
+    description: "Navigation hook"
+    features:
+      - route_information
+      - navigation_actions
+      - breadcrumb_generation
+      - search_functionality
+    return_values:
+      - currentRoute: RouteConfig | null
+      - menuItems: MenuItem[]
+      - breadcrumbs: BreadcrumbItem[]
+      - navigate: (path) => void
+      - search: (query) => SearchResult[]
+      - setActiveItem: (item) => void
+
+  use_sidebar:
+    description: "Sidebar hook"
+    features:
+      - sidebar_state
+      - sidebar_actions
+      - item_activation
+      - group_expansion
+    return_values:
+      - isOpen: boolean
+      - isCollapsed: boolean
+      - activeItem: string | null
+      - expandedGroups: string[]
+      - toggleSidebar: () => void
+      - setCollapsed: (collapsed) => void
+      - setActiveItem: (item) => void
+      - toggleGroup: (groupId) => void
+
+  use_breadcrumb:
+    description: "Breadcrumb hook"
+    features:
+      - breadcrumb_generation
+      - custom_breadcrumbs
+      - breadcrumb_navigation
+    return_values:
+      - breadcrumbs: BreadcrumbItem[]
+      - setBreadcrumbs: (items) => void
+      - navigateToBreadcrumb: (item) => void
+
+  use_theme:
+    description: "Theme hook"
+    features:
+      - theme_information
+      - theme_switching
+      - system_theme_detection
+      - custom_theme_management
+    return_values:
+      - currentTheme: string
+      - systemTheme: string
+      - customThemes: ThemeConfig[]
+      - setTheme: (theme) => void
+      - addCustomTheme: (theme) => void
+      - removeCustomTheme: (themeId) => void
+
+  performance_optimizations:
+  code_splitting:
+    description: "Code splitting for routes and components"
+    implementations:
+      - route_based_code_splitting
+      - component_based_code_splitting
+      - vendor_code_splitting
+      - dynamic_imports
+      - preloading_critical_routes
+
+  memoization:
+    description: "Memoization for expensive operations"
+    implementations:
+      - route_config_memoization
+      - menu_generation_memoization
+      - search_results_memoization
+      - theme_calculation_memoization
+
+  caching:
+    description: "Caching for frequently accessed data"
+    implementations:
+      - route_config_caching
+      - menu_items_caching
+      - search_results_caching
+      - theme_settings_caching
+
+  accessibility:
+  a11y_features:
+    description: "Accessibility features"
+    implementations:
+      - keyboard_navigation
+      - screen_reader_support
+      - focus_management
+      - aria_labels
+      - color_contrast
+      - reduced_motion
+
+  accessibility_components:
+    - SkipLink: skip to main content
+    - FocusTrap: trap focus within components
+    - Announcer: announce changes to screen readers
+    - KeyboardNavigation: keyboard navigation support
+
+  testing:
+  component_testing:
+    description: "Component testing setup"
+    test_files:
+      - RouteGenerator.test.tsx
+      - NavigationGenerator.test.tsx
+      - Sidebar.test.tsx
+      - Breadcrumb.test.tsx
+      - ThemeProvider.test.tsx
+      - RouteGuard.test.tsx
+
+    test_utilities:
+      - mock_navigation_store
+      - mock_sidebar_store
+      - mock_theme_store
+      - mock_route_config
+      - test_navigation_providers
+
+  integration_testing:
+    description: "Integration testing setup"
+    test_scenarios:
+      - route_generation_integration
+      - navigation_integration
+      - theme_switching_integration
+      - accessibility_integration
+      - performance_integration
+
+  output_expectations:
+  - "Complete dynamic routing system"
+  - "Capability-based navigation"
+  - "Role-aware page guards"
+  - "Responsive layout system"
+  - "Sidebar navigation"
+  - "Breadcrumb navigation"
+  - "Theme switching"
+  - "Search functionality"
+  - "Quick actions menu"
+  - "Help documentation"
+  - "Error page handling"
+  - "Performance optimizations"
+  - "Accessibility features"
+
+  stop_condition:
+  - "Dynamic routes generated based on capabilities"
+  - "Navigation filtered by roles and capabilities"
+  - "Page guards working correctly"
+  - "Responsive layouts functional"
+  - "Sidebar navigation working"
+  - "Breadcrumb navigation working"
+  - "Theme switching functional"
+  - "Search functionality working"
+  - "Quick actions menu working"
+  - "Help documentation accessible"
+  - "Error pages displayed correctly"
+  - "Performance optimized"
+  - "Accessibility compliant"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade routing and layout system"
+  - "Focus on capability-based navigation"
+  - "Ensure accessibility compliance"
+  - "Implement performance optimizations"
+  - "Follow React best practices"
+  - "Do not implement business logic pages"

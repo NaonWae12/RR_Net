@@ -1,0 +1,7 @@
+SUPER_ADMIN_PLAN: GET /sa/plans
+  POST /sa/plans
+  PATCH /sa/plans/{id}
+
+SUPER_ADMIN_ADDON: GET /sa/addons
+  POST /sa/addons
+  PATCH /sa/addons/{id}

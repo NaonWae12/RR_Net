@@ -1,0 +1,991 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_06_COLLECTOR"
+  purpose: >
+    Implement comprehensive collector system for RRNet SaaS
+    including collection assignments, 3-phase cash collection workflow,
+    route optimization, mobile-optimized interface, offline support,
+    GPS tracking, photo capture, and enterprise-grade responsive
+    design with accessibility and performance optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "FE_EXECUTION_03 Dashboard completed"
+    - "FE_EXECUTION_04 Client Management completed"
+    - "FE_EXECUTION_05 Billing completed"
+    - "Collector APIs available"
+    - "Client management APIs available"
+    - "Billing APIs available"
+    - "GPS/location APIs available"
+
+  design_principles:
+    - "Mobile-first design optimized for field operations"
+    - "3-phase cash collection workflow with clear status tracking"
+    - "Offline mode support with data synchronization"
+    - "GPS location tracking and route optimization"
+    - "Photo capture for collection proof"
+    - "Real-time progress updates and notifications"
+    - "Accessibility-first with touch optimization"
+    - "Performance-optimized for mobile devices"
+
+  scope:
+    include:
+      - collector_dashboard
+      - collection_assignments
+      - 3_phase_collection_workflow
+      - route_optimization
+      - client_location_mapping
+      - daily_collection_summary
+      - mobile_optimized_interface
+      - offline_mode_support
+      - gps_location_tracking
+      - photo_capture_functionality
+      - client_communication
+      - collection_performance_metrics
+    exclude:
+      - super_admin_collector_management
+      - advanced_route_optimization
+      - customer_facing_collection_portal
+      - financial_analytics_features
+
+  frontend_structure_additions:
+  src/app/collector/
+    - page.tsx (collector dashboard)
+    - assignments/
+      - page.tsx (collection assignments)
+      - [id]/
+        - page.tsx (collection detail)
+        - visit/
+          - page.tsx (visit success)
+        - deposit/
+          - page.tsx (deposit submission)
+        - activities/
+          - page.tsx (collection activities)
+    - routes/
+      - page.tsx (route optimization)
+      - [id]/
+        - page.tsx (route detail)
+    - summary/
+      - page.tsx (daily summary)
+      - performance/
+        - page.tsx (performance metrics)
+    - components/
+      - CollectorDashboard.tsx
+      - AssignmentList.tsx
+      - AssignmentCard.tsx
+      - AssignmentDetail.tsx
+      - CollectionWorkflow.tsx
+      - VisitSuccessForm.tsx
+      - DepositForm.tsx
+      - RouteOptimizer.tsx
+      - RouteMap.tsx
+      - ClientLocation.tsx
+      - DailySummary.tsx
+      - PerformanceMetrics.tsx
+      - PhotoCapture.tsx
+      - GPSTracker.tsx
+      - OfflineIndicator.tsx
+      - SyncStatus.tsx
+    - hooks/
+      - useCollector.ts
+      - useAssignments.ts
+      - useCollectionWorkflow.ts
+      - useRouteOptimization.ts
+      - useGPSTracking.ts
+      - useOfflineMode.ts
+      - usePhotoCapture.ts
+    - stores/
+      - collectorStore.ts
+      - assignmentStore.ts
+      - offlineStore.ts
+      - gpsStore.ts
+    - types/
+      - collector.ts
+      - assignment.ts
+      - collection.ts
+      - route.ts
+    - utils/
+      - collectorUtils.ts
+      - offlineUtils.ts
+      - gpsUtils.ts
+
+  collector_dashboard:
+  dashboard_layout:
+    description: "Mobile-optimized collector dashboard"
+    components:
+      CollectorDashboard:
+        features:
+          - today_assignments_overview
+          - collection_progress_summary
+          - route_optimization_suggestions
+          - weather_information
+          - quick_actions
+          - performance_metrics_summary
+          - offline_mode_indicator
+          - sync_status_display
+          - mobile_optimized_layout
+          - touch_optimized_controls
+        props:
+          - collectorId: string
+          - date: Date
+          - onAssignmentClick: (assignment) => void
+          - onRouteOptimize: () => void
+          - onRefresh: () => void
+
+    dashboard_widgets:
+      - TodayAssignmentsWidget: show today's collection assignments
+      - CollectionProgressWidget: show collection progress
+      - RouteOptimizationWidget: show route suggestions
+      - WeatherWidget: show weather information
+      - QuickActionsWidget: quick action buttons
+      - PerformanceWidget: performance metrics
+      - OfflineModeWidget: offline mode status
+      - SyncStatusWidget: sync status
+
+  collection_assignments:
+  assignment_list:
+    description: "Collection assignments list with mobile optimization"
+    components:
+      AssignmentList:
+        features:
+          - mobile_optimized_list_view
+          - assignment_filtering (status, priority, location)
+          - search_functionality
+          - sort_options (priority, distance, due_date)
+          - bulk_actions (mark visited, mark completed)
+          - offline_mode_support
+          - real_time_updates
+          - touch_optimized_controls
+          - swipe_actions
+          - gps_distance_display
+          - estimated_travel_time
+        props:
+          - date: Date
+          - filters: AssignmentFilters
+          - search: string
+          - selectedAssignments: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onAssignmentClick: (assignment) => void
+
+      AssignmentCard:
+        features:
+          - mobile_optimized_card_layout
+          - client_information_display
+          - collection_amount_display
+          - payment_status_badge
+          - collection_status_indicator
+          - gps_distance_and_direction
+          - quick_action_buttons
+          - swipe_gestures
+          - offline_mode_indicator
+          - priority_badge
+          - due_date_highlight
+        props:
+          - assignment: CollectionAssignment
+          - compact: boolean
+          - showActions: boolean
+          - onClick: (assignment) => void
+          - onVisitSuccess: (assignment) => void
+          - onDeposit: (assignment) => void
+
+  assignment_detail:
+    description: "Detailed assignment view with mobile optimization"
+    components:
+      AssignmentDetail:
+        features:
+          - tabbed_interface (overview, client, route, activities)
+          - client_information_display
+          - collection_history_timeline
+          - route_information_with_map
+          - activity_log_display
+          - quick_action_buttons
+          - offline_mode_support
+          - real_time_updates
+          - mobile_responsive_layout
+          - touch_optimized_controls
+        props:
+          - assignmentId: string
+          - activeTab: string
+          - onTabChange: (tab) => void
+          - onVisitSuccess: () => void
+          - onDeposit: () => void
+          - onNavigate: () => void
+
+      AssignmentOverview:
+        features:
+          - assignment_information_display
+          - collection_status_badge
+          - payment_status_indicator
+          - due_date_countdown
+          - client_contact_information
+          - collection_amount_display
+          - priority_badge
+          - last_activity_display
+          - quick_actions
+        props:
+          - assignment: CollectionAssignment
+          - onEdit: () => void
+          - onCallClient: () => void
+          - onNavigate: () => void
+
+      AssignmentClient:
+        features:
+          - client_information_display
+          - client_contact_details
+          - client_location_with_map
+          - client_payment_history
+          - client_collection_history
+          - client_notes_display
+          - client_communication_options
+          - photo_gallery
+        props:
+          - clientId: string
+          - onCall: () => void
+          - onMessage: () => void
+          - onNavigate: () => void
+
+      AssignmentRoute:
+        features:
+          - route_map_display
+          - turn_by_turn_directions
+          - estimated_travel_time
+          - traffic_information
+          - alternative_routes
+          - offline_map_support
+          - gps_tracking
+          - route_optimization_suggestions
+        props:
+          - assignmentId: string
+          - onOptimizeRoute: () => void
+          - onNavigate: () => void
+
+  3_phase_collection_workflow:
+  collection_workflow:
+    description: "3-phase cash collection workflow"
+    components:
+      CollectionWorkflow:
+        features:
+          - phase_status_visualization
+          - phase_progress_tracking
+          - phase_transition_validation
+          - offline_mode_support
+          - real_time_updates
+          - error_handling_with_retry
+          - audit_trail_logging
+          - mobile_optimized_interface
+          - touch_optimized_controls
+        props:
+          - assignmentId: string
+          - currentPhase: CollectionPhase
+          - onPhaseChange: (phase) => void
+          - onWorkflowComplete: () => void
+
+      PhaseStatusIndicator:
+        features:
+          - phase_visualization
+          - progress_percentage
+          - phase_completion_status
+          - phase_transition_animation
+          - accessibility_labels
+        props:
+          - phases: CollectionPhase[]
+          - currentPhase: CollectionPhase
+          - completedPhases: string[]
+
+  visit_success_phase:
+    description: "Visit success phase of collection workflow"
+    components:
+      VisitSuccessForm:
+        features:
+          - client_contact_confirmation
+          - visit_notes_field
+          - photo_capture_capability
+          - gps_location_capture
+          - timestamp_capture
+          - offline_mode_support
+          - form_validation
+          - mobile_optimized_layout
+          - touch_optimized_controls
+        props:
+          - assignmentId: string
+          - clientId: string
+          - onSubmit: (data) => Promise<void>
+          - onCancel: () => void
+          - offlineMode: boolean
+
+      PhotoCapture:
+        features:
+          - camera_interface
+          - photo_preview
+          - photo_annotation
+          - photo_validation
+          - offline_photo_storage
+          - photo_compression
+          - multiple_photo_support
+          - camera_switching
+          - flash_control
+        props:
+          - onCapture: (photo) => void
+          - onRetake: () => void
+          - maxPhotos: number
+          - requiredPhotos: number
+
+      GPSCapture:
+        features:
+          - gps_location_capture
+          - location_accuracy_display
+          - address_autocomplete
+          - manual_location_entry
+          - offline_location_storage
+          - location_validation
+          - map_display
+        props:
+          - onLocationCapture: (location) => void
+          - requiredAccuracy: number
+          - allowManualEntry: boolean
+
+  deposit_submission_phase:
+    description: "Deposit submission phase of collection workflow"
+    components:
+      DepositForm:
+        features:
+          - amount_collection_field
+          - payment_method_selection
+          - deposit_notes_field
+          - receipt_number_field
+          - photo_capture_capability
+          - offline_mode_support
+          - form_validation
+          - mobile_optimized_layout
+          - touch_optimized_controls
+        props:
+          - assignmentId: string
+          - clientId: string
+          - expectedAmount: number
+          - onSubmit: (data) => Promise<void>
+          - onCancel: () => void
+          - offlineMode: boolean
+
+      PaymentMethodSelector:
+        features:
+          - payment_method_selection
+          - method_validation
+          - custom_method_entry
+          - method_notes_field
+          - mobile_optimized_selection
+        props:
+          - availableMethods: PaymentMethod[]
+          - selectedMethod: PaymentMethod
+          - onChange: (method) => void
+          - allowCustom: boolean
+
+  route_optimization:
+  route_optimizer:
+    description: "Route optimization for collection assignments"
+    components:
+      RouteOptimizer:
+        features:
+          - route_calculation_algorithm
+          - traffic_aware_optimization
+          - priority_based_routing
+          - time_window_constraints
+          - vehicle_capacity_constraints
+          - real_time_traffic_updates
+          - alternative_route_suggestions
+          - route_comparison
+          - export_functionality
+          - offline_mode_support
+        props:
+          - assignments: CollectionAssignment[]
+          - constraints: RouteConstraints
+          - onRouteCalculated: (route) => void
+          - onExport: (route) => void
+
+      RouteMap:
+        features:
+          - interactive_route_display
+          - assignment_markers
+          - turn_by_turn_directions
+          - traffic_overlay
+          - offline_map_support
+          - mobile_optimized_map
+          - touch_gestures
+          - route_animation
+        props:
+          - route: OptimizedRoute
+          - assignments: CollectionAssignment[]
+          - onAssignmentClick: (assignment) => void
+          - onNavigate: () => void
+
+  client_location_mapping:
+  location_mapping:
+    description: "Client location mapping and navigation"
+    components:
+      ClientLocation:
+        features:
+          - interactive_map_display
+          - client_location_markers
+          - gps_navigation
+          - offline_map_support
+          - location_search
+          - distance_calculation
+          - turn_by_turn_directions
+          - mobile_optimized_map
+          - touch_gestures
+        props:
+          - clientId: string
+          - onNavigate: () => void
+          - onCall: () => void
+          - showDirections: boolean
+
+      LocationSearch:
+        features:
+          - address_autocomplete
+          - location_search
+          - map_integration
+          - offline_search_support
+          - recent_locations
+          - favorite_locations
+        props:
+          - onLocationSelect: (location) => void
+          - onCurrentLocation: () => void
+          - allowManualEntry: boolean
+
+  daily_collection_summary:
+  summary_components:
+    description: "Daily collection summary and reporting"
+    components:
+      DailySummary:
+        features:
+          - collection_progress_visualization
+          - financial_summary_display
+          - performance_metrics
+          - client_visit_summary
+          - route_efficiency_metrics
+          - time_tracking_summary
+          - offline_mode_support
+          - export_functionality
+          - mobile_optimized_layout
+        props:
+          - collectorId: string
+          - date: Date
+          - onExport: (format) => void
+          - onRefresh: () => void
+
+      CollectionProgress:
+        features:
+          - progress_visualization
+          - completion_percentage
+          - remaining_assignments
+          - estimated_completion_time
+          - performance_comparison
+          - achievement_badges
+        props:
+          - summary: DailySummary
+          - targetGoals: CollectionGoals
+
+      FinancialSummary:
+        features:
+          - collected_amount_display
+          - pending_amount_display
+          - payment_method_breakdown
+          - expense_tracking
+          - commission_calculation
+          - currency_formatting
+        props:
+          - summary: DailySummary
+          - currency: string
+
+  mobile_optimized_interface:
+  mobile_optimization:
+    description: "Mobile-optimized interface for field operations"
+    features:
+      - touch_optimized_controls
+      - swipe_gestures
+      - offline_mode_support
+      - responsive_design
+      - large_touch_targets
+      - mobile_navigation_patterns
+      - battery_optimization
+      - data_compression
+      - background_sync
+
+    mobile_components:
+      - MobileNavigation: mobile-optimized navigation
+      - TouchOptimizedButton: large touch targets
+      - SwipeableCard: swipe gesture support
+      - OfflineIndicator: offline mode status
+      - BatteryOptimizer: battery usage optimization
+      - DataCompressor: data compression for mobile
+
+  offline_mode_support:
+  offline_functionality:
+    description: "Offline mode support for field operations"
+    components:
+      OfflineManager:
+        features:
+          - offline_data_storage
+          - sync_status_display
+          - conflict_resolution
+          - offline_queue_management
+          - data_compression
+          - background_sync
+          - storage_management
+        props:
+          - onSyncComplete: () => void
+          - onConflict: (conflict) => void
+          - onStorageFull: () => void
+
+      OfflineQueue:
+        features:
+          - operation_queue_display
+          - queue_priority_management
+          - retry_mechanism
+          - conflict_resolution
+          - progress_tracking
+        props:
+          - operations: OfflineOperation[]
+          - onRetry: (operation) => void
+          - onResolve: (operation) => void
+
+  gps_location_tracking:
+  gps_tracking:
+    description: "GPS location tracking for field operations"
+    components:
+      GPSTracker:
+        features:
+          - real_time_location_tracking
+          - location_accuracy_monitoring
+          - location_history_logging
+          - geofence_support
+          - battery_optimization
+          - background_tracking
+          - location_validation
+        props:
+          - onLocationUpdate: (location) => void
+          - onGeofenceEnter: (fence) => void
+          - onGeofenceExit: (fence) => void
+          - accuracyThreshold: number
+
+      LocationHistory:
+        features:
+          - location_history_display
+          - route_visualization
+          - speed_tracking
+          - distance_calculation
+          - export_functionality
+        props:
+          - history: LocationHistory[]
+          - onExport: (format) => void
+
+  photo_capture_functionality:
+  photo_system:
+    description: "Photo capture system for collection proof"
+    components:
+      PhotoCapture:
+        features:
+          - camera_interface
+          - photo_preview
+          - photo_annotation
+          - photo_validation
+          - offline_photo_storage
+          - photo_compression
+          - multiple_photo_support
+          - camera_switching
+          - flash_control
+          - timestamp_capture
+          - gps_location_tagging
+        props:
+          - onCapture: (photo) => void
+          - onRetake: () => void
+          - maxPhotos: number
+          - requiredPhotos: number
+          - allowAnnotation: boolean
+          - requireLocation: boolean
+
+      PhotoGallery:
+        features:
+          - photo_gallery_display
+          - photo_viewer
+          - photo_annotation_display
+          - photo_export
+          - photo_deletion
+          - photo_sharing
+        props:
+          - photos: Photo[]
+          - onDelete: (photoId) => void
+          - onShare: (photo) => void
+          - onExport: (format) => void
+
+  client_communication:
+  communication_system:
+    description: "Client communication system for collectors"
+    components:
+      ClientCommunication:
+        features:
+          - call_client_functionality
+          - message_client_functionality
+          - email_client_functionality
+          - communication_history
+          - template_messages
+          - offline_message_queue
+          - delivery_tracking
+        props:
+          - clientId: string
+          - onCall: () => void
+          - onMessage: (message) => void
+          - onEmail: (email) => void
+
+      CommunicationHistory:
+        features:
+          - communication_timeline
+          - message_content_display
+          - delivery_status_tracking
+          - response_tracking
+          - export_functionality
+        props:
+          - clientId: string
+          - communications: Communication[]
+          - onExport: (format) => void
+
+  collection_performance_metrics:
+  performance_tracking:
+    description: "Performance metrics for collectors"
+    components:
+      PerformanceMetrics:
+        features:
+          - collection_efficiency_metrics
+          - time_tracking_metrics
+          - route_optimization_metrics
+          - client_satisfaction_metrics
+          - financial_performance_metrics
+          - achievement_tracking
+          - leaderboard_display
+          - trend_analysis
+          - export_functionality
+        props:
+          - collectorId: string
+          - dateRange: DateRange
+          - onExport: (format) => void
+
+      PerformanceCharts:
+        features:
+          - collection_trend_charts
+          - efficiency_charts
+          - time_analysis_charts
+          - financial_performance_charts
+          - interactive_charts
+          - mobile_optimized_charts
+        props:
+          - data: PerformanceData[]
+          - chartType: ChartType
+          - onDrillDown: (data) => void
+
+  state_management:
+  collector_store:
+    description: "Collector state management"
+    state:
+      - assignments: CollectionAssignment[]
+      - selectedAssignments: string[]
+      - currentAssignment: CollectionAssignment | null
+      - workflowState: WorkflowState
+      - offlineMode: boolean
+      - syncStatus: SyncStatus
+      - gpsLocation: Location | null
+      - performanceMetrics: PerformanceMetrics
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setAssignments: (assignments) => void
+      - setSelectedAssignments: (ids) => void
+      - setCurrentAssignment: (assignment) => void
+      - setWorkflowState: (state) => void
+      - setOfflineMode: (offline) => void
+      - setSyncStatus: (status) => void
+      - setGPSLocation: (location) => void
+      - setPerformanceMetrics: (metrics) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  assignment_store:
+    description: "Assignment state management"
+    state:
+      - assignments: CollectionAssignment[]
+      - filters: AssignmentFilters
+      - search: string
+      - pagination: PaginationState
+      - selectedAssignments: string[]
+      - loading: boolean
+      - error: string | null
+    actions:
+      - setAssignments: (assignments) => void
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setPagination: (pagination) => void
+      - setSelectedAssignments: (ids) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+
+  offline_store:
+    description: "Offline mode state management"
+    state:
+      - offlineMode: boolean
+      - offlineQueue: OfflineOperation[]
+      - syncStatus: SyncStatus
+      - storageUsage: StorageUsage
+      - lastSyncTime: Date | null
+      - conflicts: SyncConflict[]
+    actions:
+      - setOfflineMode: (offline) => void
+      - addToQueue: (operation) => void
+      - removeFromQueue: (operationId) => void
+      - setSyncStatus: (status) => void
+      - setStorageUsage: (usage) => void
+      - setLastSyncTime: (time) => void
+      - setConflicts: (conflicts) => void
+
+  gps_store:
+    description: "GPS tracking state management"
+    state:
+      - currentLocation: Location | null
+      - locationHistory: LocationHistory[]
+      - trackingEnabled: boolean
+      - accuracy: number
+      - lastUpdateTime: Date | null
+      - geofences: Geofence[]
+    actions:
+      - setCurrentLocation: (location) => void
+      - setLocationHistory: (history) => void
+      - setTrackingEnabled: (enabled) => void
+      - setAccuracy: (accuracy) => void
+      - setLastUpdateTime: (time) => void
+      - setGeofences: (geofences) => void
+
+  hooks:
+  use_collector:
+    description: "Collector management hook"
+    features:
+      - collector_data_fetching
+      - assignment_management
+      - workflow_management
+      - performance_tracking
+      - offline_mode_management
+    return_values:
+      - assignments: CollectionAssignment[]
+      - currentAssignment: CollectionAssignment | null
+      - workflowState: WorkflowState
+      - performanceMetrics: PerformanceMetrics
+      - offlineMode: boolean
+      - syncStatus: SyncStatus
+      - loading: boolean
+      - error: string | null
+      - getAssignments: (filters) => Promise<CollectionAssignment[]>
+      - getAssignment: (id) => Promise<CollectionAssignment>
+      - updateAssignment: (id, data) => Promise<CollectionAssignment>
+      - completeWorkflowPhase: (phase) => Promise<void>
+      - getPerformanceMetrics: (dateRange) => Promise<PerformanceMetrics>
+      - setOfflineMode: (offline) => void
+      - syncData: () => Promise<void>
+
+  use_assignments:
+    description: "Assignment management hook"
+    features:
+      - assignment_data_fetching
+      - assignment_filtering
+      - assignment_search
+      - bulk_operations
+      - offline_support
+    return_values:
+      - assignments: CollectionAssignment[]
+      - filters: AssignmentFilters
+      - search: string
+      - pagination: PaginationState
+      - selectedAssignments: string[]
+      - loading: boolean
+      - error: string | null
+      - getAssignments: (filters) => Promise<CollectionAssignment[]>
+      - updateAssignment: (id, data) => Promise<CollectionAssignment>
+      - bulkAction: (action, ids) => Promise<BulkActionResult>
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setSelectedAssignments: (ids) => void
+
+  use_collection_workflow:
+    description: "Collection workflow management hook"
+    features:
+      - workflow_state_management
+      - phase_transitions
+      - offline_workflow_support
+      - validation_and_error_handling
+    return_values:
+      - workflowState: WorkflowState
+      - currentPhase: CollectionPhase
+      - completedPhases: string[]
+      - validation: WorkflowValidation
+      - loading: boolean
+      - error: string | null
+      - transitionPhase: (phase) => Promise<void>
+      - validatePhase: (phase) => boolean
+      - resetWorkflow: () => void
+
+  use_route_optimization:
+    description: "Route optimization hook"
+    features:
+      - route_calculation
+      - traffic_aware_optimization
+      - constraint_handling
+      - offline_route_support
+    return_values:
+      - optimizedRoute: OptimizedRoute | null
+      - routeCalculation: boolean
+      - trafficData: TrafficData
+      - constraints: RouteConstraints
+      - loading: boolean
+      - error: string | null
+      - calculateRoute: (assignments, constraints) => Promise<OptimizedRoute>
+      - updateConstraints: (constraints) => void
+
+  use_gps_tracking:
+    description: "GPS tracking hook"
+    features:
+      - location_tracking
+      - accuracy_monitoring
+      - geofence_monitoring
+      - battery_optimization
+    return_values:
+      - currentLocation: Location | null
+      - locationHistory: LocationHistory[]
+      - accuracy: number
+      - trackingEnabled: boolean
+      - geofences: Geofence[]
+      - loading: boolean
+      - error: string | null
+      - startTracking: () => void
+      - stopTracking: () => void
+      - getCurrentLocation: () => Promise<Location>
+      - setGeofences: (geofences) => void
+
+  use_offline_mode:
+    description: "Offline mode management hook"
+    features:
+      - offline_mode_management
+      - data_synchronization
+      - conflict_resolution
+      - storage_management
+    return_values:
+      - offlineMode: boolean
+      - syncStatus: SyncStatus
+      - queueSize: number
+      - storageUsage: StorageUsage
+      - conflicts: SyncConflict[]
+      - loading: boolean
+      - error: string | null
+      - setOfflineMode: (offline) => void
+      - syncData: () => Promise<void>
+      - resolveConflict: (conflict) => void
+      - clearQueue: () => void
+
+  api_integration:
+  collector_apis:
+    description: "Collector API integration"
+    endpoints:
+      - GET /collector/assignments: get collection assignments
+      - GET /collector/assignments/{id}: get assignment details
+      - PUT /collector/assignments/{id}: update assignment
+      - POST /collector/assignments/{id}/visit-success: mark visit success
+      - POST /collector/assignments/{id}/deposit: submit deposit
+      - GET /collector/routes/optimize: get optimized route
+      - POST /collector/performance: submit performance data
+      - GET /collector/performance: get performance metrics
+      - GET /collector/summary: get daily summary
+      - POST /collector/photos: upload photos
+      - GET /collector/clients/{id}/location: get client location
+
+    api_methods:
+      - getAssignments: (filters) => Promise<CollectionAssignment[]>
+      - getAssignment: (id) => Promise<CollectionAssignment>
+      - updateAssignment: (id, data) => Promise<CollectionAssignment>
+      - markVisitSuccess: (id, data) => Promise<void>
+      - submitDeposit: (id, data) => Promise<void>
+      - getOptimizedRoute: (assignments, constraints) => Promise<OptimizedRoute>
+      - submitPerformanceData: (data) => Promise<void>
+      - getPerformanceMetrics: (dateRange) => Promise<PerformanceMetrics>
+      - getDailySummary: (date) => Promise<DailySummary>
+      - uploadPhotos: (photos) => Promise<UploadResult>
+      - getClientLocation: (clientId) => Promise<Location>
+
+  testing:
+  component_testing:
+    description: "Collector component testing"
+    test_files:
+      - CollectorDashboard.test.tsx
+      - AssignmentList.test.tsx
+      - AssignmentCard.test.tsx
+      - CollectionWorkflow.test.tsx
+      - VisitSuccessForm.test.tsx
+      - DepositForm.test.tsx
+      - RouteOptimizer.test.tsx
+      - GPSTracker.test.tsx
+      - PhotoCapture.test.tsx
+
+    test_utilities:
+      - mock_collector_data
+      - mock_gps_data
+      - mock_offline_storage
+      - test_mobile_providers
+      - user_event_setup
+
+  integration_testing:
+    description: "Collector integration testing"
+    test_scenarios:
+      - collection_workflow_integration
+      - offline_mode_integration
+      - gps_tracking_integration
+      - route_optimization_integration
+      - photo_capture_integration
+      - mobile_responsive_integration
+
+  mobile_testing:
+    description: "Mobile-specific testing"
+    test_scenarios:
+      - touch_interaction_testing
+      - offline_functionality_testing
+      - battery_usage_testing
+      - network_connectivity_testing
+      - device_compatibility_testing
+
+  output_expectations:
+  - "Complete collector system with mobile optimization"
+  - "3-phase cash collection workflow"
+  - "Route optimization with traffic awareness"
+  - "GPS location tracking and navigation"
+  - "Photo capture for collection proof"
+  - "Offline mode support with data sync"
+  - "Client communication capabilities"
+  - "Performance metrics tracking"
+  - "Mobile-responsive design"
+  - "Accessibility compliance"
+
+  stop_condition:
+  - "Collector dashboard functional with mobile optimization"
+  - "3-phase collection workflow working"
+  - "Route optimization functional"
+  - "GPS tracking working with accuracy monitoring"
+  - "Photo capture functional with offline support"
+  - "Offline mode working with sync"
+  - "Client communication functional"
+  - "Performance metrics tracking working"
+  - "Mobile-responsive design implemented"
+  - "Accessibility features working"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement mobile-first collector system"
+  - "Focus on field operation optimization"
+  - "Ensure offline mode functionality"
+  - "Implement GPS tracking and photo capture"
+  - "Follow mobile accessibility best practices"
+  - "Optimize for battery usage and data"
+  - "Do not implement super admin features"

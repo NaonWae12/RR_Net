@@ -1,0 +1,3 @@
+WA:
+  POST /wa/send:
+    internal_only: true

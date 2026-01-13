@@ -1,0 +1,4 @@
+SUPER_ADMIN_TENANT: GET /sa/tenants
+  POST /sa/tenants
+  POST /sa/tenants/{id}/suspend
+  POST /sa/tenants/{id}/unsuspend

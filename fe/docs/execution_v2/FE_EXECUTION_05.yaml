@@ -1,0 +1,838 @@
+execution_prompt:
+  id: "RRNET_FE_EXECUTION_05_BILLING"
+  purpose: >
+    Implement comprehensive billing system for RRNet SaaS including
+    invoice management, payment processing, billing packages,
+    payment history, cash collection workflow, billing analytics,
+    and enterprise-grade responsive design with accessibility and
+    performance optimization.
+
+  prerequisites:
+    - "FE_EXECUTION_00 Foundation completed"
+    - "FE_EXECUTION_01 Auth + Tenant Resolution completed"
+    - "FE_EXECUTION_02 Dynamic Routes + Layout completed"
+    - "FE_EXECUTION_03 Dashboard completed"
+    - "FE_EXECUTION_04 Client Management completed"
+    - "Billing APIs available"
+    - "Payment gateway APIs available"
+    - "Cash collection APIs available"
+
+  design_principles:
+    - "Comprehensive invoice lifecycle management"
+    - "Multiple payment method support (gateway, manual, cash)"
+    - "Real-time payment status updates via WebSocket"
+    - "3-phase cash collection workflow integration"
+    - "Mobile-responsive design with touch optimization"
+    - "Accessibility-first with keyboard navigation"
+    - "Performance-optimized with virtual scrolling"
+    - "Enterprise-grade reporting and analytics"
+
+  scope:
+    include:
+      - invoice_management
+      - payment_processing
+      - billing_package_management
+      - payment_history_tracking
+      - cash_collection_workflow
+      - billing_analytics
+      - payment_method_configuration
+      - billing_reports
+      - export_functionality
+      - mobile_responsive_design
+    exclude:
+      - super_admin_billing_management
+      - customer_facing_billing_portal
+      - advanced_financial_analytics
+      - tax_calculation_features
+
+  frontend_structure_additions:
+  src/app/billing/
+    - page.tsx (billing overview)
+    - invoices/
+      - page.tsx (invoice list)
+      - [id]/
+        - page.tsx (invoice detail)
+        - edit/
+          - page.tsx (invoice edit)
+        - payment/
+          - page.tsx (payment processing)
+    - packages/
+      - page.tsx (billing packages)
+      - [id]/
+        - page.tsx (package detail)
+        - edit/
+          - page.tsx (package edit)
+    - payments/
+      - page.tsx (payment history)
+      - methods/
+        - page.tsx (payment methods)
+      - [id]/
+        - page.tsx (payment detail)
+    - reports/
+      - page.tsx (billing reports)
+      - analytics/
+        - page.tsx (billing analytics)
+    - cash-collection/
+      - page.tsx (cash collection dashboard)
+      - assignments/
+        - page.tsx (collector assignments)
+      - [id]/
+        - page.tsx (collection detail)
+    - components/
+      - InvoiceList.tsx
+      - InvoiceCard.tsx
+      - InvoiceTable.tsx
+      - InvoiceDetail.tsx
+      - InvoiceForm.tsx
+      - PaymentStatusBadge.tsx
+      - PaymentProcessor.tsx
+      - PaymentHistory.tsx
+      - BillingPackageList.tsx
+      - BillingPackageForm.tsx
+      - CashCollectionWorkflow.tsx
+      - BillingReports.tsx
+      - BillingAnalytics.tsx
+      - PaymentMethodConfig.tsx
+      - InvoiceExport.tsx
+    - hooks/
+      - useInvoices.ts
+      - usePayments.ts
+      - useBillingPackages.ts
+      - useCashCollection.ts
+      - useBillingReports.ts
+      - usePaymentMethods.ts
+    - stores/
+      - billingStore.ts
+      - invoiceStore.ts
+      - paymentStore.ts
+    - types/
+      - billing.ts
+      - invoice.ts
+      - payment.ts
+      - billingPackage.ts
+      - cashCollection.ts
+    - utils/
+      - billingUtils.ts
+      - invoiceUtils.ts
+      - paymentUtils.ts
+
+  invoice_management:
+  invoice_list_component:
+    description: "Comprehensive invoice list with advanced features"
+    components:
+      InvoiceList:
+        features:
+          - virtual_scrolling_for_large_datasets
+          - advanced_filtering_and_search
+          - bulk_operations (send reminders, export, bulk delete)
+          - real_time_status_updates
+          - invoice_lifecycle_visualization
+          - payment_status_indicators
+          - overdue_invoice_highlighting
+          - export_functionality
+          - mobile_responsive_design
+          - keyboard_navigation
+          - accessibility_features
+        props:
+          - filters: InvoiceFilters
+          - search: string
+          - selectedInvoices: string[]
+          - onSelectionChange: (ids) => void
+          - onBulkAction: (action, ids) => void
+          - onExport: (format) => void
+          - onInvoiceClick: (invoice) => void
+
+      InvoiceTable:
+        features:
+          - sortable_columns (date, amount, status, client)
+          - filterable_columns (status, date_range, client, amount)
+          - column_visibility_toggle
+          - row_selection_with_bulk_actions
+          - inline_actions (view, edit, delete, send reminder)
+          - status_badges_with_color_coding
+          - payment_progress_bars
+          - overdue_indicators
+          - export_options
+          - pagination_with_page_size_control
+        props:
+          - invoices: Invoice[]
+          - loading: boolean
+          - pagination: PaginationConfig
+          - onSort: (column, direction) => void
+          - onFilter: (filters) => void
+          - onRowClick: (invoice) => void
+          - onSelectionChange: (ids) => void
+
+      InvoiceCard:
+        features:
+          - mobile_optimized_layout
+          - status_badge_with_animation
+          - payment_progress_indicator
+          - quick_action_buttons
+          - client_information_display
+          - due_date_highlighting
+          - overdue_warning
+          - payment_method_badge
+          - swipe_actions_for_mobile
+        props:
+          - invoice: Invoice
+          - compact: boolean
+          - showActions: boolean
+          - onClick: (invoice) => void
+          - onPay: (invoice) => void
+          - onSendReminder: (invoice) => void
+
+  invoice_detail_view:
+    description: "Comprehensive invoice detail view"
+    components:
+      InvoiceDetail:
+        features:
+          - tabbed_interface (overview, payments, activities, history)
+          - real_time_payment_status_updates
+          - payment_processing_interface
+          - invoice_editing_capability
+          - payment_reminder_sending
+          - invoice_duplication
+          - pdf_generation_and_download
+          - email_invoice_functionality
+          - payment_history_timeline
+          - activity_log_display
+          - mobile_responsive_layout
+          - accessibility_navigation
+        props:
+          - invoiceId: string
+          - activeTab: string
+          - onTabChange: (tab) => void
+          - onEdit: () => void
+          - onPay: () => void
+          - onSendReminder: () => void
+          - onDuplicate: () => void
+
+      InvoiceOverview:
+        features:
+          - invoice_information_display
+          - client_details_with_link
+          - billing_package_information
+          - payment_status_with_progress
+          - due_date_with_countdown
+          - overdue_warnings
+          - payment_method_information
+          - invoice_amount_breakdown
+          - tax_information_display
+          - discount_information
+        props:
+          - invoice: Invoice
+          - onEditClient: (clientId) => void
+          - onEditPackage: (packageId) => void
+
+      InvoicePayments:
+        features:
+          - payment_history_timeline
+          - payment_status_badges
+          - payment_method_indicators
+          - payment_amount_breakdown
+          - refund_information
+          - partial_payment_tracking
+          - payment_receipt_downloads
+          - payment_note_display
+          - add_payment_functionality
+          - refund_payment_functionality
+        props:
+          - invoiceId: string
+          - payments: Payment[]
+          - onAddPayment: () => void
+          - onRefundPayment: (paymentId) => void
+
+  invoice_creation_editing:
+    description: "Invoice creation and editing forms"
+    components:
+      InvoiceForm:
+        features:
+          - multi_step_form_wizard
+          - client_selection_with_search
+          - billing_package_selection
+          - custom_invoice_amount
+          - due_date_configuration
+          - payment_method_selection
+          - tax_calculation
+          - discount_application
+          - line_item_management
+          - note_and_memo_fields
+          - recurring_invoice_setup
+          - preview_before_save
+          - auto_save_draft
+          - form_validation_with_real_time_feedback
+          - mobile_responsive_layout
+        props:
+          - invoice?: Invoice
+          - mode: 'create' | 'edit'
+          - clients: Client[]
+          - packages: BillingPackage[]
+          - onSave: (invoice) => Promise<void>
+          - onCancel: () => void
+          - onSaveDraft: (invoice) => void
+
+      InvoiceLineItems:
+        features:
+          - dynamic_line_item_management
+          - line_item_calculation
+          - quantity_and_price_fields
+          - description_fields
+          - tax_rate_selection
+          - discount_application
+          - total_calculation
+          - line_item_removal
+          - line_item_duplication
+          - bulk_line_item_operations
+        props:
+          - lineItems: LineItem[]
+          - onChange: (lineItems) => void
+          - onAddItem: () => void
+          - onRemoveItem: (index) => void
+          - onDuplicateItem: (index) => void
+
+  payment_processing:
+  payment_processor_component:
+    description: "Payment processing interface"
+    components:
+      PaymentProcessor:
+        features:
+          - multiple_payment_method_support
+          - real_time_payment_validation
+          - payment_amount_calculation
+          - payment_fee_calculation
+          - payment_confirmation_flow
+          - payment_receipt_generation
+          - payment_status_updates
+          - error_handling_with_retry
+          - mobile_optimized_payment_flow
+          - accessibility_compliance
+        props:
+          - invoice: Invoice
+          - paymentMethods: PaymentMethod[]
+          - onPaymentComplete: (payment) => void
+          - onPaymentError: (error) => void
+          - onCancel: () => void
+
+      PaymentMethodSelector:
+        features:
+          - payment_method_selection
+          - payment_method_configuration
+          - saved_payment_methods
+          - new_payment_method_addition
+          - payment_method_validation
+          - payment_method_icons
+          - payment_method_descriptions
+          - mobile_optimized_selection
+        props:
+          - availableMethods: PaymentMethod[]
+          - selectedMethod: PaymentMethod
+          - onMethodChange: (method) => void
+          - onAddNewMethod: () => void
+
+      PaymentConfirmation:
+        features:
+          - payment_confirmation_display
+          - payment_details_review
+          - payment_fee_breakdown
+          - payment_terms_acceptance
+          - payment_processing_animation
+          - payment_success_confirmation
+          - payment_receipt_display
+          - payment_error_handling
+          - retry_payment_option
+        props:
+          - payment: Payment
+          - onConfirm: () => void
+          - onCancel: () => void
+          - onRetry: () => void
+
+  payment_history_tracking:
+  payment_history_component:
+    description: "Payment history tracking interface"
+    components:
+      PaymentHistory:
+        features:
+          - payment_history_timeline
+          - payment_status_filtering
+          - payment_method_filtering
+          - date_range_filtering
+          - payment_amount_filtering
+          - payment_receipt_downloads
+          - payment_refund_tracking
+          - payment_note_display
+          - export_functionality
+          - real_time_updates
+          - mobile_responsive_design
+        props:
+          - invoiceId?: string
+          - clientId?: string
+          - filters: PaymentFilters
+          - onExport: (format) => void
+          - onViewReceipt: (paymentId) => void
+
+      PaymentReceipt:
+        features:
+          - payment_receipt_display
+          - payment_details_breakdown
+          - payment_method_information
+          - payment_confirmation_number
+          - payment_timestamp
+          - download_pdf_functionality
+          - email_receipt_functionality
+          - print_receipt_functionality
+          - mobile_optimized_display
+        props:
+          - payment: Payment
+          - onDownload: () => void
+          - onEmail: () => void
+          - onPrint: () => void
+
+  billing_package_management:
+  billing_package_components:
+    description: "Billing package management interface"
+    components:
+      BillingPackageList:
+        features:
+          - package_listing_with_search
+          - package_filtering_by_type
+          - package_comparison
+          - package_usage_statistics
+          - package_editing_capabilities
+          - package_duplication
+          - package_archiving
+          - export_functionality
+          - mobile_responsive_design
+        props:
+          - packages: BillingPackage[]
+          - loading: boolean
+          - onEdit: (package) => void
+          - onDuplicate: (package) => void
+          - onArchive: (packageId) => void
+          - onExport: (format) => void
+
+      BillingPackageForm:
+        features:
+          - package_configuration_form
+          - package_pricing_setup
+          - package_feature_selection
+          - package_billing_cycle_configuration
+          - package_tax_configuration
+          - package_discount_rules
+          - package_usage_limits
+          - package_description_editor
+          - package_image_upload
+          - package_preview
+          - form_validation
+          - mobile_responsive_layout
+        props:
+          - package?: BillingPackage
+          - mode: 'create' | 'edit'
+          - onSave: (package) => Promise<void>
+          - onCancel: () => void
+          - onPreview: (package) => void
+
+  cash_collection_workflow:
+  cash_collection_components:
+    description: "Cash collection workflow interface"
+    components:
+      CashCollectionWorkflow:
+        features:
+          - 3_phase_collection_workflow
+          - collector_assignment_interface
+          - visit_success_tracking
+          - deposit_submission_tracking
+          - finance_confirmation_tracking
+          - collection_progress_visualization
+          - collection_performance_metrics
+          - mobile_optimized_workflow
+          - offline_mode_support
+          - gps_location_tracking
+        props:
+          - collectorId?: string
+          - assignments: CollectionAssignment[]
+          - onVisitSuccess: (assignmentId) => void
+          - onDepositSubmitted: (assignmentId) => void
+          - onFinanceConfirmed: (assignmentId) => void
+
+      CollectionAssignment:
+        features:
+          - assignment_detail_display
+          - client_information_display
+          - collection_amount_display
+          - collection_status_tracking
+          - visit_success_button
+          - deposit_submission_button
+          - finance_confirmation_status
+          - collection_notes_field
+          - photo_upload_capability
+          - gps_location_capture
+          - mobile_optimized_interface
+        props:
+          - assignment: CollectionAssignment
+          - onVisitSuccess: (notes, photos) => void
+          - onDepositSubmitted: (amount, notes) => void
+          - onViewClient: (clientId) => void
+
+  billing_analytics:
+  billing_analytics_components:
+    description: "Billing analytics and reporting interface"
+    components:
+      BillingAnalytics:
+        features:
+          - revenue_charts_and_graphs
+          - payment_trend_analysis
+          - client_payment_behavior
+          - package_popularity_analysis
+          - collection_performance_metrics
+          - overdue_payment_analysis
+          - cash_collection_efficiency
+          - billing_cycle_performance
+          - interactive_dashboards
+          - export_functionality
+          - mobile_responsive_dashboards
+        props:
+          - dateRange: DateRange
+          - filters: AnalyticsFilters
+          - onExport: (format) => void
+          - onFilterChange: (filters) => void
+
+      RevenueChart:
+        features:
+          - monthly_revenue_trends
+          - revenue_by_package_breakdown
+          - revenue_by_payment_method
+          - revenue_growth_analysis
+          - revenue_forecasting
+          - interactive_tooltips
+          - drill_down_capabilities
+          - export_options
+        props:
+          - data: RevenueData[]
+          - chartType: 'line' | 'bar' | 'pie'
+          - timeRange: TimeRange
+          - onDrillDown: (data) => void
+
+  payment_method_configuration:
+  payment_method_components:
+    description: "Payment method configuration interface"
+    components:
+      PaymentMethodConfig:
+        features:
+          - payment_method_setup
+          - payment_gateway_configuration
+          - payment_method_testing
+          - payment_method_activation
+          - payment_method_priority
+          - payment_method_fees
+          - payment_method_limits
+          - payment_method_notifications
+          - mobile_optimized_configuration
+        props:
+          - paymentMethods: PaymentMethod[]
+          - onAddMethod: (method) => void
+          - onEditMethod: (method) => void
+          - onTestMethod: (method) => void
+          - onActivateMethod: (method) => void
+
+      PaymentGatewayForm:
+        features:
+          - gateway_configuration_form
+          - api_key_setup
+          - webhook_configuration
+          - test_transaction_capability
+          - error_handling_configuration
+          - notification_settings
+          - mobile_responsive_form
+        props:
+          - gateway: PaymentGateway
+          - mode: 'create' | 'edit'
+          - onSave: (gateway) => Promise<void>
+          - onTest: (gateway) => Promise<TestResult>
+          - onCancel: () => void
+
+  billing_reports:
+  billing_report_components:
+    description: "Billing reports generation interface"
+    components:
+      BillingReports:
+        features:
+          - report_type_selection
+          - report_configuration
+          - date_range_selection
+          - filter_configuration
+          - report_preview
+          - report_generation
+          - report_download
+          - report_scheduling
+          - report_history
+          - mobile_optimized_interface
+        props:
+          - reportTypes: ReportType[]
+          - onGenerate: (config) => void
+          - onSchedule: (config) => void
+          - onDownload: (reportId) => void
+
+      ReportGenerator:
+        features:
+          - report_configuration_interface
+          - filter_setup
+          - column_selection
+          - format_selection
+          - scheduling_options
+          - notification_options
+          - preview_capability
+          - mobile_responsive_design
+        props:
+          - reportType: ReportType
+          - onGenerate: (config) => Promise<Report>
+          - onSchedule: (config) => Promise<ScheduledReport>
+          - onPreview: (config) => Promise<Preview>
+          - onCancel: () => void
+
+  export_functionality:
+  export_components:
+    description: "Export functionality for billing data"
+    components:
+      BillingExport:
+        features:
+          - export_format_selection
+          - data_filter_configuration
+          - column_selection
+          - date_range_selection
+          - export_progress_tracking
+          - export_history
+          - scheduled_exports
+          - mobile_optimized_interface
+        props:
+          - exportType: ExportType
+          - onExport: (config) => Promise<ExportResult>
+          - onSchedule: (config) => Promise<ScheduledExport>
+          - onHistory: () => void
+
+  mobile_responsive_design:
+  mobile_optimization:
+    description: "Mobile-responsive billing interface"
+    features:
+      - touch_optimized_interfaces
+      - mobile_navigation_patterns
+      - swipe_gestures_support
+      - offline_mode_capability
+      - mobile_payment_flow
+      - mobile_invoice_viewing
+      - mobile_cash_collection_workflow
+      - responsive_data_tables
+      - mobile_form_layouts
+      - mobile_dashboard_widgets
+
+  accessibility_features:
+  a11y_implementation:
+    description: "Accessibility features for billing system"
+    features:
+      - keyboard_navigation_support
+      - screen_reader_compatibility
+      - focus_management
+      - aria_labels_and_descriptions
+      - color_contrast_compliance
+      - text_scaling_support
+      - reduced_motion_support
+      - voice_navigation_support
+      - high_contrast_mode
+
+  performance_optimization:
+  performance_features:
+    description: "Performance optimization for billing system"
+    features:
+      - virtual_scrolling_for_large_datasets
+      - lazy_loading_of_components
+      - data_caching_strategies
+      - image_optimization
+      - bundle_splitting
+      - request_deduplication
+      - background_data_syncing
+      - performance_monitoring
+
+  state_management:
+  billing_store:
+    description: "Billing state management"
+    state:
+      - invoices: Invoice[]
+      - selectedInvoices: string[]
+      - filters: InvoiceFilters
+      - search: string
+      - pagination: PaginationState
+      - loading: boolean
+      - error: string | null
+      - paymentMethods: PaymentMethod[]
+      - billingPackages: BillingPackage[]
+      - analytics: BillingAnalytics
+      - reports: BillingReport[]
+    actions:
+      - setInvoices: (invoices) => void
+      - setSelectedInvoices: (ids) => void
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setPagination: (pagination) => void
+      - setLoading: (loading) => void
+      - setError: (error) => void
+      - setPaymentMethods: (methods) => void
+      - setBillingPackages: (packages) => void
+      - setAnalytics: (analytics) => void
+      - setReports: (reports) => void
+
+  hooks:
+  use_invoices:
+    description: "Invoice management hook"
+    features:
+      - invoice_data_fetching
+      - invoice_crud_operations
+      - bulk_operations
+      - export_functionality
+      - real_time_updates
+    return_values:
+      - invoices: Invoice[]
+      - loading: boolean
+      - error: string | null
+      - pagination: PaginationState
+      - filters: InvoiceFilters
+      - search: string
+      - selectedInvoices: string[]
+      - createInvoice: (invoice) => Promise<Invoice>
+      - updateInvoice: (id, invoice) => Promise<Invoice>
+      - deleteInvoice: (id) => Promise<void>
+      - bulkAction: (action, ids) => Promise<BulkActionResult>
+      - exportInvoices: (config) => Promise<ExportResult>
+      - setFilters: (filters) => void
+      - setSearch: (search) => void
+      - setSelectedInvoices: (ids) => void
+
+  use_payments:
+    description: "Payment management hook"
+    features:
+      - payment_data_fetching
+      - payment_processing
+      - payment_history_tracking
+      - payment_method_management
+      - real_time_updates
+    return_values:
+      - payments: Payment[]
+      - paymentMethods: PaymentMethod[]
+      - loading: boolean
+      - error: string | null
+      - processPayment: (payment) => Promise<Payment>
+      - getPaymentHistory: (filters) => Promise<Payment[]>
+      - addPaymentMethod: (method) => Promise<PaymentMethod>
+      - updatePaymentMethod: (id, method) => Promise<PaymentMethod>
+
+  api_integration:
+  billing_apis:
+    description: "Billing API integration"
+    endpoints:
+      - GET /invoices: get invoice list
+      - GET /invoices/{id}: get invoice details
+      - POST /invoices: create invoice
+      - PUT /invoices/{id}: update invoice
+      - DELETE /invoices/{id}: delete invoice
+      - POST /invoices/bulk: bulk operations
+      - GET /invoices/{id}/payments: get invoice payments
+      - POST /invoices/{id}/payments: add payment
+      - GET /billing/packages: get billing packages
+      - POST /billing/packages: create billing package
+      - PUT /billing/packages/{id}: update billing package
+      - GET /billing/analytics: get billing analytics
+      - GET /billing/reports: get billing reports
+      - POST /billing/export: export billing data
+      - GET /payments/methods: get payment methods
+      - POST /payments/methods: add payment method
+      - PUT /payments/methods/{id}: update payment method
+      - GET /cash-collection/assignments: get collection assignments
+      - POST /cash-collection/visit-success: mark visit success
+      - POST /cash-collection/deposit: submit deposit
+      - POST /cash-collection/confirm: confirm deposit
+
+    api_methods:
+      - getInvoices: (filters, pagination) => Promise<InvoiceListResponse>
+      - getInvoice: (id) => Promise<Invoice>
+      - createInvoice: (invoice) => Promise<Invoice>
+      - updateInvoice: (id, invoice) => Promise<Invoice>
+      - deleteInvoice: (id) => Promise<void>
+      - bulkAction: (action, ids) => Promise<BulkActionResult>
+      - getInvoicePayments: (id) => Promise<Payment[]>
+      - addPayment: (invoiceId, payment) => Promise<Payment>
+      - getBillingPackages: () => Promise<BillingPackage[]>
+      - createBillingPackage: (package) => Promise<BillingPackage>
+      - updateBillingPackage: (id, package) => Promise<BillingPackage>
+      - getBillingAnalytics: (filters) => Promise<BillingAnalytics>
+      - getBillingReports: (filters) => Promise<BillingReport[]>
+      - exportBillingData: (config) => Promise<ExportResult>
+      - getPaymentMethods: () => Promise<PaymentMethod[]>
+      - addPaymentMethod: (method) => Promise<PaymentMethod>
+      - updatePaymentMethod: (id, method) => Promise<PaymentMethod>
+      - getCollectionAssignments: (filters) => Promise<CollectionAssignment[]>
+      - markVisitSuccess: (assignmentId, notes, photos) => Promise<void>
+      - submitDeposit: (assignmentId, amount, notes) => Promise<void>
+      - confirmDeposit: (assignmentId) => Promise<void>
+
+  testing:
+  component_testing:
+    description: "Billing component testing"
+    test_files:
+      - InvoiceList.test.tsx
+      - InvoiceTable.test.tsx
+      - InvoiceDetail.test.tsx
+      - InvoiceForm.test.tsx
+      - PaymentProcessor.test.tsx
+      - BillingPackageList.test.tsx
+      - BillingPackageForm.test.tsx
+      - CashCollectionWorkflow.test.tsx
+      - BillingAnalytics.test.tsx
+
+    test_utilities:
+      - mock_billing_data
+      - mock_api_responses
+      - test_providers
+      - user_event_setup
+      - accessibility_testing
+
+  integration_testing:
+    description: "Billing integration testing"
+    test_scenarios:
+      - invoice_creation_workflow
+      - payment_processing_workflow
+      - cash_collection_workflow
+      - billing_package_management
+      - billing_analytics_workflow
+      - export_functionality_workflow
+
+  output_expectations:
+  - "Complete billing system with invoice management"
+  - "Multiple payment method support (gateway, manual, cash)"
+  - "3-phase cash collection workflow"
+  - "Billing package management"
+  - "Payment history tracking"
+  - "Billing analytics and reporting"
+  - "Mobile-responsive design"
+  - "Accessibility compliance"
+  - "Performance optimization"
+  - "Comprehensive testing coverage"
+
+  stop_condition:
+  - "Invoice CRUD operations functional"
+  - "Payment processing working with multiple methods"
+  - "Cash collection workflow functional"
+  - "Billing package management working"
+  - "Payment history tracking functional"
+  - "Billing analytics providing insights"
+  - "Mobile-responsive design implemented"
+  - "Accessibility features working"
+  - "Performance optimized"
+  - "Testing coverage complete"
+  - "Ready for production deployment"
+
+  instruction_to_ai:
+  - "Implement enterprise-grade billing system"
+  - "Focus on comprehensive invoice lifecycle management"
+  - "Ensure mobile responsiveness and accessibility"
+  - "Implement real-time payment status updates"
+  - "Follow React best practices"
+  - "Do not implement super admin billing features"

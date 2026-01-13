@@ -1,0 +1,3 @@
+NETWORK: GET /routers
+  GET /radius/users
+  GET /vouchers

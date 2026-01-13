@@ -1,0 +1,9 @@
+TENANT:
+  GET /tenant/me:
+    response:
+      data:
+        id: uuid
+        name: string
+        plan: string
+        features: map[string]bool
+        limits: map[string]int
