@@ -28,10 +28,13 @@ func TenantContext(repo *repository.TenantRepository) func(http.Handler) http.Ha
 	resolver := tenantResolver{repo: repo}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Public endpoints which resolve tenant internally (e.g. via NAS-IP) must not be blocked by host subdomain parsing.
-			if strings.HasPrefix(r.URL.Path, "/api/v1/radius/") {
-				next.ServeHTTP(w, r)
-				return
+			// Public endpoints which don't need tenant resolution
+			publicPaths := []string{"/health", "/version", "/metrics", "/api/v1/radius/"}
+			for _, path := range publicPaths {
+				if strings.HasPrefix(r.URL.Path, path) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 
 			slug := strings.TrimSpace(r.Header.Get("X-Tenant-Slug"))
