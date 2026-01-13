@@ -50,10 +50,18 @@ go version
 echo "✓ Go installed"
 
 # Step 5: Install Node.js
-echo "[5/12] Installing Node.js..."
+echo "[5/12] Installing Node.js 20+..."
 if ! command -v node &> /dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - 2>/dev/null
     apt-get install -y -qq nodejs
+else
+    # Check version and upgrade if needed
+    NODE_MAJOR=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
+    if [ "$NODE_MAJOR" -lt 20 ]; then
+        echo "   Upgrading Node.js from $(node --version) to 20.x..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - 2>/dev/null
+        apt-get install -y -qq nodejs
+    fi
 fi
 node --version
 echo "✓ Node.js installed"
