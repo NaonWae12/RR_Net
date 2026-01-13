@@ -107,13 +107,20 @@ fi
 
 # Build backend
 export PATH=$PATH:/usr/local/go/bin
-go mod download 2>/dev/null
+cd $PROJECT_DIR/BE
+
+# Fix go.sum and download dependencies
+echo "Downloading Go dependencies..."
+go mod tidy 2>&1 | tail -5
+go mod download 2>&1 | tail -5
+
+# Build backend
 go build -o rrnet-api cmd/api/main.go 2>&1
 if [ -f rrnet-api ]; then
     chmod +x rrnet-api
     echo "✓ Backend built successfully"
 else
-    echo "❌ Backend build failed. Check errors above."
+    echo "❌ Backend build failed. Run scripts/fix_build_issues.sh to fix."
 fi
 
 # Setup Frontend
