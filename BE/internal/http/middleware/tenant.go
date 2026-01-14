@@ -29,7 +29,7 @@ func TenantContext(repo *repository.TenantRepository) func(http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Public endpoints which don't need tenant resolution
-			publicPaths := []string{"/health", "/version", "/metrics", "/api/v1/radius/"}
+			publicPaths := []string{"/health", "/version", "/metrics", "/api/v1/radius/", "/api/v1/auth/"}
 			for _, path := range publicPaths {
 				if strings.HasPrefix(r.URL.Path, path) {
 					next.ServeHTTP(w, r)
