@@ -70,7 +70,7 @@ export default function PlansPage() {
       sortable: true,
       filterable: true,
       render: (value) => (
-        <code className="text-xs bg-muted px-2 py-1 rounded font-medium">{value}</code>
+        <code className="text-xs bg-slate-100 px-2 py-1 rounded font-medium text-slate-900">{value}</code>
       ),
     },
     {
@@ -80,7 +80,7 @@ export default function PlansPage() {
       filterable: true,
       render: (value, row) => (
         <div>
-          <div className="font-medium">{value}</div>
+          <div className="font-medium text-slate-900">{value}</div>
           {row.description && (
             <div className="text-xs text-slate-600 mt-1 line-clamp-1">{row.description}</div>
           )}
@@ -203,7 +203,7 @@ export default function PlansPage() {
         }
       >
         {error ? (
-          <div className="p-6 text-red-500">
+          <div className="p-6 text-red-600">
             Error loading plans: {error}
           </div>
         ) : (

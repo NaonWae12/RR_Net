@@ -81,7 +81,7 @@ export default function TenantsPage() {
       sortable: true,
       filterable: true,
       render: (value, row) => (
-        <div className="font-medium">{value}</div>
+        <div className="font-medium text-slate-900">{value}</div>
       ),
     },
     {
@@ -90,7 +90,7 @@ export default function TenantsPage() {
       sortable: true,
       filterable: true,
       render: (value) => (
-        <code className="text-xs bg-muted px-2 py-1 rounded">{value}</code>
+        <code className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-900">{value}</code>
       ),
     },
     {
@@ -185,7 +185,7 @@ export default function TenantsPage() {
         }
       >
         {error ? (
-          <div className="p-6 text-red-500">
+          <div className="p-6 text-red-600">
             Error loading tenants: {error}
           </div>
         ) : (

@@ -76,7 +76,7 @@ export default function AuditPage() {
       filterable: true,
       render: (value, row) => (
         <div>
-          <div className="font-medium">{value}</div>
+          <div className="font-medium text-slate-900">{value}</div>
           <div className="text-xs text-slate-600">{row.user_id}</div>
         </div>
       ),
@@ -108,7 +108,7 @@ export default function AuditPage() {
       key: "ip_address",
       title: "IP Address",
       filterable: true,
-      render: (value) => <code className="text-xs">{value}</code>,
+      render: (value) => <code className="text-xs text-slate-900">{value}</code>,
     },
     {
       key: "status",

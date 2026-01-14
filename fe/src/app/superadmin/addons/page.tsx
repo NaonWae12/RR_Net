@@ -84,7 +84,7 @@ export default function AddonsPage() {
       sortable: true,
       filterable: true,
       render: (value) => (
-        <code className="text-xs bg-muted px-2 py-1 rounded font-medium">{value}</code>
+        <code className="text-xs bg-slate-100 px-2 py-1 rounded font-medium text-slate-900">{value}</code>
       ),
     },
     {
@@ -94,7 +94,7 @@ export default function AddonsPage() {
       filterable: true,
       render: (value, row) => (
         <div>
-          <div className="font-medium">{value}</div>
+          <div className="font-medium text-slate-900">{value}</div>
           {row.description && (
             <div className="text-xs text-slate-600 mt-1 line-clamp-1">{row.description}</div>
           )}

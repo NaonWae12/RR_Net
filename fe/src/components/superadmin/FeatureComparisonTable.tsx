@@ -298,7 +298,7 @@ export function FeatureComparisonTable() {
                     hover:bg-slate-100
                   `}
                 >
-                  <td className="sticky left-0 z-10 bg-inherit p-3 font-medium group-hover:bg-slate-100">
+                  <td className="sticky left-0 z-10 bg-inherit p-3 font-medium text-slate-900 group-hover:bg-slate-100">
                     {row.feature}
                   </td>
 
