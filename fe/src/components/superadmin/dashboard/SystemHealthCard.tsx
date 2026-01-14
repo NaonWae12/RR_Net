@@ -105,16 +105,16 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
 
           <div className="space-y-4">
             <div>
-              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                <Server className="h-4 w-4" />
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2 text-slate-900">
+                <Server className="h-4 w-4 text-slate-700" />
                 Services Status
               </h4>
               <div className="space-y-2">
                 {data.services.map((service) => (
                   <div key={service.name} className="flex items-center justify-between text-sm">
-                    <span>{service.name}</span>
+                    <span className="text-slate-700">{service.name}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{service.uptime}% uptime</span>
+                      <span className="text-xs text-slate-500">{service.uptime}% uptime</span>
                       <StatusBadge status={service.status} variant={getStatusVariant(service.status)} size="sm" />
                     </div>
                   </div>
@@ -123,25 +123,25 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
             </div>
 
             <div>
-              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                <Database className="h-4 w-4" />
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2 text-slate-900">
+                <Database className="h-4 w-4 text-slate-700" />
                 Resource Usage
               </h4>
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span>CPU</span>
+                  <span className="text-slate-700">CPU</span>
                   <span className={cn("font-medium", getStatusColor(100 - data.resources.cpu))}>
                     {data.resources.cpu}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span>Memory</span>
+                  <span className="text-slate-700">Memory</span>
                   <span className={cn("font-medium", getStatusColor(100 - data.resources.memory))}>
                     {data.resources.memory}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span>Disk</span>
+                  <span className="text-slate-700">Disk</span>
                   <span className={cn("font-medium", getStatusColor(100 - data.resources.disk))}>
                     {data.resources.disk}%
                   </span>

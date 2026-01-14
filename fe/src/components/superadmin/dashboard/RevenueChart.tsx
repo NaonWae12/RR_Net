@@ -84,8 +84,8 @@ export const RevenueChart = React.memo<RevenueChartProps>(
             </CardTitle>
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold">{formatCurrency(data.total)}</p>
+                <p className="text-xs text-slate-600">Total Revenue</p>
+                <p className="text-2xl font-bold text-slate-900">{formatCurrency(data.total)}</p>
               </div>
               <div className={cn(
                 "flex items-center gap-1 px-3 py-1 rounded-full",
@@ -108,17 +108,17 @@ export const RevenueChart = React.memo<RevenueChartProps>(
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm text-muted-foreground">Plan Revenue</p>
+                <p className="text-sm text-blue-700">Plan Revenue</p>
                 <p className="text-xl font-bold text-blue-600">{formatCurrency(data.breakdown.plan)}</p>
               </div>
               <div className="p-4 bg-purple-50 rounded-lg">
-                <p className="text-sm text-muted-foreground">Addon Revenue</p>
+                <p className="text-sm text-purple-700">Addon Revenue</p>
                 <p className="text-xl font-bold text-purple-600">{formatCurrency(data.breakdown.addon)}</p>
               </div>
             </div>
 
             <div>
-              <h4 className="text-sm font-medium mb-2">Monthly Revenue Trend</h4>
+              <h4 className="text-sm font-medium mb-2 text-slate-900">Monthly Revenue Trend</h4>
               <LineChart
                 data={chartData}
                 xAxis={{ dataKey: "month", label: "Month" }}
@@ -136,7 +136,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
             </div>
 
             <div>
-              <h4 className="text-sm font-medium mb-2">Revenue Breakdown</h4>
+              <h4 className="text-sm font-medium mb-2 text-slate-900">Revenue Breakdown</h4>
               <BarChart
                 data={chartData}
                 xAxisKey="month"

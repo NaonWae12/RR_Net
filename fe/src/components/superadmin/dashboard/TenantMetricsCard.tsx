@@ -79,21 +79,21 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-muted rounded-lg">
-                  <p className="text-2xl font-bold">{data.total}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Total</p>
+                <div className="text-center p-4 bg-slate-100 rounded-lg">
+                  <p className="text-2xl font-bold text-slate-900">{data.total}</p>
+                  <p className="text-xs text-slate-600 mt-1">Total</p>
                 </div>
                 <div className="text-center p-4 bg-green-50 rounded-lg">
                   <p className="text-2xl font-bold text-green-600">{data.active}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Active</p>
+                  <p className="text-xs text-green-700 mt-1">Active</p>
                 </div>
                 <div className="text-center p-4 bg-red-50 rounded-lg">
                   <p className="text-2xl font-bold text-red-600">{data.suspended}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Suspended</p>
+                  <p className="text-xs text-red-700 mt-1">Suspended</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <div className="flex items-center gap-2 p-3 bg-slate-100 rounded-lg">
                 {data.growth.isPositive ? (
                   <TrendingUp className="h-4 w-4 text-green-600" />
                 ) : (
@@ -104,12 +104,12 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
                     {data.growth.isPositive ? "+" : ""}
                     {data.growth.value}%
                   </span>
-                  <span className="text-muted-foreground ml-1">growth this month</span>
+                  <span className="text-slate-600 ml-1">growth this month</span>
                 </span>
               </div>
 
               <div>
-                <h4 className="text-sm font-medium mb-2">Plan Distribution</h4>
+                <h4 className="text-sm font-medium mb-2 text-slate-900">Plan Distribution</h4>
                 <PieChart
                   data={pieData}
                   height={200}
@@ -119,7 +119,7 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
             </div>
 
             <div>
-              <h4 className="text-sm font-medium mb-2">Growth Trend</h4>
+              <h4 className="text-sm font-medium mb-2 text-slate-900">Growth Trend</h4>
               <LineChart
                 data={lineData}
                 xAxis={{ dataKey: "date", label: "Date" }}

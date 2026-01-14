@@ -100,24 +100,24 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
             <div className="grid grid-cols-4 gap-4">
               <div className="text-center p-3 bg-red-50 rounded-lg">
                 <p className="text-2xl font-bold text-red-600">{data.critical}</p>
-                <p className="text-xs text-muted-foreground mt-1">Critical</p>
+                <p className="text-xs text-red-700 mt-1">Critical</p>
               </div>
               <div className="text-center p-3 bg-amber-50 rounded-lg">
                 <p className="text-2xl font-bold text-amber-600">{data.warning}</p>
-                <p className="text-xs text-muted-foreground mt-1">Warning</p>
+                <p className="text-xs text-amber-700 mt-1">Warning</p>
               </div>
               <div className="text-center p-3 bg-blue-50 rounded-lg">
                 <p className="text-2xl font-bold text-blue-600">{data.info}</p>
-                <p className="text-xs text-muted-foreground mt-1">Info</p>
+                <p className="text-xs text-blue-700 mt-1">Info</p>
               </div>
-              <div className="text-center p-3 bg-muted rounded-lg">
-                <p className="text-2xl font-bold">{data.total}</p>
-                <p className="text-xs text-muted-foreground mt-1">Total</p>
+              <div className="text-center p-3 bg-slate-100 rounded-lg">
+                <p className="text-2xl font-bold text-slate-900">{data.total}</p>
+                <p className="text-xs text-slate-600 mt-1">Total</p>
               </div>
             </div>
 
             <div>
-              <h4 className="text-sm font-medium mb-2">Recent Alerts</h4>
+              <h4 className="text-sm font-medium mb-2 text-slate-900">Recent Alerts</h4>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {data.recent.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">No recent alerts</p>

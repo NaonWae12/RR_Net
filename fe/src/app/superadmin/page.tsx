@@ -201,8 +201,8 @@ export default function SuperAdminDashboardPage() {
                       <Users className="h-6 w-6 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Manage Tenants</p>
-                      <p className="text-2xl font-bold">{tenants?.length || 0}</p>
+                      <p className="text-sm text-slate-600">Manage Tenants</p>
+                      <p className="text-2xl font-bold text-slate-900">{tenants?.length || 0}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -216,8 +216,8 @@ export default function SuperAdminDashboardPage() {
                       <Package className="h-6 w-6 text-purple-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Manage Plans</p>
-                      <p className="text-2xl font-bold">{plans?.length || 0}</p>
+                      <p className="text-sm text-slate-600">Manage Plans</p>
+                      <p className="text-2xl font-bold text-slate-900">{plans?.length || 0}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -231,8 +231,8 @@ export default function SuperAdminDashboardPage() {
                       <Plus className="h-6 w-6 text-green-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Manage Addons</p>
-                      <p className="text-2xl font-bold">{addons?.length || 0}</p>
+                      <p className="text-sm text-slate-600">Manage Addons</p>
+                      <p className="text-2xl font-bold text-slate-900">{addons?.length || 0}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -246,8 +246,8 @@ export default function SuperAdminDashboardPage() {
                       <Settings className="h-6 w-6 text-orange-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">System Monitoring</p>
-                      <p className="text-2xl font-bold">View</p>
+                      <p className="text-sm text-slate-600">System Monitoring</p>
+                      <p className="text-2xl font-bold text-slate-900">View</p>
                     </div>
                   </div>
                 </CardContent>

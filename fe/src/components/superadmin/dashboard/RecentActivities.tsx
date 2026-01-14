@@ -111,12 +111,12 @@ export const RecentActivities = React.memo<RecentActivitiesProps>(
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <p className="text-sm font-medium">{activity.action}</p>
+                        <p className="text-sm font-medium text-slate-900">{activity.action}</p>
                         {activity.target && (
-                          <p className="text-xs text-muted-foreground mt-1">Target: {activity.target}</p>
+                          <p className="text-xs text-slate-600 mt-1">Target: {activity.target}</p>
                         )}
                         {activity.details && (
-                          <p className="text-xs text-muted-foreground mt-1">{activity.details}</p>
+                          <p className="text-xs text-slate-600 mt-1">{activity.details}</p>
                         )}
                       </div>
                       {activity.status && (
@@ -127,13 +127,13 @@ export const RecentActivities = React.memo<RecentActivitiesProps>(
                         />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-2 text-xs text-slate-600">
                       <div className="flex items-center gap-1">
-                        <User className="h-3 w-3" />
+                        <User className="h-3 w-3 text-slate-500" />
                         <span>{activity.user}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
+                        <Clock className="h-3 w-3 text-slate-500" />
                         <span>{new Date(activity.timestamp).toLocaleString()}</span>
                       </div>
                     </div>
