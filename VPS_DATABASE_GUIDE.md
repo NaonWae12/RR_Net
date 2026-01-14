@@ -32,6 +32,7 @@ chmod +x scripts/fix_postgres_auth.sh
 ```
 
 Script ini akan:
+
 - Membuat/reset user `rrnet` dengan password `rrnet_secret`
 - Memberikan privileges yang diperlukan
 - Test koneksi
@@ -69,11 +70,12 @@ SELECT datname FROM pg_database WHERE datistemplate = false;
 ```
 
 **Output contoh:**
+
 ```
-   Name    |  Owner   | Encoding |   Collate   |    Ctype    | ICU Locale | Locale Provider |   Access privileges   
+   Name    |  Owner   | Encoding |   Collate   |    Ctype    | ICU Locale | Locale Provider |   Access privileges
 -----------+----------+----------+-------------+-------------+------------+-----------------+-----------------------
- postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | 
- rrnet_dev | rrnet    | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | 
+ postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            |
+ rrnet_dev | rrnet    | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            |
  template0 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | =c/postgres          +
            |          |          |             |             |            |                 | postgres=CTc/postgres
  template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | =c/postgres          +
@@ -97,16 +99,17 @@ SELECT datname FROM pg_database WHERE datistemplate = false;
 \dt
 
 -- Atau query langsung
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
 **Output contoh:**
+
 ```
                     List of relations
- Schema |              Name              | Type  | Owner 
+ Schema |              Name              | Type  | Owner
 --------+--------------------------------+-------+-------
  public | addons                         | table | rrnet
  public | audit_logs                     | table | rrnet
@@ -129,17 +132,18 @@ ORDER BY table_name;
 ```
 
 **Output contoh:**
+
 ```
                                     Table "public.tenants"
-    Column     |           Type           | Collation | Nullable |              Default               
+    Column     |           Type           | Collation | Nullable |              Default
 ---------------+--------------------------+-----------+----------+--------------------------------------
  id            | uuid                     |           | not null | gen_random_uuid()
- name          | character varying(255)   |           | not null | 
- slug          | character varying(255)   |           | not null | 
- domain        | character varying(255)   |           |          | 
+ name          | character varying(255)   |           | not null |
+ slug          | character varying(255)   |           | not null |
+ domain        | character varying(255)   |           |          |
  status        | character varying(50)    |           | not null | 'active'::character varying
  billing_status| character varying(50)    |           |          | 'active'::character varying
- plan_id       | uuid                     |           |          | 
+ plan_id       | uuid                     |           |          |
  created_at    | timestamp with time zone |           | not null | now()
  updated_at    | timestamp with time zone |           | not null | now()
 Indexes:
@@ -167,8 +171,9 @@ SELECT id, name, slug, status FROM tenants;
 ```
 
 **Output contoh:**
+
 ```
-                  id                  |     name      |  slug   | status  | billing_status |         created_at          |         updated_at          
+                  id                  |     name      |  slug   | status  | billing_status |         created_at          |         updated_at
 --------------------------------------+---------------+---------+---------+----------------+----------------------------+----------------------------
  123e4567-e89b-12d3-a456-426614174000 | EntCorp ISP   | entcorp | active  | active         | 2026-01-01 16:56:00+00     | 2026-01-01 16:56:00+00
  223e4567-e89b-12d3-a456-426614174001 | BizNet ISP    | biznet  | active  | active         | 2026-01-01 16:56:00+00     | 2026-01-01 16:56:00+00
@@ -197,8 +202,8 @@ SELECT COUNT(*) FROM tenants WHERE status = 'active';
 \di table_name
 
 -- Query langsung
-SELECT indexname, indexdef 
-FROM pg_indexes 
+SELECT indexname, indexdef
+FROM pg_indexes
 WHERE tablename = 'tenants';
 ```
 
@@ -209,8 +214,8 @@ WHERE tablename = 'tenants';
 \d+ table_name
 
 -- Query langsung
-SELECT conname, contype, pg_get_constraintdef(oid) 
-FROM pg_constraint 
+SELECT conname, contype, pg_get_constraintdef(oid)
+FROM pg_constraint
 WHERE conrelid = 'tenants'::regclass;
 ```
 
@@ -221,16 +226,16 @@ WHERE conrelid = 'tenants'::regclass;
 ```sql
 -- Lihat foreign keys
 SELECT
-    tc.table_name, 
-    kcu.column_name, 
+    tc.table_name,
+    kcu.column_name,
     ccu.table_name AS foreign_table_name,
-    ccu.column_name AS foreign_column_name 
-FROM information_schema.table_constraints AS tc 
+    ccu.column_name AS foreign_column_name
+FROM information_schema.table_constraints AS tc
 JOIN information_schema.key_column_usage AS kcu
   ON tc.constraint_name = kcu.constraint_name
 JOIN information_schema.constraint_column_usage AS ccu
   ON ccu.constraint_name = tc.constraint_name
-WHERE tc.constraint_type = 'FOREIGN KEY' 
+WHERE tc.constraint_type = 'FOREIGN KEY'
   AND tc.table_name = 'tenants';
 ```
 
@@ -241,7 +246,7 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
 SELECT pg_size_pretty(pg_database_size('rrnet_dev'));
 
 -- Size semua tabel
-SELECT 
+SELECT
     schemaname,
     tablename,
     pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
@@ -257,10 +262,10 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 \du
 
 -- Cek permissions user tertentu
-SELECT 
-    grantee, 
-    privilege_type 
-FROM information_schema.role_table_grants 
+SELECT
+    grantee,
+    privilege_type
+FROM information_schema.role_table_grants
 WHERE table_name = 'tenants';
 ```
 
@@ -268,7 +273,7 @@ WHERE table_name = 'tenants';
 
 ```sql
 -- Contoh: Lihat tenants dengan plan mereka
-SELECT 
+SELECT
     t.id,
     t.name,
     t.slug,
@@ -560,7 +565,39 @@ ls -lh /opt/rrnet/backup_*.sql
 ## Support
 
 Untuk masalah database lebih lanjut, cek:
+
 1. PostgreSQL logs: `/var/log/postgresql/`
 2. `VPS_DEPLOYMENT_GUIDE.md` - Untuk setup database
 3. PostgreSQL documentation: https://www.postgresql.org/docs/
 
+#test
+-- Cek tenants
+SELECT id, name, slug, status FROM tenants;
+
+-- Cek users (development accounts)
+SELECT id, email, name, status FROM users WHERE email LIKE '%@rrnet.test' OR email LIKE '%@acme.test';
+
+-- Cek clients (jika ada)
+SELECT COUNT(\*) as total_clients FROM clients;
+
+-- Cek invoices (jika ada)
+SELECT COUNT(\*) as total_invoices FROM invoices;
+
+-- Cek payments (jika ada)
+SELECT COUNT(\*) as total_payments FROM payments;
+
+-- Cek service packages
+SELECT COUNT(\*) as total_packages FROM service_packages;
+
+#Verify akun development
+-- Super Admin
+SELECT u.id, u.email, u.name, u.status, r.code as role
+FROM users u
+LEFT JOIN roles r ON u.role_id = r.id
+WHERE u.email = 'admin@rrnet.test';
+
+-- Owner Acme
+SELECT u.id, u.email, u.name, u.status, t.name as tenant_name
+FROM users u
+LEFT JOIN tenants t ON u.tenant_id = t.id
+WHERE u.email = 'owner@acme.test';

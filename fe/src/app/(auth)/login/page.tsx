@@ -131,7 +131,7 @@ export default function LoginPage() {
         </p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-1">
+          <div className="space-y-1 text-slate-900">
             <label className="text-sm font-medium text-slate-700">Email</label>
             <Input
               type="email"
@@ -148,7 +148,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1 text-slate-900">
             <label className="text-sm font-medium text-slate-700">
               Password
             </label>
@@ -167,7 +167,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1 text-slate-900">
             <label className="text-sm font-medium text-slate-700">
               Tenant Slug (opsional)
             </label>

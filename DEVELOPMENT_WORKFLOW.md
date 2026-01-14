@@ -58,6 +58,7 @@ git commit -m "Fix: Add explicit text colors to super admin pages"
 ```
 
 **Contoh Pesan Commit yang Baik:**
+
 - `Fix: Add explicit text colors to super admin pages`
 - `Feature: Add new tenant management functionality`
 - `Update: Improve error handling in login page`
@@ -158,6 +159,7 @@ Gunakan format yang jelas dan deskriptif:
 ```
 
 **Types:**
+
 - `Fix:` - Perbaikan bug
 - `Feature:` - Fitur baru
 - `Update:` - Update fitur existing
@@ -167,6 +169,7 @@ Gunakan format yang jelas dan deskriptif:
 - `Test:` - Menambah/update test
 
 **Contoh:**
+
 ```bash
 git commit -m "Fix: Add explicit text colors to prevent text blending with background"
 git commit -m "Feature: Add tenant suspension functionality"
@@ -198,6 +201,7 @@ git push origin main
 ### 3. Testing Sebelum Push
 
 Sebelum push, pastikan:
+
 - Code tidak ada syntax error
 - Linter tidak error (jika ada)
 - Test secara lokal (jika memungkinkan)
@@ -351,7 +355,7 @@ systemctl restart rrnet-frontend
 ## Support
 
 Jika ada masalah dengan workflow, cek:
+
 1. `VPS_DEPLOYMENT_GUIDE.md` - Panduan deployment lengkap
 2. `VPS_DATABASE_GUIDE.md` - Panduan database operations
 3. GitHub Issues - Untuk bug reports dan feature requests
-
