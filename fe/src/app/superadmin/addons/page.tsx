@@ -118,7 +118,7 @@ export default function AddonsPage() {
       key: "price",
       title: "Price",
       sortable: true,
-      render: (value, row) => formatCurrency(value, row.currency),
+      render: (value, row) => <span className="text-slate-900">{formatCurrency(value, row.currency)}</span>,
     },
     {
       key: "billing_cycle",
@@ -150,7 +150,7 @@ export default function AddonsPage() {
       key: "created_at",
       title: "Created At",
       sortable: true,
-      render: (value) => format(new Date(value), "PPp"),
+      render: (value) => <span className="text-slate-900">{format(new Date(value), "PPp")}</span>,
     },
     {
       key: "actions",

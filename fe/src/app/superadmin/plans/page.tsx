@@ -91,7 +91,7 @@ export default function PlansPage() {
       key: "price_monthly",
       title: "Monthly Price",
       sortable: true,
-      render: (value, row) => formatCurrency(value, row.currency),
+      render: (value, row) => <span className="text-slate-900">{formatCurrency(value, row.currency)}</span>,
     },
     {
       key: "price_yearly",
@@ -127,7 +127,7 @@ export default function PlansPage() {
       key: "created_at",
       title: "Created At",
       sortable: true,
-      render: (value) => format(new Date(value), "PPp"),
+      render: (value) => <span className="text-slate-900">{format(new Date(value), "PPp")}</span>,
     },
     {
       key: "actions",

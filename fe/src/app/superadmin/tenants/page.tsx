@@ -123,7 +123,7 @@ export default function TenantsPage() {
       key: "created_at",
       title: "Created At",
       sortable: true,
-      render: (value) => format(new Date(value), "PPp"),
+      render: (value) => <span className="text-slate-900">{format(new Date(value), "PPp")}</span>,
     },
     {
       key: "actions",
