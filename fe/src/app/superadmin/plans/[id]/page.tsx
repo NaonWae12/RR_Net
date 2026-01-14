@@ -64,7 +64,7 @@ export default function PlanDetailPage() {
 
   if (error) {
     return (
-      <div className="p-6 text-red-500">
+      <div className="p-6 text-red-600">
         Error loading plan: {error}
       </div>
     );
@@ -209,7 +209,7 @@ export default function PlanDetailPage() {
           <div>
             <p className="text-slate-500">No features assigned to this plan.</p>
             {!plan.features && (
-              <p className="text-xs text-red-500 mt-2">Warning: plan.features is undefined or null</p>
+              <p className="text-xs text-red-600 mt-2">Warning: plan.features is undefined or null</p>
             )}
           </div>
         )}

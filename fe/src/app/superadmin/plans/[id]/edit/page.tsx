@@ -58,7 +58,7 @@ export default function EditPlanPage() {
 
   if (error) {
     return (
-      <div className="p-6 text-red-500">
+      <div className="p-6 text-red-600">
         Error loading plan: {error}
       </div>
     );
