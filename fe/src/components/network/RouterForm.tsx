@@ -25,7 +25,7 @@ const routerFormSchema = z.object({
   api_port: z.coerce.number().min(1).max(65535).optional(),
   api_use_tls: z.boolean().default(false),
   is_default: z.boolean().default(false),
-  radius_enabled: z.boolean().default(true),
+  radius_enabled: z.boolean().default(false).optional(),
   radius_secret: z.string().optional(),
 });
 
@@ -95,7 +95,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
       api_port: 8728,
       api_use_tls: false,
       is_default: false,
-      radius_enabled: true,
+      radius_enabled: false,
       radius_secret: "",
     },
   });
@@ -127,7 +127,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         api_port: initialData.api_port || 8728,
         api_use_tls: initialData.api_use_tls ?? false,
         is_default: initialData.is_default,
-        radius_enabled: initialData.radius_enabled ?? true,
+        radius_enabled: initialData.radius_enabled ?? false,
         radius_secret: "", // Don't pre-fill secret
       });
     }
@@ -149,7 +149,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
 
   const handleTestConnection = async () => {
     const formData = watch();
-    
+
     if (!formData.host || !formData.username || !formData.password) {
       toast.error("Please fill in Host, Username, and Password first");
       return;
@@ -167,13 +167,13 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
       const res = initialData?.id
         ? await networkService.testRouterConnection(initialData.id)
         : await networkService.testRouterConfig({
-            type: formData.type,
-            host: formData.host,
-            api_port: formData.api_port || (formData.api_use_tls ? 8729 : 8728),
-            api_use_tls: formData.api_use_tls,
-            username: formData.username,
-            password: formData.password,
-          });
+          type: formData.type,
+          host: formData.host,
+          api_port: formData.api_port || (formData.api_use_tls ? 8729 : 8728),
+          api_use_tls: formData.api_use_tls,
+          username: formData.username,
+          password: formData.password,
+        });
 
       setTestResult(res);
       if (res.ok) {
@@ -226,13 +226,12 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
       {/* Connection Mode Info Banner */}
       {host && (
         <div
-          className={`rounded-lg border p-3 ${
-            connectionMode === "local"
-              ? "border-blue-200 bg-blue-50"
-              : connectionMode === "ngrok"
-                ? "border-yellow-200 bg-yellow-50"
-                : "border-green-200 bg-green-50"
-          }`}
+          className={`rounded-lg border p-3 ${connectionMode === "local"
+            ? "border-blue-200 bg-blue-50"
+            : connectionMode === "ngrok"
+              ? "border-yellow-200 bg-yellow-50"
+              : "border-green-200 bg-green-50"
+            }`}
         >
           <div className="flex items-start gap-2">
             <span className="text-lg">{modeInfo.icon}</span>
@@ -247,11 +246,10 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
       {/* Test Result Display */}
       {testResult && (
         <div
-          className={`rounded-lg border p-3 ${
-            testResult.ok
-              ? "border-green-200 bg-green-50"
-              : "border-red-200 bg-red-50"
-          }`}
+          className={`rounded-lg border p-3 ${testResult.ok
+            ? "border-green-200 bg-green-50"
+            : "border-red-200 bg-red-50"
+            }`}
         >
           <div className="flex items-start gap-2">
             {testResult.ok ? (
@@ -277,7 +275,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-900">
         <Input label="Router Name" {...register("name")} error={errors.name?.message} />
         <SimpleSelect
           value={watch("type")}
@@ -320,12 +318,6 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             </p>
           )}
         </div>
-        <Input
-          label="NAS IP (for RADIUS)"
-          placeholder="Defaults to host if empty"
-          {...register("nas_ip")}
-          error={errors.nas_ip?.message}
-        />
         <Input label="SSH Port" type="number" {...register("port")} error={errors.port?.message} />
         <div className="md:col-span-2">
           <Input
@@ -367,24 +359,6 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         <div className="flex items-center space-x-2">
           <input
             type="checkbox"
-            id="radius_enabled"
-            {...register("radius_enabled")}
-            className="rounded border-slate-300"
-          />
-          <label htmlFor="radius_enabled" className="text-sm font-medium text-slate-700">
-            Enable RADIUS (Hotspot)
-          </label>
-        </div>
-        <Input
-          label="RADIUS Secret"
-          type="password"
-          placeholder="Shared secret between Mikrotik and FreeRADIUS"
-          {...register("radius_secret")}
-          error={errors.radius_secret?.message}
-        />
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
             id="is_default"
             {...register("is_default")}
             className="rounded border-slate-300"
@@ -403,6 +377,72 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           />
         </div>
       </div>
+
+      {/* DDNS Setup Guide for Production Mode */}
+      {connectionMode === "production" && host && watch("connectivity_mode") === "direct_public" && (
+        <div className="rounded-lg border border-blue-300 bg-blue-50 p-4">
+          <p className="text-sm font-semibold text-blue-900 mb-2">📋 Setup Guide: DDNS + Port Forward</p>
+          <div className="space-y-2 text-xs text-blue-800">
+            <div>
+              <p className="font-semibold mb-1">1. Setup DDNS di MikroTik:</p>
+              <ul className="list-inside list-disc ml-2 space-y-1">
+                <li>Masuk ke <code className="bg-blue-100 px-1 rounded">IP → Cloud</code></li>
+                <li>Enable <code className="bg-blue-100 px-1 rounded">DDNS Enabled</code></li>
+                <li>Pilih provider (No-IP, DuckDNS, atau custom)</li>
+                <li>Masukkan hostname DDNS (contoh: router.ddns.net)</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">2. Setup Port Forwarding di Router Upstream:</p>
+              <ul className="list-inside list-disc ml-2 space-y-1">
+                <li>Forward port {apiPort || (apiUseTLS ? 8729 : 8728)} dari router upstream ke IP lokal MikroTik</li>
+                <li>Pastikan firewall router upstream allow koneksi dari IP VPS backend</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">3. Konfigurasi Firewall MikroTik:</p>
+              <ul className="list-inside list-disc ml-2 space-y-1">
+                <li>Allow IP VPS backend di firewall MikroTik</li>
+                <li>Pastikan API port ({apiPort || (apiUseTLS ? 8729 : 8728)}) terbuka untuk IP VPS</li>
+                <li>Command: <code className="bg-blue-100 px-1 rounded">/ip firewall filter add chain=input src-address=IP_VPS action=accept</code></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VPN Setup Guide */}
+      {watch("connectivity_mode") === "vpn" && (
+        <div className="rounded-lg border border-purple-300 bg-purple-50 p-4">
+          <p className="text-sm font-semibold text-purple-900 mb-2">🔐 Setup Guide: VPN Connection (L2TP/IPSec)</p>
+          <div className="space-y-2 text-xs text-purple-800">
+            <div>
+              <p className="font-semibold mb-1">1. Setup L2TP/IPSec Server di MikroTik:</p>
+              <ul className="list-inside list-disc ml-2 space-y-1">
+                <li>Masuk ke <code className="bg-purple-100 px-1 rounded">PPP → Interface → L2TP Server</code></li>
+                <li>Enable L2TP server dan konfigurasi IP pool</li>
+                <li>Setup IPSec secret untuk keamanan</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">2. Setup VPN Client di VPS/Backend:</p>
+              <ul className="list-inside list-disc ml-2 space-y-1">
+                <li>Install dan konfigurasi L2TP/IPSec client</li>
+                <li>Connect ke MikroTik VPN server</li>
+                <li>Gunakan IP VPN untuk koneksi API (bukan public IP)</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">3. Catatan:</p>
+              <ul className="list-inside list-disc ml-2 space-y-1">
+                <li>Host field harus menggunakan IP VPN atau hostname internal</li>
+                <li>Pastikan VPN connection stabil sebelum test connection</li>
+                <li>L2TP/IPSec tersedia di semua MikroTik (termasuk low-end)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Warning untuk ngrok mode */}
       {connectionMode === "ngrok" && (
