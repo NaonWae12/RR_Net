@@ -1,0 +1,42 @@
+==========================================
+MikroTik Check Commands
+==========================================
+Copy-paste commands ini ke Winbox Terminal
+==========================================
+
+1. Cek Firewall Rule untuk VPS (72.60.74.209)
+----------------------------------------
+/ip firewall filter print where chain=input and src-address=72.60.74.209
+
+2. Cek semua rule untuk port 8728
+----------------------------------------
+/ip firewall filter print where chain=input and dst-port=8728
+
+3. Cek posisi semua input rules (untuk lihat apakah rule allow di atas deny)
+----------------------------------------
+/ip firewall filter print where chain=input
+
+4. Cek API Service Status
+----------------------------------------
+/ip service print where name=api
+
+5. Cek semua service
+----------------------------------------
+/ip service print
+
+6. Cek firewall rule untuk port API (8728 dan 8729)
+----------------------------------------
+/ip firewall filter print where chain=input and (dst-port=8728 or dst-port=8729)
+
+7. Cek apakah ada rule deny/reject di atas rule allow
+----------------------------------------
+/ip firewall filter print where chain=input and (action=drop or action=reject)
+
+==========================================
+Cara Pakai:
+1. Buka Winbox → Terminal
+2. Copy-paste command yang ingin dijalankan
+3. Tekan Enter
+4. Screenshot hasilnya dan kirim ke saya
+==========================================
+
