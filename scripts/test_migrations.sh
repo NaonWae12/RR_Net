@@ -53,3 +53,4 @@ echo ""
 echo "All tables in database:"
 PGPASSWORD="$DB_PASSWORD" psql -U "$DB_USER" -d "$DB_NAME" -h localhost -c "\dt" 2>&1
 
+

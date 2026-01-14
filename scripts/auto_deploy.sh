@@ -86,3 +86,4 @@ echo "  journalctl -u rrnet-backend -n 50"
 echo "  journalctl -u rrnet-frontend -n 50"
 echo ""
 
+

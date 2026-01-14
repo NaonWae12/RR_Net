@@ -76,3 +76,4 @@ echo "3. Check service file: cat /etc/systemd/system/rrnet-frontend.service"
 echo "4. Restart service: systemctl restart rrnet-frontend"
 echo ""
 
+
