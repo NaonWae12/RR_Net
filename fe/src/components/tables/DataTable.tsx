@@ -187,7 +187,7 @@ export const DataTable = React.memo(function DataTable<T extends Record<string, 
         <div className="flex items-center gap-2">
           {selectable && selectedRows.length > 0 && onBulkAction && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-slate-600">
                 {selectedRows.length} selected
               </span>
               <Button
@@ -247,7 +247,7 @@ export const DataTable = React.memo(function DataTable<T extends Record<string, 
                         <div
                           className={cn(
                             "flex items-center gap-2",
-                            header.column.getCanSort() && "cursor-pointer select-none hover:text-foreground"
+                            header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-900"
                           )}
                           onClick={header.column.getToggleSortingHandler()}
                         >

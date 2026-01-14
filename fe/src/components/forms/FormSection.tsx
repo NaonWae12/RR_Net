@@ -31,13 +31,13 @@ export function FormSection({
               <h3 className="text-lg font-semibold">{title}</h3>
             )}
             {description && (
-              <p className="text-sm text-muted-foreground mt-1">{description}</p>
+              <p className="text-sm text-slate-600 mt-1">{description}</p>
             )}
           </div>
           {collapsible && (
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-sm text-muted-foreground hover:text-foreground"
+              className="text-sm text-slate-600 hover:text-slate-900"
             >
               {isCollapsed ? "Expand" : "Collapse"}
             </button>

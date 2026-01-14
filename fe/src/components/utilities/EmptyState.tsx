@@ -29,21 +29,21 @@ export const EmptyState = React.memo<EmptyStateProps>(
     return (
       <div className={cn("flex flex-col items-center justify-center py-12 px-4 text-center", className)}>
         {illustration && (
-          <div className="mb-6 text-muted-foreground" aria-hidden="true">
+          <div className="mb-6 text-slate-400" aria-hidden="true">
             {illustration}
           </div>
         )}
 
-        <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
+        <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
 
-        <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+        <p className="text-sm text-slate-600 text-center max-w-md mb-6">
           {description}
         </p>
 
         {search && (
           <div className="w-full max-w-sm mb-6">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 type="search"
                 placeholder="Search..."
@@ -66,7 +66,7 @@ export const EmptyState = React.memo<EmptyStateProps>(
             href={help.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 transition-colors"
           >
             <HelpCircle className="h-4 w-4" />
             {help.text}

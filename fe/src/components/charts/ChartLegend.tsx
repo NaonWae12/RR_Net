@@ -54,9 +54,9 @@ export function ChartLegend({
             className="w-3 h-3 rounded-full"
             style={{ backgroundColor: item.color }}
           />
-          <span className="text-sm text-muted-foreground">{item.name}</span>
+          <span className="text-sm text-slate-600">{item.name}</span>
           {item.value !== undefined && (
-            <span className="text-sm font-medium">{item.value}</span>
+            <span className="text-sm font-medium text-slate-900">{item.value}</span>
           )}
         </div>
       ))}

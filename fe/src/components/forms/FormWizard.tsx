@@ -97,7 +97,7 @@ export function FormWizard({
             <span className="font-medium">
               Step {currentStep + 1} of {steps.length}
             </span>
-            <span className="text-muted-foreground">{Math.round(progress)}%</span>
+            <span className="text-slate-600">{Math.round(progress)}%</span>
           </div>
           <ProgressIndicator value={currentStep + 1} max={steps.length} showPercentage={false} />
         </div>
@@ -116,7 +116,7 @@ export function FormWizard({
                     ? "bg-primary text-primary-foreground"
                     : completedSteps.has(index)
                     ? "bg-muted text-foreground"
-                    : "bg-background text-muted-foreground",
+                    : "bg-background text-slate-600",
                   !allowJump && index > currentStep && !completedSteps.has(index) && "opacity-50 cursor-not-allowed"
                 )}
               >
@@ -134,7 +134,7 @@ export function FormWizard({
           <div>
             <h2 className="text-2xl font-semibold">{currentStepData.title}</h2>
             {currentStepData.description && (
-              <p className="text-muted-foreground mt-2">{currentStepData.description}</p>
+              <p className="text-slate-600 mt-2">{currentStepData.description}</p>
             )}
           </div>
 
@@ -187,8 +187,8 @@ export function FormWizard({
             <div className="space-y-2 text-sm">
               {Object.entries(formData).map(([key, value]) => (
                 <div key={key} className="flex justify-between">
-                  <span className="text-muted-foreground">{key}:</span>
-                  <span className="font-medium">{String(value)}</span>
+                  <span className="text-slate-600">{key}:</span>
+                  <span className="font-medium text-slate-900">{String(value)}</span>
                 </div>
               ))}
             </div>

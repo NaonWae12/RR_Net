@@ -61,7 +61,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
       return (
         <Card className={className}>
           <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground">No revenue data available</p>
+            <p className="text-sm text-slate-600">No revenue data available</p>
           </CardContent>
         </Card>
       );

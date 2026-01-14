@@ -88,7 +88,7 @@ export const TabLayout = React.memo<TabLayoutProps>(
                   "px-4 py-2 text-sm font-medium transition-colors border-b-4 -mb-px",
                   activeTab === tab.id
                     ? "border-primary/10 text-primary bg-primary/5"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-slate-100 hover:border-slate-400",
+                    : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-400",
                   tab.disabled && "opacity-50 cursor-not-allowed hover:bg-transparent hover:border-transparent",
                   vertical && "border-b-0 border-r-2 -mr-px",
                   !vertical && "border-b-2"

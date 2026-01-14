@@ -67,8 +67,8 @@ export function SuperAdminHeader() {
           <DropdownMenuContent align="end" className="w-56 bg-white">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{user?.name || 'User'}</p>
-                <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
+                <p className="text-sm font-medium text-slate-900">{user?.name || 'User'}</p>
+                <p className="text-xs text-slate-600">{user?.email || ''}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

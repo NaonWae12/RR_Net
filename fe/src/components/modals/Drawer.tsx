@@ -91,7 +91,7 @@ export function Drawer({
                 </h2>
               )}
               {subtitle && (
-                <p id="drawer-description" className="mt-2 text-sm text-muted-foreground">
+                <p id="drawer-description" className="mt-2 text-sm text-slate-600">
                   {subtitle}
                 </p>
               )}

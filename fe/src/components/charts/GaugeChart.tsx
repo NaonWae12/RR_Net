@@ -118,7 +118,7 @@ export function GaugeChart({
             {value.toFixed(1)}
             {unit && <span className="text-lg ml-1">{unit}</span>}
           </div>
-          <div className="text-sm text-muted-foreground mt-1">
+          <div className="text-sm text-slate-600 mt-1">
             {min} - {max}
           </div>
         </div>

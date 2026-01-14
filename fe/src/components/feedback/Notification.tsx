@@ -51,7 +51,7 @@ export const Notification = React.memo<NotificationProps>(
               onDismiss={() => onDismiss?.(notification.id)}
             />
             {notification.timestamp && (
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-slate-600 mt-2">
                 {new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(
                   Math.round((notification.timestamp.getTime() - Date.now()) / 60000),
                   "minute"
@@ -74,7 +74,7 @@ export const Notification = React.memo<NotificationProps>(
             {!notification.read && (
               <button
                 onClick={() => onMarkAsRead?.(notification.id)}
-                className="absolute top-2 right-2 text-xs text-muted-foreground hover:text-foreground"
+                className="absolute top-2 right-2 text-xs text-slate-600 hover:text-slate-900"
               >
                 Mark as read
               </button>
@@ -82,7 +82,7 @@ export const Notification = React.memo<NotificationProps>(
           </div>
         ))}
         {notifications.length > maxItems && (
-          <p className="text-sm text-center text-muted-foreground">
+          <p className="text-sm text-center text-slate-600">
             {notifications.length - maxItems} more notification{notifications.length - maxItems > 1 ? "s" : ""}
           </p>
         )}

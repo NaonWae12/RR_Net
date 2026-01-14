@@ -43,7 +43,7 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
     if (!data) {
       return (
         <Card className={cn("p-6", className)}>
-          <p className="text-sm text-muted-foreground">No health data available</p>
+          <p className="text-sm text-slate-600">No health data available</p>
         </Card>
       );
     }
@@ -87,69 +87,69 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
             />
           </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <GaugeChart
-              height={150}
-              title="Overall Health Score"
-              value={data.overallScore}
-              min={0}
-              max={100}
-              ranges={[
-                { from: 0, to: 50, color: "#ef4444" },
-                { from: 50, to: 80, color: "#f59e0b" },
-                { from: 80, to: 100, color: "#10b981" },
-              ]}
-            />
-          </div>
-
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h4 className="text-sm font-medium mb-2 flex items-center gap-2 text-slate-900">
-                <Server className="h-4 w-4 text-slate-700" />
-                Services Status
-              </h4>
-              <div className="space-y-2">
-                {data.services.map((service) => (
-                  <div key={service.name} className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700">{service.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500">{service.uptime}% uptime</span>
-                      <StatusBadge status={service.status} variant={getStatusVariant(service.status)} size="sm" />
+              <GaugeChart
+                height={150}
+                title="Overall Health Score"
+                value={data.overallScore}
+                min={0}
+                max={100}
+                ranges={[
+                  { from: 0, to: 50, color: "#ef4444" },
+                  { from: 50, to: 80, color: "#f59e0b" },
+                  { from: 80, to: 100, color: "#10b981" },
+                ]}
+              />
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2 text-slate-900">
+                  <Server className="h-4 w-4 text-slate-700" />
+                  Services Status
+                </h4>
+                <div className="space-y-2">
+                  {data.services.map((service) => (
+                    <div key={service.name} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-700">{service.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">{service.uptime}% uptime</span>
+                        <StatusBadge status={service.status} variant={getStatusVariant(service.status)} size="sm" />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div>
-              <h4 className="text-sm font-medium mb-2 flex items-center gap-2 text-slate-900">
-                <Database className="h-4 w-4 text-slate-700" />
-                Resource Usage
-              </h4>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-700">CPU</span>
-                  <span className={cn("font-medium", getStatusColor(100 - data.resources.cpu))}>
-                    {data.resources.cpu}%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-700">Memory</span>
-                  <span className={cn("font-medium", getStatusColor(100 - data.resources.memory))}>
-                    {data.resources.memory}%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-700">Disk</span>
-                  <span className={cn("font-medium", getStatusColor(100 - data.resources.disk))}>
-                    {data.resources.disk}%
-                  </span>
+              <div>
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2 text-slate-900">
+                  <Database className="h-4 w-4 text-slate-700" />
+                  Resource Usage
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700">CPU</span>
+                    <span className={cn("font-medium", getStatusColor(100 - data.resources.cpu))}>
+                      {data.resources.cpu}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700">Memory</span>
+                    <span className={cn("font-medium", getStatusColor(100 - data.resources.memory))}>
+                      {data.resources.memory}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700">Disk</span>
+                    <span className={cn("font-medium", getStatusColor(100 - data.resources.disk))}>
+                      {data.resources.disk}%
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
         </CardContent>
       </Card>
     );

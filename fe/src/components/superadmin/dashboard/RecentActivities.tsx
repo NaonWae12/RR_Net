@@ -91,7 +91,7 @@ export const RecentActivities = React.memo<RecentActivitiesProps>(
         <CardContent>
           {displayActivities.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground">No recent activities</p>
+              <p className="text-sm text-slate-600">No recent activities</p>
             </div>
           ) : (
             <div className="space-y-3">

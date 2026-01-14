@@ -87,7 +87,7 @@ export function DataTable<T extends Record<string, any>>({
   if (loading) {
     return (
       <div className="flex justify-center items-center h-48">
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-slate-600">Loading...</p>
       </div>
     );
   }
@@ -128,7 +128,7 @@ export function DataTable<T extends Record<string, any>>({
           <TableBody>
             {sortedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={columns.length} className="text-center py-8 text-slate-600">
                   {emptyMessage}
                 </TableCell>
               </TableRow>

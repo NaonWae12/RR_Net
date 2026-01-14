@@ -68,7 +68,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
       return (
         <Card className={className}>
           <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground">No alert data available</p>
+            <p className="text-sm text-slate-600">No alert data available</p>
           </CardContent>
         </Card>
       );
@@ -120,7 +120,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
               <h4 className="text-sm font-medium mb-2 text-slate-900">Recent Alerts</h4>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {data.recent.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No recent alerts</p>
+                  <p className="text-sm text-slate-600 text-center py-4">No recent alerts</p>
                 ) : (
                   data.recent.map((alert) => {
                     const Icon = alertIcons[alert.type];
@@ -133,7 +133,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
                         icon={<Icon className="h-4 w-4" />}
                         className="text-sm"
                       >
-                        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
                           <span>{alert.source || "System"}</span>
                           <span>{new Date(alert.timestamp).toLocaleString()}</span>
                         </div>

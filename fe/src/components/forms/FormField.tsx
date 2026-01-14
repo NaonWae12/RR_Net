@@ -114,7 +114,7 @@ export function FormField({
             disabled={disabled}
             rows={rows}
             className={cn(
-              "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
               error && "border-destructive",
               className
             )}
@@ -151,7 +151,7 @@ export function FormField({
               disabled={disabled}
               className="h-4 w-4 rounded border-gray-300"
             />
-            {helpText && <span className="text-sm text-muted-foreground">{helpText}</span>}
+            {helpText && <span className="text-sm text-slate-600">{helpText}</span>}
           </div>
         );
 
@@ -185,7 +185,7 @@ export function FormField({
               role="switch"
               className="h-5 w-9 rounded-full bg-gray-200 appearance-none checked:bg-primary transition-colors"
             />
-            {helpText && <span className="text-sm text-muted-foreground">{helpText}</span>}
+            {helpText && <span className="text-sm text-slate-600">{helpText}</span>}
           </div>
         );
 
@@ -260,7 +260,7 @@ export function FormField({
               renderInput(field)
             )}
             {helpText && type !== "checkbox" && type !== "switch" && (
-              <p className="text-xs text-muted-foreground">{helpText}</p>
+              <p className="text-xs text-slate-600">{helpText}</p>
             )}
             {error && (
               <div className="flex items-center gap-1 text-sm text-destructive">

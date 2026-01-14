@@ -69,7 +69,7 @@ export const ProgressIndicator = React.memo<ProgressIndicatorProps>(function Pro
 
   return (
     <div className={cn("w-full space-y-1", className)}>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="flex items-center justify-between text-xs text-slate-600">
         {steps && steps.length > 0 ? (
           <span>{steps[Math.floor((percentage / 100) * steps.length)]}</span>
         ) : (

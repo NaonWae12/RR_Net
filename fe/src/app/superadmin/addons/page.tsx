@@ -96,7 +96,7 @@ export default function AddonsPage() {
         <div>
           <div className="font-medium">{value}</div>
           {row.description && (
-            <div className="text-xs text-muted-foreground mt-1 line-clamp-1">{row.description}</div>
+            <div className="text-xs text-slate-600 mt-1 line-clamp-1">{row.description}</div>
           )}
         </div>
       ),

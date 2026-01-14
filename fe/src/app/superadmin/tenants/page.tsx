@@ -97,7 +97,7 @@ export default function TenantsPage() {
       key: "domain",
       title: "Domain",
       filterable: true,
-      render: (value) => value || <span className="text-muted-foreground">-</span>,
+      render: (value) => value || <span className="text-slate-400">-</span>,
     },
     {
       key: "status",

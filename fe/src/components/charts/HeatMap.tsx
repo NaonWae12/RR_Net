@@ -114,7 +114,7 @@ export function HeatMap({
       </div>
       {/* Legend */}
       <div className="flex items-center justify-center gap-2 mt-4">
-        <span className="text-xs text-muted-foreground">Less</span>
+        <span className="text-xs text-slate-600">Less</span>
         {colorScale.map((color, index) => (
           <div
             key={index}
@@ -122,7 +122,7 @@ export function HeatMap({
             style={{ backgroundColor: color }}
           />
         ))}
-        <span className="text-xs text-muted-foreground">More</span>
+        <span className="text-xs text-slate-600">More</span>
       </div>
     </ChartContainer>
   );

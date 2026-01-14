@@ -82,7 +82,7 @@ export default function PlansPage() {
         <div>
           <div className="font-medium">{value}</div>
           {row.description && (
-            <div className="text-xs text-muted-foreground mt-1 line-clamp-1">{row.description}</div>
+            <div className="text-xs text-slate-600 mt-1 line-clamp-1">{row.description}</div>
           )}
         </div>
       ),
@@ -97,7 +97,7 @@ export default function PlansPage() {
       key: "price_yearly",
       title: "Yearly Price",
       sortable: true,
-      render: (value, row) => value ? formatCurrency(value, row.currency) : <span className="text-muted-foreground">-</span>,
+      render: (value, row) => value ? formatCurrency(value, row.currency) : <span className="text-slate-400">-</span>,
     },
     {
       key: "is_active",

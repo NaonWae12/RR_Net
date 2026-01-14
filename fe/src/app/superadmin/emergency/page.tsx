@@ -197,7 +197,7 @@ export default function EmergencyPage() {
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
-                            <h4 className="font-medium flex items-center gap-2">
+                            <h4 className="font-medium flex items-center gap-2 text-slate-900">
                               {action.name}
                               <StatusBadge
                                 status={action.severity}
@@ -205,7 +205,7 @@ export default function EmergencyPage() {
                                 size="sm"
                               />
                             </h4>
-                            <p className="text-sm text-muted-foreground mt-1">{action.description}</p>
+                            <p className="text-sm text-slate-600 mt-1">{action.description}</p>
                           </div>
                         </div>
                         <Button

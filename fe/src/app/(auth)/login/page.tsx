@@ -45,17 +45,17 @@ export default function LoginPage() {
   const onSubmit = async (data: FormValues) => {
     try {
       setSubmitted(true);
-      
+
       // For super admin, don't send tenant slug
       // For tenant users, send tenant slug if provided
       const tenantSlug = data.tenantSlug?.trim() || undefined;
-      
+
       await login(
         { email: data.email, password: data.password },
         tenantSlug
       );
       showToast({ title: "Login berhasil", variant: "success" });
-      
+
       // Sync tenant to tenantStore after successful login (only for tenant users)
       const authState = useAuthStore.getState();
       if (authState.tenant && authState.tenantSlug) {
@@ -65,11 +65,11 @@ export default function LoginPage() {
         // For super admin, clear tenant store
         useTenantStore.getState().clear();
       }
-      
+
       // Get user role from auth store to determine redirect
       const currentUser = useAuthStore.getState().user;
       const userRole = currentUser?.role || "";
-      
+
       // Redirect based on role
       if (userRole === "super_admin") {
         router.push("/superadmin");
@@ -79,19 +79,19 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error("Login error:", err);
-      
+
       // Extract error message from various possible locations
-      const errorMessage = 
-        err?.response?.data?.error || 
-        err?.message || 
+      const errorMessage =
+        err?.response?.data?.error ||
+        err?.message ||
         err?.details?.error ||
         "Terjadi kesalahan saat login";
-      
+
       console.log("Error message extracted:", errorMessage);
-      
+
       // Clear previous errors
       clearErrors();
-      
+
       // Set error to appropriate field based on error message
       const lowerMessage = errorMessage.toLowerCase();
       if (lowerMessage.includes("email tidak terdaftar") || lowerMessage.includes("email tidak ditemukan")) {
@@ -111,7 +111,7 @@ export default function LoginPage() {
           message: errorMessage,
         });
       }
-      
+
       // Also show toast notification
       showToast({
         title: "Login gagal",

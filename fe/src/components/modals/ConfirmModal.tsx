@@ -130,7 +130,7 @@ export function ConfirmModal({
         )}
 
         {isCountingDown && (
-          <div className="text-sm text-muted-foreground text-center">
+          <div className="text-sm text-slate-600 text-center">
             Please wait {remainingTime} second{remainingTime !== 1 ? "s" : ""} before confirming
           </div>
         )}

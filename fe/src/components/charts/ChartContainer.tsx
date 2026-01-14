@@ -87,7 +87,7 @@ export function ChartContainer({
               </h3>
             )}
             {subtitle && (
-              <p className={cn("text-sm text-muted-foreground", theme === "dark" && "text-slate-400")}>
+              <p className={cn("text-sm text-slate-600", theme === "dark" && "text-slate-400")}>
                 {subtitle}
               </p>
             )}

@@ -74,7 +74,7 @@ export function MFAVerification({
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Two-Factor Authentication</h2>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-sm text-slate-600 mt-1">
           Enter the 6-digit code from your authenticator app
         </p>
       </div>
@@ -102,7 +102,7 @@ export function MFAVerification({
         </div>
 
         {timer > 0 && (
-          <p className="text-sm text-muted-foreground text-center">
+          <p className="text-sm text-slate-600 text-center">
             Time remaining: {formatTime(timer)}
           </p>
         )}

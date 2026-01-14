@@ -64,7 +64,7 @@ export function SubscriptionTab() {
               <CardDescription>{plan?.description ?? "Plan information is not available."}</CardDescription>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <span className="text-sm text-muted-foreground">Billing Status</span>
+              <span className="text-sm text-slate-600">Billing Status</span>
               <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-slate-100 text-slate-800">
                 {tenant?.billing_status ?? "-"}
               </span>
@@ -75,18 +75,18 @@ export function SubscriptionTab() {
           {plan ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <div className="text-sm text-muted-foreground">Monthly Price</div>
-                <div className="text-lg font-semibold">
+                <div className="text-sm text-slate-600">Monthly Price</div>
+                <div className="text-lg font-semibold text-slate-900">
                   {formatCurrency(plan.price_monthly ?? 0, plan.currency ?? "IDR")}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Plan Code</div>
-                <div className="text-sm font-medium">{plan.code}</div>
+                <div className="text-sm text-slate-600">Plan Code</div>
+                <div className="text-sm font-medium text-slate-900">{plan.code}</div>
               </div>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-slate-600">
               Belum ada plan terdeteksi untuk tenant ini.
             </div>
           )}
@@ -101,7 +101,7 @@ export function SubscriptionTab() {
           </CardHeader>
           <CardContent>
             {Object.keys(effectiveLimits).length === 0 ? (
-              <div className="text-sm text-muted-foreground">Tidak ada data limits.</div>
+              <div className="text-sm text-slate-600">Tidak ada data limits.</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Object.entries(effectiveLimits).map(([k, v]) => (
@@ -122,7 +122,7 @@ export function SubscriptionTab() {
           </CardHeader>
           <CardContent>
             {effectiveFeatures.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Tidak ada data feature.</div>
+              <div className="text-sm text-slate-600">Tidak ada data feature.</div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {effectiveFeatures.map((f) => (

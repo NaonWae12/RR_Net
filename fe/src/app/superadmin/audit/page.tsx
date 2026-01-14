@@ -77,7 +77,7 @@ export default function AuditPage() {
       render: (value, row) => (
         <div>
           <div className="font-medium">{value}</div>
-          <div className="text-xs text-muted-foreground">{row.user_id}</div>
+          <div className="text-xs text-slate-600">{row.user_id}</div>
         </div>
       ),
     },
@@ -87,7 +87,7 @@ export default function AuditPage() {
       sortable: true,
       filterable: true,
       render: (value) => (
-        <span className="capitalize font-medium">{value}</span>
+          <span className="capitalize font-medium text-slate-900">{value}</span>
       ),
     },
     {
@@ -97,9 +97,9 @@ export default function AuditPage() {
       filterable: true,
       render: (value, row) => (
         <div>
-          <span className="capitalize">{value}</span>
+          <span className="capitalize text-slate-900">{value}</span>
           {row.resource_name && (
-            <div className="text-xs text-muted-foreground">{row.resource_name}</div>
+            <div className="text-xs text-slate-600">{row.resource_name}</div>
           )}
         </div>
       ),
@@ -177,37 +177,37 @@ export default function AuditPage() {
       {selectedLog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedLog(null)}>
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">Audit Log Details</h3>
+            <h3 className="text-lg font-semibold mb-4 text-slate-900">Audit Log Details</h3>
             <div className="space-y-2 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-muted-foreground">User</p>
-                  <p className="font-medium">{selectedLog.user_name}</p>
+                  <p className="text-slate-600">User</p>
+                  <p className="font-medium text-slate-900">{selectedLog.user_name}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Action</p>
-                  <p className="font-medium capitalize">{selectedLog.action}</p>
+                  <p className="text-slate-600">Action</p>
+                  <p className="font-medium text-slate-900 capitalize">{selectedLog.action}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Resource</p>
-                  <p className="font-medium">{selectedLog.resource_type} - {selectedLog.resource_name || selectedLog.resource_id}</p>
+                  <p className="text-slate-600">Resource</p>
+                  <p className="font-medium text-slate-900">{selectedLog.resource_type} - {selectedLog.resource_name || selectedLog.resource_id}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Status</p>
+                  <p className="text-slate-600">Status</p>
                   <StatusBadge status={selectedLog.status} variant={selectedLog.status === "success" ? "success" : selectedLog.status === "failed" ? "error" : "warning"} size="sm" />
                 </div>
                 <div>
-                  <p className="text-muted-foreground">IP Address</p>
-                  <p className="font-medium">{selectedLog.ip_address}</p>
+                  <p className="text-slate-600">IP Address</p>
+                  <p className="font-medium text-slate-900">{selectedLog.ip_address}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Timestamp</p>
-                  <p className="font-medium">{format(new Date(selectedLog.created_at), "PPpp")}</p>
+                  <p className="text-slate-600">Timestamp</p>
+                  <p className="font-medium text-slate-900">{format(new Date(selectedLog.created_at), "PPpp")}</p>
                 </div>
               </div>
               {selectedLog.details && (
                 <div>
-                  <p className="text-muted-foreground mb-2">Details</p>
+                  <p className="text-slate-600 mb-2">Details</p>
                   <pre className="bg-muted p-3 rounded text-xs overflow-auto">
                     {JSON.stringify(selectedLog.details, null, 2)}
                   </pre>

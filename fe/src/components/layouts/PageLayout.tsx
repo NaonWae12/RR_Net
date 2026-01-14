@@ -48,7 +48,7 @@ export const PageLayout = React.memo<PageLayoutProps>(
                     <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
                   )}
                   {subtitle && (
-                    <p className="text-muted-foreground mt-1">{subtitle}</p>
+                    <p className="text-slate-600 mt-1">{subtitle}</p>
                   )}
                   {header}
                 </div>

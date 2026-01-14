@@ -226,7 +226,7 @@ export function FeatureComparisonTable() {
     return (
       <Card>
         <CardContent className="flex justify-center p-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin text-slate-600" />
         </CardContent>
       </Card>
     );
@@ -257,31 +257,31 @@ export function FeatureComparisonTable() {
 
                 <th className="bg-slate-100 p-3 text-center font-semibold">
                   Basic
-                  <div className="text-xs font-normal text-muted-foreground">
+                  <div className="text-xs font-normal text-slate-600">
                     {formatPrice(basic.price_monthly)}
                   </div>
                 </th>
 
                 <th className="bg-slate-100 p-3 text-center font-semibold">
                   Pro
-                  <div className="text-xs font-normal text-muted-foreground">
+                  <div className="text-xs font-normal text-slate-600">
                     {formatPrice(pro.price_monthly)}
                   </div>
                 </th>
 
                 <th className="bg-blue-100 p-3 text-center font-semibold text-blue-700">
                   Business
-                  <div className="text-xs font-normal">
+                  <div className="text-xs font-normal text-blue-700">
                     {formatPrice(business.price_monthly)}
                   </div>
-                  <span className="mt-1 block text-[10px] font-semibold uppercase">
+                  <span className="mt-1 block text-[10px] font-semibold uppercase text-blue-700">
                     Most Popular
                   </span>
                 </th>
 
                 <th className="bg-slate-100 p-3 text-center font-semibold">
                   Enterprise
-                  <div className="text-xs font-normal text-muted-foreground">
+                  <div className="text-xs font-normal text-slate-600">
                     {formatPrice(enterprise.price_monthly)}+
                   </div>
                 </th>

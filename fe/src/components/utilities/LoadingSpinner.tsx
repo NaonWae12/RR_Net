@@ -92,7 +92,7 @@ export const LoadingSpinner = React.memo<LoadingSpinnerProps>(
       <div className={cn("flex flex-col items-center justify-center gap-2", className)}>
         {renderSpinner()}
         {text && (
-          <p className="text-sm text-muted-foreground" style={{ color: spinnerColor }}>
+          <p className="text-sm text-slate-600" style={{ color: spinnerColor }}>
             {text}
           </p>
         )}

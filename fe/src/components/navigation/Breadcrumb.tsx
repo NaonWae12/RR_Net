@@ -52,17 +52,17 @@ export function Breadcrumb({ items, maxItems = 5, className }: BreadcrumbProps) 
       {breadcrumbItems.map((item, index) => (
         <React.Fragment key={index}>
           {index > 0 && (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <ChevronRight className="h-4 w-4 text-slate-400" />
           )}
           {item.href ? (
             <Link
               href={item.href}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="text-slate-600 hover:text-slate-900 transition-colors"
             >
               {item.label}
             </Link>
           ) : (
-            <span className="text-foreground font-medium">{item.label}</span>
+            <span className="text-slate-900 font-medium">{item.label}</span>
           )}
         </React.Fragment>
       ))}

@@ -115,8 +115,8 @@ export default function MonitoringPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Cpu className="h-4 w-4" />
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-900">
+                  <Cpu className="h-4 w-4 text-slate-700" />
                   CPU Usage
                 </CardTitle>
               </CardHeader>
@@ -132,14 +132,14 @@ export default function MonitoringPage() {
                     { from: 80, to: 100, color: "#ef4444" },
                   ]}
                 />
-                <p className="text-center text-sm font-medium mt-2">{metrics?.cpu || 0}%</p>
+                <p className="text-center text-sm font-medium text-slate-900 mt-2">{metrics?.cpu || 0}%</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Database className="h-4 w-4" />
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-900">
+                  <Database className="h-4 w-4 text-slate-700" />
                   Memory Usage
                 </CardTitle>
               </CardHeader>
@@ -155,14 +155,14 @@ export default function MonitoringPage() {
                     { from: 85, to: 100, color: "#ef4444" },
                   ]}
                 />
-                <p className="text-center text-sm font-medium mt-2">{metrics?.memory || 0}%</p>
+                <p className="text-center text-sm font-medium text-slate-900 mt-2">{metrics?.memory || 0}%</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <HardDrive className="h-4 w-4" />
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-900">
+                  <HardDrive className="h-4 w-4 text-slate-700" />
                   Disk Usage
                 </CardTitle>
               </CardHeader>
@@ -178,26 +178,26 @@ export default function MonitoringPage() {
                     { from: 90, to: 100, color: "#ef4444" },
                   ]}
                 />
-                <p className="text-center text-sm font-medium mt-2">{metrics?.disk || 0}%</p>
+                <p className="text-center text-sm font-medium text-slate-900 mt-2">{metrics?.disk || 0}%</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Activity className="h-4 w-4" />
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-900">
+                  <Activity className="h-4 w-4 text-slate-700" />
                   Network
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   <div>
-                    <p className="text-xs text-muted-foreground">In</p>
-                    <p className="text-lg font-bold">{(metrics?.networkIn || 0).toLocaleString()} KB/s</p>
+                    <p className="text-xs text-slate-600">In</p>
+                    <p className="text-lg font-bold text-slate-900">{(metrics?.networkIn || 0).toLocaleString()} KB/s</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Out</p>
-                    <p className="text-lg font-bold">{(metrics?.networkOut || 0).toLocaleString()} KB/s</p>
+                    <p className="text-xs text-slate-600">Out</p>
+                    <p className="text-lg font-bold text-slate-900">{(metrics?.networkOut || 0).toLocaleString()} KB/s</p>
                   </div>
                 </div>
               </CardContent>
@@ -207,8 +207,8 @@ export default function MonitoringPage() {
           {/* Service Status */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Server className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-slate-900">
+                <Server className="h-5 w-5 text-slate-700" />
                 Service Status
               </CardTitle>
             </CardHeader>
@@ -217,7 +217,7 @@ export default function MonitoringPage() {
                 {services.map((service) => (
                   <div key={service.name} className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">{service.name}</span>
+                      <span className="font-medium text-slate-900">{service.name}</span>
                       <StatusBadge
                         status={service.status}
                         variant={getStatusVariant(service.status)}
@@ -226,12 +226,12 @@ export default function MonitoringPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
-                        <p className="text-muted-foreground">Uptime</p>
-                        <p className="font-medium">{service.uptime}%</p>
+                        <p className="text-slate-600">Uptime</p>
+                        <p className="font-medium text-slate-900">{service.uptime}%</p>
                       </div>
                       <div>
-                        <p className="text-muted-foreground">Response Time</p>
-                        <p className="font-medium">{service.responseTime}ms</p>
+                        <p className="text-slate-600">Response Time</p>
+                        <p className="font-medium text-slate-900">{service.responseTime}ms</p>
                       </div>
                     </div>
                   </div>

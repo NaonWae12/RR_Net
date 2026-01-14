@@ -365,3 +365,4 @@ kill -9 <PID>
 4. Configure automated backups
 5. Setup monitoring (optional)
 
+

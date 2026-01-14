@@ -50,7 +50,7 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
       return (
         <Card className={className}>
           <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground">No tenant data available</p>
+            <p className="text-sm text-slate-600">No tenant data available</p>
           </CardContent>
         </Card>
       );
