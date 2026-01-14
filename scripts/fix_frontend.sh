@@ -52,7 +52,7 @@ echo "✓ Frontend directory and package.json found"
 echo "[3] Setting up environment..."
 if [ ! -f .env.local ]; then
     cat > .env.local << EOF
-NEXT_PUBLIC_API_URL=http://$VPS_IP:8080
+NEXT_PUBLIC_API_URL=http://$VPS_IP:8080/api/v1
 EOF
     echo "✓ Created .env.local"
 else

@@ -148,7 +148,7 @@ echo "[9] Setting up frontend environment..."
 cd $PROJECT_DIR/fe
 if [ ! -f .env.local ]; then
     cat > .env.local << EOF
-NEXT_PUBLIC_API_URL=http://$VPS_IP:8080
+NEXT_PUBLIC_API_URL=http://$VPS_IP:8080/api/v1
 EOF
     echo "✓ Created fe/.env.local"
 fi

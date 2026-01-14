@@ -87,7 +87,7 @@ chmod +x rrnet-api
 echo "[8/10] Configuring frontend..."
 cd "$PROJECT_DIR/fe"
 if [ ! -f .env.local ]; then
-    echo "NEXT_PUBLIC_API_URL=http://$(hostname -I | awk '{print $1}'):8080" > .env.local
+    echo "NEXT_PUBLIC_API_URL=http://$(hostname -I | awk '{print $1}'):8080/api/v1" > .env.local
     echo "Created fe/.env.local"
 fi
 
@@ -157,4 +157,5 @@ echo "To view logs:"
 echo "  journalctl -u rrnet-backend -f"
 echo "  journalctl -u rrnet-frontend -f"
 echo ""
+
 

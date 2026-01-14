@@ -139,7 +139,7 @@ fi
 Run-RemoteCommand @"
 cd $DEPLOY_DIR/fe
 if [ ! -f .env.local ]; then
-    echo 'NEXT_PUBLIC_API_URL=http://localhost:8080' > .env.local
+    echo 'NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1' > .env.local
     echo 'Created fe/.env.local file'
 fi
 "@
@@ -189,4 +189,5 @@ Write-Host "3. Check status: systemctl status rrnet-backend" -ForegroundColor Cy
 Write-Host ""
 Write-Host "Backend: http://$VPS_HOST`:8080" -ForegroundColor Green
 Write-Host "Frontend: http://$VPS_HOST`:3000" -ForegroundColor Green
+
 

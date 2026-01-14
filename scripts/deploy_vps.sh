@@ -182,7 +182,7 @@ run_remote "
     cd $DEPLOY_DIR/fe
     if [ ! -f .env.local ]; then
         cat > .env.local << 'EOF'
-NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
 EOF
         echo 'Created fe/.env.local file'
     else
@@ -267,4 +267,5 @@ echo "   ssh $VPS_USER@$VPS_HOST 'journalctl -u rrnet-frontend -f'"
 echo ""
 echo -e "${GREEN}Backend will be available at: http://$VPS_HOST:8080${NC}"
 echo -e "${GREEN}Frontend will be available at: http://$VPS_HOST:3000${NC}"
+
 

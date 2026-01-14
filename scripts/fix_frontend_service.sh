@@ -41,7 +41,7 @@ echo "[4] Checking environment..."
 if [ ! -f ".env.local" ]; then
     echo "⚠️  Creating .env.local..."
     cat > .env.local << EOF
-NEXT_PUBLIC_API_URL=http://72.60.74.209:8080
+NEXT_PUBLIC_API_URL=http://72.60.74.209:8080/api/v1
 EOF
     echo "✓ Created .env.local"
 else
@@ -108,4 +108,5 @@ echo ""
 echo "If still not working, check logs:"
 echo "  journalctl -u rrnet-frontend -f"
 echo ""
+
 
