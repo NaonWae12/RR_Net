@@ -81,12 +81,12 @@ func (s *AuthService) Login(ctx context.Context, tenantID *uuid.UUID, req *Login
 		// Tenant-scoped login: find user within specific tenant
 		u, err = s.userRepo.GetByEmail(ctx, tenantID, req.Email)
 	} else {
-		// No tenant context: try to find user from any tenant (for tenant users) or super admin (tenant_id IS NULL)
-		// First try to find from any tenant (most common case)
-		u, err = s.userRepo.GetByEmailAnyTenant(ctx, req.Email)
+		// No tenant context: try to find user from any tenant or super admin
+		// First try super admin (tenant_id IS NULL) - prioritize super admin
+		u, err = s.userRepo.GetByEmail(ctx, nil, req.Email)
 		if err != nil && errors.Is(err, repository.ErrUserNotFound) {
-			// If not found in any tenant, try super admin (tenant_id IS NULL)
-			u, err = s.userRepo.GetByEmail(ctx, nil, req.Email)
+			// If not super admin, try to find from any tenant (tenant users)
+			u, err = s.userRepo.GetByEmailAnyTenant(ctx, req.Email)
 		}
 	}
 
