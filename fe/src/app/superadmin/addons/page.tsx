@@ -212,7 +212,7 @@ export default function AddonsPage() {
         }
       >
         {error ? (
-          <div className="p-6 text-red-500">
+          <div className="p-6 text-red-600">
             Error loading addons: {error}
           </div>
         ) : (

@@ -67,7 +67,7 @@ export default function AuditPage() {
       key: "created_at",
       title: "Timestamp",
       sortable: true,
-      render: (value) => format(new Date(value), "PPp"),
+      render: (value) => <span className="text-slate-900">{format(new Date(value), "PPp")}</span>,
     },
     {
       key: "user_name",
