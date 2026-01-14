@@ -14,6 +14,28 @@ Dokumentasi ini menjelaskan cara mengecek database PostgreSQL di VPS, termasuk c
 
 ## Koneksi ke Database
 
+### 0. Fix Authentication (Jika Error Password)
+
+**Jika mendapat error "password authentication failed", jalankan script fix:**
+
+```bash
+# SSH ke VPS
+ssh root@72.60.74.209
+
+# Pull latest changes
+cd /opt/rrnet
+git pull origin main
+
+# Run fix script
+chmod +x scripts/fix_postgres_auth.sh
+./scripts/fix_postgres_auth.sh
+```
+
+Script ini akan:
+- Membuat/reset user `rrnet` dengan password `rrnet_secret`
+- Memberikan privileges yang diperlukan
+- Test koneksi
+
 ### 1. Koneksi via psql (Command Line)
 
 ```bash
@@ -23,7 +45,7 @@ ssh root@72.60.74.209
 # Koneksi ke PostgreSQL sebagai user rrnet
 psql -U rrnet -d rrnet_dev
 
-# Atau dengan password langsung
+# Atau dengan password langsung (recommended)
 PGPASSWORD=rrnet_secret psql -U rrnet -d rrnet_dev -h localhost
 ```
 
@@ -401,7 +423,16 @@ netstat -tlnp | grep 5432
 
 **Problem:** `password authentication failed for user "rrnet"`
 
-**Solution:**
+**Solution 1: Gunakan Script Fix (Recommended)**
+
+```bash
+# Run fix script
+cd /opt/rrnet
+chmod +x scripts/fix_postgres_auth.sh
+./scripts/fix_postgres_auth.sh
+```
+
+**Solution 2: Manual Fix**
 
 ```bash
 # Reset password sebagai postgres superuser
@@ -409,6 +440,24 @@ sudo -u postgres psql
 
 # Di psql:
 ALTER USER rrnet WITH PASSWORD 'rrnet_secret';
+
+# Atau create user jika belum ada
+CREATE USER rrnet WITH PASSWORD 'rrnet_secret';
+ALTER USER rrnet CREATEDB;
+
+# Exit
+\q
+```
+
+**Solution 3: Cek PostgreSQL Authentication Config**
+
+```bash
+# Cek pg_hba.conf
+cat /etc/postgresql/*/main/pg_hba.conf | grep -E "^local|^host.*127.0.0.1"
+
+# Jika perlu, edit untuk allow password authentication
+# Restart PostgreSQL setelah edit
+systemctl restart postgresql
 ```
 
 ## Quick Reference
