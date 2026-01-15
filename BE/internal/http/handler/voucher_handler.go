@@ -44,7 +44,7 @@ func (h *VoucherHandler) ListPackages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *VoucherHandler) GetPackage(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
+	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, `{"error":"Invalid package ID"}`, http.StatusBadRequest)
@@ -91,7 +91,7 @@ func (h *VoucherHandler) CreatePackage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *VoucherHandler) UpdatePackage(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
+	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, `{"error":"Invalid package ID"}`, http.StatusBadRequest)
@@ -115,7 +115,7 @@ func (h *VoucherHandler) UpdatePackage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *VoucherHandler) DeletePackage(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
+	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		http.Error(w, `{"error":"Invalid package ID"}`, http.StatusBadRequest)
