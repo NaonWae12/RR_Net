@@ -22,7 +22,7 @@ export default function NetworkPage() {
       <h1 className="text-2xl font-bold text-slate-900">Network Management</h1>
 
       {/* Routers Section */}
-      <div className="space-y-4">
+      <div className="space-y-4 text-slate-900">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold text-slate-800">Routers</h2>
           <Button onClick={() => router.push("/network/routers/create")}>
@@ -46,7 +46,7 @@ export default function NetworkPage() {
       </div>
 
       {/* Profiles Section */}
-      <div className="space-y-4">
+      <div className="space-y-4 text-slate-900">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold text-slate-800">Network Profiles</h2>
           <Button onClick={() => router.push("/network/profiles/create")}>
