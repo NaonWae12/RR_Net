@@ -189,6 +189,8 @@ func DefaultCSRFProtection() *CSRFProtection {
 		// CSRF on these endpoints is a frequent source of false 403s in cross-origin dev setups.
 		"/api/v1/network/routers/test-config",
 		"/api/v1/network/routers/*/test-connection",
+		// Router state toggle endpoint is JWT-protected; exempt to avoid CSRF false-positives.
+		"/api/v1/network/routers/*/disconnect",
 		// Public (non-JWT) endpoints authenticated by shared-secret headers
 		"/api/v1/radius/*",
 	}
