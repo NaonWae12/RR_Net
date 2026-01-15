@@ -185,6 +185,10 @@ func DefaultCSRFProtection() *CSRFProtection {
 		"/api/v1/auth/register",
 		"/api/v1/auth/refresh",
 		"/api/v1/auth/logout", // Logout is typically safe
+		// Network "test" endpoints are JWT-protected and do not mutate server state.
+		// CSRF on these endpoints is a frequent source of false 403s in cross-origin dev setups.
+		"/api/v1/network/routers/test-config",
+		"/api/v1/network/routers/*/test-connection",
 		// Public (non-JWT) endpoints authenticated by shared-secret headers
 		"/api/v1/radius/*",
 	}

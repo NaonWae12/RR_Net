@@ -23,16 +23,16 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 	query := `
 		INSERT INTO routers (
 			id, tenant_id, name, description, type, host, nas_ip, port,
-			username, password_hash, api_port, status, is_default,
+			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 	`
 	_, err := r.db.Exec(ctx, query,
 		router.ID, router.TenantID, router.Name, router.Description,
 		router.Type, router.Host, router.NASIP, router.Port, router.Username,
-		router.Password, router.APIPort, router.Status, router.IsDefault,
+		router.Password, router.APIPort, router.Status, router.LastSeen, router.IsDefault,
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
 		router.CreatedAt, router.UpdatedAt,
