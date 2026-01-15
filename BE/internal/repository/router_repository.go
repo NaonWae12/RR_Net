@@ -27,7 +27,7 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 	`
 	_, err := r.db.Exec(ctx, query,
 		router.ID, router.TenantID, router.Name, router.Description,
