@@ -1,12 +1,23 @@
 #!/bin/bash
-# Install L2TP + IPSec VPN Client di VPS untuk koneksi ke MikroTik
+# DEPRECATED (2026-01): Model changed.
+# New model: MikroTik = L2TP/IPSec CLIENT -> VPS = L2TP/IPSec SERVER (NAT-friendly, scalable)
+#
+# Use:
+#   bash scripts/install_vpn_server.sh
+#
+# This file is kept only to avoid confusion for anyone who previously pulled it.
 
 set -e
 
 echo "=========================================="
-echo "Install L2TP + IPSec VPN Client"
+echo "DEPRECATED: install_vpn_client.sh"
 echo "=========================================="
 echo ""
+echo "Model updated: MikroTik should connect as VPN client to VPS (VPN server)."
+echo "Please run:"
+echo "  bash scripts/install_vpn_server.sh"
+echo ""
+exit 1
 
 # Configuration (edit sesuai setup MikroTik)
 MIKROTIK_IP="36.70.234.179"
@@ -152,4 +163,5 @@ echo ""
 echo "To check VPN status:"
 echo "  ip addr show ppp0"
 echo ""
+
 

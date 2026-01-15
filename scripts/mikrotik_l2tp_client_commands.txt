@@ -1,0 +1,63 @@
+==========================================
+MikroTik L2TP/IPSec CLIENT (connect to VPS)
+==========================================
+
+Goal:
+- MikroTik (client) connect OUTBOUND to VPS (server) so NAT is not a problem.
+- ERP/VPS will access MikroTik API via MikroTik VPN IP (10.10.10.x).
+
+------------------------------------------
+A) Via Winbox GUI (Recommended)
+------------------------------------------
+
+1) Winbox → PPP → Interface → (+) → L2TP Client
+2) Set:
+   - Connect To     : <VPS_PUBLIC_IP>   (contoh 72.60.74.209)
+   - User           : <VPN_USERNAME>    (contoh vpn-router-001)
+   - Password       : <VPN_PASSWORD>
+   - Use IPSec      : ✓
+   - IPSec Secret   : <PSK>
+3) OK
+4) Pastikan interface status "R" (running)
+
+------------------------------------------
+B) Via Terminal (copy-paste)
+------------------------------------------
+
+# 1) Set variables
+:local vpsIp "72.60.74.209"
+:local vpnUser "vpn-router-001"
+:local vpnPass "CHANGE_ME"
+:local psk "CHANGE_ME"
+
+# 2) Add L2TP client interface
+/interface l2tp-client add name=l2tp-to-vps connect-to=$vpsIp user=$vpnUser password=$vpnPass use-ipsec=yes ipsec-secret=$psk disabled=no
+
+# 3) Verify
+/interface l2tp-client print
+
+------------------------------------------
+C) Allow MikroTik API from VPN network
+------------------------------------------
+
+Jika ERP akan connect ke MikroTik API (8728) lewat VPN, allow hanya dari VPN subnet (10.10.10.0/24)
+
+/ip firewall filter add chain=input action=accept protocol=tcp dst-port=8728 src-address=10.10.10.0/24 comment="Allow MikroTik API from VPN"
+
+Catatan:
+- Pastikan rule ini berada DI ATAS rule drop/reject.
+- Pastikan service API aktif:
+  /ip service print where name=api
+
+------------------------------------------
+D) Setelah VPN up
+------------------------------------------
+
+1) Cek IP yang didapat (harus 10.10.10.x):
+/ip address print
+
+2) Di ERP, isi Router Host = IP VPN MikroTik (10.10.10.x), bukan IP public.
+
+==========================================
+
+

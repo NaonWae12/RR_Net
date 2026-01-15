@@ -417,27 +417,27 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           <p className="text-sm font-semibold text-purple-900 mb-2">🔐 Setup Guide: VPN Connection (L2TP/IPSec)</p>
           <div className="space-y-2 text-xs text-purple-800">
             <div>
-              <p className="font-semibold mb-1">1. Setup L2TP/IPSec Server di MikroTik:</p>
+              <p className="font-semibold mb-1">1. Setup L2TP/IPSec Server di VPS:</p>
               <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Masuk ke <code className="bg-purple-100 px-1 rounded">PPP → Interface → L2TP Server</code></li>
-                <li>Enable L2TP server dan konfigurasi IP pool</li>
-                <li>Setup IPSec secret untuk keamanan</li>
+                <li>Install dan jalankan L2TP/IPSec server di VPS (strongSwan + xl2tpd)</li>
+                <li>Buat IP pool VPN (contoh: <code className="bg-purple-100 px-1 rounded">10.10.10.100-10.10.10.200</code>)</li>
+                <li>Buat akun VPN per router (username/password) supaya scalable</li>
               </ul>
             </div>
             <div>
-              <p className="font-semibold mb-1">2. Setup VPN Client di VPS/Backend:</p>
+              <p className="font-semibold mb-1">2. Setup VPN Client di MikroTik (NAT-friendly):</p>
               <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Install dan konfigurasi L2TP/IPSec client</li>
-                <li>Connect ke MikroTik VPN server</li>
-                <li>Gunakan IP VPN untuk koneksi API (bukan public IP)</li>
+                <li>Buat interface <code className="bg-purple-100 px-1 rounded">PPP → Interface → L2TP Client</code> connect ke IP public VPS</li>
+                <li>Aktifkan <code className="bg-purple-100 px-1 rounded">Use IPSec</code> dan isi IPSec Secret (PSK) yang sama seperti di VPS</li>
+                <li>Set username/password VPN sesuai akun router yang dibuat di VPS</li>
               </ul>
             </div>
             <div>
               <p className="font-semibold mb-1">3. Catatan:</p>
               <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Host field harus menggunakan IP VPN atau hostname internal</li>
-                <li>Pastikan VPN connection stabil sebelum test connection</li>
-                <li>L2TP/IPSec tersedia di semua MikroTik (termasuk low-end)</li>
+                <li>Di ERP, <b>Host</b> pakai <b>IP VPN MikroTik</b> (contoh: <code className="bg-purple-100 px-1 rounded">10.10.10.101</code>), bukan IP public</li>
+                <li>Tambahkan firewall rule di MikroTik untuk allow API dari network VPN (mis. <code className="bg-purple-100 px-1 rounded">10.10.10.0/24</code>)</li>
+                <li>L2TP/IPSec tersedia di semua MikroTik (termasuk low-end). WireGuard butuh ROS v7</li>
               </ul>
             </div>
           </div>
