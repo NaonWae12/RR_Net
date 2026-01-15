@@ -236,7 +236,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           <div className="flex items-start gap-2">
             <span className="text-lg">{modeInfo.icon}</span>
             <div className="flex-1">
-              <p className="text-sm font-semibold">{modeInfo.title}</p>
+              <p className="text-sm font-semibold text-slate-900">{modeInfo.title}</p>
               <p className="mt-1 text-xs text-slate-600">{modeInfo.description}</p>
             </div>
           </div>
@@ -257,8 +257,8 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             ) : (
               <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
             )}
-            <div className="flex-1">
-              <p className="text-sm font-semibold">
+            <div className="flex-1 ">
+              <p className="text-sm font-semibold text-slate-900">
                 {testResult.ok ? "Connection Test Successful" : "Connection Test Failed"}
               </p>
               {testResult.ok && testResult.identity && (

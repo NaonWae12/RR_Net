@@ -92,7 +92,7 @@ export default function RouterDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white shadow rounded-lg p-6">
         <div>
           <p className="text-sm font-medium text-slate-500">Type</p>
-          <p className="text-lg font-semibold uppercase">{routerData.type}</p>
+          <p className="text-lg font-semibold uppercase text-slate-900">{routerData.type}</p>
         </div>
         <div>
           <p className="text-sm font-medium text-slate-500">Status</p>
@@ -100,42 +100,42 @@ export default function RouterDetailPage() {
         </div>
         <div>
           <p className="text-sm font-medium text-slate-500">Host</p>
-          <p className="text-lg">{routerData.host}</p>
+          <p className="text-lg text-slate-900">{routerData.host}</p>
         </div>
         <div>
           <p className="text-sm font-medium text-slate-500">Port</p>
-          <p className="text-lg">{routerData.port}</p>
+          <p className="text-lg text-slate-900">{routerData.port}</p>
         </div>
         <div>
           <p className="text-sm font-medium text-slate-500">API Port</p>
-          <p className="text-lg">{routerData.api_port || "N/A"}</p>
+          <p className="text-lg text-slate-900">{routerData.api_port || "N/A"}</p>
         </div>
         <div>
           <p className="text-sm font-medium text-slate-500">Username</p>
-          <p className="text-lg">{routerData.username}</p>
+          <p className="text-lg text-slate-900">{routerData.username}</p>
         </div>
         <div>
           <p className="text-sm font-medium text-slate-500">Default Router</p>
-          <p className="text-lg">{routerData.is_default ? "Yes" : "No"}</p>
+          <p className="text-lg text-slate-900">{routerData.is_default ? "Yes" : "No"}</p>
         </div>
         {routerData.last_seen && (
           <div>
             <p className="text-sm font-medium text-slate-500">Last Seen</p>
-            <p className="text-lg">{format(new Date(routerData.last_seen), "PPp")}</p>
+            <p className="text-lg text-slate-900">{format(new Date(routerData.last_seen), "PPp")}</p>
           </div>
         )}
         <div>
           <p className="text-sm font-medium text-slate-500">Created At</p>
-          <p className="text-lg">{format(new Date(routerData.created_at), "PPp")}</p>
+          <p className="text-lg text-slate-900">{format(new Date(routerData.created_at), "PPp")}</p>
         </div>
         <div>
           <p className="text-sm font-medium text-slate-500">Updated At</p>
-          <p className="text-lg">{format(new Date(routerData.updated_at), "PPp")}</p>
+          <p className="text-lg text-slate-900">{format(new Date(routerData.updated_at), "PPp")}</p>
         </div>
         {routerData.description && (
           <div className="md:col-span-2">
             <p className="text-sm font-medium text-slate-500">Description</p>
-            <p className="text-lg">{routerData.description}</p>
+            <p className="text-lg text-slate-900">{routerData.description}</p>
           </div>
         )}
       </div>
