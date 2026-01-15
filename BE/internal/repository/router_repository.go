@@ -148,7 +148,14 @@ func (r *RouterRepository) Update(ctx context.Context, router *network.Router) e
 }
 
 func (r *RouterRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status network.RouterStatus) error {
-	query := `UPDATE routers SET status = $2, last_seen = NOW(), updated_at = NOW() WHERE id = $1`
+	// Only bump last_seen when router is reachable (online). If we mark offline,
+	// we keep last_seen as the last known successful contact time.
+	if status == network.RouterStatusOnline {
+		query := `UPDATE routers SET status = $2, last_seen = NOW(), updated_at = NOW() WHERE id = $1`
+		_, err := r.db.Exec(ctx, query, id, status)
+		return err
+	}
+	query := `UPDATE routers SET status = $2, updated_at = NOW() WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id, status)
 	return err
 }
