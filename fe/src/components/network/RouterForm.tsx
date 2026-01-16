@@ -5,8 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Router, CreateRouterRequest, UpdateRouterRequest, ProvisionResponse } from "@/lib/api/types";
+import { Router, CreateRouterRequest, UpdateRouterRequest, ProvisionResponse, RouterStatus } from "@/lib/api/types";
+import { cn } from "@/lib/utils/styles";
 import { useState } from "react";
+import React from "react";
 import { networkService } from "@/lib/api/networkService";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, Loader2, Copy, Terminal, ShieldCheck, Activity } from "lucide-react";
@@ -40,11 +42,12 @@ interface RouterFormProps {
 }
 
 export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: RouterFormProps) {
-  const [step, setStep] = useState(initialData ? 3 : 1);
+  const [provisionedId, setProvisionedId] = useState<string | null>(initialData?.id || null);
   const [provisioningData, setProvisioningData] = useState<ProvisionResponse | null>(initialData ? {
+    router_id: initialData.id,
     vpn_username: initialData.vpn_username || "",
     vpn_password: initialData.vpn_password || "",
-    vpn_ipsec_psk: "rrnet123",
+    vpn_ipsec_psk: "RRNetSecretPSK",
     vpn_script: initialData.vpn_script || "",
     remote_access_port: initialData.remote_access_port || 0,
     tunnel_ip: initialData.host || "",
@@ -52,7 +55,8 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
   } : null);
   const [isProvisioning, setIsProvisioning] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
+  const [isVerified, setIsVerified] = useState(!!initialData?.host);
+  const [step, setStep] = useState(initialData?.host ? 3 : 1);
 
   const {
     register,
@@ -84,6 +88,22 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
 
   const connectivityMode = watch("connectivity_mode");
 
+  const handleFormSubmit = async (values: RouterFormValues) => {
+    try {
+      // If we already have a provisioned ID, we should UPDATE the router instead of creating it
+      if (provisionedId) {
+        await onSubmit({
+          ...values,
+          status: "offline", // Reset status from provisioning to offline/online after full save
+        } as any);
+      } else {
+        await onSubmit(values as CreateRouterRequest);
+      }
+    } catch (error) {
+      // Handled by parent
+    }
+  };
+
   const handleProvision = async () => {
     const name = watch("name");
     if (!name) {
@@ -94,17 +114,18 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
     setIsProvisioning(true);
     try {
       const res = await networkService.provisionRouter({
-        name,
-        connectivity_mode: connectivityMode,
+        name: watch("name"),
+        connectivity_mode: "vpn",
       });
       setProvisioningData(res);
+      setProvisionedId(res.router_id);
       setValue("host", res.tunnel_ip);
       setValue("vpn_username", res.vpn_username);
       setValue("vpn_password", res.vpn_password);
       setValue("vpn_ipsec_psk", res.vpn_ipsec_psk);
       setValue("remote_access_port", res.remote_access_port);
       setStep(2);
-      toast.success("Provisioning ready! Please follow script instructions.");
+      toast.success("Router provisioned and saved! Apply the script now.");
     } catch (err: any) {
       toast.error("Provisioning failed: " + (err.response?.data?.error || err.message));
     } finally {

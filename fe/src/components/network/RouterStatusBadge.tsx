@@ -1,5 +1,7 @@
 import { cn } from "@/lib/utils/styles";
 import { RouterStatus } from "@/lib/api/types";
+import { Loader2 } from "lucide-react";
+import React from "react";
 
 interface RouterStatusBadgeProps {
   status: RouterStatus;
@@ -30,6 +32,15 @@ export function RouterStatusBadge({ status, className }: RouterStatusBadgeProps)
     case "maintenance":
       colorClass = "bg-yellow-100 text-yellow-800";
       text = "Maintenance";
+      break;
+    case "provisioning":
+      colorClass = "bg-indigo-100 text-indigo-800 ring-indigo-600/20";
+      text = (
+        <span className="flex items-center gap-1.5 font-bold">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          On Progress
+        </span>
+      );
       break;
     default:
       colorClass = "bg-gray-100 text-gray-800";

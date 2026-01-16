@@ -8,7 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Router } from "@/lib/api/types";
+import { Router, RouterStatus } from "@/lib/api/types";
+import { Loader2 } from "lucide-react";
 import { RouterStatusBadge } from "./RouterStatusBadge";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -152,22 +153,35 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
                 <Button variant="outline" size="sm" onClick={() => handleEdit(routerItem.id)}>
                   Edit
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleTestConnection(routerItem.id, routerItem.name)}
-                  className="text-green-600 hover:text-green-700"
-                >
-                  Connect/Test
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDisconnect(routerItem.id, routerItem.name)}
-                  className="text-orange-600 hover:text-orange-700"
-                >
-                  Disconnect
-                </Button>
+                {routerItem.status === "provisioning" ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(routerItem.id)}
+                    className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                  >
+                    Continue Setup →
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnection(routerItem.id, routerItem.name)}
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      Connect/Test
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(routerItem.id, routerItem.name)}
+                      className="text-orange-600 hover:text-orange-700"
+                    >
+                      Disconnect
+                    </Button>
+                  </>
+                )}
                 <Button variant="destructive" size="sm" onClick={() => handleDelete(routerItem.id, routerItem.name)}>
                   Delete
                 </Button>

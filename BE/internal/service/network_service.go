@@ -240,13 +240,14 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 }
 
 type ProvisionRouterResponse struct {
-	VPNUsername      string `json:"vpn_username"`
-	VPNPassword      string `json:"vpn_password"`
-	VPNIPsecPSK      string `json:"vpn_ipsec_psk"`
-	VPNScript        string `json:"vpn_script"`
-	RemoteAccessPort int    `json:"remote_access_port"`
-	TunnelIP         string `json:"tunnel_ip"`
-	PublicIP         string `json:"public_ip"`
+	RouterID         uuid.UUID `json:"router_id"`
+	VPNUsername      string    `json:"vpn_username"`
+	VPNPassword      string    `json:"vpn_password"`
+	VPNIPsecPSK      string    `json:"vpn_ipsec_psk"`
+	VPNScript        string    `json:"vpn_script"`
+	RemoteAccessPort int       `json:"remote_access_port"`
+	TunnelIP         string    `json:"tunnel_ip"`
+	PublicIP         string    `json:"public_ip"`
 }
 
 func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID, name string) (*ProvisionRouterResponse, error) {
@@ -299,7 +300,6 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 	vpnPass := generateRandomString(12)
 
 	// 5. Execute script to add VPN user on the VPS (strongswan/accel-ppp)
-	// We do this NOW so that the account is active when the user applies the script
 	cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_add_user_auto.sh", vpnUser, vpnPass)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -312,24 +312,39 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		}
 	}
 
-	// Dry-run router object for script generation
-	tempRouter := &network.Router{
+	// 6. Create Router object and SAVE to database immediately as "provisioning"
+	now := time.Now()
+	router := &network.Router{
+		ID:                  uuid.New(),
+		TenantID:            tenantID,
 		Name:                name,
+		Type:                network.RouterTypeMikroTik,
+		ConnectivityMode:    network.RouterConnectivityModeVPN,
+		Status:              network.RouterStatusProvisioning,
 		VPNUsername:         vpnUser,
 		VPNPassword:         vpnPass,
 		Host:                assignedIP,
 		RemoteAccessPort:    assignedPort,
 		RemoteAccessEnabled: true,
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 
-	script := s.generateMikrotikVPNScript(tempRouter)
+	// Generate script for this router
+	script := s.generateMikrotikVPNScript(router)
+	router.VPNScript = script
+
+	if err := s.routerRepo.Create(ctx, router); err != nil {
+		return nil, fmt.Errorf("failed to pre-save provisioning router: %w", err)
+	}
 
 	publicIP := s.getPublicIP()
 
 	return &ProvisionRouterResponse{
+		RouterID:         router.ID,
 		VPNUsername:      vpnUser,
 		VPNPassword:      vpnPass,
-		VPNIPsecPSK:      "rrnet123", // Static PSK for now, or could be dynamic
+		VPNIPsecPSK:      "RRNetSecretPSK", // This should ideally be dynamic but for now based on script
 		VPNScript:        script,
 		RemoteAccessPort: assignedPort,
 		TunnelIP:         assignedIP,

@@ -21,9 +21,10 @@ const (
 type RouterStatus string
 
 const (
-	RouterStatusOnline      RouterStatus = "online"
-	RouterStatusOffline     RouterStatus = "offline"
-	RouterStatusMaintenance RouterStatus = "maintenance"
+	RouterStatusOnline       RouterStatus = "online"
+	RouterStatusOffline      RouterStatus = "offline"
+	RouterStatusMaintenance  RouterStatus = "maintenance"
+	RouterStatusProvisioning RouterStatus = "provisioning"
 )
 
 // RouterConnectivityMode defines how ERP reaches router management API

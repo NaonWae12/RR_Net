@@ -182,7 +182,7 @@ export interface RecordPaymentRequest {
 // ========== Network Types ==========
 
 export type RouterType = "mikrotik" | "cisco" | "ubiquiti" | "other";
-export type RouterStatus = "online" | "offline" | "maintenance";
+export type RouterStatus = "online" | "offline" | "maintenance" | "provisioning";
 export type RouterConnectivityMode = "direct_public" | "vpn";
 
 export interface Router {
@@ -275,6 +275,7 @@ export interface ProvisionRouterRequest {
 }
 
 export interface ProvisionResponse {
+  router_id: string;
   vpn_username: string;
   vpn_password: string;
   vpn_ipsec_psk: string;
