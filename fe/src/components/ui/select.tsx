@@ -116,14 +116,36 @@ interface SimpleSelectProps {
   className?: string;
   placeholder?: string;
   disabled?: boolean;
+  label?: string;
+  error?: string;
 }
 
-export function SimpleSelect({ value, onValueChange, children, className, placeholder, disabled }: SimpleSelectProps) {
+export function SimpleSelect({ value, onValueChange, children, className, placeholder, disabled, label, error }: SimpleSelectProps) {
   return (
-    <Select value={value} onChange={(e) => onValueChange?.(e.target.value)} className={className} disabled={disabled}>
-      {placeholder && <option value="">{placeholder}</option>}
-      {children}
-    </Select>
+    <div className="flex w-full flex-col gap-1">
+      {label && (
+        <label className="text-sm font-medium text-slate-700">
+          {label}
+        </label>
+      )}
+      <Select
+        value={value}
+        onChange={(e) => onValueChange?.(e.target.value)}
+        className={cn(
+          className,
+          error ? "border-rose-400 focus-visible:ring-rose-200" : ""
+        )}
+        disabled={disabled}
+      >
+        {placeholder && <option value="">{placeholder}</option>}
+        {children}
+      </Select>
+      {error && (
+        <span className="text-xs text-rose-600" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
   );
 }
 

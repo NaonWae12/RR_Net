@@ -5,43 +5,32 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SimpleSelect } from "@/components/ui/select";
-import { Router, CreateRouterRequest, UpdateRouterRequest } from "@/lib/api/types";
-import { useEffect, useState } from "react";
+import { Router, CreateRouterRequest, UpdateRouterRequest, ProvisionResponse } from "@/lib/api/types";
+import { useState } from "react";
 import { networkService } from "@/lib/api/networkService";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Copy, Terminal, ShieldCheck, Activity } from "lucide-react";
 
 const routerFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   type: z.enum(["mikrotik", "cisco", "ubiquiti", "other"]),
-  connectivity_mode: z.enum(["direct_public", "vpn"]).default("direct_public"),
+  connectivity_mode: z.enum(["direct_public", "vpn"]).default("vpn"),
   host: z.string().optional(),
   nas_ip: z.string().optional(),
   port: z.coerce.number().min(1).max(65535).default(22),
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
-  api_port: z.coerce.number().min(1).max(65535).optional(),
+  api_port: z.coerce.number().min(1).max(65535).default(8728),
   api_use_tls: z.boolean().default(false),
   is_default: z.boolean().default(false),
-  radius_enabled: z.boolean().default(false).optional(),
-  radius_secret: z.string().optional(),
-  auto_create_vpn: z.boolean().default(false),
-  enable_remote_access: z.boolean().default(false),
-}).refine((data) => {
-  if (data.connectivity_mode === 'vpn' && data.auto_create_vpn) {
-    return true;
-  }
-  return data.host && data.host.length > 0;
-}, {
-  message: "Host is required",
-  path: ["host"],
+  vpn_username: z.string().optional(),
+  vpn_password: z.string().optional(),
+  vpn_ipsec_psk: z.string().optional(),
+  remote_access_port: z.coerce.number().optional(),
 });
 
 type RouterFormValues = z.infer<typeof routerFormSchema>;
-
-type ConnectionMode = "local" | "ngrok" | "production";
 
 interface RouterFormProps {
   initialData?: Router;
@@ -50,498 +39,334 @@ interface RouterFormProps {
   isLoading: boolean;
 }
 
-// Helper functions
-const isNgrokHostname = (host: string): boolean => {
-  return /\.ngrok\.(io|dev|app)$/i.test(host) || /\.tcp\.ngrok/i.test(host);
-};
-
-const isIPAddress = (host: string): boolean => {
-  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  return ipRegex.test(host);
-};
-
-const isLocalIP = (ip: string): boolean => {
-  return /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(ip);
-};
-
-const detectConnectionMode = (host: string): ConnectionMode => {
-  if (!host) return "production";
-  if (isNgrokHostname(host)) return "ngrok";
-  if (isIPAddress(host)) {
-    return isLocalIP(host) ? "local" : "production";
-  }
-  return "production"; // Assume DDNS hostname
-};
-
 export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: RouterFormProps) {
-  const [connectionMode, setConnectionMode] = useState<ConnectionMode>("production");
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    ok: boolean;
-    identity?: string;
-    latency_ms?: number;
-    error?: string;
-  } | null>(null);
+  const [step, setStep] = useState(initialData ? 3 : 1);
+  const [provisioningData, setProvisioningData] = useState<ProvisionResponse | null>(initialData ? {
+    vpn_username: initialData.vpn_username || "",
+    vpn_password: initialData.vpn_password || "",
+    vpn_ipsec_psk: "rrnet123",
+    vpn_script: initialData.vpn_script || "",
+    remote_access_port: initialData.remote_access_port || 0,
+    tunnel_ip: initialData.host || "",
+    public_ip: "72.60.74.209"
+  } : null);
+  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
 
   const {
     register,
     handleSubmit,
-    reset,
     watch,
     setValue,
     formState: { errors },
   } = useForm<RouterFormValues>({
     resolver: zodResolver(routerFormSchema),
     defaultValues: {
-      name: "",
-      description: "",
-      type: "mikrotik",
-      connectivity_mode: "direct_public",
-      host: "",
-      nas_ip: "",
-      port: 22,
-      username: "",
-      password: "",
-      api_port: 8728,
-      api_use_tls: false,
-      is_default: false,
-      radius_enabled: false,
-      radius_secret: "",
-      auto_create_vpn: false,
-      enable_remote_access: false,
+      name: initialData?.name || "",
+      description: initialData?.description || "",
+      type: initialData?.type || "mikrotik",
+      connectivity_mode: (initialData?.connectivity_mode as any) || "vpn",
+      host: initialData?.host || "",
+      nas_ip: initialData?.nas_ip || "",
+      port: initialData?.port || 22,
+      username: initialData?.username || "",
+      password: initialData?.password || "",
+      api_port: initialData?.api_port || 8728,
+      api_use_tls: initialData?.api_use_tls || false,
+      is_default: initialData?.is_default || false,
+      vpn_username: initialData?.vpn_username || "",
+      vpn_password: initialData?.vpn_password || "",
+      vpn_ipsec_psk: "rrnet123",
+      remote_access_port: initialData?.remote_access_port || 10500,
     },
   });
 
-  const apiUseTLS = watch("api_use_tls");
-  const apiPort = watch("api_port");
-  const host = watch("host");
   const connectivityMode = watch("connectivity_mode");
-  const autoCreateVPN = watch("auto_create_vpn");
-  const type = watch("type");
 
-  // Auto-detect connection mode based on host
-  useEffect(() => {
-    if (host) {
-      setConnectionMode(detectConnectionMode(host));
-    }
-  }, [host]);
-
-  useEffect(() => {
-    if (initialData) {
-      reset({
-        name: initialData.name,
-        description: initialData.description || "",
-        type: initialData.type,
-        connectivity_mode: initialData.connectivity_mode ?? "direct_public",
-        host: initialData.host,
-        nas_ip: initialData.nas_ip || "",
-        port: initialData.port,
-        username: initialData.username,
-        password: "", // Don't pre-fill password
-        api_port: initialData.api_port || 8728,
-        api_use_tls: initialData.api_use_tls ?? false,
-        is_default: initialData.is_default,
-        radius_enabled: initialData.radius_enabled ?? false,
-        radius_secret: "", // Don't pre-fill secret
-      });
-    }
-  }, [initialData, reset]);
-
-  useEffect(() => {
-    // Convenience: when toggling TLS, nudge port to the common default if user didn't customize it.
-    if (apiUseTLS && apiPort === 8728) {
-      setValue("api_port", 8729);
-    }
-    if (!apiUseTLS && apiPort === 8729) {
-      setValue("api_port", 8728);
-    }
-  }, [apiUseTLS, apiPort, setValue]);
-
-  const handleFormSubmit = async (data: RouterFormValues) => {
-    await onSubmit(data);
-  };
-
-  const handleTestConnection = async () => {
-    const formData = watch();
-
-    if (!formData.host || !formData.username || !formData.password) {
-      toast.error("Please fill in Host, Username, and Password first");
+  const handleProvision = async () => {
+    const name = watch("name");
+    if (!name) {
+      toast.error("Please enter a router name first");
       return;
     }
 
-    if (formData.type !== "mikrotik") {
-      toast.info("Connection test is only available for MikroTik routers");
-      return;
-    }
-
-    setIsTestingConnection(true);
-    setTestResult(null);
-
+    setIsProvisioning(true);
     try {
-      const res = initialData?.id
-        ? await networkService.testRouterConnection(initialData.id)
-        : await networkService.testRouterConfig({
-          type: formData.type,
-          host: formData.host,
-          api_port: formData.api_port || (formData.api_use_tls ? 8729 : 8728),
-          api_use_tls: formData.api_use_tls,
-          username: formData.username,
-          password: formData.password,
-        });
-
-      setTestResult(res);
-      if (res.ok) {
-        toast.success("Connection OK", {
-          description: res.identity
-            ? `Router identity: ${res.identity}${res.latency_ms ? ` (${res.latency_ms}ms)` : ""}`
-            : res.latency_ms
-              ? `Latency: ${res.latency_ms}ms`
-              : undefined,
-        });
-      } else {
-        toast.error("Connection failed", { description: res.error ?? "Unknown error" });
-      }
+      const res = await networkService.provisionRouter({
+        name,
+        connectivity_mode: connectivityMode,
+      });
+      setProvisioningData(res);
+      setValue("host", res.tunnel_ip);
+      setValue("vpn_username", res.vpn_username);
+      setValue("vpn_password", res.vpn_password);
+      setValue("vpn_ipsec_psk", res.vpn_ipsec_psk);
+      setValue("remote_access_port", res.remote_access_port);
+      setStep(2);
+      toast.success("Provisioning ready! Please follow script instructions.");
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.error ?? err?.message ?? "Unknown error";
-      setTestResult({ ok: false, error: errorMsg });
-      toast.error("Connection failed", { description: errorMsg });
+      toast.error("Provisioning failed: " + (err.response?.data?.error || err.message));
     } finally {
-      setIsTestingConnection(false);
+      setIsProvisioning(false);
     }
   };
 
-  const getModeInfo = () => {
-    switch (connectionMode) {
-      case "local":
-        return {
-          icon: "🔵",
-          title: "Mode: Development (Local Network)",
-          description: "Router dan backend berada di jaringan yang sama. Pastikan router dapat diakses via IP lokal ini.",
-        };
-      case "ngrok":
-        return {
-          icon: "🟡",
-          title: "Mode: Development (ngrok Tunnel)",
-          description: "Menggunakan ngrok TCP tunnel untuk development. Pastikan ngrok tunnel aktif dan MikroTik sudah dikonfigurasi untuk allow ngrok IP.",
-        };
-      default:
-        return {
-          icon: "🟢",
-          title: "Mode: Production (DDNS/IP)",
-          description: "Menggunakan DDNS atau public IP. Pastikan port forwarding sudah dikonfigurasi dan firewall MikroTik sudah allow IP backend.",
-        };
+  const handleVerifyConnection = async () => {
+    setIsVerifying(true);
+    try {
+      const res = await networkService.testRouterConfig({
+        type: "mikrotik",
+        host: watch("host") || "",
+        api_port: watch("api_port"),
+        api_use_tls: watch("api_use_tls"),
+        username: "admin",
+        password: "",
+      });
+
+      if (res.ok) {
+        setIsVerified(true);
+        setStep(3);
+        toast.success("VPN Link Established! MikroTik is reachable.");
+      } else {
+        toast.error("Still unreachable. Ensure script is applied on MikroTik.");
+      }
+    } catch (err) {
+      toast.error("Verification failed. Make sure MikroTik is online.");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
-  const modeInfo = getModeInfo();
+  const copyScript = () => {
+    if (provisioningData?.vpn_script) {
+      navigator.clipboard.writeText(provisioningData.vpn_script);
+      toast.success("Script copied to clipboard!");
+    }
+  };
 
-  return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-      {/* Connection Mode Info Banner */}
-      {host && (
-        <div
-          className={`rounded-lg border p-3 ${connectionMode === "local"
-            ? "border-blue-200 bg-blue-50"
-            : connectionMode === "ngrok"
-              ? "border-yellow-200 bg-yellow-50"
-              : "border-green-200 bg-green-50"
-            }`}
-        >
-          <div className="flex items-start gap-2">
-            <span className="text-lg">{modeInfo.icon}</span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-900">{modeInfo.title}</p>
-              <p className="mt-1 text-xs text-slate-600">{modeInfo.description}</p>
-            </div>
+  const renderStep1 = () => (
+    <div className="space-y-4">
+      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-indigo-100 p-2 rounded-lg">
+            <Activity className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Step 1: Router Identity</h3>
+            <p className="text-xs text-slate-500">Beri nama router Anda untuk identifikasi di dashboard.</p>
           </div>
         </div>
-      )}
 
-      {/* Test Result Display */}
-      {testResult && (
-        <div
-          className={`rounded-lg border p-3 ${testResult.ok
-            ? "border-green-200 bg-green-50"
-            : "border-red-200 bg-red-50"
-            }`}
-        >
-          <div className="flex items-start gap-2">
-            {testResult.ok ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
-            ) : (
-              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-            )}
-            <div className="flex-1 ">
-              <p className="text-sm font-semibold text-slate-900">
-                {testResult.ok ? "Connection Test Successful" : "Connection Test Failed"}
-              </p>
-              {testResult.ok && testResult.identity && (
-                <p className="mt-1 text-xs text-slate-600">
-                  Router: {testResult.identity}
-                  {testResult.latency_ms && ` • Latency: ${testResult.latency_ms}ms`}
-                </p>
-              )}
-              {!testResult.ok && testResult.error && (
-                <p className="mt-1 text-xs text-red-600">{testResult.error}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-900">
-        <Input label="Router Name" {...register("name")} error={errors.name?.message} />
-        <SimpleSelect
-          value={watch("type")}
-          onValueChange={(value) => setValue("type", value as Router["type"])}
-          className="w-full"
-        >
-          <option value="mikrotik">MikroTik</option>
-          <option value="cisco">Cisco</option>
-          <option value="ubiquiti">Ubiquiti</option>
-          <option value="other">Other</option>
-        </SimpleSelect>
-        <SimpleSelect
-          value={watch("connectivity_mode")}
-          onValueChange={(value) => setValue("connectivity_mode", value as RouterFormValues["connectivity_mode"])}
-          className="w-full"
-        >
-          <option value="direct_public">Connectivity: Direct/Public (DDNS+Port Forward)</option>
-          <option value="vpn">Connectivity: VPN (Private)</option>
-        </SimpleSelect>
-        <div className="md:col-span-2">
-          {!autoCreateVPN || connectivityMode !== 'vpn' ? (
-            <>
-              <Input
-                label="Host (IP or Hostname)"
-                {...register("host")}
-                error={errors.host?.message}
-                placeholder={
-                  connectionMode === "ngrok"
-                    ? "e.g. 0.tcp.ngrok.io"
-                    : connectionMode === "local"
-                      ? "e.g. 192.168.1.1"
-                      : "e.g. router.ddns.net atau 203.0.113.1"
-                }
-              />
-              {host && (
-                <p className="mt-1 text-xs text-slate-500">
-                  {connectionMode === "ngrok"
-                    ? "Masukkan hostname ngrok (tanpa port). Port akan diambil dari field Port di bawah."
-                    : connectionMode === "local"
-                      ? "IP lokal router di jaringan yang sama dengan backend"
-                      : "DDNS hostname atau public IP router"}
-                </p>
-              )}
-            </>
-          ) : (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-md p-3">
-              <p className="text-sm text-indigo-700 font-medium">Auto VPN Enabled</p>
-              <p className="text-xs text-indigo-500">Host IP will be assigned automatically by the server.</p>
-            </div>
-          )}
-        </div>
-        <Input label="SSH Port" type="number" {...register("port")} error={errors.port?.message} />
-        <div className="md:col-span-2">
+        <div className="space-y-4">
           <Input
-            label="API Port"
-            type="number"
-            {...register("api_port")}
-            error={errors.api_port?.message}
+            label="Router Name"
+            {...register("name")}
+            error={errors.name?.message}
+            placeholder="Contoh: Kantor Pusat, Cabang Malang, dll"
+            className="text-base"
           />
-          {connectionMode === "ngrok" && (
-            <p className="mt-1 text-xs text-yellow-600">
-              ⚠️ Gunakan port dari ngrok (bukan 8728). Contoh: jika ngrok forward ke tcp://0.tcp.ngrok.io:12345,
-              masukkan 12345
-            </p>
-          )}
-          {connectionMode !== "ngrok" && (
-            <p className="mt-1 text-xs text-slate-500">
-              Port API MikroTik (default: 8728 untuk non-SSL, 8729 untuk SSL)
-            </p>
-          )}
-        </div>
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="api_use_tls"
-            {...register("api_use_tls")}
-            className="rounded border-slate-300"
-          />
-          <label htmlFor="api_use_tls" className="text-sm font-medium text-slate-700">
-            Use TLS (API-SSL)
-          </label>
-        </div>
-        <Input label="Username" {...register("username")} error={errors.username?.message} />
-        <Input
-          label="Password"
-          type="password"
-          {...register("password")}
-          error={errors.password?.message}
-        />
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="is_default"
-            {...register("is_default")}
-            className="rounded border-slate-300"
-          />
-          <label htmlFor="is_default" className="text-sm font-medium text-slate-700">
-            Set as default router
-          </label>
-        </div>
-
-        {/* Automation Toggles */}
-        <div className="md:col-span-2 border-t border-slate-200 pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Automation & Remote Access</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {connectivityMode === 'vpn' && (
-              <div className="flex items-center space-x-2 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                <input
-                  type="checkbox"
-                  id="auto_create_vpn"
-                  {...register("auto_create_vpn")}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <div className="flex flex-col">
-                  <label htmlFor="auto_create_vpn" className="text-sm font-semibold text-indigo-900">
-                    Auto-create VPN Account
-                  </label>
-                  <p className="text-[10px] text-indigo-600">Generate credentials & MikroTik script automatically.</p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center space-x-2 bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-              <input
-                type="checkbox"
-                id="enable_remote_access"
-                {...register("enable_remote_access")}
-                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-              />
-              <div className="flex flex-col">
-                <label htmlFor="enable_remote_access" className="text-sm font-semibold text-emerald-900">
-                  Enable Remote Access
-                </label>
-                <p className="text-[10px] text-emerald-600">Auto port forward to access via Winbox/WebFig.</p>
-              </div>
+          <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-3">
+            <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-blue-800">
+              <p className="font-bold">Pro-Tip:</p>
+              <p>Gunakan nama yang unik. Sistem akan otomatis menyiapkan tunnel VPN L2TP/IPSec yang aman untuk Anda.</p>
             </div>
           </div>
-        </div>
-        <div className="md:col-span-2">
-          <label className="text-sm font-medium text-slate-700">Description (optional)</label>
-          <textarea
-            {...register("description")}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
-            rows={3}
-            placeholder="Router description"
-          />
         </div>
       </div>
-
-      {/* DDNS Setup Guide for Production Mode */}
-      {connectionMode === "production" && host && watch("connectivity_mode") === "direct_public" && (
-        <div className="rounded-lg border border-blue-300 bg-blue-50 p-4">
-          <p className="text-sm font-semibold text-blue-900 mb-2">📋 Setup Guide: DDNS + Port Forward</p>
-          <div className="space-y-2 text-xs text-blue-800">
-            <div>
-              <p className="font-semibold mb-1">1. Setup DDNS di MikroTik:</p>
-              <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Masuk ke <code className="bg-blue-100 px-1 rounded">IP → Cloud</code></li>
-                <li>Enable <code className="bg-blue-100 px-1 rounded">DDNS Enabled</code></li>
-                <li>Pilih provider (No-IP, DuckDNS, atau custom)</li>
-                <li>Masukkan hostname DDNS (contoh: router.ddns.net)</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">2. Setup Port Forwarding di Router Upstream:</p>
-              <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Forward port {apiPort || (apiUseTLS ? 8729 : 8728)} dari router upstream ke IP lokal MikroTik</li>
-                <li>Pastikan firewall router upstream allow koneksi dari IP VPS backend</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">3. Konfigurasi Firewall MikroTik:</p>
-              <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Allow IP VPS backend di firewall MikroTik</li>
-                <li>Pastikan API port ({apiPort || (apiUseTLS ? 8729 : 8728)}) terbuka untuk IP VPS</li>
-                <li>Command: <code className="bg-blue-100 px-1 rounded">/ip firewall filter add chain=input src-address=IP_VPS action=accept</code></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* VPN Setup Guide */}
-      {watch("connectivity_mode") === "vpn" && (
-        <div className="rounded-lg border border-purple-300 bg-purple-50 p-4">
-          <p className="text-sm font-semibold text-purple-900 mb-2">🔐 Setup Guide: VPN Connection (L2TP/IPSec)</p>
-          <div className="space-y-2 text-xs text-purple-800">
-            <div>
-              <p className="font-semibold mb-1">1. Setup L2TP/IPSec Server di VPS:</p>
-              <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Install dan jalankan L2TP/IPSec server di VPS (strongSwan + xl2tpd)</li>
-                <li>Buat IP pool VPN (contoh: <code className="bg-purple-100 px-1 rounded">10.10.10.100-10.10.10.200</code>)</li>
-                <li>Buat akun VPN per router (username/password) supaya scalable</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">2. Setup VPN Client di MikroTik (NAT-friendly):</p>
-              <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Buat interface <code className="bg-purple-100 px-1 rounded">PPP → Interface → L2TP Client</code> connect ke IP public VPS</li>
-                <li>Aktifkan <code className="bg-purple-100 px-1 rounded">Use IPSec</code> dan isi IPSec Secret (PSK) yang sama seperti di VPS</li>
-                <li>Set username/password VPN sesuai akun router yang dibuat di VPS</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">3. Catatan:</p>
-              <ul className="list-inside list-disc ml-2 space-y-1">
-                <li>Di ERP, <b>Host</b> pakai <b>IP VPN MikroTik</b> (contoh: <code className="bg-purple-100 px-1 rounded">10.10.10.101</code>), bukan IP public</li>
-                <li>Tambahkan firewall rule di MikroTik untuk allow API dari network VPN (mis. <code className="bg-purple-100 px-1 rounded">10.10.10.0/24</code>)</li>
-                <li>L2TP/IPSec tersedia di semua MikroTik (termasuk low-end). WireGuard butuh ROS v7</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Warning untuk ngrok mode */}
-      {connectionMode === "ngrok" && (
-        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3">
-          <p className="text-xs font-semibold text-yellow-800">⚠️ Catatan ngrok:</p>
-          <ul className="mt-1 list-inside list-disc text-xs text-yellow-700 space-y-1">
-            <li>
-              Pastikan ngrok TCP tunnel sudah running: <code className="bg-yellow-100 px-1 rounded">ngrok tcp 8728</code>
-            </li>
-            <li>URL ngrok berubah setiap restart (free plan)</li>
-            <li>Konfigurasi MikroTik harus allow IP ngrok (lihat guide)</li>
-          </ul>
-        </div>
-      )}
-
-      <div className="flex justify-end space-x-2">
+      <div className="flex justify-end pt-2">
         <Button
           type="button"
-          variant="outline"
-          onClick={handleTestConnection}
-          disabled={isLoading || isTestingConnection || type !== "mikrotik"}
+          onClick={handleProvision}
+          disabled={isProvisioning}
+          className="bg-indigo-600 hover:bg-indigo-700 h-11 px-8 rounded-full shadow-lg shadow-indigo-200 transition-all hover:scale-105 active:scale-95"
         >
-          {isTestingConnection ? (
+          {isProvisioning ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Testing...
+              <Loader2 className="animate-spin h-4 w-4 mr-2" />
+              Preparing Tunnel...
             </>
-          ) : (
-            "Test Connection"
-          )}
-        </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? "Saving..." : initialData ? "Update Router" : "Create Router"}
+          ) : "Generate VPN Script"}
         </Button>
       </div>
-    </form>
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="space-y-4">
+      <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-indigo-600 p-2 rounded-lg">
+            <Terminal className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-indigo-900">Step 2: MikroTik Setup</h3>
+            <p className="text-xs text-indigo-700">Gunakan script di bawah untuk menghubungkan MikroTik ke VPS.</p>
+          </div>
+        </div>
+
+        <div className="relative group">
+          <div className="absolute -top-3 left-4 bg-indigo-600 text-[10px] text-white px-2 py-0.5 rounded font-bold z-10">
+            MIKROTIK TERMINAL SCRIPT
+          </div>
+          <pre className="bg-slate-950 text-emerald-400 p-5 rounded-lg text-[10px] font-mono overflow-auto max-h-[250px] border-2 border-indigo-200 group-hover:border-indigo-400 transition-colors">
+            {provisioningData?.vpn_script}
+          </pre>
+          <Button
+            type="button"
+            size="sm"
+            className="absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white border border-white/20"
+            onClick={copyScript}
+          >
+            <Copy className="h-3.5 w-3.5 mr-2" /> Copy Script
+          </Button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Tunnel Destination</p>
+            <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.public_ip}</p>
+          </div>
+          <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">VPN Username</p>
+            <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.vpn_username}</p>
+          </div>
+          <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">VPN Password</p>
+            <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.vpn_password}</p>
+          </div>
+          <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">IPsec PSK</p>
+            <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.vpn_ipsec_psk}</p>
+          </div>
+          <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Remote Winbox Port</p>
+            <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.remote_access_port}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 p-3 bg-white/40 rounded-lg text-[10px] text-indigo-800 italic flex gap-2 items-center">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Pastikan script sudah di-paste ke terminal Winbox sebelum klik Verify.</span>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center pt-2">
+        <Button type="button" variant="ghost" onClick={() => setStep(1)} className="text-slate-500 hover:text-slate-800">
+          &larr; Ubah Nama
+        </Button>
+        <Button
+          type="button"
+          onClick={handleVerifyConnection}
+          disabled={isVerifying}
+          className="bg-emerald-600 hover:bg-emerald-700 h-11 px-8 rounded-full shadow-lg shadow-emerald-100 transition-all hover:scale-105"
+        >
+          {isVerifying ? (
+            <>
+              <Loader2 className="animate-spin h-4 w-4 mr-2" />
+              Verifying Link...
+            </>
+          ) : (
+            <>
+              <Activity className="h-4 w-4 mr-2" />
+              Verify Connection
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderStep3 = () => (
+    <div className="space-y-4">
+      <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-emerald-600 p-2 rounded-lg shadow-md shadow-emerald-200">
+            <ShieldCheck className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-emerald-900">Step 3: Access Credentials</h3>
+            <p className="text-xs text-emerald-700">Link VPN Aktif! Sekarang masukkan kredensial login MikroTik.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-slate-700 border-b pb-1">MikroTik Credentials (Final)</h4>
+            <Input label="Winbox Username" {...register("username")} error={errors.username?.message} placeholder="e.g. admin" />
+            <Input label="Winbox Password" type="password" {...register("password")} error={errors.password?.message} placeholder="••••••••" />
+          </div>
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-slate-700 border-b pb-1">Backend Connectivity</h4>
+            <Input label="Tunnel Connection IP (Host)" {...register("host")} error={errors.host?.message} />
+            <Input label="Remote Access Port" type="number" {...register("remote_access_port")} error={errors.remote_access_port?.message} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-slate-700 border-b pb-1">VPN Credentials (Advanced)</h4>
+            <Input label="VPN L2TP Username" {...register("vpn_username")} />
+            <Input label="VPN L2TP Password" {...register("vpn_password")} />
+          </div>
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-slate-700 border-b pb-1">API Settings</h4>
+            <Input label="Router API Port" type="number" {...register("api_port")} error={errors.api_port?.message} />
+            <div className="flex items-center space-x-3 bg-white/50 p-3 rounded-lg border border-emerald-100">
+              <input type="checkbox" id="api_use_tls" {...register("api_use_tls")} className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500" />
+              <label htmlFor="api_use_tls" className="text-sm font-semibold text-emerald-900 cursor-pointer">Use SSL (API-SSL)</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center pt-4">
+        <Button type="button" variant="ghost" onClick={() => setStep(2)} className="text-slate-500">
+          &larr; Lihat Script Lagi
+        </Button>
+        <Button
+          type="submit"
+          disabled={isLoading}
+          className="bg-slate-900 hover:bg-black text-white px-10 h-12 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+        >
+          {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+          {isLoading ? "Saving Data..." : "Complete Setup"}
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="flex items-center justify-between mb-8 px-4">
+        {[1, 2, 3].map((s) => (
+          <div key={s} className="flex items-center">
+            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${step === s ? "bg-indigo-600 text-white" :
+              step > s ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500"
+              }`}>
+              {step > s ? <CheckCircle2 className="h-5 w-5" /> : s}
+            </div>
+            {s < 3 && <div className={`h-1 w-16 md:w-24 mx-2 rounded ${step > s ? "bg-emerald-500" : "bg-slate-200"}`} />}
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit(async (data) => {
+        const finalData = {
+          ...data,
+          auto_create_vpn: connectivityMode === 'vpn',
+          enable_remote_access: true,
+          vpn_username: data.vpn_username,
+          vpn_password: data.vpn_password,
+          remote_access_port: data.remote_access_port,
+        };
+        await onSubmit(finalData as any);
+      })}>
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+      </form>
+    </div>
   );
 }

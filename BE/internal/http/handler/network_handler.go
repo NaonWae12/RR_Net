@@ -72,8 +72,10 @@ func (h *NetworkHandler) CreateRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.Host == "" || req.Username == "" || req.Password == "" {
-		http.Error(w, `{"error":"Name, host, username and password are required"}`, http.StatusBadRequest)
+	// If not provisioning/VPN, host is required. But in our new wizard,
+	// the host will be provided by FE from Step 2.
+	if req.Name == "" || req.Username == "" || req.Password == "" {
+		http.Error(w, `{"error":"Name, username and password are required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -89,6 +91,31 @@ func (h *NetworkHandler) CreateRouter(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(router)
+}
+
+func (h *NetworkHandler) ProvisionRouter(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.networkService.ProvisionRouter(r.Context(), tenantID, req.Name)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
 }
 
 func (h *NetworkHandler) UpdateRouter(w http.ResponseWriter, r *http.Request) {

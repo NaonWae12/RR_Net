@@ -269,6 +269,21 @@ export interface UpdateRouterRequest {
   remote_access_enabled?: boolean;
 }
 
+export interface ProvisionRouterRequest {
+  name: string;
+  connectivity_mode: RouterConnectivityMode;
+}
+
+export interface ProvisionResponse {
+  vpn_username: string;
+  vpn_password: string;
+  vpn_ipsec_psk: string;
+  vpn_script: string;
+  remote_access_port: number;
+  tunnel_ip: string;
+  public_ip: string;
+}
+
 export interface CreateNetworkProfileRequest {
   name: string;
   description?: string;

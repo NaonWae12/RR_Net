@@ -1,6 +1,8 @@
 import { apiClient } from "./apiClient";
 import type {
   Router,
+  RouterStatus,
+  RouterConnectivityMode,
   NetworkProfile,
   RouterListResponse,
   NetworkProfileListResponse,
@@ -8,6 +10,8 @@ import type {
   UpdateRouterRequest,
   CreateNetworkProfileRequest,
   UpdateNetworkProfileRequest,
+  ProvisionRouterRequest,
+  ProvisionResponse,
 } from "./types";
 
 export const networkService = {
@@ -69,6 +73,11 @@ export const networkService = {
 
   async toggleRemoteAccess(id: string, enabled: boolean): Promise<Router> {
     const response = await apiClient.post<Router>(`/network/routers/${id}/remote-access`, { enabled });
+    return response.data;
+  },
+
+  async provisionRouter(data: ProvisionRouterRequest): Promise<ProvisionResponse> {
+    const response = await apiClient.post<ProvisionResponse>("/network/routers/provision", data);
     return response.data;
   },
 

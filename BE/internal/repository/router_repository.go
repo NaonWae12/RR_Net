@@ -113,6 +113,44 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 	return routers, nil
 }
 
+func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, error) {
+	query := `
+		SELECT id, tenant_id, name, description, type, host, nas_ip, port,
+			username, password_hash, api_port, status, last_seen, is_default,
+			radius_enabled, radius_secret,
+			connectivity_mode, api_use_tls,
+			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			created_at, updated_at
+		FROM routers
+	`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all routers: %w", err)
+	}
+	defer rows.Close()
+
+	var routers []*network.Router
+	for rows.Next() {
+		var router network.Router
+		err := rows.Scan(
+			&router.ID, &router.TenantID, &router.Name, &router.Description,
+			&router.Type, &router.Host, &router.NASIP, &router.Port, &router.Username,
+			&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
+			&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
+			&router.ConnectivityMode, &router.APIUseTLS,
+			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
+			&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+			&router.CreatedAt, &router.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan router: %w", err)
+		}
+		routers = append(routers, &router)
+	}
+	return routers, nil
+}
+
 func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid.UUID) (*network.Router, error) {
 	query := `
 		SELECT id, tenant_id, name, description, type, host, nas_ip, port,

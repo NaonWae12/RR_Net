@@ -15,6 +15,13 @@ export default function NetworkPage() {
   useEffect(() => {
     fetchRouters();
     fetchProfiles();
+
+    // Auto-refresh router status every 30 seconds
+    const interval = setInterval(() => {
+      fetchRouters();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [fetchRouters, fetchProfiles]);
 
   return (

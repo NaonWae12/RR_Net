@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type Variant = "default" | "outline" | "ghost" | "destructive" | "link";
+type Variant = "default" | "secondary" | "outline" | "ghost" | "destructive" | "link";
 type Size = "sm" | "md" | "lg" | "icon";
 
 const baseClass =
@@ -9,6 +9,7 @@ const baseClass =
 
 const variantClass: Record<Variant, string> = {
   default: "bg-slate-900 text-white hover:bg-slate-800",
+  secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200",
   outline: "border border-slate-200 bg-white hover:bg-slate-50 text-slate-900",
   ghost: "bg-transparent hover:bg-slate-100 text-slate-900",
   destructive: "bg-red-600 text-white hover:bg-red-700",

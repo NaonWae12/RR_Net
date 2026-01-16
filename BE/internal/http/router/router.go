@@ -587,6 +587,7 @@ func New(deps Dependencies) http.Handler {
 	routerRepo := repository.NewRouterRepository(deps.DB)
 	profileRepo := repository.NewNetworkProfileRepository(deps.DB)
 	networkService := service.NewNetworkService(routerRepo, profileRepo)
+	networkService.StartHealthCheckScheduler(context.Background())
 	networkHandler := handler.NewNetworkHandler(networkService)
 
 	// RADIUS + Voucher (Hotspot)
@@ -603,20 +604,14 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/network/routers", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			networkHandler.ListRouters(w, r)
+			requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.ListRouters)).ServeHTTP(w, r)
 		case http.MethodPost:
-			networkHandler.CreateRouter(w, r)
+			requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.CreateRouter)).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})))
-	mux.Handle("/api/v1/network/routers/test-config", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			networkHandler.TestRouterConfig(w, r)
-		} else {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})))
+
 	mux.Handle("/api/v1/network/routers/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/network/routers/")
 		if path == "" {
@@ -625,44 +620,71 @@ func New(deps Dependencies) http.Handler {
 		}
 		path = strings.TrimSuffix(path, "/")
 		parts := strings.Split(path, "/")
-		if len(parts) == 2 && parts[1] == "test-connection" {
-			r = setPathParam(r, "id", parts[0])
+
+		// 1. Provision (POST /api/v1/network/routers/provision)
+		if path == "provision" {
 			if r.Method == http.MethodPost {
-				networkHandler.TestRouterConnection(w, r)
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.ProvisionRouter)).ServeHTTP(w, r)
 				return
 			}
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		if len(parts) == 2 && parts[1] == "disconnect" {
-			r = setPathParam(r, "id", parts[0])
+
+		// 2. Test Router Config (POST /api/v1/network/routers/test-config)
+		if path == "test-config" {
 			if r.Method == http.MethodPost {
-				networkHandler.DisconnectRouter(w, r)
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.TestRouterConfig)).ServeHTTP(w, r)
 				return
 			}
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		if len(parts) == 2 && parts[1] == "remote-access" {
-			r = setPathParam(r, "id", parts[0])
-			if r.Method == http.MethodPost {
-				networkHandler.ToggleRemoteAccess(w, r)
-				return
+
+		// 3. ID-specific routes
+		if len(parts) == 2 {
+			id := parts[0]
+			action := parts[1]
+			r = setPathParam(r, "id", id)
+
+			switch action {
+			case "test-connection":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.TestRouterConnection)).ServeHTTP(w, r)
+					return
+				}
+			case "disconnect":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.DisconnectRouter)).ServeHTTP(w, r)
+					return
+				}
+			case "remote-access":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.ToggleRemoteAccess)).ServeHTTP(w, r)
+					return
+				}
 			}
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		r = setPathParam(r, "id", parts[0])
-		switch r.Method {
-		case http.MethodGet:
-			networkHandler.GetRouter(w, r)
-		case http.MethodPut:
-			networkHandler.UpdateRouter(w, r)
-		case http.MethodDelete:
-			networkHandler.DeleteRouter(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
+
+		// 4. CRUD on specific ID
+		if len(parts) == 1 {
+			r = setPathParam(r, "id", parts[0])
+			switch r.Method {
+			case http.MethodGet:
+				requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetRouter)).ServeHTTP(w, r)
+			case http.MethodPut:
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.UpdateRouter)).ServeHTTP(w, r)
+			case http.MethodDelete:
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.DeleteRouter)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
 		}
+
+		w.WriteHeader(http.StatusNotFound)
 	})))
 
 	// Network Profiles
