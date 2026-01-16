@@ -26,8 +26,9 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
+			remote_access_enabled, remote_access_port,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 	`
 	_, err := r.db.Exec(ctx, query,
 		router.ID, router.TenantID, router.Name, router.Description,
@@ -35,6 +36,7 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 		router.Password, router.APIPort, router.Status, router.LastSeen, router.IsDefault,
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
+		router.RemoteAccessEnabled, router.RemoteAccessPort,
 		router.CreatedAt, router.UpdatedAt,
 	)
 	return err
@@ -46,6 +48,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
+			remote_access_enabled, remote_access_port,
 			created_at, updated_at
 		FROM routers
 		WHERE id = $1
@@ -57,6 +60,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
+		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -71,6 +75,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
+			remote_access_enabled, remote_access_port,
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1
@@ -91,6 +96,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 			&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 			&router.ConnectivityMode, &router.APIUseTLS,
+			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 			&router.CreatedAt, &router.UpdatedAt,
 		)
 		if err != nil {
@@ -107,6 +113,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
+			remote_access_enabled, remote_access_port,
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1 AND is_default = true
@@ -118,6 +125,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
+		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -133,7 +141,8 @@ func (r *RouterRepository) Update(ctx context.Context, router *network.Router) e
 			username = $8, password_hash = $9, api_port = $10, status = $11,
 			is_default = $12, radius_enabled = $13, radius_secret = $14,
 			connectivity_mode = $15, api_use_tls = $16,
-			updated_at = $17
+			remote_access_enabled = $17, remote_access_port = $18,
+			updated_at = $19
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
@@ -142,6 +151,7 @@ func (r *RouterRepository) Update(ctx context.Context, router *network.Router) e
 		router.APIPort, router.Status, router.IsDefault,
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
+		router.RemoteAccessEnabled, router.RemoteAccessPort,
 		router.UpdatedAt,
 	)
 	return err
@@ -179,6 +189,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
+			remote_access_enabled, remote_access_port,
 			created_at, updated_at
 		FROM routers
 		WHERE nas_ip = $1 AND radius_enabled = true
@@ -191,6 +202,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
+		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {

@@ -641,6 +641,15 @@ func New(deps Dependencies) http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+		if len(parts) == 2 && parts[1] == "remote-access" {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodPost {
+				networkHandler.ToggleRemoteAccess(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		r = setPathParam(r, "id", parts[0])
 		switch r.Method {
 		case http.MethodGet:

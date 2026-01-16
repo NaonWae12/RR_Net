@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -459,4 +461,88 @@ func (s *NetworkService) UpdateProfile(ctx context.Context, id uuid.UUID, req Up
 
 func (s *NetworkService) DeleteProfile(ctx context.Context, id uuid.UUID) error {
 	return s.profileRepo.Delete(ctx, id)
+}
+
+func (s *NetworkService) ToggleRemoteAccess(ctx context.Context, id uuid.UUID, enabled bool) (*network.Router, error) {
+	router, err := s.routerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if router.RemoteAccessEnabled == enabled {
+		return router, nil
+	}
+
+	if enabled {
+		// Enable Remote Access
+		if router.RemoteAccessPort == 0 {
+			routers, err := s.routerRepo.ListByTenant(ctx, router.TenantID)
+			if err != nil {
+				return nil, err
+			}
+
+			usedPorts := make(map[int]bool)
+			for _, r := range routers {
+				if r.RemoteAccessPort > 0 {
+					usedPorts[r.RemoteAccessPort] = true
+				}
+			}
+
+			startPort := 10500 // Matching mockup
+			assignedPort := 0
+			for p := startPort; p <= 20000; p++ {
+				if !usedPorts[p] {
+					assignedPort = p
+					break
+				}
+			}
+			if assignedPort == 0 {
+				return nil, fmt.Errorf("no available ports for remote access")
+			}
+			router.RemoteAccessPort = assignedPort
+		}
+
+		// Apply IPTables rules if on Linux
+		if runtime.GOOS == "linux" {
+			// DNAT Rule
+			cmd := exec.Command("iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return nil, fmt.Errorf("failed to apply PREROUTING rule: %v, output: %s", err, string(out))
+			}
+
+			// FORWARD Rule
+			cmd = exec.Command("iptables", "-A", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				// Cleanup PREROUTING if FORWARD fails
+				_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
+				return nil, fmt.Errorf("failed to apply FORWARD rule: %v, output: %s", err, string(out))
+			}
+		} else {
+			fmt.Printf("[MOCK] Enabling Port Forwarding on non-linux OS: Public Port %d -> %s:8291\n", router.RemoteAccessPort, router.Host)
+		}
+
+		router.RemoteAccessEnabled = true
+	} else {
+		// Disable Remote Access
+		if runtime.GOOS == "linux" && router.RemoteAccessPort > 0 {
+			// Remove DNAT Rule
+			cmd := exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
+			_ = cmd.Run() // Ignore errors during deletion for robustness
+
+			// Remove FORWARD Rule
+			cmd = exec.Command("iptables", "-D", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+			_ = cmd.Run()
+		} else {
+			fmt.Printf("[MOCK] Disabling Port Forwarding on non-linux OS: Public Port %d\n", router.RemoteAccessPort)
+		}
+
+		router.RemoteAccessEnabled = false
+	}
+
+	router.UpdatedAt = time.Now()
+	if err := s.routerRepo.Update(ctx, router); err != nil {
+		return nil, err
+	}
+
+	return router, nil
 }

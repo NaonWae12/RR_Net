@@ -67,6 +67,11 @@ export const networkService = {
     return response.data;
   },
 
+  async toggleRemoteAccess(id: string, enabled: boolean): Promise<Router> {
+    const response = await apiClient.post<Router>(`/network/routers/${id}/remote-access`, { enabled });
+    return response.data;
+  },
+
   // ========== Network Profiles ==========
   async getNetworkProfiles(): Promise<NetworkProfile[]> {
     const response = await apiClient.get<NetworkProfileListResponse>("/network/profiles");

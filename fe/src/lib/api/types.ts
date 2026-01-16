@@ -203,6 +203,8 @@ export interface Router {
   last_seen?: string | null;
   is_default: boolean;
   radius_enabled: boolean;
+  remote_access_enabled?: boolean;
+  remote_access_port?: number;
   created_at: string;
   updated_at: string;
 }
@@ -259,6 +261,7 @@ export interface UpdateRouterRequest {
   is_default?: boolean;
   radius_enabled?: boolean;
   radius_secret?: string;
+  remote_access_enabled?: boolean;
 }
 
 export interface CreateNetworkProfileRequest {

@@ -38,26 +38,28 @@ const (
 
 // Router represents a network router device
 type Router struct {
-	ID               uuid.UUID              `json:"id"`
-	TenantID         uuid.UUID              `json:"tenant_id"`
-	Name             string                 `json:"name"`
-	Description      string                 `json:"description,omitempty"`
-	Type             RouterType             `json:"type"`
-	Host             string                 `json:"host"`
-	NASIP            string                 `json:"nas_ip,omitempty"`
-	Port             int                    `json:"port"`
-	Username         string                 `json:"username"`
-	Password         string                 `json:"-"` // Never expose password
-	APIPort          int                    `json:"api_port,omitempty"`
-	APIUseTLS        bool                   `json:"api_use_tls"`
-	ConnectivityMode RouterConnectivityMode `json:"connectivity_mode"`
-	Status           RouterStatus           `json:"status"`
-	LastSeen         *time.Time             `json:"last_seen,omitempty"`
-	IsDefault        bool                   `json:"is_default"`
-	RadiusEnabled    bool                   `json:"radius_enabled"`
-	RadiusSecret     string                 `json:"-"` // Never expose radius secret
-	CreatedAt        time.Time              `json:"created_at"`
-	UpdatedAt        time.Time              `json:"updated_at"`
+	ID                  uuid.UUID              `json:"id"`
+	TenantID            uuid.UUID              `json:"tenant_id"`
+	Name                string                 `json:"name"`
+	Description         string                 `json:"description,omitempty"`
+	Type                RouterType             `json:"type"`
+	Host                string                 `json:"host"`
+	NASIP               string                 `json:"nas_ip,omitempty"`
+	Port                int                    `json:"port"`
+	Username            string                 `json:"username"`
+	Password            string                 `json:"-"` // Never expose password
+	APIPort             int                    `json:"api_port,omitempty"`
+	APIUseTLS           bool                   `json:"api_use_tls"`
+	ConnectivityMode    RouterConnectivityMode `json:"connectivity_mode"`
+	Status              RouterStatus           `json:"status"`
+	LastSeen            *time.Time             `json:"last_seen,omitempty"`
+	IsDefault           bool                   `json:"is_default"`
+	RadiusEnabled       bool                   `json:"radius_enabled"`
+	RadiusSecret        string                 `json:"-"` // Never expose radius secret
+	RemoteAccessEnabled bool                   `json:"remote_access_enabled"`
+	RemoteAccessPort    int                    `json:"remote_access_port,omitempty"`
+	CreatedAt           time.Time              `json:"created_at"`
+	UpdatedAt           time.Time              `json:"updated_at"`
 }
 
 // NetworkProfile represents a bandwidth/QoS profile
