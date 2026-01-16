@@ -2,11 +2,15 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,20 +38,22 @@ func NewNetworkService(
 // ========== Router Operations ==========
 
 type CreateRouterRequest struct {
-	Name             string                         `json:"name"`
-	Description      string                         `json:"description,omitempty"`
-	Type             network.RouterType             `json:"type"`
-	Host             string                         `json:"host"`
-	NASIP            string                         `json:"nas_ip,omitempty"`
-	Port             int                            `json:"port"`
-	Username         string                         `json:"username"`
-	Password         string                         `json:"password"`
-	APIPort          int                            `json:"api_port,omitempty"`
-	APIUseTLS        *bool                          `json:"api_use_tls,omitempty"`
-	ConnectivityMode network.RouterConnectivityMode `json:"connectivity_mode,omitempty"`
-	IsDefault        bool                           `json:"is_default"`
-	RadiusEnabled    *bool                          `json:"radius_enabled,omitempty"`
-	RadiusSecret     string                         `json:"radius_secret,omitempty"`
+	Name               string                         `json:"name"`
+	Description        string                         `json:"description,omitempty"`
+	Type               network.RouterType             `json:"type"`
+	Host               string                         `json:"host"`
+	NASIP              string                         `json:"nas_ip,omitempty"`
+	Port               int                            `json:"port"`
+	Username           string                         `json:"username"`
+	Password           string                         `json:"password"`
+	APIPort            int                            `json:"api_port,omitempty"`
+	APIUseTLS          *bool                          `json:"api_use_tls,omitempty"`
+	ConnectivityMode   network.RouterConnectivityMode `json:"connectivity_mode,omitempty"`
+	IsDefault          bool                           `json:"is_default"`
+	RadiusEnabled      *bool                          `json:"radius_enabled,omitempty"`
+	RadiusSecret       string                         `json:"radius_secret,omitempty"`
+	AutoCreateVPN      bool                           `json:"auto_create_vpn"`
+	EnableRemoteAccess bool                           `json:"enable_remote_access"`
 }
 
 func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, req CreateRouterRequest) (*network.Router, error) {
@@ -99,6 +105,77 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 	}
 	if req.RadiusEnabled != nil {
 		router.RadiusEnabled = *req.RadiusEnabled
+	}
+
+	if router.ConnectivityMode == network.RouterConnectivityModeVPN && req.AutoCreateVPN {
+		// Generate VPN credentials
+		router.VPNUsername = "vpn-" + router.Name + "-" + generateRandomString(4)
+		router.VPNPassword = generateRandomString(12)
+
+		// Execute script to add VPN user and get IP
+		cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_add_user_auto.sh", router.VPNUsername, router.VPNPassword)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create VPN account: %v, output: %s", err, string(out))
+		}
+		router.Host = string(net.ParseIP(strings.TrimSpace(string(out)))) // Clean output
+		vpnIP := strings.TrimSpace(string(out))
+		if net.ParseIP(vpnIP) == nil {
+			return nil, fmt.Errorf("invalid IP returned from vpn script: %s", vpnIP)
+		}
+		router.Host = vpnIP
+		router.VPNUsername = router.VPNUsername // Already set
+		router.VPNPassword = router.VPNPassword // Already set
+	}
+
+	if req.EnableRemoteAccess {
+		// ToggleRemoteAccess logic (port finding part)
+		routers, err := s.routerRepo.ListByTenant(ctx, router.TenantID)
+		if err != nil {
+			return nil, err
+		}
+
+		usedPorts := make(map[int]bool)
+		for _, r := range routers {
+			if r.RemoteAccessPort > 0 {
+				usedPorts[r.RemoteAccessPort] = true
+			}
+		}
+
+		startPort := 10500
+		assignedPort := 0
+		for p := startPort; p <= 20000; p++ {
+			if !usedPorts[p] {
+				assignedPort = p
+				break
+			}
+		}
+		if assignedPort == 0 {
+			return nil, fmt.Errorf("no available ports for remote access")
+		}
+		router.RemoteAccessPort = assignedPort
+		router.RemoteAccessEnabled = true
+
+		// Logic for IPTables will be triggered if Host is set correctly
+		if router.Host != "" && runtime.GOOS == "linux" {
+			// DNAT Rule
+			cmd := exec.Command("sudo", "iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return nil, fmt.Errorf("failed to apply PREROUTING rule: %v, output: %s", err, string(out))
+			}
+
+			// FORWARD Rule
+			cmd = exec.Command("sudo", "iptables", "-A", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				_ = exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
+				return nil, fmt.Errorf("failed to apply FORWARD rule: %v, output: %s", err, string(out))
+			}
+		}
+	}
+
+	// Generate MikroTik script if VPN was created
+	if req.AutoCreateVPN && router.VPNUsername != "" {
+		router.VPNScript = s.generateMikrotikVPNScript(router)
 	}
 
 	if err := s.routerRepo.Create(ctx, router); err != nil {
@@ -545,4 +622,44 @@ func (s *NetworkService) ToggleRemoteAccess(ctx context.Context, id uuid.UUID, e
 	}
 
 	return router, nil
+}
+
+func generateRandomString(n int) string {
+	b := make([]byte, n/2+1)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)[:n]
+}
+
+func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
+	// Try to get PSK from /etc/ipsec.secrets
+	psk := "RRNetSecretPSK"    // Default backup
+	publicIP := "72.60.74.209" // Default/Current VPS IP
+
+	data, err := os.ReadFile("/etc/ipsec.secrets")
+	if err == nil {
+		content := string(data)
+		// Usually: IP : PSK "secret"
+		parts := strings.Split(content, "PSK")
+		if len(parts) > 1 {
+			psk = strings.TrimSpace(parts[1])
+			psk = strings.Trim(psk, "\"")
+		}
+	}
+
+	script := fmt.Sprintf(`/interface l2tp-client
+add connect-to=%s disabled=no name=l2tp-erp password=%s user=%s use-ipsec=yes ipsec-secret=%s
+/ip service
+set api disabled=no port=8728
+set winbox disabled=no port=8291
+/ip firewall filter
+add chain=input action=accept protocol=tcp dst-port=8728,8291 src-address=10.10.10.1 comment="Allow ERP Access from VPN"
+`, publicIP, router.VPNPassword, router.VPNUsername, psk)
+
+	if router.RemoteAccessEnabled && router.RemoteAccessPort > 0 {
+		script += fmt.Sprintf("## Remote Access enabled on port: %d\n", router.RemoteAccessPort)
+	}
+
+	return script
 }

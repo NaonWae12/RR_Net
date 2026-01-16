@@ -17,7 +17,7 @@ const routerFormSchema = z.object({
   description: z.string().optional(),
   type: z.enum(["mikrotik", "cisco", "ubiquiti", "other"]),
   connectivity_mode: z.enum(["direct_public", "vpn"]).default("direct_public"),
-  host: z.string().min(1, "Host is required"),
+  host: z.string().optional(),
   nas_ip: z.string().optional(),
   port: z.coerce.number().min(1).max(65535).default(22),
   username: z.string().min(1, "Username is required"),
@@ -27,6 +27,16 @@ const routerFormSchema = z.object({
   is_default: z.boolean().default(false),
   radius_enabled: z.boolean().default(false).optional(),
   radius_secret: z.string().optional(),
+  auto_create_vpn: z.boolean().default(false),
+  enable_remote_access: z.boolean().default(false),
+}).refine((data) => {
+  if (data.connectivity_mode === 'vpn' && data.auto_create_vpn) {
+    return true;
+  }
+  return data.host && data.host.length > 0;
+}, {
+  message: "Host is required",
+  path: ["host"],
 });
 
 type RouterFormValues = z.infer<typeof routerFormSchema>;
@@ -97,12 +107,16 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
       is_default: false,
       radius_enabled: false,
       radius_secret: "",
+      auto_create_vpn: false,
+      enable_remote_access: false,
     },
   });
 
   const apiUseTLS = watch("api_use_tls");
   const apiPort = watch("api_port");
   const host = watch("host");
+  const connectivityMode = watch("connectivity_mode");
+  const autoCreateVPN = watch("auto_create_vpn");
   const type = watch("type");
 
   // Auto-detect connection mode based on host
@@ -296,26 +310,35 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           <option value="vpn">Connectivity: VPN (Private)</option>
         </SimpleSelect>
         <div className="md:col-span-2">
-          <Input
-            label="Host (IP or Hostname)"
-            {...register("host")}
-            error={errors.host?.message}
-            placeholder={
-              connectionMode === "ngrok"
-                ? "e.g. 0.tcp.ngrok.io"
-                : connectionMode === "local"
-                  ? "e.g. 192.168.1.1"
-                  : "e.g. router.ddns.net atau 203.0.113.1"
-            }
-          />
-          {host && (
-            <p className="mt-1 text-xs text-slate-500">
-              {connectionMode === "ngrok"
-                ? "Masukkan hostname ngrok (tanpa port). Port akan diambil dari field Port di bawah."
-                : connectionMode === "local"
-                  ? "IP lokal router di jaringan yang sama dengan backend"
-                  : "DDNS hostname atau public IP router"}
-            </p>
+          {!autoCreateVPN || connectivityMode !== 'vpn' ? (
+            <>
+              <Input
+                label="Host (IP or Hostname)"
+                {...register("host")}
+                error={errors.host?.message}
+                placeholder={
+                  connectionMode === "ngrok"
+                    ? "e.g. 0.tcp.ngrok.io"
+                    : connectionMode === "local"
+                      ? "e.g. 192.168.1.1"
+                      : "e.g. router.ddns.net atau 203.0.113.1"
+                }
+              />
+              {host && (
+                <p className="mt-1 text-xs text-slate-500">
+                  {connectionMode === "ngrok"
+                    ? "Masukkan hostname ngrok (tanpa port). Port akan diambil dari field Port di bawah."
+                    : connectionMode === "local"
+                      ? "IP lokal router di jaringan yang sama dengan backend"
+                      : "DDNS hostname atau public IP router"}
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-md p-3">
+              <p className="text-sm text-indigo-700 font-medium">Auto VPN Enabled</p>
+              <p className="text-xs text-indigo-500">Host IP will be assigned automatically by the server.</p>
+            </div>
           )}
         </div>
         <Input label="SSH Port" type="number" {...register("port")} error={errors.port?.message} />
@@ -366,6 +389,44 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           <label htmlFor="is_default" className="text-sm font-medium text-slate-700">
             Set as default router
           </label>
+        </div>
+
+        {/* Automation Toggles */}
+        <div className="md:col-span-2 border-t border-slate-200 pt-4 mt-2">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Automation & Remote Access</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {connectivityMode === 'vpn' && (
+              <div className="flex items-center space-x-2 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                <input
+                  type="checkbox"
+                  id="auto_create_vpn"
+                  {...register("auto_create_vpn")}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <div className="flex flex-col">
+                  <label htmlFor="auto_create_vpn" className="text-sm font-semibold text-indigo-900">
+                    Auto-create VPN Account
+                  </label>
+                  <p className="text-[10px] text-indigo-600">Generate credentials & MikroTik script automatically.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center space-x-2 bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+              <input
+                type="checkbox"
+                id="enable_remote_access"
+                {...register("enable_remote_access")}
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <div className="flex flex-col">
+                <label htmlFor="enable_remote_access" className="text-sm font-semibold text-emerald-900">
+                  Enable Remote Access
+                </label>
+                <p className="text-[10px] text-emerald-600">Auto port forward to access via Winbox/WebFig.</p>
+              </div>
+            </div>
+          </div>
         </div>
         <div className="md:col-span-2">
           <label className="text-sm font-medium text-slate-700">Description (optional)</label>

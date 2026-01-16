@@ -15,8 +15,6 @@ import { useRouter } from "next/navigation";
 import { useNetworkStore } from "@/stores/networkStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
-import { RemoteAccessModal } from "./RemoteAccessModal";
-import { Globe } from "lucide-react";
 import { useState } from "react";
 
 interface RouterTableProps {
@@ -29,7 +27,6 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
   const { deleteRouter, testRouterConnection, disconnectRouter } = useNetworkStore();
   const { showToast } = useNotificationStore();
   const [selectedRouter, setSelectedRouter] = useState<Router | null>(null);
-  const [isRemoteAccessOpen, setIsRemoteAccessOpen] = useState(false);
 
   const handleView = (id: string) => {
     router.push(`/network/routers/${id}`);
@@ -171,17 +168,6 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
                 >
                   Disconnect
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedRouter(routerItem);
-                    setIsRemoteAccessOpen(true);
-                  }}
-                  className="text-indigo-600 hover:text-indigo-700"
-                >
-                  <Globe className="h-4 w-4 mr-1" /> Remote Access
-                </Button>
                 <Button variant="destructive" size="sm" onClick={() => handleDelete(routerItem.id, routerItem.name)}>
                   Delete
                 </Button>
@@ -191,16 +177,6 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
         </TableBody>
       </Table>
 
-      {selectedRouter && (
-        <RemoteAccessModal
-          isOpen={isRemoteAccessOpen}
-          onClose={() => {
-            setIsRemoteAccessOpen(false);
-            setSelectedRouter(null);
-          }}
-          router={routers?.find(r => r.id === selectedRouter.id) || selectedRouter}
-        />
-      )}
     </div>
   );
 }

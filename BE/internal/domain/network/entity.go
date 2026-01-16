@@ -58,6 +58,9 @@ type Router struct {
 	RadiusSecret        string                 `json:"-"` // Never expose radius secret
 	RemoteAccessEnabled bool                   `json:"remote_access_enabled"`
 	RemoteAccessPort    int                    `json:"remote_access_port,omitempty"`
+	VPNUsername         string                 `json:"vpn_username,omitempty"`
+	VPNPassword         string                 `json:"vpn_password,omitempty"`
+	VPNScript           string                 `json:"vpn_script,omitempty"`
 	CreatedAt           time.Time              `json:"created_at"`
 	UpdatedAt           time.Time              `json:"updated_at"`
 }

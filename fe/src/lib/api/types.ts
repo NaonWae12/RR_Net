@@ -205,6 +205,9 @@ export interface Router {
   radius_enabled: boolean;
   remote_access_enabled?: boolean;
   remote_access_port?: number;
+  vpn_username?: string;
+  vpn_password?: string;
+  vpn_script?: string;
   created_at: string;
   updated_at: string;
 }
@@ -244,6 +247,8 @@ export interface CreateRouterRequest {
   is_default?: boolean;
   radius_enabled?: boolean;
   radius_secret?: string;
+  auto_create_vpn?: boolean;
+  enable_remote_access?: boolean;
 }
 
 export interface UpdateRouterRequest {

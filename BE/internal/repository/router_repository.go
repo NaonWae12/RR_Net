@@ -27,8 +27,9 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			remote_access_enabled, remote_access_port,
+			vpn_username, vpn_password, vpn_script,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 	`
 	_, err := r.db.Exec(ctx, query,
 		router.ID, router.TenantID, router.Name, router.Description,
@@ -37,6 +38,7 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
 		router.RemoteAccessEnabled, router.RemoteAccessPort,
+		router.VPNUsername, router.VPNPassword, router.VPNScript,
 		router.CreatedAt, router.UpdatedAt,
 	)
 	return err
@@ -49,6 +51,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE id = $1
@@ -61,6 +64,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -76,6 +80,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1
@@ -97,6 +102,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 			&router.ConnectivityMode, &router.APIUseTLS,
 			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
+			&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
 			&router.CreatedAt, &router.UpdatedAt,
 		)
 		if err != nil {
@@ -114,6 +120,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1 AND is_default = true
@@ -126,6 +133,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -142,7 +150,8 @@ func (r *RouterRepository) Update(ctx context.Context, router *network.Router) e
 			is_default = $12, radius_enabled = $13, radius_secret = $14,
 			connectivity_mode = $15, api_use_tls = $16,
 			remote_access_enabled = $17, remote_access_port = $18,
-			updated_at = $19
+			vpn_username = $19, vpn_password = $20, vpn_script = $21,
+			updated_at = $22
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
@@ -152,6 +161,7 @@ func (r *RouterRepository) Update(ctx context.Context, router *network.Router) e
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
 		router.RemoteAccessEnabled, router.RemoteAccessPort,
+		router.VPNUsername, router.VPNPassword, router.VPNScript,
 		router.UpdatedAt,
 	)
 	return err
@@ -190,6 +200,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE nas_ip = $1 AND radius_enabled = true
@@ -203,6 +214,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
