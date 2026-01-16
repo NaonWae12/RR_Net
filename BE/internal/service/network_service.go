@@ -849,33 +849,16 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 		}
 	}
 
-	script := fmt.Sprintf(`################################################
-## RR-NET AUTO GENERATED SETUP SCRIPT
-## Router: %s
-################################################
-
-## SCRIPT 1: L2TP CLIENT CONFIG
-/interface l2tp-client
-add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet \
-    password=%s user=%s use-ipsec=yes ipsec-secret=%s
-
-## SCRIPT 2: FIREWALL INPUT (REMOTE ACCESS)
-/ip firewall filter
-add action=accept chain=input comment="Allow ERP Access from VPN" \
-    src-address=10.10.10.0/24 dst-port=8728,8291 protocol=tcp \
-    place-before=0
-
-## SCRIPT 3: SERVICE HARDENING
-/ip service
-set api disabled=no port=8728
-set api-ssl disabled=yes
-set winbox disabled=no port=8291
-set www disabled=yes
-set ssh port=22
-set telnet disabled=yes
-set ftp disabled=yes
-
-## SYSTEM IDENTITY
+	script := fmt.Sprintf(`## RR-NET SETUP - %s
+/interface l2tp-client add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet password=%s user=%s use-ipsec=yes ipsec-secret=%s
+/ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=10.10.10.0/24 dst-port=8728,8291 protocol=tcp place-before=0
+/ip service set api disabled=no port=8728
+/ip service set api-ssl disabled=yes
+/ip service set winbox disabled=no port=8291
+/ip service set www disabled=yes
+/ip service set ssh port=22
+/ip service set telnet disabled=yes
+/ip service set ftp disabled=yes
 /system identity set name="RR-%s"
 `, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, router.Name)
 
