@@ -198,7 +198,7 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
             setIsRemoteAccessOpen(false);
             setSelectedRouter(null);
           }}
-          router={selectedRouter}
+          router={routers?.find(r => r.id === selectedRouter.id) || selectedRouter}
         />
       )}
     </div>

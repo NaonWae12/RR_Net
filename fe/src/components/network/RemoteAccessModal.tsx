@@ -54,7 +54,7 @@ export function RemoteAccessModal({ isOpen, onClose, router }: RemoteAccessModal
                     : "Remote access has been revoked.",
                 variant: "success",
             });
-            onClose();
+            // Don't close modal, let user see the port
         } catch (error: any) {
             showToast({
                 title: "Failed to update settings",
@@ -78,8 +78,15 @@ export function RemoteAccessModal({ isOpen, onClose, router }: RemoteAccessModal
     };
 
     const publicIP = "72.60.74.209"; // Ideally this comes from config or backend
-    const port = router.remote_access_port || "Pending..."; // Pending until backend assigns it
-    const fullAddress = typeof port === 'number' ? `${publicIP}:${port}` : "Waiting for assignment...";
+
+    // Check if we are showing current saved state or a new (unsaved) toggle state
+    const isActuallyEnabled = !!router.remote_access_enabled;
+    const hasPort = !!router.remote_access_port;
+
+    // UI derivated states
+    const showDetails = enabled; // Show details if switch is ON
+    const portLabel = hasPort ? router.remote_access_port : (enabled === isActuallyEnabled ? "Not assigned" : "Will be assigned on save");
+    const fullAddress = hasPort ? `${publicIP}:${router.remote_access_port}` : (enabled === isActuallyEnabled ? "No address available" : "Address will be generated...");
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !loading && !open && onClose()}>
@@ -100,7 +107,8 @@ export function RemoteAccessModal({ isOpen, onClose, router }: RemoteAccessModal
                         <div className="space-y-0.5">
                             <label className="text-sm font-medium text-slate-900">Enable Remote Access</label>
                             <div className="text-xs text-slate-500">
-                                {enabled ? "Status: Active" : "Status: Inactive"}
+                                {isActuallyEnabled ? "Status: Active" : "Status: Inactive"}
+                                {enabled !== isActuallyEnabled && <span className="text-amber-600 ml-2">(Unsaved changes)</span>}
                             </div>
                         </div>
                         <Switch
@@ -124,11 +132,11 @@ export function RemoteAccessModal({ isOpen, onClose, router }: RemoteAccessModal
 
                                 <div className="text-slate-500">Port:</div>
                                 <div className="col-span-2 font-mono text-slate-700">
-                                    {router.remote_access_port ? (
+                                    {hasPort ? (
                                         <span className="text-emerald-600 font-bold">{router.remote_access_port}</span>
                                     ) : (
-                                        <span className="flex items-center text-amber-600">
-                                            <LoadingSpinner size={12} className="mr-2" /> Assigning...
+                                        <span className="flex items-center text-amber-600 italic">
+                                            {enabled === isActuallyEnabled ? "Missing assignment" : "Assigned on save"}
                                         </span>
                                     )}
                                 </div>
@@ -143,8 +151,8 @@ export function RemoteAccessModal({ isOpen, onClose, router }: RemoteAccessModal
                                         size="icon"
                                         variant="ghost"
                                         className="h-6 w-6 ml-2 text-slate-400 hover:text-indigo-600"
-                                        onClick={() => typeof port === 'number' && copyToClipboard(`${publicIP}:${port}`)}
-                                        disabled={typeof port !== 'number'}
+                                        onClick={() => hasPort && copyToClipboard(`${publicIP}:${router.remote_access_port}`)}
+                                        disabled={!hasPort}
                                     >
                                         <Copy className="h-3.5 w-3.5" />
                                     </Button>
@@ -162,7 +170,7 @@ export function RemoteAccessModal({ isOpen, onClose, router }: RemoteAccessModal
                     <Button variant="ghost" onClick={onClose} disabled={loading}>
                         Cancel
                     </Button>
-                    <Button onClick={handleSave} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">
+                    <Button onClick={handleSave} disabled={loading || (enabled === isActuallyEnabled)} className="bg-indigo-600 hover:bg-indigo-700">
                         {loading && <LoadingSpinner size={16} className="mr-2" />}
                         Save Changes
                     </Button>
