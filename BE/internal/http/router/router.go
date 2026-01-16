@@ -307,18 +307,20 @@ func New(deps Dependencies) http.Handler {
 
 		switch action {
 		case "plan":
-			if r.Method == http.MethodPost {
+			switch r.Method {
+			case http.MethodPost:
 				planHandler.AssignToTenant(w, r)
-			} else {
+			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
 		case "addons":
-			if r.Method == http.MethodPost {
+			switch r.Method {
+			case http.MethodPost:
 				addonHandler.AssignToTenant(w, r)
-			} else if r.Method == http.MethodGet {
+			case http.MethodGet:
 				// Get tenant addons by tenant_id (for admin)
 				w.WriteHeader(http.StatusNotImplemented)
-			} else {
+			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
 		default:

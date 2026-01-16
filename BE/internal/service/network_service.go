@@ -118,14 +118,12 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		if err != nil {
 			return nil, fmt.Errorf("failed to create VPN account: %v, output: %s", err, string(out))
 		}
-		router.Host = string(net.ParseIP(strings.TrimSpace(string(out)))) // Clean output
+
 		vpnIP := strings.TrimSpace(string(out))
 		if net.ParseIP(vpnIP) == nil {
 			return nil, fmt.Errorf("invalid IP returned from vpn script: %s", vpnIP)
 		}
 		router.Host = vpnIP
-		router.VPNUsername = router.VPNUsername // Already set
-		router.VPNPassword = router.VPNPassword // Already set
 	}
 
 	if req.EnableRemoteAccess {
@@ -158,17 +156,23 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 
 		// Logic for IPTables will be triggered if Host is set correctly
 		if router.Host != "" && runtime.GOOS == "linux" {
-			// DNAT Rule
+			// DNAT Rule for Winbox
 			cmd := exec.Command("sudo", "iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
 			if out, err := cmd.CombinedOutput(); err != nil {
 				return nil, fmt.Errorf("failed to apply PREROUTING rule: %v, output: %s", err, string(out))
 			}
 
-			// FORWARD Rule
+			// FORWARD Rule for Winbox
 			cmd = exec.Command("sudo", "iptables", "-A", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
 			if out, err := cmd.CombinedOutput(); err != nil {
 				_ = exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
 				return nil, fmt.Errorf("failed to apply FORWARD rule: %v, output: %s", err, string(out))
+			}
+
+			// Ensure Masquerade for VPN subnet (critical for return path)
+			_ = exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE").Run() // Check
+			if err := exec.Command("sudo", "iptables", "-t", "nat", "-A", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE").Run(); err != nil {
+				// Ignore if already exists, but try anyway
 			}
 		}
 	}
@@ -640,7 +644,6 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 	data, err := os.ReadFile("/etc/ipsec.secrets")
 	if err == nil {
 		content := string(data)
-		// Usually: IP : PSK "secret"
 		parts := strings.Split(content, "PSK")
 		if len(parts) > 1 {
 			psk = strings.TrimSpace(parts[1])
@@ -648,17 +651,39 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 		}
 	}
 
-	script := fmt.Sprintf(`/interface l2tp-client
-add connect-to=%s disabled=no name=l2tp-erp password=%s user=%s use-ipsec=yes ipsec-secret=%s
+	script := fmt.Sprintf(`################################################
+## RR-NET AUTO GENERATED SETUP SCRIPT
+## Router: %s
+################################################
+
+## SCRIPT 1: L2TP CLIENT CONFIG
+/interface l2tp-client
+add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet \
+    password=%s user=%s use-ipsec=yes ipsec-secret=%s
+
+## SCRIPT 2: FIREWALL INPUT (REMOTE ACCESS)
+/ip firewall filter
+add action=accept chain=input comment="Allow ERP Access from VPN" \
+    src-address=10.10.10.0/24 dst-port=8728,8291 protocol=tcp \
+    place-before=0
+
+## SCRIPT 3: SERVICE HARDENING
 /ip service
 set api disabled=no port=8728
+set api-ssl disabled=yes
 set winbox disabled=no port=8291
-/ip firewall filter
-add chain=input action=accept protocol=tcp dst-port=8728,8291 src-address=10.10.10.1 comment="Allow ERP Access from VPN"
-`, publicIP, router.VPNPassword, router.VPNUsername, psk)
+set www disabled=yes
+set ssh port=22
+set telnet disabled=yes
+set ftp disabled=yes
+
+## SYSTEM IDENTITY
+/system identity set name="RR-%s"
+`, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, router.Name)
 
 	if router.RemoteAccessEnabled && router.RemoteAccessPort > 0 {
-		script += fmt.Sprintf("## Remote Access enabled on port: %d\n", router.RemoteAccessPort)
+		script += fmt.Sprintf("\n## REMOTE ACCESS INFO\n")
+		script += fmt.Sprintf("## You can access this router via: %s:%d\n", publicIP, router.RemoteAccessPort)
 	}
 
 	return script
