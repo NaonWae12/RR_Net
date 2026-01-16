@@ -48,7 +48,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
-			remote_access_enabled, remote_access_port,
+			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			created_at, updated_at
 		FROM routers
 		WHERE id = $1
@@ -75,7 +75,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
-			remote_access_enabled, remote_access_port,
+			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1
@@ -113,7 +113,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
-			remote_access_enabled, remote_access_port,
+			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1 AND is_default = true
@@ -189,7 +189,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
-			remote_access_enabled, remote_access_port,
+			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			created_at, updated_at
 		FROM routers
 		WHERE nas_ip = $1 AND radius_enabled = true
