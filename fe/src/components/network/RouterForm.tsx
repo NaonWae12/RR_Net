@@ -141,19 +141,18 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         host: watch("host") || "",
         api_port: watch("api_port"),
         api_use_tls: watch("api_use_tls"),
-        username: watch("username") || "",
+        username: watch("username") || "admin",
         password: watch("password") || "",
       });
 
       if (res.ok) {
         setIsVerified(true);
-        setStep(3);
-        toast.success("VPN Link Established! MikroTik is reachable.");
+        toast.success(`✅ Connected! MikroTik Identity: ${res.identity || 'Unknown'}`);
       } else {
-        toast.error("Still unreachable. Ensure script is applied on MikroTik.");
+        toast.error("Connection failed. Check your credentials and ensure MikroTik is reachable.");
       }
-    } catch (err) {
-      toast.error("Verification failed. Make sure MikroTik is online.");
+    } catch (err: any) {
+      toast.error("Connection failed: " + (err.response?.data?.error || err.message || "Unknown error"));
     } finally {
       setIsVerifying(false);
     }
@@ -279,21 +278,10 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         </Button>
         <Button
           type="button"
-          onClick={handleVerifyConnection}
-          disabled={isVerifying}
-          className="bg-emerald-600 hover:bg-emerald-700 h-11 px-8 rounded-full shadow-lg shadow-emerald-100 transition-all hover:scale-105"
+          onClick={() => setStep(3)}
+          className="bg-indigo-600 hover:bg-indigo-700 h-11 px-8 rounded-full shadow-lg shadow-indigo-200 transition-all hover:scale-105"
         >
-          {isVerifying ? (
-            <>
-              <Loader2 className="animate-spin h-4 w-4 mr-2" />
-              Verifying Link...
-            </>
-          ) : (
-            <>
-              <Activity className="h-4 w-4 mr-2" />
-              Verify Connection
-            </>
-          )}
+          Next: Fill Credentials &rarr;
         </Button>
       </div>
     </div>
@@ -311,6 +299,13 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             <p className="text-xs text-emerald-700">Link VPN Aktif! Sekarang masukkan kredensial login MikroTik.</p>
           </div>
         </div>
+
+        {isVerified && (
+          <div className="mb-4 p-3 bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <span className="text-sm font-bold text-emerald-800">Connection Test Passed! You can now complete the setup.</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
           <div className="space-y-4">
@@ -346,14 +341,34 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         <Button type="button" variant="ghost" onClick={() => setStep(2)} className="text-slate-500">
           &larr; Lihat Script Lagi
         </Button>
-        <Button
-          type="submit"
-          disabled={isLoading}
-          className="bg-slate-900 hover:bg-black text-white px-10 h-12 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
-        >
-          {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
-          {isLoading ? "Saving Data..." : "Complete Setup"}
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            onClick={handleVerifyConnection}
+            disabled={isVerifying}
+            className="bg-emerald-600 hover:bg-emerald-700 h-12 px-6 rounded-full shadow-lg transition-all hover:scale-105"
+          >
+            {isVerifying ? (
+              <>
+                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                Testing...
+              </>
+            ) : (
+              <>
+                <Activity className="h-4 w-4 mr-2" />
+                Test Connection
+              </>
+            )}
+          </Button>
+          <Button
+            type="submit"
+            disabled={isLoading || !isVerified}
+            className="bg-slate-900 hover:bg-black text-white px-10 h-12 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+          >
+            {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+            {isLoading ? "Saving Data..." : "Complete Setup"}
+          </Button>
+        </div>
       </div>
     </div>
   );
