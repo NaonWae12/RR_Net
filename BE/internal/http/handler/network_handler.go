@@ -201,6 +201,46 @@ func (h *NetworkHandler) TestRouterConfig(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+func (h *NetworkHandler) DisconnectRouter(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant exists
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if err := h.networkService.DisconnectRouter(r.Context(), id); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok": true,
+	})
+}
+
 // ========== Network Profile Handlers ==========
 
 func (h *NetworkHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
@@ -308,4 +348,3 @@ func (h *NetworkHandler) DeleteProfile(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
- 

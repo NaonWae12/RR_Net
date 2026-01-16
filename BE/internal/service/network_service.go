@@ -250,6 +250,15 @@ func (s *NetworkService) TestRouterConnection(ctx context.Context, router *netwo
 	}, nil
 }
 
+func (s *NetworkService) DisconnectRouter(ctx context.Context, id uuid.UUID) error {
+	// For now, we just update the status to offline.
+	// In the future, if we have persistent connections/streams, we would close them here.
+	if err := s.routerRepo.UpdateStatus(ctx, id, network.RouterStatusOffline); err != nil {
+		return fmt.Errorf("failed to update router status to offline: %w", err)
+	}
+	return nil
+}
+
 // TestRouterConfigRequest is used for testing connection with temporary config (before saving)
 type TestRouterConfigRequest struct {
 	Type      network.RouterType `json:"type"`
