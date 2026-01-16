@@ -24,6 +24,8 @@ interface NetworkActions {
   createRouter: (data: CreateRouterRequest) => Promise<Router>;
   updateRouter: (id: string, data: UpdateRouterRequest) => Promise<Router>;
   deleteRouter: (id: string) => Promise<void>;
+  testRouterConnection: (id: string) => Promise<{ ok: boolean; identity?: string; latency_ms?: number; error?: string }>;
+  disconnectRouter: (id: string) => Promise<void>;
   
   // Profile actions
   fetchProfiles: () => Promise<void>;
@@ -110,6 +112,37 @@ export const useNetworkStore = create<NetworkState & NetworkActions>((set, get) 
         router: state.router?.id === id ? null : state.router,
         loading: false,
       }));
+    } catch (err) {
+      set({ error: toApiError(err).message, loading: false });
+      throw err;
+    }
+  },
+
+  testRouterConnection: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await networkService.testRouterConnection(id);
+      // Refetch router to get updated status
+      await get().fetchRouter(id);
+      // Also refresh routers list
+      await get().fetchRouters();
+      set({ loading: false });
+      return result;
+    } catch (err) {
+      set({ error: toApiError(err).message, loading: false });
+      throw err;
+    }
+  },
+
+  disconnectRouter: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      await networkService.disconnectRouter(id);
+      // Refetch router to get updated status
+      await get().fetchRouter(id);
+      // Also refresh routers list
+      await get().fetchRouters();
+      set({ loading: false });
     } catch (err) {
       set({ error: toApiError(err).message, loading: false });
       throw err;

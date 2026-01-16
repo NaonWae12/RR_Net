@@ -62,6 +62,11 @@ export const networkService = {
     await apiClient.delete(`/network/routers/${id}`);
   },
 
+  async disconnectRouter(id: string): Promise<{ ok: boolean }> {
+    const response = await apiClient.post<{ ok: boolean }>(`/network/routers/${id}/disconnect`);
+    return response.data;
+  },
+
   // ========== Network Profiles ==========
   async getNetworkProfiles(): Promise<NetworkProfile[]> {
     const response = await apiClient.get<NetworkProfileListResponse>("/network/profiles");

@@ -23,7 +23,7 @@ interface RouterTableProps {
 
 export function RouterTable({ routers, loading }: RouterTableProps) {
   const router = useRouter();
-  const { deleteRouter } = useNetworkStore();
+  const { deleteRouter, testRouterConnection, disconnectRouter } = useNetworkStore();
   const { showToast } = useNotificationStore();
 
   const handleView = (id: string) => {
@@ -48,6 +48,50 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
     } catch (error: any) {
       showToast({
         title: "Failed to delete router",
+        description: error.message || "An unexpected error occurred.",
+        variant: "error",
+      });
+    }
+  };
+
+  const handleTestConnection = async (id: string, name: string) => {
+    try {
+      const result = await testRouterConnection(id);
+      if (result.ok) {
+        showToast({
+          title: "Connection successful",
+          description: result.identity 
+            ? `Connected to ${result.identity}${result.latency_ms ? ` (${result.latency_ms}ms)` : ""}`
+            : "Router is reachable.",
+          variant: "success",
+        });
+      } else {
+        showToast({
+          title: "Connection failed",
+          description: result.error || "Could not connect to router.",
+          variant: "error",
+        });
+      }
+    } catch (error: any) {
+      showToast({
+        title: "Connection test failed",
+        description: error.message || "An unexpected error occurred.",
+        variant: "error",
+      });
+    }
+  };
+
+  const handleDisconnect = async (id: string, name: string) => {
+    try {
+      await disconnectRouter(id);
+      showToast({
+        title: "Router disconnected",
+        description: `Router "${name}" has been marked offline.`,
+        variant: "success",
+      });
+    } catch (error: any) {
+      showToast({
+        title: "Failed to disconnect router",
         description: error.message || "An unexpected error occurred.",
         variant: "error",
       });
@@ -105,6 +149,22 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => handleEdit(routerItem.id)}>
                   Edit
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleTestConnection(routerItem.id, routerItem.name)}
+                  className="text-green-600 hover:text-green-700"
+                >
+                  Connect/Test
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleDisconnect(routerItem.id, routerItem.name)}
+                  className="text-orange-600 hover:text-orange-700"
+                >
+                  Disconnect
                 </Button>
                 <Button variant="destructive" size="sm" onClick={() => handleDelete(routerItem.id, routerItem.name)}>
                   Delete
