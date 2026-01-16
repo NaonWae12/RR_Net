@@ -141,8 +141,8 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         host: watch("host") || "",
         api_port: watch("api_port"),
         api_use_tls: watch("api_use_tls"),
-        username: "admin",
-        password: "",
+        username: watch("username") || "",
+        password: watch("password") || "",
       });
 
       if (res.ok) {
