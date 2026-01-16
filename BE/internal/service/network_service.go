@@ -103,6 +103,9 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		return nil, fmt.Errorf("failed to create router: %w", err)
 	}
 
+	// Trigger initial connection check in background
+	s.checkAndUpdateStatusAsync(router)
+
 	return router, nil
 }
 
@@ -187,6 +190,9 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 		return nil, fmt.Errorf("failed to update router: %w", err)
 	}
 
+	// Trigger connection check in background after update
+	s.checkAndUpdateStatusAsync(router)
+
 	return router, nil
 }
 
@@ -227,7 +233,14 @@ func (s *NetworkService) TestRouterConnection(ctx context.Context, router *netwo
 	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 	out, err := mikrotik.TestLogin(ctx, addr, router.APIUseTLS, router.Username, router.Password)
 	if err != nil {
+		// Connection failed, mark as offline
+		_ = s.routerRepo.UpdateStatus(ctx, router.ID, network.RouterStatusOffline)
 		return nil, err
+	}
+
+	// Connection successful, mark as online
+	if err := s.routerRepo.UpdateStatus(ctx, router.ID, network.RouterStatusOnline); err != nil {
+		return nil, fmt.Errorf("connection successful but failed to update status: %w", err)
 	}
 
 	return &RouterConnectionTestResult{
@@ -281,6 +294,15 @@ func (s *NetworkService) TestRouterConfig(ctx context.Context, req TestRouterCon
 		Identity:  out.Identity,
 		LatencyMS: out.LatencyMS,
 	}, nil
+}
+
+func (s *NetworkService) checkAndUpdateStatusAsync(router *network.Router) {
+	go func() {
+		// Create a detached context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_, _ = s.TestRouterConnection(ctx, router)
+	}()
 }
 
 // ========== Network Profile Operations ==========

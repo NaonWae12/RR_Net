@@ -13,11 +13,11 @@ import (
 
 // PaymentMatrixEntry represents a client's payment status for a specific month
 type PaymentMatrixEntry struct {
-	ClientID        uuid.UUID `json:"client_id"`
-	ClientName      string    `json:"client_name"`
-	ClientGroupName *string   `json:"client_group_name,omitempty"`
-	PackageName     *string   `json:"package_name,omitempty"`
-	Amount          int64     `json:"amount"`
+	ClientID        uuid.UUID              `json:"client_id"`
+	ClientName      string                 `json:"client_name"`
+	ClientGroupName *string                `json:"client_group_name,omitempty"`
+	PackageName     *string                `json:"package_name,omitempty"`
+	Amount          int64                  `json:"amount"`
 	Months          [12]PaymentMonthStatus `json:"months"`
 }
 
@@ -155,17 +155,16 @@ func (s *BillingService) GetPaymentMatrix(ctx context.Context, filter PaymentMat
 
 			// Determine status
 			status := "pending"
-			if inv.Status == billing.InvoiceStatusPaid {
+			switch inv.Status {
+			case billing.InvoiceStatusPaid:
 				if inv.PaidAt != nil && isPaidOnTime(*inv.PaidAt, inv.DueDate) {
 					status = "paid_on_time"
-				} else if inv.PaidAt != nil {
-					status = "paid_late"
 				} else {
 					status = "paid_late"
 				}
-			} else if inv.Status == billing.InvoiceStatusOverdue {
+			case billing.InvoiceStatusOverdue:
 				status = "overdue"
-			} else if inv.Status == billing.InvoiceStatusPending {
+			case billing.InvoiceStatusPending:
 				// Check if overdue by comparing due_date with now
 				dueEnd := time.Date(inv.DueDate.Year(), inv.DueDate.Month(), inv.DueDate.Day(), 23, 59, 59, 0, time.Local)
 				if time.Now().After(dueEnd) {
@@ -173,9 +172,9 @@ func (s *BillingService) GetPaymentMatrix(ctx context.Context, filter PaymentMat
 				} else {
 					status = "pending"
 				}
-			} else if inv.Status == billing.InvoiceStatusDraft {
+			case billing.InvoiceStatusDraft:
 				status = "pending"
-			} else if inv.Status == billing.InvoiceStatusCancelled {
+			case billing.InvoiceStatusCancelled:
 				status = "cancelled"
 			}
 
@@ -205,4 +204,3 @@ func (s *BillingService) GetPaymentMatrix(ctx context.Context, filter PaymentMat
 
 	return entries, nil
 }
-

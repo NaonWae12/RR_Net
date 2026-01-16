@@ -95,7 +95,7 @@ func (s *ClientCleanupScheduler) calculateNextRun(now time.Time) time.Time {
 
 // runCleanupJob executes the cleanup job to hard delete old soft-deleted clients
 func (s *ClientCleanupScheduler) runCleanupJob(ctx context.Context) {
-	jobCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute) // 5-minute timeout for the whole job
+	jobCtx, cancel := context.WithTimeout(ctx, 5*time.Minute) // 5-minute timeout for the whole job
 	defer cancel()
 
 	log.Info().Int("retention_days", s.retentionDays).Msg("Starting client cleanup job")
@@ -112,4 +112,3 @@ func (s *ClientCleanupScheduler) runCleanupJob(ctx context.Context) {
 		Int("retention_days", s.retentionDays).
 		Msg("Client cleanup job completed")
 }
-
