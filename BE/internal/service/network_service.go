@@ -203,23 +203,8 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 
 		// Logic for IPTables will be triggered if Host is set correctly
 		if router.Host != "" && runtime.GOOS == "linux" {
-			// DNAT Rule for Winbox
-			cmd := exec.Command("sudo", "iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
-			if out, err := cmd.CombinedOutput(); err != nil {
-				return nil, fmt.Errorf("failed to apply PREROUTING rule: %v, output: %s", err, string(out))
-			}
-
-			// FORWARD Rule for Winbox
-			cmd = exec.Command("sudo", "iptables", "-A", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
-			if out, err := cmd.CombinedOutput(); err != nil {
-				_ = exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
-				return nil, fmt.Errorf("failed to apply FORWARD rule: %v, output: %s", err, string(out))
-			}
-
-			// Ensure Masquerade for VPN subnet (critical for return path)
-			_ = exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE").Run() // Check
-			if err := exec.Command("sudo", "iptables", "-t", "nat", "-A", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE").Run(); err != nil {
-				// Ignore if already exists, but try anyway
+			if err := s.applyRemoteAccessRules(router); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -282,33 +267,35 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		return nil, fmt.Errorf("no available ports for remote access")
 	}
 
-	// 3. Find available tunnel IP (10.10.10.100-250)
-	assignedIP := ""
-	for i := 100; i <= 250; i++ {
-		ip := fmt.Sprintf("10.10.10.%d", i)
-		if !usedIPs[ip] {
-			assignedIP = ip
-			break
-		}
-	}
-	if assignedIP == "" {
-		return nil, fmt.Errorf("no available tunnel IPs")
-	}
-
-	// 4. Generate credentials
+	// 3. Generate credentials
 	vpnUser := "vpn-" + strings.ReplaceAll(strings.ToLower(name), " ", "-") + "-" + generateRandomString(4)
 	vpnPass := generateRandomString(12)
 
-	// 5. Execute script to add VPN user on the VPS (strongswan/accel-ppp)
-	cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_add_user_auto.sh", vpnUser, vpnPass)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Printf("Warning: failed to create VPN account during provision: %v, output: %s\n", err, string(out))
+	// 4. Execute script to add VPN user on the VPS (strongswan/accel-ppp)
+	// The script is responsible for finding the next available IP
+	var assignedIP string
+
+	if runtime.GOOS == "windows" {
+		// Mock for local development
+		fmt.Println("[MOCK-WINDOWS] Executing VPN script skipped. Generating mock IP.")
+		// Random IP in range 10.10.10.100-250
+		b := make([]byte, 1)
+		_, _ = rand.Read(b)
+		octet := int(b[0])%150 + 100
+		assignedIP = fmt.Sprintf("10.10.10.%d", octet)
 	} else {
-		// If the script returns an assigned IP, we prioritize it
-		vpnIP := strings.TrimSpace(string(out))
-		if net.ParseIP(vpnIP) != nil {
-			assignedIP = vpnIP
+		cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_add_user_auto.sh", vpnUser, vpnPass)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Printf("Warning: failed to create VPN account during provision: %v, output: %s\n", err, string(out))
+			// If script fails, we can't get an IP, so we might return error or fallback
+			return nil, fmt.Errorf("failed to create vpn user: %s", string(out))
+		}
+
+		// 5. Read assigned IP from script output
+		assignedIP = strings.TrimSpace(string(out))
+		if net.ParseIP(assignedIP) == nil {
+			return nil, fmt.Errorf("script returned invalid IP: %s", assignedIP)
 		}
 	}
 
@@ -339,12 +326,13 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 	}
 
 	publicIP := s.getPublicIP()
+	psk := s.getIPsecPSK()
 
 	return &ProvisionRouterResponse{
 		RouterID:         router.ID,
 		VPNUsername:      vpnUser,
 		VPNPassword:      vpnPass,
-		VPNIPsecPSK:      "RRNetSecretPSK", // This should ideally be dynamic but for now based on script
+		VPNIPsecPSK:      psk,
 		VPNScript:        script,
 		RemoteAccessPort: assignedPort,
 		TunnelIP:         assignedIP,
@@ -473,6 +461,33 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	}
 	router.IsDefault = req.IsDefault
 	router.UpdatedAt = time.Now()
+
+	// Check if we need to update Remote Access rules (Port Forwarding)
+	// Apply rules if:
+	// 1. Remote Access is enabled (either newly enabled or existing)
+	// 2. Connectivity Mode is VPN (rules only apply for VPN clients in this context)
+	// 3. We have a Host IP and a Remote Access Port
+	shouldApplyRules := (router.RemoteAccessEnabled) &&
+		(router.ConnectivityMode == network.RouterConnectivityModeVPN) &&
+		(router.Host != "") &&
+		(router.RemoteAccessPort > 0)
+
+	// If remote access was toggled OFF in this request
+	if req.EnableRemoteAccess != nil && !*req.EnableRemoteAccess {
+		// Cleanup rules
+		_ = s.removeRemoteAccessRules(router)
+		shouldApplyRules = false
+	}
+
+	if shouldApplyRules && runtime.GOOS == "linux" {
+		// We re-apply rules here to ensure they are up to date with any port/IP changes
+		// Ideally we should check if they changed, but re-applying (delete then add) is safer
+		_ = s.removeRemoteAccessRules(router) // Cleanup old rules just in case
+		if err := s.applyRemoteAccessRules(router); err != nil {
+			fmt.Printf("Warning: failed to apply remote access rules on update: %v\n", err)
+			// Non-fatal, we still save the DB update
+		}
+	}
 
 	if err := s.routerRepo.Update(ctx, router); err != nil {
 		return nil, fmt.Errorf("failed to update router: %w", err)
@@ -850,19 +865,8 @@ func generateRandomString(n int) string {
 }
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
-	// Try to get PSK from /etc/ipsec.secrets
-	psk := "RRNetSecretPSK" // Default backup
 	publicIP := s.getPublicIP()
-
-	data, err := os.ReadFile("/etc/ipsec.secrets")
-	if err == nil {
-		content := string(data)
-		parts := strings.Split(content, "PSK")
-		if len(parts) > 1 {
-			psk = strings.TrimSpace(parts[1])
-			psk = strings.Trim(psk, "\"")
-		}
-	}
+	psk := s.getIPsecPSK()
 
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
 /interface l2tp-client add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet password=%s user=%s use-ipsec=yes ipsec-secret=%s
@@ -878,4 +882,66 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 `, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, router.Name)
 
 	return script
+}
+
+func (s *NetworkService) getIPsecPSK() string {
+	psk := "RRNetSecretPSK" // Default backup
+	data, err := os.ReadFile("/etc/ipsec.secrets")
+	if err == nil {
+		content := string(data)
+		parts := strings.Split(content, "PSK")
+		if len(parts) > 1 {
+			rawPsk := strings.TrimSpace(parts[1])
+			psk = strings.Trim(rawPsk, "\"")
+		}
+	}
+	return psk
+}
+
+func (s *NetworkService) applyRemoteAccessRules(router *network.Router) error {
+	if router.Host == "" || router.RemoteAccessPort <= 0 {
+		return nil
+	}
+
+	// DNAT Rule for Winbox
+	cmd := exec.Command("sudo", "iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to apply PREROUTING rule: %v, output: %s", err, string(out))
+	}
+
+	// FORWARD Rule for Winbox
+	cmd = exec.Command("sudo", "iptables", "-A", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		// Cleanup PREROUTING if FORWARD fails
+		_ = exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
+		return fmt.Errorf("failed to apply FORWARD rule: %v, output: %s", err, string(out))
+	}
+
+	// Ensure Masquerade for VPN subnet (critical for return path)
+	// We use -C to check if rule exists first to avoid duplicates
+	checkCmd := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE")
+	if err := checkCmd.Run(); err != nil {
+		// Rule does not exist, add it
+		if err := exec.Command("sudo", "iptables", "-t", "nat", "-A", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE").Run(); err != nil {
+			fmt.Printf("Warning: failed to add masquerade rule: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *NetworkService) removeRemoteAccessRules(router *network.Router) error {
+	if router.Host == "" || router.RemoteAccessPort <= 0 {
+		return nil
+	}
+
+	// Remove DNAT Rule
+	cmd := exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
+	_ = cmd.Run()
+
+	// Remove FORWARD Rule
+	cmd = exec.Command("sudo", "iptables", "-D", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+	_ = cmd.Run()
+
+	return nil
 }

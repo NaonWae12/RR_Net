@@ -221,8 +221,8 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             <Terminal className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-indigo-900">Step 2: MikroTik Setup</h3>
-            <p className="text-xs text-indigo-700">Gunakan script di bawah untuk menghubungkan MikroTik ke VPS.</p>
+            <h3 className="text-base font-bold text-indigo-900">Step 2: Jalankan Script di MikroTik</h3>
+            <p className="text-xs text-indigo-700">Script ini akan menghubungkan MikroTik ke VPN Server secara otomatis.</p>
           </div>
         </div>
 
@@ -268,7 +268,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
 
         <div className="mt-4 p-3 bg-white/40 rounded-lg text-[10px] text-indigo-800 italic flex gap-2 items-center">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>Pastikan script sudah di-paste ke terminal Winbox sebelum klik Verify.</span>
+          <span>Silakan copy script di atas dan jalankan di "New Terminal" Winbox. Setelah itu, <b>lanjut ke Step 3</b> untuk verifikasi koneksi.</span>
         </div>
       </div>
 
@@ -281,7 +281,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           onClick={() => setStep(3)}
           className="bg-indigo-600 hover:bg-indigo-700 h-11 px-8 rounded-full shadow-lg shadow-indigo-200 transition-all hover:scale-105"
         >
-          Next: Fill Credentials &rarr;
+          Next: Input Credentials & Verify &rarr;
         </Button>
       </div>
     </div>
