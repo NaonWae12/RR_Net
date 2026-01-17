@@ -8,6 +8,7 @@ export interface VoucherPackage {
   download_speed: number;
   upload_speed: number;
   duration_hours?: number | null;
+  validity?: string;
   quota_mb?: number | null;
   price: number;
   currency: string;
@@ -38,6 +39,7 @@ export interface CreateVoucherPackageRequest {
   download_speed: number;
   upload_speed: number;
   duration_hours?: number;
+  validity?: string;
   quota_mb?: number;
   price?: number;
   currency?: string;

@@ -5,12 +5,13 @@ export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
   label?: string;
+  info?: string;
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, error, label, id, ...props }, ref) => {
+  ({ className, error, label, info, id, ...props }, ref) => {
     return (
-      <div className="flex w-full flex-col gap-1">
+      <div className="flex w-full flex-col gap-1 text-slate-900">
         {label ? (
           <label htmlFor={id} className="text-sm font-medium text-slate-700">
             {label}
@@ -26,6 +27,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           )}
           {...props}
         />
+        {info ? (
+          <span className="text-[10px] text-slate-400 leading-tight">
+            {info}
+          </span>
+        ) : null}
         {error ? (
           <span className="text-xs text-rose-600" role="alert">
             {error}

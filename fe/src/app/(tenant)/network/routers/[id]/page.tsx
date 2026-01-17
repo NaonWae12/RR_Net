@@ -114,7 +114,7 @@ export default function RouterDetailPage() {
         {/* Card: Device Info */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Device Information</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-900">Device Information</CardTitle>
             <Server className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
@@ -127,7 +127,7 @@ export default function RouterDetailPage() {
               <p className="text-slate-900">{routerData.description || "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Last Seen</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide ">Last Seen</p>
               <p className="text-slate-900">
                 {routerData.last_seen ? format(new Date(routerData.last_seen), "PPp") : "Never"}
               </p>
@@ -187,7 +187,7 @@ export default function RouterDetailPage() {
         {/* Card: Management */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Management</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-900">Management</CardTitle>
             <Settings className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
@@ -216,8 +216,8 @@ export default function RouterDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Activity className="w-4 h-4" /> Recent Logs
+            <CardTitle className="text-sm flex items-center gap-2 text-slate-900">
+              <Activity className="w-4 h-4 text-slate-900" /> Recent Logs
             </CardTitle>
           </CardHeader>
           <CardContent>
