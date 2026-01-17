@@ -41,12 +41,12 @@ func NewRadiusHandler(
 
 // AuthRequest represents FreeRADIUS rlm_rest JSON body for Access-Request
 type AuthRequest struct {
-	UserName          string `json:"User-Name"`
-	UserPassword      string `json:"User-Password"`
-	NASIPAddress      string `json:"NAS-IP-Address"`
-	NASPortID         string `json:"NAS-Port-Id"`
-	CallingStationID  string `json:"Calling-Station-Id"`
-	CalledStationID   string `json:"Called-Station-Id"`
+	UserName         string `json:"User-Name"`
+	UserPassword     string `json:"User-Password"`
+	NASIPAddress     string `json:"NAS-IP-Address"`
+	NASPortID        string `json:"NAS-Port-Id"`
+	CallingStationID string `json:"Calling-Station-Id"`
+	CalledStationID  string `json:"Called-Station-Id"`
 }
 
 // AuthResponse is returned to FreeRADIUS with reply attributes
@@ -130,19 +130,19 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 
 // AcctRequest represents FreeRADIUS rlm_rest JSON body for Accounting-Request
 type AcctRequest struct {
-	AcctStatusType    string `json:"Acct-Status-Type"`
-	AcctSessionID     string `json:"Acct-Session-Id"`
-	UserName          string `json:"User-Name"`
-	NASIPAddress      string `json:"NAS-IP-Address"`
-	NASPortID         string `json:"NAS-Port-Id"`
-	FramedIPAddress   string `json:"Framed-IP-Address"`
-	CallingStationID  string `json:"Calling-Station-Id"`
-	CalledStationID   string `json:"Called-Station-Id"`
-	AcctSessionTime   int    `json:"Acct-Session-Time"`
-	AcctInputOctets   int64  `json:"Acct-Input-Octets"`
-	AcctOutputOctets  int64  `json:"Acct-Output-Octets"`
-	AcctInputPackets  int64  `json:"Acct-Input-Packets"`
-	AcctOutputPackets int64  `json:"Acct-Output-Packets"`
+	AcctStatusType     string `json:"Acct-Status-Type"`
+	AcctSessionID      string `json:"Acct-Session-Id"`
+	UserName           string `json:"User-Name"`
+	NASIPAddress       string `json:"NAS-IP-Address"`
+	NASPortID          string `json:"NAS-Port-Id"`
+	FramedIPAddress    string `json:"Framed-IP-Address"`
+	CallingStationID   string `json:"Calling-Station-Id"`
+	CalledStationID    string `json:"Called-Station-Id"`
+	AcctSessionTime    int    `json:"Acct-Session-Time"`
+	AcctInputOctets    int64  `json:"Acct-Input-Octets"`
+	AcctOutputOctets   int64  `json:"Acct-Output-Octets"`
+	AcctInputPackets   int64  `json:"Acct-Input-Packets"`
+	AcctOutputPackets  int64  `json:"Acct-Output-Packets"`
 	AcctTerminateCause string `json:"Acct-Terminate-Cause"`
 }
 
@@ -212,6 +212,13 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 			v.UsedAt = &usedNow
 			v.FirstSessionID = &session.ID
 			v.UpdatedAt = usedNow
+
+			// Calculate expiration based on package duration
+			if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil && pkg.DurationHours != nil {
+				expiry := usedNow.Add(time.Duration(*pkg.DurationHours) * time.Hour)
+				v.ExpiresAt = &expiry
+			}
+
 			_ = h.voucherService.VoucherRepo().UpdateVoucher(ctx, v)
 		}
 
@@ -314,4 +321,3 @@ func (h *RadiusHandler) logAuthAttempt(ctx context.Context, tenantID uuid.UUID, 
 	}
 	_ = h.radiusRepo.CreateAuthAttempt(ctx, attempt)
 }
-
