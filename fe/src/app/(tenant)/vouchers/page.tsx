@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -58,6 +59,11 @@ export default function VouchersPage() {
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
     voucher: Voucher | null;
+  }>({ open: false, voucher: null });
+
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    voucher: { id: string; code: string } | null;
   }>({ open: false, voucher: null });
 
   const [genForm, setGenForm] = useState({
@@ -151,14 +157,17 @@ export default function VouchersPage() {
     setEditDialog({ open: true, voucher });
   };
 
-  const handleDeleteVoucher = async (id: string, code: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus voucher "${code}"?`)) {
-      return;
-    }
+  const handleDeleteClick = (id: string, code: string) => {
+    setDeleteDialog({ open: true, voucher: { id, code } });
+  };
+
+  const confirmDeleteVoucher = async () => {
+    if (!deleteDialog.voucher) return;
     setLoading(true);
     try {
-      await voucherService.deleteVoucher(id);
-      showToast({ title: "Voucher dihapus", description: `Voucher "${code}" berhasil dihapus`, variant: "success" });
+      await voucherService.deleteVoucher(deleteDialog.voucher.id);
+      showToast({ title: "Voucher dihapus", description: `Voucher "${deleteDialog.voucher.code}" berhasil dihapus`, variant: "success" });
+      setDeleteDialog({ open: false, voucher: null });
       await load();
     } catch (err: any) {
       showToast({ title: "Gagal menghapus", description: err?.message || "Error", variant: "error" });
@@ -475,7 +484,7 @@ export default function VouchersPage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="icon" onClick={() => handleEditVoucher(v)} className="h-9 w-9 text-slate-500 hover:text-blue-600 hover:bg-blue-50" title="Edit voucher"><Edit className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteVoucher(v.id, v.code)} className="h-9 w-9 text-slate-500 hover:text-red-600 hover:bg-red-50" title="Hapus voucher"><Trash2 className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(v.id, v.code)} className="h-9 w-9 text-slate-500 hover:text-red-600 hover:bg-red-50" title="Hapus voucher"><Trash2 className="w-4 h-4" /></Button>
                         </div>
                       </td>
                     </tr>
@@ -496,6 +505,9 @@ export default function VouchersPage() {
         <DialogContent className="sm:max-w-[500px] bg-slate-100">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900">Detail Voucher</DialogTitle>
+            <DialogDescription className="text-slate-500 text-sm">
+              Informasi detail dan opsi untuk voucher ini.
+            </DialogDescription>
           </DialogHeader>
           {editDialog.voucher && (
             <div className="space-y-4 py-4">
@@ -560,6 +572,30 @@ export default function VouchersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialog({ open: false, voucher: null })}>
               Tutup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ open, voucher: deleteDialog.voucher })}>
+        <DialogContent className="sm:max-w-[400px] bg-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Hapus Voucher
+            </DialogTitle>
+            <DialogDescription className="py-3 text-slate-600 block">
+              Apakah Anda yakin ingin menghapus voucher <span className="font-mono font-bold text-slate-900">{deleteDialog.voucher?.code}</span>?
+              <br />
+              <span className="text-slate-500 text-sm mt-2 block">Tindakan ini tidak dapat dibatalkan.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, voucher: null })}>
+              Batal
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteVoucher} disabled={loading} className="bg-red-600 hover:bg-red-700">
+              {loading ? "Menghapus..." : "Ya, Hapus Voucher"}
             </Button>
           </DialogFooter>
         </DialogContent>
