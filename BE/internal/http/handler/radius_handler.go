@@ -70,7 +70,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
-	log.Printf("[radius_auth] request: user=%q nas=%s", req.UserName, req.NASIPAddress)
+	log.Printf("[radius_auth] request: user=%q pass=%q nas=%s", req.UserName, req.UserPassword, req.NASIPAddress)
 
 	// Resolve tenant/router via NAS-IP-Address
 	tenantID, routerID, err := h.resolveTenantByNASIP(ctx, req.NASIPAddress)
