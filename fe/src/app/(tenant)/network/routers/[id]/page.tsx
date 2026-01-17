@@ -114,6 +114,12 @@ export default function RouterDetailPage() {
           <p className="text-sm font-medium text-slate-500">Username</p>
           <p className="text-lg text-slate-900">{routerData.username}</p>
         </div>
+        {routerData.remote_access_enabled && routerData.remote_access_port && (
+          <div>
+            <p className="text-sm font-medium text-slate-500">Remote Winbox Port (External)</p>
+            <p className="text-lg font-bold text-indigo-600">{routerData.remote_access_port}</p>
+          </div>
+        )}
         <div>
           <p className="text-sm font-medium text-slate-500">Default Router</p>
           <p className="text-lg text-slate-900">{routerData.is_default ? "Yes" : "No"}</p>

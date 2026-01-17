@@ -820,7 +820,7 @@ func (s *NetworkService) ToggleRemoteAccess(ctx context.Context, id uuid.UUID, e
 			}
 
 			// FORWARD Rule
-			cmd = exec.Command("iptables", "-A", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+			cmd = exec.Command("iptables", "-I", "FORWARD", "1", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
 			if out, err := cmd.CombinedOutput(); err != nil {
 				// Cleanup PREROUTING if FORWARD fails
 				_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
@@ -910,7 +910,7 @@ func (s *NetworkService) applyRemoteAccessRules(router *network.Router) error {
 	}
 
 	// FORWARD Rule for Winbox
-	cmd = exec.Command("sudo", "iptables", "-A", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+	cmd = exec.Command("sudo", "iptables", "-I", "FORWARD", "1", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		// Cleanup PREROUTING if FORWARD fails
 		_ = exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
