@@ -135,7 +135,16 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
             <TableRow key={routerItem.id}>
               <TableCell className="font-medium">{routerItem.name}</TableCell>
               <TableCell className="uppercase">{routerItem.type}</TableCell>
-              <TableCell>{routerItem.host}:{routerItem.port}</TableCell>
+              <TableCell>
+                <div className="flex flex-col">
+                  <span className="font-mono text-xs">{routerItem.host}:{routerItem.port}</span>
+                  {routerItem.remote_access_enabled && routerItem.remote_access_port ? (
+                    <span className="text-[10px] text-indigo-600 font-bold mt-1">
+                      EXT: :{routerItem.remote_access_port}
+                    </span>
+                  ) : null}
+                </div>
+              </TableCell>
               <TableCell>
                 <RouterStatusBadge status={routerItem.status} />
               </TableCell>

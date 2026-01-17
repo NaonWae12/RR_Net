@@ -313,14 +313,14 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             <Input label="Winbox Username" {...register("username")} error={errors.username?.message} placeholder="e.g. admin" />
             <Input label="Winbox Password" type="password" {...register("password")} error={errors.password?.message} placeholder="••••••••" />
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 text-slate-900">
             <h4 className="text-sm font-bold text-slate-700 border-b pb-1">Backend Connectivity</h4>
             <Input label="Tunnel Connection IP (Host)" {...register("host")} error={errors.host?.message} />
             <Input label="Remote Access Port" type="number" {...register("remote_access_port")} error={errors.remote_access_port?.message} />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-slate-900">
           <div className="space-y-4">
             <h4 className="text-sm font-bold text-slate-700 border-b pb-1">VPN Credentials (Advanced)</h4>
             <Input label="VPN L2TP Username" {...register("vpn_username")} />
