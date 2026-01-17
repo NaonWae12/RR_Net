@@ -128,7 +128,7 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 
 func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, v.password, v.status,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
@@ -149,7 +149,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 
 func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, v.password, v.status,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
