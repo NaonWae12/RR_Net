@@ -1,12 +1,23 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useNetworkStore } from "@/stores/networkStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { RouterStatusBadge } from "@/components/network";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  Server,
+  Globe,
+  Shield,
+  Settings,
+  Activity,
+  Network
+} from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { format } from "date-fns";
 
@@ -15,10 +26,14 @@ export default function RouterDetailPage() {
   const router = useRouter();
   const { router: routerData, loading, error, fetchRouter, deleteRouter, clearRouter } = useNetworkStore();
   const { showToast } = useNotificationStore();
+  const [currentHost, setCurrentHost] = useState("");
 
   useEffect(() => {
     if (id) {
       fetchRouter(id);
+    }
+    if (typeof window !== "undefined") {
+      setCurrentHost(window.location.hostname);
     }
     return () => {
       clearRouter();
@@ -72,7 +87,8 @@ export default function RouterDetailPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Header Actions */}
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Routers
@@ -87,64 +103,129 @@ export default function RouterDetailPage() {
         </div>
       </div>
 
-      <h1 className="text-3xl font-bold text-slate-900">{routerData.name}</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white shadow rounded-lg p-6">
-        <div>
-          <p className="text-sm font-medium text-slate-500">Type</p>
-          <p className="text-lg font-semibold uppercase text-slate-900">{routerData.type}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Status</p>
-          <RouterStatusBadge status={routerData.status} className="text-lg" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Host</p>
-          <p className="text-lg text-slate-900">{routerData.host}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Port</p>
-          <p className="text-lg text-slate-900">{routerData.port}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">API Port</p>
-          <p className="text-lg text-slate-900">{routerData.api_port || "N/A"}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Username</p>
-          <p className="text-lg text-slate-900">{routerData.username}</p>
-        </div>
-        {routerData.remote_access_enabled && routerData.remote_access_port && (
-          <div>
-            <p className="text-sm font-medium text-slate-500">Remote Winbox Port (External)</p>
-            <p className="text-lg font-bold text-indigo-600">{routerData.remote_access_port}</p>
-          </div>
-        )}
-        <div>
-          <p className="text-sm font-medium text-slate-500">Default Router</p>
-          <p className="text-lg text-slate-900">{routerData.is_default ? "Yes" : "No"}</p>
-        </div>
-        {routerData.last_seen && (
-          <div>
-            <p className="text-sm font-medium text-slate-500">Last Seen</p>
-            <p className="text-lg text-slate-900">{format(new Date(routerData.last_seen), "PPp")}</p>
-          </div>
-        )}
-        <div>
-          <p className="text-sm font-medium text-slate-500">Created At</p>
-          <p className="text-lg text-slate-900">{format(new Date(routerData.created_at), "PPp")}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Updated At</p>
-          <p className="text-lg text-slate-900">{format(new Date(routerData.updated_at), "PPp")}</p>
-        </div>
-        {routerData.description && (
-          <div className="md:col-span-2">
-            <p className="text-sm font-medium text-slate-500">Description</p>
-            <p className="text-lg text-slate-900">{routerData.description}</p>
-          </div>
-        )}
+      {/* Main Title & Status */}
+      <div className="flex items-center space-x-4">
+        <h1 className="text-3xl font-bold text-slate-900">{routerData.name}</h1>
+        <RouterStatusBadge status={routerData.status} className="text-lg px-3 py-1" />
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        {/* Card: Device Info */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Device Information</CardTitle>
+            <Server className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Type</p>
+              <p className="text-lg font-semibold uppercase text-slate-900">{routerData.type}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Description</p>
+              <p className="text-slate-900">{routerData.description || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Last Seen</p>
+              <p className="text-slate-900">
+                {routerData.last_seen ? format(new Date(routerData.last_seen), "PPp") : "Never"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card: Connectivity */}
+        <Card className="col-span-1 md:col-span-2 lg:col-span-1 border-indigo-100 bg-indigo-50/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-indigo-900">Connectivity</CardTitle>
+            <Network className="h-4 w-4 text-indigo-500" />
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Mode</p>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 uppercase">
+                {routerData.connectivity_mode.replace("_", " ")}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                  <Globe className="w-3 h-3" /> Internal Host
+                </p>
+                <p className="font-mono text-slate-700">{routerData.host}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide">Port</p>
+                <p className="font-mono text-slate-700">{routerData.port}</p>
+              </div>
+            </div>
+
+            {/* Remote Access Highlight */}
+            {routerData.remote_access_enabled && routerData.remote_access_port ? (
+              <div className="mt-4 p-3 bg-white rounded-lg border border-indigo-200 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-100 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+                <p className="text-xs text-indigo-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <Globe className="w-3 h-3" /> Remote Winbox Access
+                </p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-xl font-bold text-indigo-700 font-mono tracking-tight">
+                    {currentHost}:{routerData.remote_access_port}
+                  </p>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Use this address to connect via Winbox from public internet.</p>
+              </div>
+            ) : (
+              <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200">
+                <p className="text-sm text-slate-500 italic">Remote access disabled</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card: Management */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Management</CardTitle>
+            <Settings className="h-4 w-4 text-slate-500" />
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                <Shield className="w-3 h-3" /> API Port
+              </p>
+              <p className="font-mono text-slate-900">{routerData.api_port || "Default"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">API Use TLS</p>
+              <p className="text-slate-900">{routerData.api_use_tls ? "Yes (SSL)" : "No"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Radius Server</p>
+              <p className="text-slate-900">{routerData.radius_enabled ? "Enabled" : "Disabled"}</p>
+            </div>
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-xs text-slate-400">Credentials hidden for security.</p>
+            </div>
+          </CardContent>
+        </Card>
+
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Activity className="w-4 h-4" /> Recent Logs
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-slate-500 text-sm italic">No recent logs available.</p>
+          </CardContent>
+        </Card>
+      </div>
+
     </div>
   );
 }
