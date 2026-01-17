@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -64,9 +66,15 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		// return
 	}
 
+	body, _ := io.ReadAll(r.Body)
+	log.Printf("[radius_auth] Raw Body: %s", string(body))
+
+	// Reset body for decoder
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+
 	var req AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[radius_auth] ERROR: JSON Decode failed: %v", err)
+		log.Printf("[radius_auth] ERROR: JSON Decode failed: %v (Body: %q)", err, string(body))
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
