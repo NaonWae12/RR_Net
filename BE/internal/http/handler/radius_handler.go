@@ -66,6 +66,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 
 	var req AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[radius_auth] ERROR: JSON Decode failed: %v", err)
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
@@ -173,6 +174,7 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 
 	var req AcctRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[radius_acct] ERROR: JSON Decode failed: %v", err)
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
