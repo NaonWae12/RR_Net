@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -759,6 +760,15 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/vouchers", requireAuth(methodHandler("GET", voucherHandler.ListVouchers)))
 	mux.Handle("/api/v1/vouchers/generate", requireAuth(methodHandler("POST", voucherHandler.GenerateVouchers)))
 	mux.Handle("/api/v1/vouchers/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Log request for debugging
+		log.Printf("[VoucherRoute] Method=%s URL=%s", r.Method, r.URL.Path)
+
+		// CORS fallback
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/vouchers/")
 		if path == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -769,6 +779,7 @@ func New(deps Dependencies) http.Handler {
 		case http.MethodDelete:
 			voucherHandler.DeleteVoucher(w, r)
 		default:
+			log.Printf("[VoucherRoute] 405 Method Not Allowed: %s", r.Method)
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})))
