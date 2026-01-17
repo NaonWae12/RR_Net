@@ -879,6 +879,11 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /ip service set telnet disabled=yes
 /ip service set ftp disabled=yes
 /system identity set name="RR-%s"
+
+## RADIUS & HOTSPOT SETUP
+/radius add address=10.10.10.1 secret=dev-radius-rest-secret service=hotspot comment="RR-NET RADIUS"
+/ip hotspot profile set [ find default=yes ] use-radius=yes
+/ip hotspot user profile set [ find default=yes ] address-pool=none
 `, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, router.Name)
 
 	return script

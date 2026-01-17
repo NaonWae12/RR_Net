@@ -187,3 +187,18 @@ func (h *VoucherHandler) ListVouchers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *VoucherHandler) DeleteVoucher(w http.ResponseWriter, r *http.Request) {
+	idStr := getParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid voucher ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.voucherService.DeleteVoucher(r.Context(), id); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

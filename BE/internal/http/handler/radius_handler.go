@@ -107,6 +107,18 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate password if set
+	if v.Password != "" && v.Password != req.UserPassword {
+		log.Printf("[radius_auth] password mismatch for voucher %s", req.UserName)
+		h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, "password mismatch")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"Reply-Message": "Voucher accepted but password incorrect",
+		})
+		return
+	}
+
 	// Success: log accept
 	h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "")
 

@@ -23,6 +23,7 @@ export interface Voucher {
   package_id: string;
   router_id?: string | null;
   code: string;
+  password?: string;
   status: string;
   used_at?: string | null;
   expires_at?: string | null;
@@ -50,6 +51,8 @@ export interface GenerateVouchersRequest {
   router_id?: string;
   quantity: number;
   expires_at?: string;
+  user_mode?: string;
+  character_mode?: string;
   code_length?: number;
 }
 
@@ -72,6 +75,10 @@ export const voucherService = {
   async generate(req: GenerateVouchersRequest): Promise<{ data: Voucher[]; total: number }> {
     const res = await apiClient.post<{ data: Voucher[]; total: number }>("/vouchers/generate", req);
     return res.data;
+  },
+
+  async deleteVoucher(id: string): Promise<void> {
+    await apiClient.delete(`/vouchers/${id}`);
   },
 };
 

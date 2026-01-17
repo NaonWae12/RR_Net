@@ -758,6 +758,20 @@ func New(deps Dependencies) http.Handler {
 
 	mux.Handle("/api/v1/vouchers", requireAuth(methodHandler("GET", voucherHandler.ListVouchers)))
 	mux.Handle("/api/v1/vouchers/generate", requireAuth(methodHandler("POST", voucherHandler.GenerateVouchers)))
+	mux.Handle("/api/v1/vouchers/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/vouchers/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r = setPathParam(r, "id", path)
+		switch r.Method {
+		case http.MethodDelete:
+			voucherHandler.DeleteVoucher(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
 
 	// RADIUS audit routes (Protected, tenant-scoped)
 	mux.Handle("/api/v1/radius/auth-attempts", requireAuth(methodHandler("GET", radiusHandler.ListAuthAttempts)))

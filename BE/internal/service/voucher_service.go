@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -158,11 +157,13 @@ func (s *VoucherService) DeletePackage(ctx context.Context, id uuid.UUID) error 
 // ========== Vouchers ==========
 
 type GenerateVouchersRequest struct {
-	PackageID  uuid.UUID  `json:"package_id"`
-	RouterID   *uuid.UUID `json:"router_id,omitempty"`
-	Quantity   int        `json:"quantity"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	CodeLength int        `json:"code_length,omitempty"` // default 8
+	PackageID     uuid.UUID  `json:"package_id"`
+	RouterID      *uuid.UUID `json:"router_id,omitempty"`
+	Quantity      int        `json:"quantity"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	UserMode      string     `json:"user_mode,omitempty"`      // "up" (User & Pass), "vc" (User=Pass)
+	CharacterMode string     `json:"character_mode,omitempty"` // "abcd", "ABCD", "aBcD", etc.
+	CodeLength    int        `json:"code_length,omitempty"`    // total length
 }
 
 func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUID, req GenerateVouchersRequest) ([]*voucher.Voucher, error) {
@@ -178,16 +179,53 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 
 	codeLength := req.CodeLength
 	if codeLength == 0 {
-		codeLength = 8
+		codeLength = 6
+	}
+
+	// Map character mode to charset (strictly following user request case-sensitively)
+	charset := "23456789ABCDEFGHJKLMNPQRSTUVWXYZ" // default fallback (Upper Alphanumeric)
+	switch req.CharacterMode {
+	case "abcd":
+		charset = "abcdefghijkmnpqrstuvwxyz"
+	case "ABCD":
+		charset = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+	case "aBcD":
+		charset = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
+	case "5ab2":
+		charset = "abcdefghijkmnpqrstuvwxyz23456789"
+	case "5AB2":
+		charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	case "5aB2":
+		charset = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	}
 
 	vouchers := make([]*voucher.Voucher, 0, req.Quantity)
 	now := time.Now()
 
+	userMode := req.UserMode
+	if userMode == "" {
+		userMode = "up" // Default is Username & Password
+	}
+
 	for i := 0; i < req.Quantity; i++ {
-		code, err := generateVoucherCode(codeLength)
+		var code, password string
+		var err error
+
+		// Username is always from selected charset
+		code, err = generateRandomFromCharset(charset, codeLength)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate voucher code: %w", err)
+			return nil, err
+		}
+
+		if userMode == "up" {
+			// Password is random digits, same length as username
+			password, err = generateRandomFromCharset("0123456789", codeLength)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// User = Password
+			password = code
 		}
 
 		v := &voucher.Voucher{
@@ -196,6 +234,7 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 			PackageID: req.PackageID,
 			RouterID:  req.RouterID,
 			Code:      code,
+			Password:  password,
 			Status:    voucher.VoucherStatusActive,
 			ExpiresAt: req.ExpiresAt,
 			CreatedAt: now,
@@ -230,6 +269,10 @@ func (s *VoucherService) GetVoucherByCode(ctx context.Context, tenantID uuid.UUI
 	return s.voucherRepo.GetVoucherByCode(ctx, tenantID, strings.TrimSpace(code))
 }
 
+func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
+	return s.voucherRepo.DeleteVoucher(ctx, id)
+}
+
 // ValidateVoucherForAuth checks if voucher can be used for authentication
 func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	code = strings.TrimSpace(code)
@@ -255,15 +298,17 @@ func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uu
 	return v, nil
 }
 
-// generateVoucherCode creates a random alphanumeric code
-func generateVoucherCode(length int) (string, error) {
-	bytes := make([]byte, length/2+1)
-	if _, err := rand.Read(bytes); err != nil {
+// generateRandomFromCharset creates a random string using the provided charset and length
+func generateRandomFromCharset(charset string, length int) (string, error) {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 
-	code := hex.EncodeToString(bytes)[:length]
-	return strings.ToUpper(code), nil
+	for i := 0; i < length; i++ {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b), nil
 }
 
 // ParseMikhmonDuration converts string formats like 2h, 2H, 2j, 2M, 2B to hours

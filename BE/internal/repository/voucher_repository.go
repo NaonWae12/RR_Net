@@ -115,12 +115,12 @@ func (r *VoucherRepository) DeletePackage(ctx context.Context, id uuid.UUID) err
 func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Voucher) error {
 	query := `
 		INSERT INTO vouchers (
-			id, tenant_id, package_id, router_id, code, status,
+			id, tenant_id, package_id, router_id, code, password, status,
 			used_at, expires_at, first_session_id, notes, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 	_, err := r.db.Exec(ctx, query,
-		v.ID, v.TenantID, v.PackageID, v.RouterID, v.Code, v.Status,
+		v.ID, v.TenantID, v.PackageID, v.RouterID, v.Code, v.Password, v.Status,
 		v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.CreatedAt, v.UpdatedAt,
 	)
 	return err
@@ -128,7 +128,7 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 
 func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, v.status,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, v.password, v.status,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
@@ -137,7 +137,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 	`
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, tenantID, code).Scan(
-		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Status,
+		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
 		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
 		&v.PackageName,
 	)
@@ -149,7 +149,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 
 func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, v.status,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, v.password, v.status,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
@@ -168,7 +168,7 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 	for rows.Next() {
 		var v voucher.Voucher
 		err := rows.Scan(
-			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Status,
+			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
 			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
 			&v.PackageName,
 		)
@@ -200,3 +200,8 @@ func (r *VoucherRepository) CountVouchersByTenant(ctx context.Context, tenantID 
 	return count, err
 }
 
+func (r *VoucherRepository) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
+	query := `DELETE FROM vouchers WHERE id = $1`
+	_, err := r.db.Exec(ctx, query, id)
+	return err
+}

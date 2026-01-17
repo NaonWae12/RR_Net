@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Ticket,
   Plus,
   RotateCw,
@@ -15,6 +22,7 @@ import {
   Copy,
   Printer,
   Trash2,
+  Edit,
   LayoutGrid,
   Search,
   Router as RouterIcon
@@ -47,11 +55,19 @@ export default function VouchersPage() {
     price: 0,
   });
 
+  const [editDialog, setEditDialog] = useState<{
+    open: boolean;
+    voucher: Voucher | null;
+  }>({ open: false, voucher: null });
+
   const [genForm, setGenForm] = useState({
     package_id: "",
     router_id: "all",
     quantity: 10,
     expires_at: "",
+    user_mode: "up",
+    character_mode: "5AB2",
+    code_length: 6,
   });
 
   const [lastGenerated, setLastGenerated] = useState<Voucher[]>([]);
@@ -116,6 +132,9 @@ export default function VouchersPage() {
         router_id: genForm.router_id === "all" ? undefined : genForm.router_id,
         quantity: Number(genForm.quantity),
         expires_at: genForm.expires_at || undefined,
+        user_mode: genForm.user_mode,
+        character_mode: genForm.character_mode,
+        code_length: Number(genForm.code_length),
       });
       const gen = Array.isArray(res?.data) ? res.data : [];
       setLastGenerated(gen);
@@ -126,6 +145,37 @@ export default function VouchersPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditVoucher = (voucher: Voucher) => {
+    setEditDialog({ open: true, voucher });
+  };
+
+  const handleDeleteVoucher = async (id: string, code: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus voucher "${code}"?`)) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await voucherService.deleteVoucher(id);
+      showToast({ title: "Voucher dihapus", description: `Voucher "${code}" berhasil dihapus`, variant: "success" });
+      await load();
+    } catch (err: any) {
+      showToast({ title: "Gagal menghapus", description: err?.message || "Error", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editDialog.voucher) return;
+    // Untuk saat ini hanya tampilkan info, bisa dikembangkan nanti
+    showToast({
+      title: "Info",
+      description: "Fitur edit voucher akan segera tersedia",
+      variant: "info"
+    });
+    setEditDialog({ open: false, voucher: null });
   };
 
   const copy = async (text: string) => {
@@ -143,7 +193,7 @@ export default function VouchersPage() {
   }, [vouchers, searchTerm]);
 
   return (
-    <div className="p-6 space-y-8 max-w-[1600px] mx-auto">
+    <div className="p-6 space-y-8 max-w-[1600px] mx-auto text-slate-900">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -163,7 +213,7 @@ export default function VouchersPage() {
 
         {/* LEFT COMPONENT: PACKAGE MANAGEMENT */}
         <div className="xl:col-span-4 space-y-6">
-          <Card className="border-indigo-100 shadow-sm overflow-hidden">
+          <Card className="border-indigo-100 shadow-sm overflow-hidden text-slate-900">
             <CardHeader className="bg-indigo-50/50 border-b">
               <CardTitle className="text-indigo-900 text-lg flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Tambah Paket
@@ -211,35 +261,35 @@ export default function VouchersPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader>
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b">
               <CardTitle className="text-lg flex items-center justify-between text-slate-900">
                 <span>Daftar Paket</span>
                 <Badge variant="outline">{packages.length}</Badge>
               </CardTitle>
             </CardHeader>
-            <div className="max-h-[500px] overflow-y-auto border-t">
+            <div className="max-h-[500px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0">
+                <thead className="bg-slate-50 sticky top-0 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500">Nama</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500">Speed / Validity</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 font-semibold">Nama</th>
+                    <th className="px-4 py-3 text-left font-medium text-slate-500 font-semibold">Speed / Validity</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-slate-100">
                   {packages.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-900">{p.name}</td>
                       <td className="px-4 py-3 text-slate-600">
                         <div className="flex flex-col">
-                          <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-amber-500" /> {formatKbps(p.download_speed)} / {formatKbps(p.upload_speed)}</span>
-                          <span className="text-xs text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" /> {p.duration_hours ? `${p.duration_hours} Jam` : "Unlimited"}</span>
+                          <span className="flex items-center gap-1 font-semibold"><Zap className="w-3 h-3 text-amber-500" /> {formatKbps(p.download_speed)} / {formatKbps(p.upload_speed)}</span>
+                          <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3" /> {p.duration_hours ? `${p.duration_hours} Jam` : "Unlimited"}</span>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {packages.length === 0 && (
-                    <tr><td colSpan={2} className="p-4 text-center text-slate-400">Belum ada paket.</td></tr>
+                    <tr><td colSpan={2} className="p-8 text-center text-slate-400 italic">Belum ada paket tersedia.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -248,19 +298,57 @@ export default function VouchersPage() {
         </div>
 
         {/* RIGHT COMPONENT: GENERATE & LIST */}
-        <div className="xl:col-span-8 space-y-6">
+        <div className="xl:col-span-8 space-y-6 text-slate-900">
           <Card className="border-orange-100 shadow-sm overflow-hidden">
             <CardHeader className="bg-orange-50/50 border-b">
               <CardTitle className="text-orange-900 text-lg flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4" /> Generate Voucher Batch
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <CardContent className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 leading-none">Mode Pengguna</label>
+                  <select
+                    className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-orange-500 outline-none text-slate-900 border-slate-200"
+                    value={genForm.user_mode}
+                    onChange={(e) => setGenForm({ ...genForm, user_mode: e.target.value })}
+                  >
+                    <option value="up">Username & Password</option>
+                    <option value="vc">Username = Password</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 leading-none">Karakter</label>
+                  <select
+                    className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-orange-500 outline-none text-slate-900 border-slate-200"
+                    value={genForm.character_mode}
+                    onChange={(e) => setGenForm({ ...genForm, character_mode: e.target.value })}
+                  >
+                    <option value="abcd">Acak abcd (Kecil)</option>
+                    <option value="ABCD">Acak ABCD (Besar)</option>
+                    <option value="aBcD">Acak aBcD (Campuran)</option>
+                    <option value="5ab2">Acak abcd + 123</option>
+                    <option value="5AB2">Acak ABCD + 123</option>
+                    <option value="5aB2">Acak aBcD + 123</option>
+                  </select>
+                </div>
+
+                <Input
+                  label="Panjang Kode"
+                  type="number"
+                  min={3}
+                  max={20}
+                  className="h-10 border-slate-200"
+                  value={genForm.code_length}
+                  onChange={(e) => setGenForm({ ...genForm, code_length: Number(e.target.value) })}
+                />
+
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-700 leading-none">Paket (Profile)</label>
                   <select
-                    className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-orange-500 outline-none text-slate-900"
+                    className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-orange-500 outline-none text-slate-900 border-slate-200"
                     value={genForm.package_id}
                     onChange={(e) => setGenForm({ ...genForm, package_id: e.target.value })}
                   >
@@ -274,11 +362,11 @@ export default function VouchersPage() {
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-700 leading-none">Router</label>
                   <select
-                    className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-orange-500 outline-none text-slate-900"
+                    className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-orange-500 outline-none text-slate-900 border-slate-200"
                     value={genForm.router_id}
                     onChange={(e) => setGenForm({ ...genForm, router_id: e.target.value })}
                   >
-                    <option value="all">Semua Router (Default)</option>
+                    <option value="all">Semua Router</option>
                     {routers.map((r) => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
@@ -286,31 +374,38 @@ export default function VouchersPage() {
                 </div>
 
                 <Input
-                  label="Jumlah (Quantity)"
+                  label="Batch Qty"
                   type="number"
                   min={1}
                   max={1000}
+                  className="h-10 border-slate-200"
                   value={genForm.quantity}
                   onChange={(e) => setGenForm({ ...genForm, quantity: Number(e.target.value) })}
                 />
 
-                <Button onClick={generate} disabled={loading || !genForm.package_id} className="w-full bg-orange-600 hover:bg-orange-700 h-10">
-                  Generate Sekarang
-                </Button>
+                <div className="lg:col-span-2">
+                  <Button onClick={generate} disabled={loading || !genForm.package_id} className="w-full bg-orange-600 hover:bg-orange-700 h-10 text-white font-bold shadow-md shadow-orange-100 transition-all active:scale-[0.98]">
+                    Generate Batch Sekarang
+                  </Button>
+                </div>
               </div>
 
               {lastGenerated.length > 0 && (
-                <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50/20">
-                  <div className="px-4 py-2 border-b border-orange-200 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-orange-900">Voucher Berhasil Dibuat</span>
-                    <Button variant="ghost" size="sm" onClick={() => copy(lastGenerated.map(v => v.code).join("\n"))} className="h-8 text-orange-700 hover:text-orange-900 hover:bg-orange-100">
-                      <Copy className="w-3.5 h-3.5 mr-1" /> Copy Semua
+                <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50/20 overflow-hidden">
+                  <div className="px-4 py-2 bg-orange-50 border-b border-orange-200 flex items-center justify-between">
+                    <span className="text-sm font-bold text-orange-900">Voucher Berhasil Dibuat</span>
+                    <Button variant="ghost" size="sm" onClick={() => copy(lastGenerated.map(v => v.password && v.password !== v.code ? `${v.code} | ${v.password}` : v.code).join("\n"))} className="h-8 text-orange-700 hover:text-orange-900 hover:bg-orange-100 font-semibold">
+                      <Copy className="w-3.5 h-3.5 mr-1.5" /> Copy Semua
                     </Button>
                   </div>
-                  <div className="p-4 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 max-h-[200px] overflow-y-auto">
+                  <div className="p-4 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 max-h-[250px] overflow-y-auto text-slate-900">
                     {lastGenerated.map(v => (
-                      <div key={v.id} onClick={() => copy(v.code)} className="cursor-pointer bg-white border border-orange-200 rounded px-2 py-1 text-center font-mono text-xs hover:border-orange-400 transition-colors">
-                        {v.code}
+                      <div key={v.id} onClick={() => copy(v.code)} className="group relative cursor-pointer bg-white border border-orange-200 rounded-md p-2 text-center font-mono text-xs hover:border-orange-400 hover:shadow-sm transition-all">
+                        <div className="font-bold text-slate-800">{v.code}</div>
+                        {v.password && v.password !== v.code && (
+                          <div className="text-[9px] text-orange-600 mt-0.5 border-t border-orange-50 pt-0.5">{v.password}</div>
+                        )}
+                        <div className="absolute inset-0 bg-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" />
                       </div>
                     ))}
                   </div>
@@ -319,62 +414,74 @@ export default function VouchersPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between py-4 ">
-              <CardTitle className="text-lg text-slate-900">Daftar Voucher User</CardTitle>
-              <div className="relative w-full max-w-xs">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50/50 border-b py-4 px-6 gap-4">
+              <CardTitle className="text-lg font-bold text-slate-900 px-0">Daftar Voucher User</CardTitle>
+              <div className="relative w-full max-w-xs text-slate-900">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   placeholder="Cari kode voucher..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-md pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full bg-white border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
             </CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm border-t">
-                <thead className="bg-slate-50 text-slate-500">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-slate-500 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium">Kode</th>
-                    <th className="px-4 py-3 text-left font-medium">Paket</th>
-                    <th className="px-4 py-3 text-left font-medium text-center">Router</th>
-                    <th className="px-4 py-3 text-left font-medium text-center">Status</th>
-                    <th className="px-4 py-3 text-right font-medium">Aksi</th>
+                    <th className="px-6 py-4 text-left font-semibold">Username</th>
+                    <th className="px-6 py-4 text-left font-semibold">Password</th>
+                    <th className="px-6 py-4 text-left font-semibold">Paket</th>
+                    <th className="px-6 py-4 text-center font-semibold">Router</th>
+                    <th className="px-6 py-4 text-center font-semibold">Status</th>
+                    <th className="px-6 py-4 text-right font-semibold">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-slate-100">
                   {filteredVouchers.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">{v.code}</span>
+                    <tr key={v.id} className="hover:bg-slate-50/80 transition-colors group">
+                      <td className="px-6 py-4">
+                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-100 group-hover:scale-105 transition-transform origin-left inline-block">
+                          {v.code}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{v.package_name || "Unknown"}</td>
-                      <td className="px-4 py-3 text-center">
-                        {v.router_id ? (
-                          <Badge variant="secondary" className="font-normal capitalize"><RouterIcon className="w-3 h-3 mr-1" /> {routers.find(r => r.id === v.router_id)?.name || "Router"}</Badge>
+                      <td className="px-6 py-4">
+                        {v.password && v.password !== v.code ? (
+                          <span className="font-mono font-semibold text-orange-700 bg-orange-50 px-2.5 py-1 rounded border border-orange-100 inline-block">
+                            {v.password}
+                          </span>
                         ) : (
-                          <Badge variant="outline" className="text-slate-400">All Routers</Badge>
+                          <span className="text-xs text-slate-400 italic font-medium">= Username</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${v.status === 'active' ? 'bg-green-100 text-green-800' :
-                          v.status === 'used' ? 'bg-blue-100 text-blue-800' :
-                            'bg-slate-100 text-slate-800'
+                      <td className="px-6 py-4 text-slate-600 font-medium">{v.package_name || "Unknown"}</td>
+                      <td className="px-6 py-4 text-center">
+                        {v.router_id ? (
+                          <Badge variant="secondary" className="font-medium capitalize bg-slate-100 text-slate-700 border-slate-200"><RouterIcon className="w-3 h-3 mr-1.5" /> {routers.find(r => r.id === v.router_id)?.name || "Router"}</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-slate-400 font-normal">Global / All</Badge>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize shadow-sm ${v.status === 'active' ? 'bg-green-100 text-green-700 border border-green-200' :
+                          v.status === 'used' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                            'bg-slate-100 text-slate-600 border border-slate-200'
                           }`}>
                           {v.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => copy(v.code)} className="h-8 w-8 text-slate-500"><Copy className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500"><Printer className="w-4 h-4" /></Button>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditVoucher(v)} className="h-9 w-9 text-slate-500 hover:text-blue-600 hover:bg-blue-50" title="Edit voucher"><Edit className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteVoucher(v.id, v.code)} className="h-9 w-9 text-slate-500 hover:text-red-600 hover:bg-red-50" title="Hapus voucher"><Trash2 className="w-4 h-4" /></Button>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {filteredVouchers.length === 0 && (
-                    <tr><td colSpan={5} className="p-8 text-center text-slate-400 italic">Data voucher tidak ditemukan.</td></tr>
+                    <tr><td colSpan={6} className="p-12 text-center text-slate-400 italic font-medium">Data voucher tidak ditemukan atau kosong.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -383,6 +490,80 @@ export default function VouchersPage() {
         </div>
 
       </div>
+
+      {/* Edit Voucher Dialog */}
+      <Dialog open={editDialog.open} onOpenChange={(open) => setEditDialog({ open, voucher: editDialog.voucher })}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900">Detail Voucher</DialogTitle>
+          </DialogHeader>
+          {editDialog.voucher && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Username</label>
+                  <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <p className="font-mono font-bold text-indigo-700">{editDialog.voucher.code}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Password</label>
+                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    {editDialog.voucher.password && editDialog.voucher.password !== editDialog.voucher.code ? (
+                      <p className="font-mono font-bold text-orange-700">{editDialog.voucher.password}</p>
+                    ) : (
+                      <p className="text-sm text-slate-400 italic">= Username</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Paket</label>
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="font-medium text-slate-900">{editDialog.voucher.package_name || "Unknown"}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Status</label>
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <Badge className={`${editDialog.voucher.status === 'active' ? 'bg-green-100 text-green-700' : editDialog.voucher.status === 'used' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                      {editDialog.voucher.status}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Router</label>
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    {editDialog.voucher.router_id ? (
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-700">
+                        <RouterIcon className="w-3 h-3 mr-1.5" />
+                        {routers.find(r => r.id === editDialog.voucher?.router_id)?.name || "Router"}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-slate-400">Global</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="pt-4 flex gap-2">
+                <Button
+                  onClick={() => copy(editDialog.voucher?.password && editDialog.voucher.password !== editDialog.voucher.code ? `${editDialog.voucher.code}|${editDialog.voucher.password}` : editDialog.voucher?.code || "")}
+                  variant="outline"
+                  className="flex-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  📋 Copy Voucher
+                </Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog({ open: false, voucher: null })}>
+              Tutup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
