@@ -90,8 +90,9 @@ type CreateRouterRequest struct {
 
 func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, req CreateRouterRequest) (*network.Router, error) {
 	now := time.Now()
+	newID := uuid.New()
 	router := &network.Router{
-		ID:               uuid.New(),
+		ID:               newID,
 		TenantID:         tenantID,
 		Name:             req.Name,
 		Description:      req.Description,
@@ -108,6 +109,7 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		IsDefault:        req.IsDefault,
 		RadiusEnabled:    true, // default for MVP
 		RadiusSecret:     req.RadiusSecret,
+		NASIdentifier:    newID.String(),
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -301,8 +303,9 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 
 	// 6. Create Router object and SAVE to database immediately as "provisioning"
 	now := time.Now()
+	newID := uuid.New()
 	router := &network.Router{
-		ID:                  uuid.New(),
+		ID:                  newID,
 		TenantID:            tenantID,
 		Name:                name,
 		Type:                network.RouterTypeMikroTik,
@@ -313,6 +316,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		Host:                assignedIP,
 		RemoteAccessPort:    assignedPort,
 		RemoteAccessEnabled: true,
+		NASIdentifier:       newID.String(),
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}

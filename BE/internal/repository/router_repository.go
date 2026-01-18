@@ -22,18 +22,18 @@ func NewRouterRepository(db *pgxpool.Pool) *RouterRepository {
 func (r *RouterRepository) Create(ctx context.Context, router *network.Router) error {
 	query := `
 		INSERT INTO routers (
-			id, tenant_id, name, description, type, host, nas_ip, port,
+			id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			remote_access_enabled, remote_access_port,
 			vpn_username, vpn_password, vpn_script,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
 	`
 	_, err := r.db.Exec(ctx, query,
 		router.ID, router.TenantID, router.Name, router.Description,
-		router.Type, router.Host, router.NASIP, router.Port, router.Username,
+		router.Type, router.Host, router.NASIdentifier, router.NASIP, router.Port, router.Username,
 		router.Password, router.APIPort, router.Status, router.LastSeen, router.IsDefault,
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
@@ -46,7 +46,7 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 
 func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_ip, port,
+		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
@@ -59,7 +59,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 	var router network.Router
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&router.ID, &router.TenantID, &router.Name, &router.Description,
-		&router.Type, &router.Host, &router.NASIP, &router.Port, &router.Username,
+		&router.Type, &router.Host, &router.NASIdentifier, &router.NASIP, &router.Port, &router.Username,
 		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
@@ -75,7 +75,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 
 func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_ip, port,
+		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
@@ -97,7 +97,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 		var router network.Router
 		err := rows.Scan(
 			&router.ID, &router.TenantID, &router.Name, &router.Description,
-			&router.Type, &router.Host, &router.NASIP, &router.Port, &router.Username,
+			&router.Type, &router.Host, &router.NASIdentifier, &router.NASIP, &router.Port, &router.Username,
 			&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 			&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 			&router.ConnectivityMode, &router.APIUseTLS,
@@ -115,7 +115,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 
 func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_ip, port,
+		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
@@ -135,7 +135,7 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 		var router network.Router
 		err := rows.Scan(
 			&router.ID, &router.TenantID, &router.Name, &router.Description,
-			&router.Type, &router.Host, &router.NASIP, &router.Port, &router.Username,
+			&router.Type, &router.Host, &router.NASIdentifier, &router.NASIP, &router.Port, &router.Username,
 			&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 			&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 			&router.ConnectivityMode, &router.APIUseTLS,
@@ -153,7 +153,7 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 
 func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid.UUID) (*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_ip, port,
+		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
@@ -166,7 +166,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 	var router network.Router
 	err := r.db.QueryRow(ctx, query, tenantID).Scan(
 		&router.ID, &router.TenantID, &router.Name, &router.Description,
-		&router.Type, &router.Host, &router.NASIP, &router.Port, &router.Username,
+		&router.Type, &router.Host, &router.NASIdentifier, &router.NASIP, &router.Port, &router.Username,
 		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
@@ -183,18 +183,18 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 func (r *RouterRepository) Update(ctx context.Context, router *network.Router) error {
 	query := `
 		UPDATE routers SET
-			name = $2, description = $3, type = $4, host = $5, nas_ip = $6, port = $7,
-			username = $8, password_hash = $9, api_port = $10, status = $11,
-			is_default = $12, radius_enabled = $13, radius_secret = $14,
-			connectivity_mode = $15, api_use_tls = $16,
-			remote_access_enabled = $17, remote_access_port = $18,
-			vpn_username = $19, vpn_password = $20, vpn_script = $21,
-			updated_at = $22
+			name = $2, description = $3, type = $4, host = $5, nas_identifier = $6, nas_ip = $7, port = $8,
+			username = $9, password_hash = $10, api_port = $11, status = $12,
+			is_default = $13, radius_enabled = $14, radius_secret = $15,
+			connectivity_mode = $16, api_use_tls = $17,
+			remote_access_enabled = $18, remote_access_port = $19,
+			vpn_username = $20, vpn_password = $21, vpn_script = $22,
+			updated_at = $23
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
 		router.ID, router.Name, router.Description, router.Type,
-		router.Host, router.NASIP, router.Port, router.Username, router.Password,
+		router.Host, router.NASIdentifier, router.NASIP, router.Port, router.Username, router.Password,
 		router.APIPort, router.Status, router.IsDefault,
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
@@ -233,7 +233,7 @@ func (r *RouterRepository) CountByTenant(ctx context.Context, tenantID uuid.UUID
 
 func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_ip, port,
+		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
 			username, password_hash, api_port, status, last_seen, is_default,
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
@@ -247,7 +247,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 	var router network.Router
 	err := r.db.QueryRow(ctx, query, nasIP).Scan(
 		&router.ID, &router.TenantID, &router.Name, &router.Description,
-		&router.Type, &router.Host, &router.NASIP, &router.Port, &router.Username,
+		&router.Type, &router.Host, &router.NASIdentifier, &router.NASIP, &router.Port, &router.Username,
 		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
@@ -259,4 +259,40 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 		return nil, fmt.Errorf("router not found for NAS-IP: %s", nasIP)
 	}
 	return &router, err
+}
+
+func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string) (*network.Router, error) {
+	query := `
+		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
+			username, password_hash, api_port, status, last_seen, is_default,
+			radius_enabled, radius_secret,
+			connectivity_mode, api_use_tls,
+			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			created_at, updated_at
+		FROM routers
+		WHERE nas_identifier = $1 AND radius_enabled = true
+		LIMIT 1
+	`
+	var router network.Router
+	err := r.db.QueryRow(ctx, query, nasID).Scan(
+		&router.ID, &router.TenantID, &router.Name, &router.Description,
+		&router.Type, &router.Host, &router.NASIdentifier, &router.NASIP, &router.Port, &router.Username,
+		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
+		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
+		&router.ConnectivityMode, &router.APIUseTLS,
+		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+		&router.CreatedAt, &router.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("router not found for NAS-Identifier: %s", nasID)
+	}
+	return &router, err
+}
+
+func (r *RouterRepository) UpdateNASIP(ctx context.Context, id uuid.UUID, newIP string) error {
+	query := `UPDATE routers SET nas_ip = $2, updated_at = NOW() WHERE id = $1`
+	_, err := r.db.Exec(ctx, query, id, newIP)
+	return err
 }

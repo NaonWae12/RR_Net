@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"rrnet/internal/auth"
+	"rrnet/internal/domain/network"
 	"rrnet/internal/domain/radius"
 	"rrnet/internal/domain/voucher"
 	"rrnet/internal/repository"
@@ -44,6 +47,7 @@ func NewRadiusHandler(
 type AuthRequest struct {
 	UserName         string `json:"User-Name"`
 	UserPassword     string `json:"User-Password"`
+	NASIdentifier    string `json:"NAS-Identifier"`
 	NASIPAddress     string `json:"NAS-IP-Address"`
 	NASPortID        string `json:"NAS-Port-Id"`
 	CallingStationID string `json:"Calling-Station-Id"`
@@ -65,16 +69,26 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		// return
 	}
 
+	// Read body to buffer for debugging in case of error
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("[radius_auth] ERROR: Failed to read body: %v", err)
+		http.Error(w, `{"error":"read header failed"}`, http.StatusBadRequest)
+		return
+	}
+	// Restore body for decoder
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	var req AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[radius_auth] ERROR: JSON Decode failed: %v", err)
+		log.Printf("[radius_auth] ERROR: JSON Decode failed: %v | Body: %s", err, string(bodyBytes))
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
 	log.Printf("[radius_auth] request: user=%q pass=%q nas=%s", req.UserName, req.UserPassword, req.NASIPAddress)
 
 	// Resolve tenant/router via NAS-IP-Address
-	tenantID, routerID, err := h.resolveTenantByNASIP(ctx, req.NASIPAddress)
+	tenantID, routerID, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		h.logAuthAttempt(ctx, uuid.Nil, nil, req.UserName, req.NASIPAddress, radius.AuthResultError, "router not found")
 		http.Error(w, `{"error":"NAS not registered"}`, http.StatusForbidden)
@@ -102,29 +116,33 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			err,
 		)
 		h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, err.Error())
-		// Return 401 with reject reason in JSON
+		// Return 401 with reject reason in JSON (FreeRADIUS rlm_rest format)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"Reply-Message": fmt.Sprintf("Voucher invalid: %s", err.Error()),
+			"reply": map[string]interface{}{
+				"Reply-Message": fmt.Sprintf("Voucher invalid: %s", err.Error()),
+			},
 		})
 		return
 	}
 
 	// Validate password if set
 	if v.Password != "" {
-		if v.Password != req.UserPassword {
-			log.Printf("[radius_auth] password mismatch: db_pass=%q req_pass=%q (len: %d vs %d)", v.Password, req.UserPassword, len(v.Password), len(req.UserPassword))
-			// Check for whitespace issues
-			if strings.TrimSpace(v.Password) == strings.TrimSpace(req.UserPassword) {
-				log.Printf("[radius_auth] password match after trim! Update DB or logic to handle whitespace.")
-			}
+		// Trim whitespace for comparison
+		dbPass := strings.TrimSpace(v.Password)
+		reqPass := strings.TrimSpace(req.UserPassword)
+
+		if dbPass != reqPass {
+			log.Printf("[radius_auth] password mismatch: db_pass=%q req_pass=%q (len: %d vs %d)", dbPass, reqPass, len(dbPass), len(reqPass))
 
 			h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, "password mismatch")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"Reply-Message": "Voucher accepted but password incorrect",
+				"reply": map[string]interface{}{
+					"Reply-Message": "Voucher accepted but password incorrect",
+				},
 			})
 			return
 		}
@@ -133,17 +151,22 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	// Success: log accept
 	h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "")
 
-	// Return ACCEPT with reply attributes (speed limits from voucher package)
+	// Return ACCEPT with reply attributes (FreeRADIUS rlm_rest format)
 	// MikroTik expects a string like "down/up" (e.g., "2048k/512k").
-	var mikrotikRateLimit string
-	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
-		mikrotikRateLimit = fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
-	}
-	response := AuthResponse{
+	replyAttrs := map[string]interface{}{
 		"Reply-Message": "Voucher accepted",
 	}
-	if mikrotikRateLimit != "" {
-		response["Mikrotik-Rate-Limit"] = mikrotikRateLimit
+
+	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
+		mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
+		replyAttrs["Mikrotik-Rate-Limit"] = mikrotikRateLimit
+	}
+
+	response := map[string]interface{}{
+		"control": map[string]interface{}{
+			"Auth-Type": "Accept",
+		},
+		"reply": replyAttrs,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -156,6 +179,7 @@ type AcctRequest struct {
 	AcctStatusType     string `json:"Acct-Status-Type"`
 	AcctSessionID      string `json:"Acct-Session-Id"`
 	UserName           string `json:"User-Name"`
+	NASIdentifier      string `json:"NAS-Identifier"`
 	NASIPAddress       string `json:"NAS-IP-Address"`
 	NASPortID          string `json:"NAS-Port-Id"`
 	FramedIPAddress    string `json:"Framed-IP-Address"`
@@ -189,7 +213,7 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Resolve tenant/router via NAS-IP-Address
-	tenantID, routerID, err := h.resolveTenantByNASIP(ctx, req.NASIPAddress)
+	tenantID, routerID, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		http.Error(w, `{"error":"NAS not registered"}`, http.StatusForbidden)
 		return
@@ -324,12 +348,36 @@ func (h *RadiusHandler) ListActiveSessions(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// resolveTenantByNASIP looks up the router by NAS-IP and returns tenant_id + router_id
-func (h *RadiusHandler) resolveTenantByNASIP(ctx context.Context, nasIP string) (uuid.UUID, uuid.UUID, error) {
-	router, err := h.routerRepo.GetByNASIP(ctx, nasIP)
+// resolveRouter looks up the router by NAS-Identifier (preferred) or NAS-IP
+// It automatically updates NAS-IP in DB if it changed (Self-Healing)
+func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP string) (uuid.UUID, uuid.UUID, error) {
+	var router *network.Router
+	var err error
+
+	// 1. Try Lookup by NAS-Identifier (Persistent Identity)
+	if nasIdentifier != "" {
+		router, err = h.routerRepo.GetByNASIdentifier(ctx, nasIdentifier)
+	}
+
+	// 2. Fallback to NAS-IP (Legacy or first time setup)
+	if router == nil {
+		router, err = h.routerRepo.GetByNASIP(ctx, nasIP)
+	}
+
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}
+
+	// 3. Self-Healing: Update IP if changed
+	if nasIP != "" && router.NASIP != nasIP {
+		log.Printf("[radius] Auto-updating router %s (%s) IP: %s -> %s", router.Name, router.ID, router.NASIP, nasIP)
+		// Fire-and-forget update to avoid blocking auth
+		// We use a detached context to ensure it completes even if auth context cancels
+		go func(id uuid.UUID, ip string) {
+			_ = h.routerRepo.UpdateNASIP(context.Background(), id, ip)
+		}(router.ID, nasIP)
+	}
+
 	return router.TenantID, router.ID, nil
 }
 

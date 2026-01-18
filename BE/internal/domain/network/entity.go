@@ -45,6 +45,7 @@ type Router struct {
 	Description         string                 `json:"description,omitempty"`
 	Type                RouterType             `json:"type"`
 	Host                string                 `json:"host"`
+	NASIdentifier       string                 `json:"nas_identifier,omitempty"`
 	NASIP               string                 `json:"nas_ip,omitempty"`
 	Port                int                    `json:"port"`
 	Username            string                 `json:"username"`
