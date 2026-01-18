@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -91,6 +92,13 @@ type CreateRouterRequest struct {
 func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, req CreateRouterRequest) (*network.Router, error) {
 	now := time.Now()
 	newID := uuid.New()
+
+	// 0. Enforce Uniqueness of NAS-Identifier (Anti-Duplication)
+	// Even revoked routers are checked to prevent immediate reuse during retention period.
+	if existing, err := s.routerRepo.GetByNASIdentifier(ctx, newID.String()); err == nil && existing != nil {
+		return nil, fmt.Errorf("router identifier collision: %s. This ID is reserved or in retention", newID.String())
+	}
+
 	router := &network.Router{
 		ID:               newID,
 		TenantID:         tenantID,
@@ -953,4 +961,44 @@ func (s *NetworkService) removeRemoteAccessRules(router *network.Router) error {
 	_ = cmd.Run()
 
 	return nil
+}
+
+// StartRouterCleanupScheduler starts a ticker to purge old soft-deleted routers
+func (s *NetworkService) StartRouterCleanupScheduler(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				s.purgeOldRouters(ctx)
+			}
+		}
+	}()
+	// Run once on startup
+	go s.purgeOldRouters(ctx)
+}
+
+func (s *NetworkService) purgeOldRouters(ctx context.Context) {
+	retentionDays := 30
+	routers, err := s.routerRepo.GetPurgeableRouters(ctx, retentionDays)
+	if err != nil {
+		log.Printf("[RouterCleanup] Error fetching purgeable routers: %v", err)
+		return
+	}
+
+	if len(routers) == 0 {
+		return
+	}
+
+	log.Printf("[RouterCleanup] Found %d routers to purge (older than %d days)", len(routers), retentionDays)
+	for _, r := range routers {
+		if err := s.routerRepo.HardDelete(ctx, r.ID); err != nil {
+			log.Printf("[RouterCleanup] Failed to hard delete router %s (%s): %v", r.Name, r.ID, err)
+		} else {
+			log.Printf("[RouterCleanup] Purged router %s (%s)", r.Name, r.ID)
+		}
+	}
 }

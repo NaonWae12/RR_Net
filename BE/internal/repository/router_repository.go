@@ -83,7 +83,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
 		FROM routers
-		WHERE tenant_id = $1
+		WHERE tenant_id = $1 AND deleted_at IS NULL
 		ORDER BY is_default DESC, name ASC
 	`
 	rows, err := r.db.Query(ctx, query, tenantID)
@@ -122,7 +122,7 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
-		FROM routers
+		FROM routers WHERE deleted_at IS NULL
 	`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
@@ -161,7 +161,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
 		FROM routers
-		WHERE tenant_id = $1 AND is_default = true
+		WHERE tenant_id = $1 AND is_default = true AND deleted_at IS NULL
 	`
 	var router network.Router
 	err := r.db.QueryRow(ctx, query, tenantID).Scan(
@@ -219,13 +219,43 @@ func (r *RouterRepository) UpdateStatus(ctx context.Context, id uuid.UUID, statu
 }
 
 func (r *RouterRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	// Soft delete
+	query := `UPDATE routers SET status = 'revoked', deleted_at = NOW() WHERE id = $1`
+	_, err := r.db.Exec(ctx, query, id)
+	return err
+}
+
+func (r *RouterRepository) HardDelete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM routers WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id)
 	return err
 }
 
+func (r *RouterRepository) GetPurgeableRouters(ctx context.Context, retentionDays int) ([]*network.Router, error) {
+	query := `
+		SELECT id, tenant_id, name
+		FROM routers
+		WHERE deleted_at < NOW() - ($1 || ' days')::INTERVAL
+	`
+	rows, err := r.db.Query(ctx, query, retentionDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var routers []*network.Router
+	for rows.Next() {
+		var router network.Router
+		if err := rows.Scan(&router.ID, &router.TenantID, &router.Name); err != nil {
+			return nil, err
+		}
+		routers = append(routers, &router)
+	}
+	return routers, nil
+}
+
 func (r *RouterRepository) CountByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
-	query := `SELECT COUNT(*) FROM routers WHERE tenant_id = $1`
+	query := `SELECT COUNT(*) FROM routers WHERE tenant_id = $1 AND deleted_at IS NULL`
 	var count int
 	err := r.db.QueryRow(ctx, query, tenantID).Scan(&count)
 	return count, err
@@ -241,7 +271,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
 			created_at, updated_at
 		FROM routers
-		WHERE nas_ip = $1 AND radius_enabled = true
+		WHERE nas_ip = $1 AND radius_enabled = true AND deleted_at IS NULL
 		LIMIT 1
 	`
 	var router network.Router
@@ -262,6 +292,8 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 }
 
 func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string) (*network.Router, error) {
+	// We intentionally do NOT filter by deleted_at here, because we want to find revoked routers
+	// so we can explicitly reject them in the Radius Handler with a clear reason.
 	query := `
 		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
 			username, password_hash, api_port, status, last_seen, is_default,
@@ -269,9 +301,9 @@ func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string)
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
-			created_at, updated_at
+			created_at, updated_at, deleted_at
 		FROM routers
-		WHERE nas_identifier = $1 AND radius_enabled = true
+		WHERE nas_identifier = $1
 		LIMIT 1
 	`
 	var router network.Router
@@ -283,7 +315,7 @@ func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string)
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
-		&router.CreatedAt, &router.UpdatedAt,
+		&router.CreatedAt, &router.UpdatedAt, &router.DeletedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("router not found for NAS-Identifier: %s", nasID)

@@ -25,6 +25,7 @@ const (
 	RouterStatusOffline      RouterStatus = "offline"
 	RouterStatusMaintenance  RouterStatus = "maintenance"
 	RouterStatusProvisioning RouterStatus = "provisioning"
+	RouterStatusRevoked      RouterStatus = "revoked"
 )
 
 // RouterConnectivityMode defines how ERP reaches router management API
@@ -65,6 +66,7 @@ type Router struct {
 	VPNScript           string                 `json:"vpn_script,omitempty"`
 	CreatedAt           time.Time              `json:"created_at"`
 	UpdatedAt           time.Time              `json:"updated_at"`
+	DeletedAt           *time.Time             `json:"deleted_at,omitempty"`
 }
 
 // NetworkProfile represents a bandwidth/QoS profile

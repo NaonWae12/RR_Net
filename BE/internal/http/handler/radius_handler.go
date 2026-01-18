@@ -350,6 +350,8 @@ func (h *RadiusHandler) ListActiveSessions(w http.ResponseWriter, r *http.Reques
 
 // resolveRouter looks up the router by NAS-Identifier (preferred) or NAS-IP
 // It automatically updates NAS-IP in DB if it changed (Self-Healing)
+// resolveRouter looks up the router by NAS-Identifier (preferred) or NAS-IP
+// It automatically updates NAS-IP in DB if it changed (Self-Healing)
 func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP string) (uuid.UUID, uuid.UUID, error) {
 	var router *network.Router
 	var err error
@@ -368,7 +370,14 @@ func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP 
 		return uuid.Nil, uuid.Nil, err
 	}
 
-	// 3. Self-Healing: Update IP if changed
+	// 3. Strict Check: Revoked / Soft-Deleted Router
+	// Revoked routers MUST NOT authenticate and MUST NOT trigger auto-healing
+	if router.DeletedAt != nil || router.Status == network.RouterStatusRevoked {
+		log.Printf("[radius_reject_revoked_router] Rejecting revoked router: %s (ID: %s, NAS-ID: %s)", router.Name, router.ID, router.NASIdentifier)
+		return uuid.Nil, uuid.Nil, fmt.Errorf("router is revoked")
+	}
+
+	// 4. Self-Healing: Update IP if changed (Only for ACTIVE routers)
 	if nasIP != "" && router.NASIP != nasIP {
 		log.Printf("[radius] Auto-updating router %s (%s) IP: %s -> %s", router.Name, router.ID, router.NASIP, nasIP)
 		// Fire-and-forget update to avoid blocking auth
