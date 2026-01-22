@@ -1,9 +1,8 @@
 rest {
-	# Connect URI for connection pooling (optional but recommended)
-	connect_uri = "$ENV{RRNET_RADIUS_REST_BASE}"
-
 	# Authenticate: Access-Request (PAP)
 	# NOTE: Use Cleartext-Password (from PAP decode), NOT User-Password (binary)
+	# 
+
 	authenticate {
 		uri = "$ENV{RRNET_RADIUS_REST_BASE}/auth"
 		method = 'post'
