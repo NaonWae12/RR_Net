@@ -15,6 +15,9 @@ export interface Client {
   service_package_id?: string | null;
   group_id?: string | null;
   discount_id?: string | null;
+  // Discount fields (populated when discount is included in response)
+  discount_type?: 'percent' | 'fixed' | null;
+  discount_value?: number | null;
   device_count?: number | null;
   pppoe_username?: string;
   // Optional display/service fields (some endpoints may include these)
