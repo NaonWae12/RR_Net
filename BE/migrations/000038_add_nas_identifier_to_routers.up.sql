@@ -1,11 +1,19 @@
--- Add NAS Identifier to routers
-ALTER TABLE routers ADD COLUMN nas_identifier VARCHAR(100);
+-- Add NAS Identifier to routers (idempotent)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'routers' AND column_name = 'nas_identifier'
+    ) THEN
+        ALTER TABLE routers ADD COLUMN nas_identifier VARCHAR(100);
+    END IF;
+END $$;
 
 -- Populate existing routers with their ID as nas_identifier to avoid nulls
 UPDATE routers SET nas_identifier = id::text WHERE nas_identifier IS NULL;
 
--- Create Unique Index
-CREATE UNIQUE INDEX idx_routers_nas_identifier ON routers(nas_identifier);
+-- Create Unique Index (idempotent)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_routers_nas_identifier ON routers(nas_identifier);
 
 -- Drop old index on nas_ip if exists (it might be just a normal index, but we want to ensure it's not unique or just re-create it as standard index if needed)
 -- In previous migrations it was just INDEX, not UNIQUE, so it's fine.

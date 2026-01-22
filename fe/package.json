@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "install:legacy": "npm install --legacy-peer-deps"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -52,6 +53,6 @@
     "typescript": "^5"
   },
   "optionalDependencies": {
-    "@sentry/nextjs": "^8.0.0"
+    "@sentry/nextjs": "^8.40.0"
   }
 }
