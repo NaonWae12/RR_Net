@@ -66,8 +66,8 @@ export const TabLayout = React.memo<TabLayoutProps>(
         {/* Tab Headers */}
         <div
           className={cn(
-            "flex border-b",
-            vertical && "flex-col border-b-0 border-r",
+            "flex border-b border-slate-200",
+            vertical && "flex-col border-b-0 border-r border-slate-200",
             !vertical && "flex-row"
           )}
           role="tablist"
@@ -85,24 +85,31 @@ export const TabLayout = React.memo<TabLayoutProps>(
                 onClick={() => handleTabChange(tab.id)}
                 disabled={tab.disabled}
                 className={cn(
-                  "px-4 py-2 text-sm font-medium transition-colors border-b-4 -mb-px",
-                  activeTab === tab.id
-                    ? "border-primary/10 text-primary bg-primary/5"
-                    : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-400",
-                  tab.disabled && "opacity-50 cursor-not-allowed hover:bg-transparent hover:border-transparent",
+                  "px-4 py-2 text-sm font-medium transition-colors relative",
+                  // Active tab styling
+                  activeTab === tab.id && "text-slate-900 bg-slate-100",
+                  // Inactive tab styling
+                  activeTab !== tab.id && "text-slate-400 hover:text-slate-900 hover:bg-slate-100",
+                  // Border for horizontal tabs
+                  !vertical && activeTab === tab.id && "border-b-2 border-slate-500 -mb-px",
+                  !vertical && activeTab !== tab.id && "border-b-2 border-transparent",
+                  // Border for vertical tabs
                   vertical && "border-b-0 border-r-2 -mr-px",
-                  !vertical && "border-b-2"
+                  vertical && activeTab === tab.id && "border-indigo-500",
+                  vertical && activeTab !== tab.id && "border-slate-200",
+                  // Disabled state
+                  tab.disabled && "opacity-50 cursor-not-allowed hover:bg-transparent hover:border-transparent"
                 )}
               >
                 <span className="flex items-center gap-2">
                   {tab.label}
                   {tab.badge && (
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary">
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20">
                       {tab.badge}
                     </span>
                   )}
                   {hasError && (
-                    <span className="text-destructive" title={hasError}>
+                    <span className="text-red-600" title={hasError}>
                       ⚠
                     </span>
                   )}
@@ -116,10 +123,10 @@ export const TabLayout = React.memo<TabLayoutProps>(
         <div
           id={`tab-panel-${activeTab}`}
           role="tabpanel"
-          className="flex-1 p-4"
+          className="flex-1 p-4 text-slate-900"
         >
           {lazy ? (
-            <React.Suspense fallback={<div>Loading...</div>}>
+            <React.Suspense fallback={<div className="text-slate-500">Loading...</div>}>
               {activeTabContent}
             </React.Suspense>
           ) : (

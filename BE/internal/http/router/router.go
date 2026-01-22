@@ -65,6 +65,7 @@ func New(deps Dependencies) http.Handler {
 	clientRepo := repository.NewClientRepository(deps.DB)
 	servicePackageRepo := repository.NewServicePackageRepository(deps.DB)
 	clientGroupRepo := repository.NewClientGroupRepository(deps.DB)
+	discountRepo := repository.NewDiscountRepository(deps.DB)
 
 	// Asynq client (optional injection; fallback to creating one)
 	asynqClient := deps.Asynq
@@ -82,6 +83,7 @@ func New(deps Dependencies) http.Handler {
 	servicePackageService := service.NewServicePackageService(servicePackageRepo)
 	serviceSettingsService := service.NewServiceSettingsService(tenantRepo)
 	clientGroupService := service.NewClientGroupService(clientGroupRepo)
+	discountService := service.NewDiscountService(discountRepo)
 
 	// WhatsApp campaigns (async)
 	waCampaignRepo := repository.NewWACampaignRepository(deps.DB)
@@ -102,6 +104,7 @@ func New(deps Dependencies) http.Handler {
 	servicePackageHandler := handler.NewServicePackageHandler(servicePackageService)
 	serviceSettingsHandler := handler.NewServiceSettingsHandler(serviceSettingsService)
 	clientGroupHandler := handler.NewClientGroupHandler(clientGroupService)
+	discountHandler := handler.NewDiscountHandler(discountService)
 	waCampaignHandler := handler.NewWACampaignHandler(waCampaignService)
 	waTemplateHandler := handler.NewWATemplateHandler(waTemplateService)
 	waLogHandler := handler.NewWALogHandler(waLogRepo)
@@ -109,6 +112,12 @@ func New(deps Dependencies) http.Handler {
 	// WhatsApp Gateway (Baileys) proxy client + handler (tenant-scoped; protected)
 	waGatewayClient := wagw.NewClient(deps.Config.WAGateway.URL, deps.Config.WAGateway.AdminToken)
 	waGatewayHandler := handler.NewWAGatewayHandler(waGatewayClient, waLogService)
+
+	// Technician module (repositories, service, handler)
+	taskRepo := repository.NewTaskRepository(deps.DB)
+	activityLogRepo := repository.NewActivityLogRepository(deps.DB)
+	technicianService := service.NewTechnicianService(taskRepo, activityLogRepo)
+	technicianHandler := handler.NewTechnicianHandler(technicianService)
 
 	// RBAC service
 	rbacService := rbac.NewService()
@@ -478,6 +487,43 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/service-settings/discount", requireAuth(requireServicePackagesFeature(methodHandler("PUT", serviceSettingsHandler.UpdateDiscount))))
 
 	// ============================================
+	// Discount routes (Protected, tenant-scoped, feature-gated: service_packages)
+	// ============================================
+	// Register exact path first (without trailing slash) for POST/GET
+	mux.Handle("/api/v1/discounts", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			discountHandler.List(w, r)
+		case http.MethodPost:
+			discountHandler.Create(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))))
+	// Register path with trailing slash for ID-based operations (must be after exact path)
+	mux.Handle("/api/v1/discounts/", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/discounts/")
+		path = strings.TrimSuffix(path, "/") // Remove trailing slash if any
+		if path == "" {
+			// Empty path means request was to /api/v1/discounts/ (with trailing slash)
+			// Redirect to exact route or return method not allowed
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r = setPathParam(r, "id", path)
+		switch r.Method {
+		case http.MethodGet:
+			discountHandler.Get(w, r)
+		case http.MethodPut:
+			discountHandler.Update(w, r)
+		case http.MethodDelete:
+			discountHandler.Delete(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))))
+
+	// ============================================
 	// Client group routes (Protected, tenant-scoped, feature-gated: service_packages)
 	// Capabilities: view=list, update=create/update/delete
 	// ============================================
@@ -522,6 +568,98 @@ func New(deps Dependencies) http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))))
+
+	// ============================================
+	// Technician routes (Protected, tenant-scoped, RBAC-gated)
+	// ============================================
+	// Task summary route (must be before /tasks/ to avoid path matching conflicts)
+	mux.Handle("/api/v1/technician/tasks/summary", requireAuth(requireCapability(rbac.CapTechnicianView)(methodHandler("GET", technicianHandler.GetTaskSummary))))
+
+	// Task routes
+	mux.Handle("/api/v1/technician/tasks", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapTechnicianView)(http.HandlerFunc(technicianHandler.ListTasks)).ServeHTTP(w, r)
+		case http.MethodPost:
+			requireCapability(rbac.CapTechnicianManage)(http.HandlerFunc(technicianHandler.CreateTask)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Task ID-specific routes
+	mux.Handle("/api/v1/technician/tasks/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/technician/tasks/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		// Nested routes: /api/v1/technician/tasks/{id}/start, /complete, /cancel
+		if len(parts) == 2 {
+			id := parts[0]
+			action := parts[1]
+			r = setPathParam(r, "id", id)
+
+			switch action {
+			case "start":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapTechnicianManage)(http.HandlerFunc(technicianHandler.StartTask)).ServeHTTP(w, r)
+					return
+				}
+			case "complete":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapTechnicianManage)(http.HandlerFunc(technicianHandler.CompleteTask)).ServeHTTP(w, r)
+					return
+				}
+			case "cancel":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapTechnicianManage)(http.HandlerFunc(technicianHandler.CancelTask)).ServeHTTP(w, r)
+					return
+				}
+			case "activities":
+				if r.Method == http.MethodGet {
+					r = setPathParam(r, "task_id", id)
+					requireCapability(rbac.CapTechnicianView)(http.HandlerFunc(technicianHandler.GetTaskActivityLogs)).ServeHTTP(w, r)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// CRUD on specific task ID
+		if len(parts) == 1 {
+			r = setPathParam(r, "id", parts[0])
+			switch r.Method {
+			case http.MethodGet:
+				requireCapability(rbac.CapTechnicianView)(http.HandlerFunc(technicianHandler.GetTask)).ServeHTTP(w, r)
+			case http.MethodPut:
+				requireCapability(rbac.CapTechnicianManage)(http.HandlerFunc(technicianHandler.UpdateTask)).ServeHTTP(w, r)
+			case http.MethodDelete:
+				requireCapability(rbac.CapTechnicianManage)(http.HandlerFunc(technicianHandler.DeleteTask)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
+
+	// Activity log routes
+	mux.Handle("/api/v1/technician/activities", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapTechnicianView)(http.HandlerFunc(technicianHandler.ListActivityLogs)).ServeHTTP(w, r)
+		case http.MethodPost:
+			requireCapability(rbac.CapTechnicianManage)(http.HandlerFunc(technicianHandler.LogActivity)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
 
 	// ============================================
 	// Super Admin routes (Protected, super admin only)

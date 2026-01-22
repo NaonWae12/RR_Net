@@ -1,22 +1,26 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTechnicianStore } from "@/stores/technicianStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { TaskStatusBadge } from "@/components/technician/TaskStatusBadge";
 import { TaskPriorityBadge } from "@/components/technician/TaskPriorityBadge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeftIcon, PencilIcon, TrashIcon, PlayIcon, CheckIcon } from "@heroicons/react/20/solid";
+import { ArrowLeftIcon, PencilIcon, TrashIcon, PlayIcon, CheckIcon, PlusIcon } from "@heroicons/react/20/solid";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { format } from "date-fns";
 import { ActivityLog } from "@/lib/api/types";
+import { useRole } from "@/lib/hooks/useRole";
+import { LogActivityModal } from "@/components/technician/LogActivityModal";
 
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { task, activityLogs, loading, error, fetchTask, fetchTaskActivityLogs, startTask, cancelTask, deleteTask, clearTask } = useTechnicianStore();
+  const { task, activityLogs, loading, error, fetchTask, fetchTaskActivityLogs, startTask, cancelTask, deleteTask, clearTask, logActivity } = useTechnicianStore();
   const { showToast } = useNotificationStore();
+  const { isTechnician, canManageTasks } = useRole();
+  const [showLogActivityModal, setShowLogActivityModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -122,32 +126,53 @@ export default function TaskDetailPage() {
   const canStart = task.status === "pending";
   const canComplete = task.status === "in_progress" || task.status === "pending";
 
+  const handleLogActivitySuccess = async () => {
+    setShowLogActivityModal(false);
+    await fetchTaskActivityLogs(id!);
+    showToast({
+      title: "Activity logged",
+      description: "Activity has been logged successfully.",
+      variant: "success",
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back to Tasks
         </Button>
-        <div className="flex space-x-2">
-          {canStart && (
+        <div className="flex space-x-2 flex-wrap">
+          {canStart && task.status !== "pending_approval" && (
             <Button onClick={handleStart}>
               <PlayIcon className="h-4 w-4 mr-2" /> Start Task
             </Button>
           )}
-          {canComplete && (
+          {canComplete && task.status !== "pending_approval" && (
             <Button onClick={handleComplete} variant="default">
               <CheckIcon className="h-4 w-4 mr-2" /> Complete Task
             </Button>
           )}
-          <Button variant="outline" onClick={() => router.push(`/technician/tasks/${task.id}/edit`)}>
-            <PencilIcon className="h-4 w-4 mr-2" /> Edit
+          <Button 
+            onClick={() => setShowLogActivityModal(true)}
+            variant="default"
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <PlusIcon className="h-4 w-4 mr-2" /> Log Activity
           </Button>
-          <Button variant="outline" onClick={handleCancel}>
-            Cancel Task
-          </Button>
-          <Button variant="destructive" onClick={handleDelete}>
-            <TrashIcon className="h-4 w-4 mr-2" /> Delete
-          </Button>
+          {canManageTasks && (
+            <>
+              <Button variant="outline" onClick={() => router.push(`/technician/tasks/${task.id}/edit`)}>
+                <PencilIcon className="h-4 w-4 mr-2" /> Edit
+              </Button>
+              <Button variant="outline" onClick={handleCancel}>
+                Cancel Task
+              </Button>
+              <Button variant="destructive" onClick={handleDelete}>
+                <TrashIcon className="h-4 w-4 mr-2" /> Delete
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -254,6 +279,15 @@ export default function TaskDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Log Activity Modal */}
+      {showLogActivityModal && task && (
+        <LogActivityModal
+          taskId={task.id}
+          onClose={() => setShowLogActivityModal(false)}
+          onSuccess={handleLogActivitySuccess}
+        />
+      )}
     </div>
   );
 }

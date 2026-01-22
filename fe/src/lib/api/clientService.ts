@@ -14,6 +14,7 @@ export interface Client {
   category: ClientCategory;
   service_package_id?: string | null;
   group_id?: string | null;
+  discount_id?: string | null;
   device_count?: number | null;
   pppoe_username?: string;
   // Optional display/service fields (some endpoints may include these)
@@ -26,9 +27,6 @@ export interface Client {
   payment_tempo_template_id?: string | null;
   // legacy/backward-compat display field from backend
   service_plan?: string | null;
-  // Discount fields (temporary, will be added to backend later)
-  discount_type?: 'percent' | 'nominal' | null;
-  discount_value?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -56,15 +54,13 @@ export interface CreateClientRequest {
   category: ClientCategory;
   service_package_id: string;
   group_id?: string;
+  isolir_mode?: 'auto' | 'manual';
   device_count?: number;
   pppoe_username?: string;
   pppoe_password?: string;
   // Optional: allow manual client_code entry; if omitted backend will generate
   client_code?: string;
-  // Discount fields (temporary, will be added to backend later)
-  discount_type?: 'percent' | 'nominal';
-  discount_value?: number;
-
+  discount_id?: string;
   // Payment tempo fields (new)
   payment_tempo_option?: 'default' | 'template' | 'manual';
   payment_due_day?: number;
@@ -80,6 +76,7 @@ export interface ClientFilters {
   search?: string;
   status?: string;
   category?: string;
+  group_id?: string;
   page?: number;
   page_size?: number;
 }
@@ -90,6 +87,10 @@ export const clientService = {
     if (filters.search) params.append('search', filters.search);
     if (filters.status) params.append('status', filters.status);
     if (filters.category) params.append('category', filters.category);
+    // Only append group_id if it's a non-empty string
+    if (filters.group_id && typeof filters.group_id === 'string' && filters.group_id.trim() !== '') {
+      params.append('group_id', filters.group_id);
+    }
     if (filters.page) params.append('page', String(filters.page));
     if (filters.page_size) params.append('page_size', String(filters.page_size));
     
@@ -124,6 +125,8 @@ export const clientService = {
       category: data.category,
       service_package_id: data.service_package_id,
       group_id: data.group_id,
+      discount_id: data.discount_id,
+      isolir_mode: data.isolir_mode,
       device_count: data.device_count,
       pppoe_username: data.pppoe_username,
       pppoe_password: data.pppoe_password,
@@ -144,6 +147,8 @@ export const clientService = {
       category: data.category,
       service_package_id: data.service_package_id,
       group_id: data.group_id,
+      discount_id: data.discount_id,
+      isolir_mode: data.isolir_mode,
       device_count: data.device_count,
       pppoe_username: data.pppoe_username,
       pppoe_password: data.pppoe_password,

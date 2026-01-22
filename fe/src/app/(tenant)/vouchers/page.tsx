@@ -31,6 +31,7 @@ import {
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 function formatKbps(kbps: number) {
   if (!kbps) return "-";
@@ -41,6 +42,7 @@ function formatKbps(kbps: number) {
 export default function VouchersPage() {
   const { showToast } = useNotificationStore();
   const { routers, fetchRouters } = useNetworkStore();
+  const { isAuthenticated } = useAuth();
 
   const [packages, setPackages] = useState<VoucherPackage[]>([]);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
@@ -69,11 +71,11 @@ export default function VouchersPage() {
   const [genForm, setGenForm] = useState({
     package_id: "",
     router_id: "all",
-    quantity: 10,
+    quantity: 1,
     expires_at: "",
     user_mode: "up",
-    character_mode: "5AB2",
-    code_length: 6,
+    character_mode: "abcd",
+    code_length: 4,
   });
 
   const [lastGenerated, setLastGenerated] = useState<Voucher[]>([]);
@@ -81,6 +83,9 @@ export default function VouchersPage() {
   const packageOptions = useMemo(() => (packages ?? []).map((p) => ({ id: p.id, name: p.name })), [packages]);
 
   const load = async () => {
+    // Only load if authenticated
+    if (!isAuthenticated) return;
+    
     setLoading(true);
     try {
       await fetchRouters();
@@ -108,7 +113,7 @@ export default function VouchersPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthenticated]);
 
   const createPackage = async () => {
     setLoading(true);
@@ -223,7 +228,7 @@ export default function VouchersPage() {
         {/* LEFT COMPONENT: PACKAGE MANAGEMENT */}
         <div className="xl:col-span-4 space-y-6">
           <Card className="border-indigo-100 shadow-sm overflow-hidden text-slate-900">
-            <CardHeader className="bg-indigo-50/50 border-b">
+            <CardHeader className="bg-indigo-50/50 border-b border-indigo-200">
               <CardTitle className="text-indigo-900 text-lg flex items-center gap-2">
                 <Plus className="w-4 h-4" /> Tambah Paket
               </CardTitle>
@@ -271,28 +276,28 @@ export default function VouchersPage() {
           </Card>
 
           <Card className="border-slate-200 shadow-sm overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-200">
               <CardTitle className="text-lg flex items-center justify-between text-slate-900">
                 <span>Daftar Paket</span>
-                <Badge variant="outline">{packages.length}</Badge>
+                <Badge variant="outline" className="border-slate-200">{packages.length}</Badge>
               </CardTitle>
             </CardHeader>
             <div className="max-h-[500px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0 border-b">
+                <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 font-semibold">Nama</th>
-                    <th className="px-4 py-3 text-left font-medium text-slate-500 font-semibold">Speed / Validity</th>
+                    <th className="px-4 py-3 text-left text-slate-500 font-semibold">Nama</th>
+                    <th className="px-4 py-3 text-left text-slate-500 font-semibold">Speed / Validity</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {packages.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-200">
                       <td className="px-4 py-3 font-medium text-slate-900">{p.name}</td>
                       <td className="px-4 py-3 text-slate-600">
                         <div className="flex flex-col">
-                          <span className="flex items-center gap-1 font-semibold"><Zap className="w-3 h-3 text-amber-500" /> {formatKbps(p.download_speed)} / {formatKbps(p.upload_speed)}</span>
-                          <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3" /> {p.duration_hours ? `${p.duration_hours} Jam` : "Unlimited"}</span>
+                          <span className="flex items-center gap-1 font-semibold text-slate-700"><Zap className="w-3 h-3 text-amber-500" /> {formatKbps(p.download_speed)} / {formatKbps(p.upload_speed)}</span>
+                          <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3 text-slate-400" /> {p.duration_hours ? `${p.duration_hours} Jam` : "Unlimited"}</span>
                         </div>
                       </td>
                     </tr>
@@ -309,7 +314,7 @@ export default function VouchersPage() {
         {/* RIGHT COMPONENT: GENERATE & LIST */}
         <div className="xl:col-span-8 space-y-6 text-slate-900">
           <Card className="border-orange-100 shadow-sm overflow-hidden">
-            <CardHeader className="bg-orange-50/50 border-b">
+            <CardHeader className="bg-orange-50/50 border-b border-orange-200">
               <CardTitle className="text-orange-900 text-lg flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4" /> Generate Voucher Batch
               </CardTitle>
@@ -335,12 +340,12 @@ export default function VouchersPage() {
                     value={genForm.character_mode}
                     onChange={(e) => setGenForm({ ...genForm, character_mode: e.target.value })}
                   >
-                    <option value="abcd">Acak abcd (Kecil)</option>
-                    <option value="ABCD">Acak ABCD (Besar)</option>
-                    <option value="aBcD">Acak aBcD (Campuran)</option>
-                    <option value="5ab2">Acak abcd + 123</option>
-                    <option value="5AB2">Acak ABCD + 123</option>
-                    <option value="5aB2">Acak aBcD + 123</option>
+                    <option value="abcd">abcd</option>
+                    <option value="ABCD">ABCD</option>
+                    <option value="aBcD">aBcD</option>
+                    <option value="5ab2">5ab2c34d</option>
+                    <option value="5AB2">5AB2C34D</option>
+                    <option value="5aB2">5aB2c34D</option>
                   </select>
                 </div>
 
@@ -424,7 +429,7 @@ export default function VouchersPage() {
           </Card>
 
           <Card className="border-slate-200 shadow-sm overflow-hidden">
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50/50 border-b py-4 px-6 gap-4">
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50/50 border-b border-slate-200 py-4 px-6 gap-4">
               <CardTitle className="text-lg font-bold text-slate-900 px-0">Daftar Voucher User</CardTitle>
               <div className="relative w-full max-w-xs text-slate-900">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -438,7 +443,7 @@ export default function VouchersPage() {
             </CardHeader>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-slate-500 border-b">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 text-left font-semibold">Username</th>
                     <th className="px-6 py-4 text-left font-semibold">Password</th>
@@ -448,17 +453,17 @@ export default function VouchersPage() {
                     <th className="px-6 py-4 text-right font-semibold">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {filteredVouchers.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-50/80 transition-colors group">
-                      <td className="px-6 py-4">
-                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-100 group-hover:scale-105 transition-transform origin-left inline-block">
+                    <tr key={v.id} className="hover:bg-slate-50/80 transition-colors group border-b border-slate-200">
+                      <td className="px-6 py-4 text-slate-900">
+                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200 group-hover:scale-105 transition-transform origin-left inline-block">
                           {v.code}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 text-slate-900">
                         {v.password && v.password !== v.code ? (
-                          <span className="font-mono font-semibold text-orange-700 bg-orange-50 px-2.5 py-1 rounded border border-orange-100 inline-block">
+                          <span className="font-mono font-semibold text-orange-700 bg-orange-50 px-2.5 py-1 rounded border border-orange-200 inline-block">
                             {v.password}
                           </span>
                         ) : (
@@ -502,10 +507,10 @@ export default function VouchersPage() {
 
       {/* Edit Voucher Dialog */}
       <Dialog open={editDialog.open} onOpenChange={(open) => setEditDialog({ open, voucher: editDialog.voucher })}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-100">
+        <DialogContent className="sm:max-w-[500px] bg-white text-slate-900">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900">Detail Voucher</DialogTitle>
-            <DialogDescription className="text-slate-500 text-sm">
+            <DialogDescription className="text-slate-600 text-sm">
               Informasi detail dan opsi untuk voucher ini.
             </DialogDescription>
           </DialogHeader>
@@ -579,7 +584,7 @@ export default function VouchersPage() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ open, voucher: deleteDialog.voucher })}>
-        <DialogContent className="sm:max-w-[400px] bg-slate-100">
+        <DialogContent className="sm:max-w-[400px] bg-white text-slate-900">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
               <Trash2 className="w-5 h-5" /> Hapus Voucher

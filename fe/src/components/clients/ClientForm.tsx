@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Client, CreateClientRequest, ClientCategory, UpdateClientRequest } from '@/lib/api/clientService';
 import servicePackageService, { ServicePackage } from '@/lib/api/servicePackageService';
 import clientGroupService, { ClientGroup } from '@/lib/api/clientGroupService';
+import { discountService, Discount } from '@/lib/api/discountService';
 import type { TempoTemplate } from '@/lib/api/types';
 import { billingService } from '@/lib/api/billingService';
 import { Input } from '@/components/ui/input';
@@ -21,12 +22,12 @@ const clientSchema = z.object({
   address: z.string().min(5, 'Address must be at least 5 characters'),
   category: z.enum(['regular', 'business', 'enterprise', 'lite']),
   group_id: z.string().uuid('Invalid group ID').optional().or(z.literal('')),
+  discount_id: z.string().uuid('Invalid discount ID').optional().or(z.literal('')),
+  isolir_mode: z.enum(['auto', 'manual']).optional(),
   service_package_id: z.string().min(1, 'Service package is required'),
   pppoe_username: z.string().optional(),
   pppoe_password: z.string().optional(),
   device_count: z.number().int().min(1).optional().nullable(),
-  discount_type: z.enum(['percent', 'nominal']).optional().nullable(),
-  discount_value: z.number().min(0).optional().nullable(),
 });
 
 type ClientFormData = z.infer<typeof clientSchema>;
@@ -44,6 +45,8 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
   const [packagesLoading, setPackagesLoading] = useState(false);
   const [groups, setGroups] = useState<ClientGroup[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [discountsLoading, setDiscountsLoading] = useState(false);
   const [templates, setTemplates] = useState<TempoTemplate[]>([]);
   const [tempoError, setTempoError] = useState<string | null>(null);
   
@@ -69,12 +72,12 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       address: client?.address || '',
       category: (client?.category as ClientCategory) || 'regular',
       group_id: client?.group_id || '',
+      discount_id: client?.discount_id || '',
+      isolir_mode: (client as any)?.isolir_mode || 'auto',
       service_package_id: client?.service_package_id || '',
       pppoe_username: client?.pppoe_username || '',
       pppoe_password: '',
       device_count: client?.device_count ?? null,
-      discount_type: (client?.discount_type as 'percent' | 'nominal' | undefined) || null,
-      discount_value: client?.discount_value ?? null,
     },
   });
 
@@ -121,6 +124,26 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         // ignore - optional field
       } finally {
         if (alive) setGroupsLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setDiscountsLoading(true);
+      try {
+        const list = await discountService.getDiscounts(false, true); // Only valid discounts
+        if (!alive) return;
+        setDiscounts(Array.isArray(list) ? list : []);
+      } catch {
+        // ignore - optional field, but ensure discounts is always an array
+        if (alive) setDiscounts([]);
+      } finally {
+        if (alive) setDiscountsLoading(false);
       }
     })();
     return () => {
@@ -189,11 +212,11 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       category: data.category,
       service_package_id: data.service_package_id,
       group_id: data.group_id ? data.group_id : undefined,
+      isolir_mode: data.isolir_mode || 'auto',
       device_count: data.category === 'lite' ? data.device_count ?? undefined : undefined,
       pppoe_username: data.category !== 'lite' ? data.pppoe_username : undefined,
       pppoe_password: data.category !== 'lite' ? (data.pppoe_password || undefined) : undefined,
-      discount_type: data.discount_type || undefined,
-      discount_value: data.discount_value ?? undefined,
+      discount_id: data.discount_id ? data.discount_id : undefined,
     };
 
     // Attach payment tempo fields
@@ -296,6 +319,19 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             </select>
             {errors.group_id && <p className="mt-1 text-xs text-red-600">{errors.group_id.message}</p>}
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Isolir Mode
+            </label>
+            <select
+              {...register('isolir_mode')}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="auto">Auto Isolir</option>
+              <option value="manual">Manual Isolir</option>
+            </select>
+            {errors.isolir_mode && <p className="mt-1 text-xs text-red-600">{errors.isolir_mode.message}</p>}
+          </div>
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Address <span className="text-red-500">*</span>
@@ -383,31 +419,26 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Discount (Optional)</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Discount Type
+              Discount
             </label>
             <select
-              {...register('discount_type')}
+              {...register('discount_id')}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              disabled={discountsLoading}
             >
-              <option value="">No discount</option>
-              <option value="percent">Percent (%)</option>
-              <option value="nominal">Nominal (IDR)</option>
+              <option value="">{discountsLoading ? 'Loading discounts...' : 'No discount'}</option>
+              {Array.isArray(discounts) && discounts.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.type === 'percent' ? `${d.value}%` : `Rp ${d.value.toLocaleString('id-ID')}`})
+                  {d.expires_at && ` - Expires: ${new Date(d.expires_at).toLocaleDateString('id-ID')}`}
+                </option>
+              ))}
             </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Discount Value
-            </label>
-            <Input
-              type="number"
-              {...register('discount_value', { valueAsNumber: true })}
-              placeholder="0"
-              min={0}
-              disabled={!watch('discount_type')}
-              error={errors.discount_value?.message}
-            />
+            {errors.discount_id && (
+              <p className="mt-1 text-xs text-red-600">{errors.discount_id.message}</p>
+            )}
           </div>
         </div>
       </div>

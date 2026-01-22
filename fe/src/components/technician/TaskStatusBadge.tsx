@@ -15,6 +15,10 @@ export function TaskStatusBadge({ status, className }: TaskStatusBadgeProps) {
       colorClass = "bg-yellow-100 text-yellow-800";
       text = "Pending";
       break;
+    case "pending_approval":
+      colorClass = "bg-amber-100 text-amber-800";
+      text = "Waiting for Approval";
+      break;
     case "in_progress":
       colorClass = "bg-blue-100 text-blue-800";
       text = "In Progress";

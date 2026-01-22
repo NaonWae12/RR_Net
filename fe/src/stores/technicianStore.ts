@@ -50,8 +50,15 @@ export const useTechnicianStore = create<TechnicianState & TechnicianActions>((s
   error: null,
 
   fetchTasks: async (technicianId?: string) => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already fetching, skip this call
+    }
+    
     set({ loading: true, error: null });
     try {
+      // If technicianId is provided, use it; otherwise backend returns all tasks (for admin)
       const tasks = await technicianService.getTasks(technicianId);
       set({ tasks: tasks || [], loading: false });
     } catch (err) {
@@ -170,12 +177,14 @@ export const useTechnicianStore = create<TechnicianState & TechnicianActions>((s
   },
 
   fetchTaskSummary: async (technicianId?: string) => {
-    set({ loading: true, error: null });
+    // Allow concurrent call with fetchTasks - use separate check
+    // This can be called independently, so we'll allow it
+    set({ error: null });
     try {
       const summary = await technicianService.getTaskSummary(technicianId);
-      set({ summary, loading: false });
+      set({ summary });
     } catch (err) {
-      set({ error: toApiError(err).message, loading: false });
+      set({ error: toApiError(err).message });
     }
   },
 
@@ -194,6 +203,12 @@ export const useTechnicianStore = create<TechnicianState & TechnicianActions>((s
   },
 
   fetchActivityLogs: async (technicianId?: string, limit?: number) => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already fetching, skip this call
+    }
+    
     set({ loading: true, error: null });
     try {
       const logs = await technicianService.getActivityLogs(technicianId, limit);

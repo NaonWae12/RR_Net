@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, Package, Plus, Settings } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function SuperAdminDashboardPage() {
   const store = useSuperAdminStore();
@@ -28,6 +29,7 @@ export default function SuperAdminDashboardPage() {
   const plans = store.plans || [];
   const addons = store.addons || [];
   const { loading, fetchTenants, fetchPlans, fetchAddons } = store;
+  const { isAuthenticated } = useAuth();
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [systemHealth, setSystemHealth] = useState<SystemHealthData | undefined>();
   const [tenantMetrics, setTenantMetrics] = useState<TenantMetricsData | undefined>();
@@ -36,6 +38,9 @@ export default function SuperAdminDashboardPage() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
+    // Only fetch if authenticated
+    if (!isAuthenticated) return;
+    
     const loadDashboardData = async () => {
       setDashboardLoading(true);
       try {
@@ -175,8 +180,7 @@ export default function SuperAdminDashboardPage() {
     };
 
     loadDashboardData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, [isAuthenticated, fetchTenants, fetchPlans, fetchAddons]); // Run when authenticated or fetch functions change
 
   const isLoading = loading || dashboardLoading;
 

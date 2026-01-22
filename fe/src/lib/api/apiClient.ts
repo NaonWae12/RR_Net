@@ -14,7 +14,6 @@ export const apiClient = axios.create({
 let accessToken: string | null = null;
 let tenantSlug: string | null = null;
 let refreshToken: string | null = null;
-let csrfToken: string | null = null; // CSRF token from backend response header
 
 // Refresh token state to prevent concurrent refresh calls
 let isRefreshing = false;
@@ -25,7 +24,189 @@ let getRefreshTokenCallback: (() => string | null) | null = null;
 let onTokenRefreshedCallback: ((token: string, refreshToken: string) => void) | null = null;
 let refreshTokenCallback: (() => Promise<void>) | null = null;
 
+// ============================================================================
+// CSRF Token Management (HMR-safe)
+// ============================================================================
+// CSRF token is stored in sessionStorage to survive HMR/Fast Refresh.
+// The token is extracted from API responses and proactively fetched when needed.
+
+const CSRF_TOKEN_STORAGE_KEY = 'rrnet_csrf_token';
+
+// CSRF token initialization state
+let csrfTokenInitPromise: Promise<string | null> | null = null;
+let csrfTokenInitInProgress = false;
+
+// Request queue for state-changing requests waiting for CSRF token
+type QueuedRequest = {
+  resolve: (token: string | null) => void;
+  reject: (error: Error) => void;
+};
+let csrfTokenQueue: QueuedRequest[] = [];
+
+/**
+ * Get CSRF token from sessionStorage (HMR-safe)
+ */
+function getCSRFToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return sessionStorage.getItem(CSRF_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Set CSRF token in sessionStorage (HMR-safe)
+ */
+function setCSRFToken(token: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (token) {
+      sessionStorage.setItem(CSRF_TOKEN_STORAGE_KEY, token);
+    } else {
+      sessionStorage.removeItem(CSRF_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors (e.g., private browsing mode)
+  }
+}
+
+/**
+ * Fetch CSRF token from backend by making a lightweight GET request.
+ * Uses /auth/me as it's a simple authenticated endpoint that should return the token.
+ * Falls back to /clients/stats if /auth/me fails.
+ * Uses raw axios to avoid interceptor loops.
+ */
+async function fetchCSRFToken(): Promise<string | null> {
+  // Get current access token for authentication
+  let currentToken = accessToken;
+  try {
+    const authStore = (await import("@/stores/authStore")).useAuthStore;
+    if (authStore) {
+      const state = authStore.getState();
+      if (state.token) {
+        currentToken = state.token;
+      }
+    }
+  } catch {
+    // Ignore - use existing accessToken
+  }
+
+  const headers: Record<string, string> = {};
+  if (currentToken) {
+    headers.Authorization = `Bearer ${currentToken}`;
+  }
+  if (tenantSlug && tenantSlug.trim() !== '') {
+    headers['X-Tenant-Slug'] = tenantSlug;
+  }
+
+  // Try /auth/me first (lightweight, always available when authenticated)
+  try {
+    const response = await axios.get(`${API_BASE_URL}/auth/me`, {
+      withCredentials: true,
+      timeout: 5000,
+      headers,
+    });
+    const token = response.headers['x-csrf-token'];
+    if (token && typeof token === 'string') {
+      return token;
+    }
+  } catch (error) {
+    // Fallback to /clients/stats if /auth/me fails
+    try {
+      const response = await axios.get(`${API_BASE_URL}/clients/stats`, {
+        withCredentials: true,
+        timeout: 5000,
+        headers,
+      });
+      const token = response.headers['x-csrf-token'];
+      if (token && typeof token === 'string') {
+        return token;
+      }
+    } catch {
+      // Both endpoints failed
+    }
+  }
+  return null;
+}
+
+/**
+ * Ensure CSRF token is available. This function:
+ * 1. Checks sessionStorage first (fast path)
+ * 2. If missing, fetches from backend (only one fetch at a time)
+ * 3. Queues concurrent requests to avoid duplicate fetches
+ * 4. Returns a promise that resolves when token is available
+ */
+async function ensureCSRFToken(): Promise<string | null> {
+  // Fast path: token already in storage
+  const existingToken = getCSRFToken();
+  if (existingToken) {
+    return existingToken;
+  }
+
+  // If initialization is already in progress, wait for it
+  if (csrfTokenInitInProgress && csrfTokenInitPromise) {
+    return csrfTokenInitPromise;
+  }
+
+  // Start initialization
+  csrfTokenInitInProgress = true;
+  csrfTokenInitPromise = (async () => {
+    try {
+      const token = await fetchCSRFToken();
+      if (token) {
+        setCSRFToken(token);
+        // Resolve all queued requests
+        csrfTokenQueue.forEach(({ resolve }) => resolve(token));
+        csrfTokenQueue = [];
+        return token;
+      } else {
+        // No token available - reject queued requests
+        const error = new Error('Failed to obtain CSRF token from backend');
+        csrfTokenQueue.forEach(({ reject }) => reject(error));
+        csrfTokenQueue = [];
+        return null;
+      }
+    } catch (error) {
+      // Fetch failed - reject queued requests
+      const err = error instanceof Error ? error : new Error('CSRF token fetch failed');
+      csrfTokenQueue.forEach(({ reject }) => reject(err));
+      csrfTokenQueue = [];
+      throw err;
+    } finally {
+      csrfTokenInitInProgress = false;
+      csrfTokenInitPromise = null;
+    }
+  })();
+
+  return csrfTokenInitPromise;
+}
+
+/**
+ * Restore CSRF token from sessionStorage on module initialization.
+ * This ensures token is available immediately after HMR/Fast Refresh.
+ */
+function initializeCSRFToken(): void {
+  if (typeof window === 'undefined') return;
+  const storedToken = getCSRFToken();
+  if (storedToken) {
+    // Token exists in storage, no need to fetch
+    // It will be validated/refreshed on next API call if needed
+  }
+  // If no token, it will be fetched on first state-changing request
+}
+
+// Initialize on module load (survives HMR)
+if (typeof window !== 'undefined') {
+  initializeCSRFToken();
+}
+
 export const setAccessToken = (token: string | null) => {
+  // console.log('[AXIOS] setAccessToken called:', {
+  //   hasToken: !!token,
+  //   token: token ? token.substring(0, 20) + '...' : null,
+  //   stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n'),
+  // });
   accessToken = token;
 };
 
@@ -42,11 +223,6 @@ export const setRefreshTokenCallback = (
   onTokenRefreshedCallback = onRefreshed;
   refreshTokenCallback = refresh;
 };
-
-// Get CSRF token from stored value (set from response header)
-function getCSRFToken(): string | null {
-  return csrfToken;
-}
 
 // Decode JWT token to get expiration time (without verification)
 function getTokenExpiration(token: string): number | null {
@@ -89,20 +265,38 @@ apiClient.interceptors.request.use(
   // Get latest token from authStore if available (for better sync)
   // This ensures we always use the most up-to-date token
   let currentToken = accessToken;
+  // console.log('[AXIOS] Request interceptor - initial state:', {
+  //   url: config.url,
+  //   method: config.method,
+  //   accessToken: accessToken ? accessToken.substring(0, 20) + '...' : null,
+  // });
   try {
     // Try to get token from authStore if it's available
     const authStore = (await import("@/stores/authStore")).useAuthStore;
     if (authStore) {
       const state = authStore.getState();
+      // console.log('[AXIOS] Request interceptor - authStore state:', {
+      //   url: config.url,
+      //   isAuthenticated: state.isAuthenticated,
+      //   hasToken: !!state.token,
+      //   token: state.token ? state.token.substring(0, 20) + '...' : null,
+      // });
       if (state.token) {
         currentToken = state.token;
         // Sync apiClient token with store token
         if (currentToken !== accessToken) {
+          // console.log('[AXIOS] Syncing accessToken from authStore');
           accessToken = currentToken;
         }
+      } else {
+        // console.log('[AXIOS] WARNING: authStore has no token but isAuthenticated might be true:', {
+        //   url: config.url,
+        //   isAuthenticated: state.isAuthenticated,
+        // });
       }
     }
   } catch (e) {
+    // console.log('[AXIOS] Error getting token from authStore:', e);
     // Ignore - use existing accessToken
   }
     
@@ -163,6 +357,19 @@ apiClient.interceptors.request.use(
   // Add auth token
   if (currentToken) {
     config.headers.Authorization = `Bearer ${currentToken}`;
+    // console.log('[AXIOS] Authorization header set in interceptor:', {
+    //   url: config.url,
+    //   method: config.method,
+    //   hasToken: true,
+    //   tokenPreview: currentToken.substring(0, 20) + '...',
+    // });
+  } else {
+    // console.log('[AXIOS] WARNING: No token available in interceptor:', {
+    //   url: config.url,
+    //   method: config.method,
+    //   accessToken: accessToken ? accessToken.substring(0, 20) + '...' : null,
+    //   currentToken: null,
+    // });
   }
   
   // Add tenant slug (only if provided and not empty)
@@ -183,13 +390,33 @@ apiClient.interceptors.request.use(
     ];
     const isExempt = csrfExemptPaths.some((p) => url === p || url.startsWith(p + '?'));
 
-    const token = getCSRFToken();
+    // For non-exempt paths, ensure CSRF token is available before sending request
+    if (!isExempt) {
+      try {
+        const token = await ensureCSRFToken();
     if (token) {
       config.headers['X-CSRF-Token'] = token;
     } else {
-      // Avoid noisy warnings for CSRF-exempt auth endpoints
-      if (!isExempt) {
-        console.warn('[CSRF] Token not available for', config.method, config.url);
+          // Token fetch failed - this is a critical error
+          const error = new ApiError(
+            'CSRF token is required but could not be obtained. Please refresh the page.',
+            403,
+            'CSRF_TOKEN_MISSING'
+          );
+          console.error('[CSRF] Failed to obtain token for', config.method, config.url);
+          return Promise.reject(error);
+        }
+      } catch (error) {
+        // ensureCSRFToken() threw an error
+        const apiError = error instanceof ApiError 
+          ? error 
+          : new ApiError(
+              'Failed to obtain CSRF token. Please check your connection and try again.',
+              503,
+              'CSRF_TOKEN_FETCH_FAILED'
+            );
+        console.error('[CSRF] Error ensuring token for', config.method, config.url, error);
+        return Promise.reject(apiError);
       }
     }
   }
@@ -277,7 +504,7 @@ function getErrorMessage(error: AxiosError): string {
 // Retry configuration
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
-const RETRYABLE_STATUSES = [408, 429, 500, 502, 503, 504];
+const RETRYABLE_STATUSES = [408, 500, 502, 503, 504]; // Removed 429 - don't retry rate limit errors
 const RETRYABLE_CODES = ["ECONNABORTED", "ETIMEDOUT", "ERR_NETWORK"];
 
 // Check if error is retryable
@@ -285,13 +512,22 @@ function isRetryableError(error: AxiosError): boolean {
   const status = error?.response?.status;
   const code = error?.code;
   const url = (error?.config?.url ?? "").toString();
+  const method = error?.config?.method?.toUpperCase();
+
+  // Do NOT retry 429 (Too Many Requests) - this indicates rate limiting
+  // Retrying will only make it worse
+  if (status === 429) {
+    return false;
+  }
+
+  // Do NOT retry 500 errors for POST/PUT/PATCH/DELETE requests
+  // These are usually data validation or business logic errors that won't change with retry
+  // Only retry 500 for GET requests (which might be transient server issues)
+  if (status === 500 && method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    return false;
+  }
 
   if (status && RETRYABLE_STATUSES.includes(status)) {
-    // Do NOT retry 429 for wa-gateway polling endpoints.
-    // The backend returns Retry-After; the UI should back off instead of spamming.
-    if (status === 429 && url.includes("/wa-gateway/")) {
-      return false;
-    }
     return true;
   }
 
@@ -318,8 +554,12 @@ apiClient.interceptors.response.use(
     // Axios normalizes headers to lowercase in response.headers object
     const token = response.headers['x-csrf-token'];
     if (token && typeof token === 'string') {
-      csrfToken = token;
+      setCSRFToken(token);
+      // Only log if token changed (avoid noise)
+      const existingToken = getCSRFToken();
+      if (existingToken !== token) {
       console.log('[CSRF] Token extracted from success response:', token.substring(0, 10) + '...');
+      }
     }
     return response;
   },
@@ -332,15 +572,18 @@ apiClient.interceptors.response.use(
       // Try both lowercase and original case (axios may or may not normalize error headers)
       const token = (headers['x-csrf-token'] || (headers as any)['X-CSRF-Token']) as string | undefined;
       if (token && typeof token === 'string') {
-        csrfToken = token;
+        setCSRFToken(token);
+        // Only log if token changed (avoid noise)
+        const existingToken = getCSRFToken();
+        if (existingToken !== token) {
         console.log('[CSRF] Token extracted from error response:', token.substring(0, 10) + '...');
-      } else {
-        // Debug: log available headers to see what we have
-        console.warn('[CSRF] Token not found in error response headers. Available headers:', Object.keys(headers));
+        }
       }
+      // Removed noisy warning - token extraction from error responses is opportunistic
     }
     const originalRequest = error.config as InternalAxiosRequestConfig & { 
       _retry?: boolean;
+      _retryOnce?: boolean; // Flag for simple token retry (before refresh token logic)
       _retryCount?: number;
     };
 
@@ -352,6 +595,68 @@ apiClient.interceptors.response.use(
     const status = error?.response?.status;
     
     // Handle 401 Unauthorized - try to refresh token
+    // if (status === 401) {
+    //   console.log('[401 DEBUG] Unauthorized response:', {
+    //     url: originalRequest?.url,
+    //     method: originalRequest?.method,
+    //     authHeader: originalRequest?.headers?.Authorization || 'MISSING',
+    //     hasAuthHeader: !!originalRequest?.headers?.Authorization,
+    //     accessToken: accessToken ? accessToken.substring(0, 20) + '...' : null,
+    //     _retry: originalRequest._retry,
+    //     _retryOnce: originalRequest._retryOnce,
+    //   });
+    // }
+    
+    // OPTION A: Retry-once dengan token dari authStore (defensive fix untuk timing issue)
+    // Hanya retry sekali jika token tersedia di authStore tapi belum terpasang di request
+    if (status === 401 && !originalRequest._retryOnce) {
+      originalRequest._retryOnce = true;
+      
+      try {
+        // Ambil token terbaru dari authStore
+        const authStore = (await import("@/stores/authStore")).useAuthStore;
+        if (authStore) {
+          const state = authStore.getState();
+          const token = state.token;
+          
+          if (token) {
+            // console.log('[401 RETRY] Retrying once with token from authStore:', {
+            //   url: originalRequest?.url,
+            //   method: originalRequest?.method,
+            // });
+            
+            // Set token di header dan retry sekali
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            // Sync accessToken variable juga
+            accessToken = token;
+            
+            // Retry request sekali
+            return apiClient(originalRequest);
+          }
+        }
+      } catch (e) {
+        // Ignore error, fall through to refresh token logic
+        // console.log('[401 RETRY] Failed to get token from authStore, falling through to refresh logic');
+      }
+    }
+    
+    // Handle 401 Unauthorized - try to refresh token (existing logic)
+    // SAFETY NET: Dashboard endpoints are best-effort, don't trigger logout on 401
+    // Only critical auth endpoints should trigger logout
+    const url = (originalRequest?.url ?? '').toString();
+    const isDashboardEndpoint = 
+      url.includes('/clients/stats') ||
+      url.includes('/my/plan') ||
+      url.includes('/my/features') ||
+      url.includes('/my/limits') ||
+      url.includes('/tenant/me');
+    
+    const isCriticalAuthEndpoint = 
+      url.includes('/auth/me') ||
+      url.includes('/auth/logout');
+    
     if (status === 401 && !originalRequest._retry && refreshTokenCallback && getRefreshTokenCallback) {
       originalRequest._retry = true;
       const currentRefreshToken = getRefreshTokenCallback();
@@ -384,12 +689,27 @@ apiClient.interceptors.response.use(
           
           return apiClient(originalRequest);
         } catch (refreshError) {
-          if (onTokenRefreshedCallback) {
-            onTokenRefreshedCallback("", "");
+          // Only trigger logout for critical auth endpoints
+          // Dashboard endpoints should fail gracefully without logout
+          if (isCriticalAuthEndpoint) {
+            if (onTokenRefreshedCallback) {
+              onTokenRefreshedCallback("", "");
+            }
+            return Promise.reject(
+              new ApiError("Session expired. Please log in again.", 401, "SESSION_EXPIRED")
+            );
+          } else {
+            // For dashboard endpoints, just reject with error but don't trigger logout
+            return Promise.reject(
+              new ApiError(
+                isDashboardEndpoint 
+                  ? "Dashboard data unavailable. Auth may not be ready yet."
+                  : "Unauthorized. Please check your authentication.",
+                401,
+                isDashboardEndpoint ? "DASHBOARD_UNAUTHORIZED" : "UNAUTHORIZED"
+              )
+            );
           }
-          return Promise.reject(
-            new ApiError("Session expired. Please log in again.", 401, "SESSION_EXPIRED")
-          );
         } finally {
           isRefreshing = false;
           onTokenRefreshed();
@@ -403,6 +723,20 @@ apiClient.interceptors.response.use(
             resolve(apiClient(originalRequest));
           });
         });
+      }
+    }
+    
+    // If 401 and no refresh token available, only trigger logout for critical endpoints
+    if (status === 401 && !originalRequest._retry && (!refreshTokenCallback || !getRefreshTokenCallback || !getRefreshTokenCallback())) {
+      if (isCriticalAuthEndpoint) {
+        return Promise.reject(
+          new ApiError("Session expired. Please log in again.", 401, "SESSION_EXPIRED")
+        );
+      } else if (isDashboardEndpoint) {
+        // Dashboard endpoints fail gracefully without logout
+        return Promise.reject(
+          new ApiError("Dashboard data unavailable. Auth may not be ready yet.", 401, "DASHBOARD_UNAUTHORIZED")
+        );
       }
     }
     

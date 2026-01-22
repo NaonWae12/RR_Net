@@ -15,8 +15,10 @@ interface TaskCardProps {
 export function TaskCard({ task, onStart, onComplete, showActions = true }: TaskCardProps) {
   const router = useRouter();
 
-  const canStart = task.status === "pending";
-  const canComplete = task.status === "in_progress" || task.status === "pending";
+  // Disable actions if task is pending approval
+  const isPendingApproval = task.status === "pending_approval";
+  const canStart = task.status === "pending" && !isPendingApproval;
+  const canComplete = (task.status === "in_progress" || task.status === "pending") && !isPendingApproval;
 
   return (
     <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
@@ -25,9 +27,32 @@ export function TaskCard({ task, onStart, onComplete, showActions = true }: Task
           <h3 className="font-semibold text-lg text-slate-900">{task.title}</h3>
           <p className="text-sm text-slate-600 mt-1">{task.description}</p>
         </div>
-        <div className="flex space-x-2">
-          <TaskStatusBadge status={task.status} />
-          <TaskPriorityBadge priority={task.priority} />
+        <div className="flex flex-col items-end space-y-1">
+          <div className="flex space-x-2">
+            <TaskStatusBadge status={task.status} />
+            <TaskPriorityBadge priority={task.priority} />
+          </div>
+          {/* Approval status badge */}
+          {task.approval_status && (
+            <span
+              className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
+                task.approval_status === "approved"
+                  ? "bg-green-100 text-green-800"
+                  : task.approval_status === "rejected"
+                  ? "bg-red-100 text-red-800"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {task.approval_status === "approved"
+                ? "✓ Approved"
+                : task.approval_status === "rejected"
+                ? "✗ Rejected"
+                : "⏳ Pending Approval"}
+            </span>
+          )}
+          {task.approval_feedback && task.approval_status === "rejected" && (
+            <p className="text-xs text-red-600 mt-1 max-w-xs text-right">{task.approval_feedback}</p>
+          )}
         </div>
       </div>
 

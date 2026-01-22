@@ -2,17 +2,12 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/google/uuid"
 
 	"rrnet/internal/repository"
 )
 
-var (
-	ErrDiscountTypeInvalid  = errors.New("invalid discount type")
-	ErrDiscountValueInvalid = errors.New("invalid discount value")
-)
 
 type ServiceDiscountType string
 

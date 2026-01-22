@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { authService } from "../lib/api/authService";
 import { setAccessToken, setTenantSlug as setApiTenantSlug, setRefreshTokenCallback } from "../lib/api/apiClient";
+import { clearRoleContext } from "../lib/utils/roleContext";
 import type { LoginRequest, LoginResponse, Tenant, User } from "../lib/api/types";
 
 type AuthState = {
@@ -13,6 +14,7 @@ type AuthState = {
   error: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
+  ready: boolean; // True only after: hydration complete + token synced to apiClient + refresh (if any) complete
 };
 
 type AuthActions = {
@@ -59,8 +61,19 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   error: null,
   isAuthenticated: false,
   isHydrated: false,
+  ready: false,
 
-  hydrate: (data) => set((s) => ({ ...s, ...data })),
+  hydrate: (data) => {
+    const newState = { ...data };
+    // console.log('[AUTH] hydrate called:', {
+    //   isAuthenticated: newState.isAuthenticated,
+    //   token: newState.token ? `${newState.token.substring(0, 20)}...` : null,
+    //   hasToken: !!newState.token,
+    // });
+    set((s) => ({ ...s, ...newState }));
+    const finalState = useAuthStore.getState();
+    // console.log('[AUTH] after hydrate - isAuthenticated:', finalState.isAuthenticated, 'token:', finalState.token ? `${finalState.token.substring(0, 20)}...` : null);
+  },
 
   setTenantSlug: (slug) => set({ tenantSlug: slug }),
 
@@ -77,7 +90,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       setAccessToken(res.access_token);
       setApiTenantSlug(slug ?? null);
       
-      set({
+      const newState = {
         user: res.user,
         tenant: res.tenant ?? null,
         token: res.access_token,
@@ -86,8 +99,17 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         isLoading: false,
         error: null,
         isAuthenticated: true,
-      });
+        ready: true, // Login complete, auth is ready
+      };
+      // console.log('[AUTH] login success - setting state:', {
+      //   isAuthenticated: newState.isAuthenticated,
+      //   token: newState.token ? `${newState.token.substring(0, 20)}...` : null,
+      //   hasToken: !!newState.token,
+      // });
+      set(newState);
       persistState(get());
+      const afterState = get();
+      // console.log('[AUTH] after login set - isAuthenticated:', afterState.isAuthenticated, 'token:', afterState.token ? `${afterState.token.substring(0, 20)}...` : null);
     } catch (err: any) {
       set({ error: err?.response?.data?.error ?? "Login failed", isLoading: false });
       throw err;
@@ -116,11 +138,14 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       error: null,
       isAuthenticated: false,
       isHydrated: true, // Keep hydrated flag true after logout
+      ready: true, // After logout, auth state is "ready" (no auth, but state is clear)
     });
     
     // Clear localStorage
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
+      // Clear role context on logout
+      clearRoleContext();
     }
   },
 
@@ -128,7 +153,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     const refreshToken = get().refreshToken;
     if (!refreshToken) {
       // No refresh token available - clear auth state silently
-      set({ token: null, refreshToken: null, user: null, isAuthenticated: false });
+      set({ token: null, refreshToken: null, user: null, isAuthenticated: false, ready: true });
       setAccessToken(null);
       persistState(get());
       return;
@@ -139,13 +164,21 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         user: res.user,
         token: res.access_token,
         refreshToken: res.refresh_token,
+        isAuthenticated: true,
+        ready: true, // Refresh complete, auth is ready
       };
+      // console.log('[AUTH] refresh success - setting state:', {
+      //   isAuthenticated: !!newState.token,
+      //   token: newState.token ? `${newState.token.substring(0, 20)}...` : null,
+      // });
       set(newState);
       setAccessToken(res.access_token);
       persistState(get());
+      const afterState = get();
+      // console.log('[AUTH] after refresh - isAuthenticated:', !!afterState.token, 'token:', afterState.token ? `${afterState.token.substring(0, 20)}...` : null);
     } catch (err) {
       // Refresh failed - clear auth state
-      set({ token: null, refreshToken: null, user: null, isAuthenticated: false });
+      set({ token: null, refreshToken: null, user: null, isAuthenticated: false, ready: true });
       setAccessToken(null);
       persistState(get());
       // Don't throw - let the app continue without auth
@@ -174,26 +207,60 @@ if (typeof window !== "undefined") {
   );
 }
 
-// Hydrate once on module load (client-side only)
+  // Hydrate once on module load (client-side only)
 if (typeof window !== "undefined") {
+  // console.log('[AUTH] Module load - starting hydration');
   const snapshot = loadPersisted();
+  // console.log('[AUTH] Loaded from localStorage:', {
+  //   hasToken: !!snapshot.token,
+  //   token: snapshot.token ? `${snapshot.token.substring(0, 20)}...` : null,
+  //   isAuthenticated: snapshot.isAuthenticated,
+  // });
   
-  // Set isAuthenticated based on token presence
-  const hydratedData: Partial<AuthState> = {
-    ...snapshot,
-    isAuthenticated: !!snapshot.token,
-    isLoading: false, // Ensure loading is false after hydrate
-    isHydrated: true, // Mark as hydrated
-  };
-  
-  useAuthStore.getState().hydrate(hydratedData);
-  
-  // Also set API client credentials from persisted state
-  if (snapshot.token) {
-    setAccessToken(snapshot.token);
-  }
-  if (snapshot.tenantSlug) {
-    setApiTenantSlug(snapshot.tenantSlug);
-  }
+      // Set isAuthenticated based on token presence
+      const hydratedData: Partial<AuthState> = {
+        ...snapshot,
+        isAuthenticated: !!snapshot.token,
+        isLoading: false, // Ensure loading is false after hydrate
+        isHydrated: true, // Mark as hydrated
+        ready: false, // Not ready yet - will be set after token sync and refresh check
+      };
+      
+      // console.log('[AUTH] Calling hydrate with:', {
+      //   isAuthenticated: hydratedData.isAuthenticated,
+      //   token: hydratedData.token ? `${hydratedData.token.substring(0, 20)}...` : null,
+      // });
+      
+      useAuthStore.getState().hydrate(hydratedData);
+      
+      // Also set API client credentials from persisted state
+      if (snapshot.token) {
+        // console.log('[AUTH] Setting accessToken in apiClient:', snapshot.token.substring(0, 20) + '...');
+        setAccessToken(snapshot.token);
+      }
+      if (snapshot.tenantSlug) {
+        setApiTenantSlug(snapshot.tenantSlug);
+      }
+      
+      // Check if we need to refresh token
+      // If we have a refreshToken but no token, AuthProvider will trigger refresh
+      // Otherwise, if we have token, mark as ready immediately (token sync already done above)
+      const needsRefresh = snapshot.refreshToken && !snapshot.token;
+      
+      // If no refresh needed (we have token or no refreshToken), mark as ready immediately
+      // Token is already synced to apiClient above, so we're ready
+      if (!needsRefresh) {
+        useAuthStore.getState().hydrate({ ready: true });
+      }
+      // If refresh is needed, AuthProvider will trigger it
+      // ready will be set to true in refresh() method after refresh completes
+      
+      const finalState = useAuthStore.getState();
+      // console.log('[AUTH] Hydration complete:', {
+      //   isAuthenticated: finalState.isAuthenticated,
+      //   token: finalState.token ? `${finalState.token.substring(0, 20)}...` : null,
+      //   isHydrated: finalState.isHydrated,
+      //   ready: finalState.ready,
+      // });
 }
 

@@ -1,17 +1,30 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTechnicianStore } from "@/stores/technicianStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { format } from "date-fns";
 import { ActivityLog } from "@/lib/api/types";
+import { useRole } from "@/lib/hooks/useRole";
+import { Button } from "@/components/ui/button";
+import { PlusIcon } from "@heroicons/react/20/solid";
+import { LogActivityModal } from "@/components/technician/LogActivityModal";
+import { useNotificationStore } from "@/stores/notificationStore";
+import { RoleGuard } from "@/components/guards/RoleGuard";
 
 export default function ActivitiesPage() {
-  const { activityLogs, loading, error, fetchActivityLogs } = useTechnicianStore();
+  const { activityLogs, loading, error, fetchActivityLogs, logActivity } = useTechnicianStore();
+  const { isTechnician, canViewAllActivities, userId } = useRole();
+  const { showToast } = useNotificationStore();
+  const [showLogActivityModal, setShowLogActivityModal] = useState(false);
 
   useEffect(() => {
-    fetchActivityLogs(undefined, 100);
-  }, [fetchActivityLogs]);
+    // For technician: only fetch own activities
+    // For admin: fetch all activities
+    // Pass technician_id as query param (backend expects UUID string)
+    const technicianId = isTechnician && userId ? userId : undefined;
+    fetchActivityLogs(technicianId, 100);
+  }, [fetchActivityLogs, isTechnician, userId]);
 
   if (error) {
     return (
@@ -21,9 +34,28 @@ export default function ActivitiesPage() {
     );
   }
 
+  const handleLogActivitySuccess = async () => {
+    setShowLogActivityModal(false);
+    const technicianId = isTechnician ? userId : undefined;
+    await fetchActivityLogs(technicianId, 100);
+    showToast({
+      title: "Activity logged",
+      description: "Activity has been logged successfully.",
+      variant: "success",
+    });
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">Activity Logs</h1>
+    <RoleGuard allowedRoles={["owner", "admin", "technician"]} redirectTo="/dashboard">
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-slate-900">
+            {isTechnician ? "My Activities" : "Activity Logs"}
+          </h1>
+          <Button onClick={() => setShowLogActivityModal(true)}>
+            <PlusIcon className="h-5 w-5 mr-2" /> Log Activity
+          </Button>
+        </div>
 
       {loading ? (
         <div className="flex justify-center items-center h-48">
@@ -73,7 +105,16 @@ export default function ActivitiesPage() {
           ))}
         </div>
       )}
-    </div>
+
+      {/* Log Activity Modal */}
+      {showLogActivityModal && (
+        <LogActivityModal
+          onClose={() => setShowLogActivityModal(false)}
+          onSuccess={handleLogActivitySuccess}
+        />
+      )}
+      </div>
+    </RoleGuard>
   );
 }
 

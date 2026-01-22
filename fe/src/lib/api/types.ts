@@ -37,6 +37,27 @@ export interface LoginResponse {
 export type InvoiceStatus = "draft" | "pending" | "paid" | "overdue" | "cancelled";
 export type PaymentMethod = "cash" | "bank_transfer" | "e_wallet" | "qris" | "virtual_account" | "collector";
 
+// ========== Collector Types (FE-only) ==========
+export type CollectorWorkflowStatus = "assigned" | "visit_success" | "visit_failed" | "deposited" | "confirmed";
+
+export interface CollectorAssignment {
+  invoice_id: string;
+  invoice: Invoice;
+  workflow_status: CollectorWorkflowStatus;
+  assigned_at?: string;
+  visit_notes?: string;
+  visit_photo_url?: string;
+  deposit_proof_url?: string;
+  deposit_submitted_at?: string;
+  confirmed_at?: string;
+  // FE-only fields for state management
+  _local_state?: {
+    visit_notes?: string;
+    visit_photo_file?: File;
+    deposit_proof_file?: File;
+  };
+}
+
 export interface TempoTemplate {
   id: string;
   tenant_id?: string;
@@ -475,7 +496,7 @@ export interface NearestODPResponse {
 
 // ========== Technician Types ==========
 
-export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
+export type TaskStatus = "pending" | "pending_approval" | "in_progress" | "completed" | "cancelled";
 export type TaskType = "installation" | "maintenance" | "repair" | "inspection" | "outage" | "other";
 export type TaskPriority = "low" | "normal" | "high" | "critical";
 
@@ -502,6 +523,11 @@ export interface TechnicianTask {
   notes?: string;
   created_at: string;
   updated_at: string;
+  // Approval fields (FE-only for now, backend will support later)
+  approval_status?: "pending" | "approved" | "rejected";
+  approval_feedback?: string; // Feedback if rejected
+  approved_by?: string;
+  approved_at?: string;
 }
 
 export interface ActivityLog {
@@ -583,6 +609,237 @@ export interface TaskListResponse {
 
 export interface ActivityLogListResponse {
   data: ActivityLog[];
+  total: number;
+}
+
+// ========== Attendance Types ==========
+
+export type AttendanceStatus = "checked_in" | "checked_out" | "absent" | "on_leave";
+
+export interface Attendance {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  date: string; // YYYY-MM-DD
+  check_in_time?: string;
+  check_out_time?: string;
+  status: AttendanceStatus;
+  note?: string;
+  location_latitude?: number;
+  location_longitude?: number;
+  total_hours?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CheckInRequest {
+  note?: string;
+  location_latitude?: number;
+  location_longitude?: number;
+}
+
+export interface CheckOutRequest {
+  note?: string;
+  location_latitude?: number;
+  location_longitude?: number;
+}
+
+export interface AttendanceListResponse {
+  data: Attendance[];
+  total: number;
+}
+
+// ========== Payslip Types ==========
+
+export type PayslipStatus = "generated" | "paid";
+
+export interface Payslip {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  period: string; // YYYY-MM format
+  gross_salary: number;
+  deductions: number;
+  allowances: number;
+  net_salary: number;
+  status: PayslipStatus;
+  paid_at?: string;
+  pdf_url?: string;
+  breakdown?: PayslipBreakdown;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayslipBreakdown {
+  basic_salary?: number;
+  overtime?: number;
+  bonuses?: number;
+  allowances?: PayslipAllowance[];
+  tax?: number;
+  insurance?: number;
+  other_deductions?: PayslipDeduction[];
+}
+
+export interface PayslipAllowance {
+  name: string;
+  amount: number;
+}
+
+export interface PayslipDeduction {
+  name: string;
+  amount: number;
+}
+
+export interface PayslipListResponse {
+  data: Payslip[];
+  total: number;
+}
+
+// ========== Reimbursement Types ==========
+
+export type ReimbursementStatus = "submitted" | "approved" | "rejected";
+export type ReimbursementCategory = "transport" | "meal" | "accommodation" | "equipment" | "other";
+
+export interface Reimbursement {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  amount: number;
+  category: ReimbursementCategory;
+  description: string;
+  date: string; // YYYY-MM-DD
+  attachment_url?: string;
+  status: ReimbursementStatus;
+  rejection_reason?: string;
+  approved_by?: string;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateReimbursementRequest {
+  amount: number;
+  category: ReimbursementCategory;
+  description: string;
+  date: string; // YYYY-MM-DD
+  attachment?: File; // Will be handled separately for upload
+}
+
+export interface ReimbursementListResponse {
+  data: Reimbursement[];
+  total: number;
+}
+
+// ========== Time Off Types ==========
+
+export type TimeOffType = "leave" | "sick" | "emergency";
+export type TimeOffStatus = "pending_approval" | "approved" | "rejected";
+
+export interface TimeOff {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  type: TimeOffType;
+  start_date: string; // YYYY-MM-DD
+  end_date: string; // YYYY-MM-DD
+  reason: string;
+  attachment_url?: string;
+  status: TimeOffStatus;
+  rejection_reason?: string;
+  approved_by?: string;
+  approved_at?: string;
+  days_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTimeOffRequest {
+  type: TimeOffType;
+  start_date: string; // YYYY-MM-DD
+  end_date: string; // YYYY-MM-DD
+  reason: string;
+  attachment?: File; // Will be handled separately for upload
+}
+
+export interface TimeOffListResponse {
+  data: TimeOff[];
+  total: number;
+}
+
+// ========== Location Submission Types ==========
+
+export type LocationType = "client" | "odc" | "odp";
+export type LocationSubmissionStatus = "pending_admin_review" | "approved" | "rejected";
+
+export interface LocationSubmission {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  location_type: LocationType;
+  latitude: number;
+  longitude: number;
+  note?: string;
+  photo_url?: string;
+  status: LocationSubmissionStatus;
+  rejection_reason?: string;
+  approved_by?: string;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateLocationSubmissionRequest {
+  location_type: LocationType;
+  latitude: number;
+  longitude: number;
+  note?: string;
+  photo?: File;
+}
+
+export interface LocationSubmissionListResponse {
+  data: LocationSubmission[];
+  total: number;
+}
+
+// ========== Client Submission Types ==========
+
+export type ClientSubmissionStatus = "pending_admin_approval" | "approved" | "rejected";
+
+export interface ClientSubmission {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  category?: string;
+  service_package_id?: string;
+  latitude?: number;
+  longitude?: number;
+  photo_url?: string;
+  status: ClientSubmissionStatus;
+  rejection_reason?: string;
+  approved_by?: string;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateClientSubmissionRequest {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  category?: string;
+  service_package_id?: string;
+  latitude?: number;
+  longitude?: number;
+  photo?: File;
+}
+
+export interface ClientSubmissionListResponse {
+  data: ClientSubmission[];
   total: number;
 }
 

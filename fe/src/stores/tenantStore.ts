@@ -53,6 +53,12 @@ export const useTenantStore = create<TenantState & TenantActions>((set, get) => 
   },
 
   resolveTenant: async (slugOptional) => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already resolving, skip this call
+    }
+    
     const slug = slugOptional ?? get().slug;
     if (!slug) {
       set({ tenant: null, resolved: true, loading: false, error: null });

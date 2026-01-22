@@ -84,7 +84,7 @@ export function ConfirmModal({
       onClose={onClose}
       size="sm"
       title={title}
-      className={className}
+      className={className || "bg-white"}
       footer={
         <div className="flex items-center justify-end gap-2 w-full">
           <Button variant="outline" onClick={onClose} disabled={loading}>

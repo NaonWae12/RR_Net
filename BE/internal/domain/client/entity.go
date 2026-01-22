@@ -41,6 +41,7 @@ type Client struct {
 	Longitude   *float64        `json:"longitude,omitempty"`
 	ODPID       *uuid.UUID      `json:"odp_id,omitempty"`
 	GroupID     *uuid.UUID      `json:"group_id,omitempty"`
+	DiscountID  *uuid.UUID      `json:"discount_id,omitempty"`
 
 	// Service (new model)
 	Category         Category   `json:"category"`
@@ -113,6 +114,7 @@ type ClientListFilter struct {
 	Status     *Status `json:"status,omitempty"`
 	Category   *Category `json:"category,omitempty"`
 	Search     string  `json:"search,omitempty"` // Search in name, phone, client_code
+	GroupID    *uuid.UUID `json:"group_id,omitempty"` // Filter by client group
 	Page       int     `json:"page,omitempty"`
 	PageSize   int     `json:"page_size,omitempty"`
 }

@@ -27,7 +27,7 @@ export function OverdueInvoicesAlert({ invoices }: OverdueInvoicesAlertProps) {
             You have {invoices.length} invoice{invoices.length > 1 ? "s" : ""} that are past due date.
           </p>
           <button
-            onClick={() => router.push("/billing/invoices?status=overdue")}
+            onClick={() => router.push("/billing?tab=invoices&status=overdue")}
             className="text-sm font-medium text-red-800 hover:text-red-900 mt-2 underline"
           >
             View overdue invoices →

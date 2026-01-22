@@ -110,7 +110,7 @@ export function LogsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-6 space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 space-y-4 text-slate-900">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Logs</h2>
           <p className="text-sm text-slate-600 mt-1">Riwayat pengiriman WA (Single / Campaign / System).</p>
@@ -124,7 +124,7 @@ export function LogsTab() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Source</label>
             <select
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
               value={source}
               onChange={(e) => setSource(e.target.value)}
               disabled={loading}
@@ -138,7 +138,7 @@ export function LogsTab() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Status</label>
             <select
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               disabled={loading}
@@ -158,7 +158,7 @@ export function LogsTab() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 text-slate-900">
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-900">Log list</div>
           <div className="text-xs text-slate-500">{items.length} rows</div>
@@ -167,7 +167,7 @@ export function LogsTab() {
         <div className="mt-3 overflow-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-slate-500 border-b">
+              <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
                 <th className="py-2 pr-2">Time</th>
                 <th className="py-2 pr-2">Source</th>
                 <th className="py-2 pr-2">To / Client</th>
@@ -178,7 +178,7 @@ export function LogsTab() {
             </thead>
             <tbody>
               {items.map((r) => (
-                <tr key={r.id} className="border-b last:border-b-0 align-top">
+                <tr key={r.id} className="border-b border-slate-200 last:border-b-0 align-top">
                   <td className="py-2 pr-2 text-xs text-slate-600 whitespace-nowrap">
                     {new Date(r.created_at).toLocaleString()}
                   </td>
@@ -188,7 +188,7 @@ export function LogsTab() {
                     </span>
                   </td>
                   <td className="py-2 pr-2">
-                    <div className="font-mono text-xs">{r.to_phone}</div>
+                    <div className="font-mono text-xs text-slate-900">{r.to_phone}</div>
                     <div className="text-xs text-slate-600">{r.client_name || "-"}</div>
                   </td>
                   <td className="py-2 pr-2">

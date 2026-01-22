@@ -6,18 +6,25 @@ import { TenantGuard } from "@/components/auth/TenantGuard";
 import { AppLayout } from "@/components/layout";
 import { useDashboardStore } from "@/stores/dashboardStore";
 import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useAuthStore } from "@/stores/authStore";
 
 function TenantFeatureBootstrap({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { data, loading, fetchDashboardData } = useDashboardStore();
+  const { isAuthenticated } = useAuth();
+
+  const ready = useAuthStore((state) => state.ready);
 
   useEffect(() => {
     // Ensure we have plan/features/limits available for sidebar gating and route guards.
-    if (!data && !loading) {
+    // CRITICAL: Only fetch if auth is READY (not just authenticated)
+    // This ensures token is fully synced to apiClient before making requests
+    if (ready && isAuthenticated && !data && !loading) {
       fetchDashboardData();
     }
-  }, [data, loading, fetchDashboardData]);
+  }, [data, loading, fetchDashboardData, isAuthenticated, ready]);
 
   useEffect(() => {
     // Wait until we have tenant feature data
@@ -40,16 +47,51 @@ function TenantFeatureBootstrap({ children }: { children: React.ReactNode }) {
     const needsEmployees = pathname.startsWith("/employees");
     const needsServiceSetup = pathname.startsWith("/service-setup");
 
+    // Technician routes that require feature gating (maps-related)
+    const technicianRoutesRequiringFeature = [
+      "/technician/clients/submit",
+      "/technician/clients/submissions"
+    ];
+    const needsTechnicianFeature = needsTechnician && 
+      (pathname.startsWith("/technician/clients") || pathname === "/technician/clients");
+
+    // Technician routes that don't require feature gating (basic technician features)
+    const technicianBasicRoutes = [
+      "/technician/attendance",
+      "/technician/reimbursement",
+      "/technician/payslip",
+      "/technician/time-off",
+      "/technician/tasks",
+      "/technician/activities"
+    ];
+    const isTechnicianBasicRoute = technicianBasicRoutes.some(route => pathname.startsWith(route));
+
     if (needsReports) {
       router.replace("/dashboard");
       return;
     }
 
-    if (needsMaps || needsTechnician) {
+    // Maps route requires feature
+    if (needsMaps) {
       const ok = hasAnyFeature(["odp_maps", "client_maps"]);
       if (!ok) {
         router.replace("/dashboard");
       }
+      return;
+    }
+
+    // Technician client submission routes require feature
+    if (needsTechnicianFeature) {
+      const ok = hasAnyFeature(["odp_maps", "client_maps"]);
+      if (!ok) {
+        router.replace("/dashboard");
+      }
+      return;
+    }
+
+    // Basic technician routes (attendance, reimbursement, etc.) don't require feature gating
+    // These are handled by RoleGuard at the page level
+    if (isTechnicianBasicRoute) {
       return;
     }
 

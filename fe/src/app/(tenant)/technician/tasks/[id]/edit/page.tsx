@@ -9,6 +9,7 @@ import { UpdateTaskRequest } from "@/lib/api/types";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { ArrowLeftIcon } from "@heroicons/react/20/solid";
 import { Button } from "@/components/ui/button";
+import { RoleGuard } from "@/components/guards/RoleGuard";
 
 export default function EditTaskPage() {
   const { id } = useParams<{ id: string }>();
@@ -73,15 +74,17 @@ export default function EditTaskPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={handleCancel}>
-          <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back to Task Details
-        </Button>
+    <RoleGuard allowedRoles={["owner", "admin"]} redirectTo={`/technician/tasks/${id}`}>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <Button variant="outline" onClick={handleCancel}>
+            <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back to Task Details
+          </Button>
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900">Edit Task: {task.title}</h1>
+        <TaskForm initialData={task} onSubmit={handleSubmit} onCancel={handleCancel} isLoading={loading} />
       </div>
-      <h1 className="text-2xl font-bold text-slate-900">Edit Task: {task.title}</h1>
-      <TaskForm initialData={task} onSubmit={handleSubmit} onCancel={handleCancel} isLoading={loading} />
-    </div>
+    </RoleGuard>
   );
 }
 

@@ -55,7 +55,7 @@ export default function WhatsAppGatewayPage() {
                 </div>
             </div>
 
-            <div className="rounded-lg border bg-white overflow-hidden">
+            <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
                 <TabLayout tabs={tabs} defaultTab="device" className="w-full" />
             </div>
         </div>

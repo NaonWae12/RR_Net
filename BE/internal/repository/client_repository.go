@@ -34,18 +34,18 @@ func (r *ClientRepository) Create(ctx context.Context, c *client.Client) error {
 	query := `
 		INSERT INTO clients (
 			id, tenant_id, user_id, client_code, name, email, phone, address,
-			latitude, longitude, odp_id, group_id,
+			latitude, longitude, odp_id, group_id, discount_id,
 			category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			service_plan, speed_profile, monthly_fee, billing_date,
 			payment_tempo_option, payment_due_day, payment_tempo_template_id,
 			status, pppoe_username, ip_address, mac_address, metadata,
 			created_at, updated_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
 	`
 	_, err := r.db.Exec(ctx, query,
 		c.ID, c.TenantID, c.UserID, c.ClientCode, c.Name, c.Email, c.Phone, c.Address,
-		c.Latitude, c.Longitude, c.ODPID, c.GroupID,
+		c.Latitude, c.Longitude, c.ODPID, c.GroupID, c.DiscountID,
 		c.Category, c.ServicePackageID, c.DeviceCount, c.PPPoEPasswordEnc, c.PPPoEPasswordUpdatedAt,
 		c.ServicePlan, c.SpeedProfile, c.MonthlyFee, c.BillingDate,
 		c.PaymentTempoOption, c.PaymentDueDay, c.PaymentTempoTemplateID,
@@ -59,7 +59,7 @@ func (r *ClientRepository) Create(ctx context.Context, c *client.Client) error {
 func (r *ClientRepository) GetByID(ctx context.Context, tenantID, clientID uuid.UUID) (*client.Client, error) {
 	query := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
-			   latitude, longitude, odp_id, group_id,
+			   latitude, longitude, odp_id, group_id, discount_id,
 			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
@@ -75,7 +75,7 @@ func (r *ClientRepository) GetByID(ctx context.Context, tenantID, clientID uuid.
 func (r *ClientRepository) GetByCode(ctx context.Context, tenantID uuid.UUID, clientCode string) (*client.Client, error) {
 	query := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
-			   latitude, longitude, odp_id, group_id,
+			   latitude, longitude, odp_id, group_id, discount_id,
 			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
@@ -109,6 +109,11 @@ func (r *ClientRepository) List(ctx context.Context, tenantID uuid.UUID, filter 
 		args = append(args, "%"+filter.Search+"%")
 		argNum++
 	}
+	if filter.GroupID != nil {
+		baseQuery += fmt.Sprintf(` AND group_id = $%d`, argNum)
+		args = append(args, *filter.GroupID)
+		argNum++
+	}
 
 	// Count total
 	countQuery := `SELECT COUNT(*) ` + baseQuery
@@ -131,7 +136,7 @@ func (r *ClientRepository) List(ctx context.Context, tenantID uuid.UUID, filter 
 	// Select query
 	selectQuery := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
-			   latitude, longitude, odp_id, group_id,
+			   latitude, longitude, odp_id, group_id, discount_id,
 			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
@@ -163,7 +168,7 @@ func (r *ClientRepository) List(ctx context.Context, tenantID uuid.UUID, filter 
 func (r *ClientRepository) ListByGroupID(ctx context.Context, tenantID, groupID uuid.UUID) ([]*client.Client, error) {
 	query := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
-			   latitude, longitude, odp_id, group_id,
+			   latitude, longitude, odp_id, group_id, discount_id,
 			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
@@ -195,18 +200,18 @@ func (r *ClientRepository) Update(ctx context.Context, c *client.Client) error {
 	query := `
 		UPDATE clients
 		SET user_id = $3, name = $4, email = $5, phone = $6, address = $7,
-			latitude = $8, longitude = $9, odp_id = $10, group_id = $11,
-			category = $12, service_package_id = $13, device_count = $14,
-			pppoe_password_enc = $15, pppoe_password_updated_at = $16,
-			service_plan = $17, speed_profile = $18, monthly_fee = $19, billing_date = $20,
-			payment_tempo_option = $21, payment_due_day = $22, payment_tempo_template_id = $23,
-			pppoe_username = $24, ip_address = $25, mac_address = $26,
-			metadata = $27, updated_at = NOW()
+			latitude = $8, longitude = $9, odp_id = $10, group_id = $11, discount_id = $12,
+			category = $13, service_package_id = $14, device_count = $15,
+			pppoe_password_enc = $16, pppoe_password_updated_at = $17,
+			service_plan = $18, speed_profile = $19, monthly_fee = $20, billing_date = $21,
+			payment_tempo_option = $22, payment_due_day = $23, payment_tempo_template_id = $24,
+			pppoe_username = $25, ip_address = $26, mac_address = $27,
+			metadata = $28, updated_at = NOW()
 		WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
 	`
 	result, err := r.db.Exec(ctx, query,
 		c.ID, c.TenantID, c.UserID, c.Name, c.Email, c.Phone, c.Address,
-		c.Latitude, c.Longitude, c.ODPID, c.GroupID,
+		c.Latitude, c.Longitude, c.ODPID, c.GroupID, c.DiscountID,
 		c.Category, c.ServicePackageID, c.DeviceCount,
 		c.PPPoEPasswordEnc, c.PPPoEPasswordUpdatedAt,
 		c.ServicePlan, c.SpeedProfile, c.MonthlyFee, c.BillingDate,
@@ -308,7 +313,7 @@ func (r *ClientRepository) scanClient(row pgx.Row) (*client.Client, error) {
 
 	err := row.Scan(
 		&c.ID, &c.TenantID, &c.UserID, &c.ClientCode, &c.Name, &c.Email, &c.Phone, &c.Address,
-		&c.Latitude, &c.Longitude, &c.ODPID, &c.GroupID,
+		&c.Latitude, &c.Longitude, &c.ODPID, &c.GroupID, &c.DiscountID,
 		&c.Category, &c.ServicePackageID, &c.DeviceCount, &c.PPPoEPasswordEnc, &c.PPPoEPasswordUpdatedAt,
 		&c.ServicePlan, &c.SpeedProfile, &c.MonthlyFee, &c.BillingDate,
 		&c.PaymentTempoOption, &c.PaymentDueDay, &c.PaymentTempoTemplateID,
@@ -339,7 +344,7 @@ func (r *ClientRepository) scanClientFromRows(rows pgx.Rows) (*client.Client, er
 
 	err := rows.Scan(
 		&c.ID, &c.TenantID, &c.UserID, &c.ClientCode, &c.Name, &c.Email, &c.Phone, &c.Address,
-		&c.Latitude, &c.Longitude, &c.ODPID, &c.GroupID,
+		&c.Latitude, &c.Longitude, &c.ODPID, &c.GroupID, &c.DiscountID,
 		&c.Category, &c.ServicePackageID, &c.DeviceCount, &c.PPPoEPasswordEnc, &c.PPPoEPasswordUpdatedAt,
 		&c.ServicePlan, &c.SpeedProfile, &c.MonthlyFee, &c.BillingDate,
 		&c.PaymentTempoOption, &c.PaymentDueDay, &c.PaymentTempoTemplateID,

@@ -6,6 +6,7 @@ import { Client } from '@/lib/api/clientService';
 import { ClientStatusBadge } from './ClientStatusBadge';
 import servicePackageService, { ServicePackage } from '@/lib/api/servicePackageService';
 import clientGroupService, { ClientGroup } from '@/lib/api/clientGroupService';
+import { CollectorActions } from './CollectorActions';
 
 type ColumnKey = 'client' | 'contact' | 'package' | 'group' | 'status' | 'total' | 'actions';
 const COLUMNS_STORAGE_KEY = 'clients_table_columns_v1';
@@ -14,9 +15,12 @@ interface ClientTableProps {
   clients: Client[];
   loading?: boolean;
   onStatusChange?: (client: Client, status: string) => void;
+  isCollectorMode?: boolean;
+  filters?: any;
+  onFilterChange?: (filters: any) => void;
 }
 
-export function ClientTable({ clients, loading, onStatusChange }: ClientTableProps) {
+export function ClientTable({ clients, loading, onStatusChange, isCollectorMode = false, filters, onFilterChange }: ClientTableProps) {
   const [packages, setPackages] = useState<ServicePackage[]>([]);
   const [groups, setGroups] = useState<ClientGroup[]>([]);
   const [auxLoading, setAuxLoading] = useState(false);
@@ -30,6 +34,10 @@ export function ClientTable({ clients, loading, onStatusChange }: ClientTablePro
     total: true,
     actions: true,
   });
+
+  // Group filter state for collector mode (must be before conditional returns)
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [availableGroups, setAvailableGroups] = useState<ClientGroup[]>([]);
 
   // Load column preferences
   useEffect(() => {
@@ -78,6 +86,43 @@ export function ClientTable({ clients, loading, onStatusChange }: ClientTablePro
       alive = false;
     };
   }, []);
+
+  // Load groups for collector mode filter
+  useEffect(() => {
+    if (isCollectorMode && onFilterChange) {
+      let alive = true;
+      (async () => {
+        try {
+          const groupList = await clientGroupService.list();
+          if (!alive) return;
+          setAvailableGroups(groupList);
+        } catch {
+          // ignore error
+        }
+      })();
+      return () => {
+        alive = false;
+      };
+    }
+  }, [isCollectorMode, onFilterChange]);
+
+  // Sync selectedGroupId with filters.group_id (must be before conditional returns)
+  useEffect(() => {
+    const currentGroupId = filters?.group_id || '';
+    // Only update if different to avoid unnecessary re-renders
+    if (currentGroupId !== selectedGroupId) {
+      setSelectedGroupId(currentGroupId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters?.group_id]); // Only depend on filters.group_id, not selectedGroupId to avoid infinite loop
+  
+  // Initialize selectedGroupId from filters on mount
+  useEffect(() => {
+    if (filters?.group_id && !selectedGroupId) {
+      setSelectedGroupId(filters.group_id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Calculate total billing for a client
   const calculateTotal = (client: Client): number => {
@@ -160,40 +205,75 @@ export function ClientTable({ clients, loading, onStatusChange }: ClientTablePro
     );
   }
 
+  const handleGroupFilterChange = (groupId: string) => {
+    setSelectedGroupId(groupId);
+    if (onFilterChange) {
+      // Always pass current filters and update group_id
+      // Use empty string to clear filter, undefined to remove it from params
+      const updatedFilters = {
+        ...(filters || {}),
+        group_id: groupId ? groupId : undefined, // Remove group_id if empty string
+        page: 1, // Reset to first page when filter changes
+      };
+      onFilterChange(updatedFilters);
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="flex items-center justify-end px-4 py-3 border-b border-slate-200 bg-white">
-        <details className="relative">
-          <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50">
-            Columns
-            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </summary>
-          <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-lg p-3 z-10">
-            <div className="space-y-2 text-sm">
-              {(
-                [
-                  ['client', 'Client'],
-                  ['contact', 'Contact'],
-                  ['package', 'Package'],
-                  ['group', 'Group'],
-                  ['status', 'Status'],
-                  ['total', 'Total Tagihan'],
-                ] as Array<[ColumnKey, string]>
-              ).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!visibleColumns[key]}
-                    onChange={(e) => setColumn(key, e.target.checked)}
-                  />
-                  <span>{label}</span>
-                </label>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
+        {/* Left side: Group filter for collector mode only */}
+        {isCollectorMode && (
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedGroupId}
+              onChange={(e) => handleGroupFilterChange(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="">All Groups</option>
+              {availableGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
               ))}
-            </div>
+            </select>
           </div>
-        </details>
+        )}
+        {/* Right side: Columns button (always on the right) */}
+        <div className={isCollectorMode ? '' : 'ml-auto'}>
+          <details className="relative">
+            <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50">
+              Columns
+              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+            <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-lg p-3 z-10">
+              <div className="space-y-2 text-sm text-slate-900">
+                {(
+                  [
+                    ['client', 'Client'],
+                    ['contact', 'Contact'],
+                    ['package', 'Package'],
+                    ['group', 'Group'],
+                    ['status', 'Status'],
+                    ['total', 'Total Tagihan'],
+                  ] as Array<[ColumnKey, string]>
+                ).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-slate-900">
+                    <input
+                      type="checkbox"
+                      checked={!!visibleColumns[key]}
+                      onChange={(e) => setColumn(key, e.target.checked)}
+                      className="text-indigo-600 border-slate-300"
+                    />
+                    <span className="text-slate-900">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </details>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -236,11 +316,11 @@ export function ClientTable({ clients, loading, onStatusChange }: ClientTablePro
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-200">
             {clients.map((client) => (
               <tr
                 key={client.id}
-                className="hover:bg-slate-50 transition-colors"
+                className="hover:bg-slate-50 transition-colors border-b border-slate-200"
               >
                 {visibleColumns.client && (
                   <td className="px-4 py-4">
@@ -298,49 +378,53 @@ export function ClientTable({ clients, loading, onStatusChange }: ClientTablePro
                 )}
                 {visibleColumns.actions && (
                   <td className="px-4 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Link
-                      href={`/clients/${client.id}`}
-                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                      title="View"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    </Link>
-                    <Link
-                      href={`/clients/${client.id}/edit`}
-                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                      title="Edit"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </Link>
-                    {onStatusChange && client.status === 'active' && (
-                      <button
-                        onClick={() => onStatusChange(client, 'isolir')}
-                        className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"
-                        title="Isolate"
+                  {isCollectorMode ? (
+                    <CollectorActions client={client} />
+                  ) : (
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/clients/${client.id}`}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                        title="View"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                      </button>
-                    )}
-                    {onStatusChange && client.status === 'isolir' && (
-                      <button
-                        onClick={() => onStatusChange(client, 'active')}
-                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
-                        title="Activate"
+                      </Link>
+                      <Link
+                        href={`/clients/${client.id}/edit`}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                        title="Edit"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                      </button>
-                    )}
-                  </div>
+                      </Link>
+                      {onStatusChange && client.status === 'active' && (
+                        <button
+                          onClick={() => onStatusChange(client, 'isolir')}
+                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+                          title="Isolate"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                          </svg>
+                        </button>
+                      )}
+                      {onStatusChange && client.status === 'isolir' && (
+                        <button
+                          onClick={() => onStatusChange(client, 'active')}
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+                          title="Activate"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </td>
                 )}
               </tr>

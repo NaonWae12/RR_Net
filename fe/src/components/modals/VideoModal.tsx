@@ -45,7 +45,7 @@ export function VideoModal({
       onClose={onClose}
       size="xl"
       title={title}
-      className={className}
+      className={className || "bg-white"}
       footer={
         downloadable && (
           <Button variant="outline" onClick={handleDownload}>

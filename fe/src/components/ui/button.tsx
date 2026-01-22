@@ -32,7 +32,7 @@ export interface ButtonProps
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "default", size = "md", ...props }, ref) => {
     const computed = cn(baseClass, variantClass[variant], sizeClass[size], className);
-    return <button ref={ref} className={computed} {...props} />;
+    return <button ref={ref} className={computed} suppressHydrationWarning {...props} />;
   }
 );
 Button.displayName = "Button";

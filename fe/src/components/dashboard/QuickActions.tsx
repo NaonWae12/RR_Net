@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRole } from '@/lib/hooks/useRole';
 
 interface QuickAction {
   label: string;
@@ -9,12 +10,13 @@ interface QuickAction {
   icon: React.ReactNode;
   description: string;
   color: string;
+  allowedRoles?: string[]; // Roles that can see this action
 }
 
-const actions: QuickAction[] = [
+const allActions: QuickAction[] = [
   {
     label: 'Add Client',
-    href: '/clients/new',
+    href: '/clients/create',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -22,6 +24,7 @@ const actions: QuickAction[] = [
     ),
     description: 'Register a new subscriber',
     color: 'bg-indigo-500 hover:bg-indigo-600',
+    allowedRoles: ['admin', 'owner'],
   },
   {
     label: 'View Clients',
@@ -33,6 +36,7 @@ const actions: QuickAction[] = [
     ),
     description: 'Manage existing clients',
     color: 'bg-emerald-500 hover:bg-emerald-600',
+    allowedRoles: ['admin', 'owner', 'technician', 'collector'],
   },
   {
     label: 'Billing',
@@ -44,6 +48,7 @@ const actions: QuickAction[] = [
     ),
     description: 'View invoices & payments',
     color: 'bg-amber-500 hover:bg-amber-600',
+    allowedRoles: ['admin', 'owner', 'finance', 'collector'],
   },
   {
     label: 'Reports',
@@ -55,10 +60,49 @@ const actions: QuickAction[] = [
     ),
     description: 'Generate reports',
     color: 'bg-purple-500 hover:bg-purple-600',
+    allowedRoles: ['admin', 'owner', 'finance', 'hr'],
+  },
+  {
+    label: 'My Tasks',
+    href: '/technician/tasks',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+    ),
+    description: 'View assigned tasks',
+    color: 'bg-blue-500 hover:bg-blue-600',
+    allowedRoles: ['technician'],
+  },
+  {
+    label: 'Attendance',
+    href: '/technician/attendance',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    description: 'Check in/out',
+    color: 'bg-green-500 hover:bg-green-600',
+    allowedRoles: ['technician'],
   },
 ];
 
 export function QuickActions({ className = '' }: { className?: string }) {
+  const { role, isAdmin } = useRole();
+  
+  // Filter actions based on effectiveRole
+  const actions = allActions.filter((action) => {
+    if (!action.allowedRoles || action.allowedRoles.length === 0) return true;
+    // Admin can see all actions when not switched
+    if (isAdmin && !role) return true;
+    return action.allowedRoles.includes(role || '');
+  });
+
+  if (actions.length === 0) {
+    return null; // Don't render if no actions available
+  }
+
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}>
       <h3 className="text-lg font-semibold text-slate-900 mb-4">Quick Actions</h3>

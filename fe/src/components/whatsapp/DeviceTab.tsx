@@ -106,11 +106,11 @@ export function DeviceTab() {
 
       <QrCard qr={qr} qrUpdatedAt={qrUpdatedAt} />
 
-      <div className="rounded-lg border bg-white p-4 text-xs text-slate-600">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-600">
         <div className="font-medium text-slate-900">Catatan</div>
-        <ul className="mt-2 list-disc pl-5 space-y-1">
+        <ul className="mt-2 list-disc pl-5 space-y-1 text-slate-600">
           <li>
-            Kalau QR tidak muncul, klik <span className="font-medium">Connect</span> lagi (gateway akan reset session bila perlu).
+            Kalau QR tidak muncul, klik <span className="font-medium text-slate-900">Connect</span> lagi (gateway akan reset session bila perlu).
           </li>
           <li>
             Untuk produksi, sebaiknya pakai token admin yang aman dan self-host OS/WA gateway infra sesuai kapasitas.

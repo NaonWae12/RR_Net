@@ -120,8 +120,8 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
   return (
     <div className="overflow-x-auto">
       <Table>
-        <TableHeader>
-          <TableRow>
+        <TableHeader >
+          <TableRow className="border-b border-slate-200">
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Host</TableHead>
@@ -130,11 +130,11 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody className="divide-y divide-slate-200">
           {routers.map((routerItem) => (
             <TableRow key={routerItem.id}>
-              <TableCell className="font-medium">{routerItem.name}</TableCell>
-              <TableCell className="uppercase">{routerItem.type}</TableCell>
+              <TableCell className="font-medium text-slate-900">{routerItem.name}</TableCell>
+              <TableCell className="uppercase text-slate-500">{routerItem.type}</TableCell>
               <TableCell>
                 <div className="flex flex-col">
                   <span className="font-mono text-xs">{routerItem.host}:{routerItem.port}</span>

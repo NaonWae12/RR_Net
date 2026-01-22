@@ -63,7 +63,7 @@ export function ImageModal({
       onClose={onClose}
       size="full"
       title={title}
-      className={className}
+      className={className || "bg-white"}
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">

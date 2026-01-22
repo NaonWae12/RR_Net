@@ -20,9 +20,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Attempt refresh on mount if refresh token exists
   useEffect(() => {
-    const { refreshToken } = useAuthStore.getState();
+    const state = useAuthStore.getState();
     // Only try to refresh if we have a refresh token but no access token
-    if (!token && refreshToken) {
+    // And if not already ready (to avoid duplicate refresh calls)
+    if (!token && state.refreshToken && !state.ready) {
       void refresh();
     }
   }, [token, refresh]);

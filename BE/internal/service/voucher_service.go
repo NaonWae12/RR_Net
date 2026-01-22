@@ -166,6 +166,74 @@ type GenerateVouchersRequest struct {
 	CodeLength    int        `json:"code_length,omitempty"`    // total length
 }
 
+// buildCharsetFromMode deterministically builds a charset based on character_mode pattern.
+// It analyzes the pattern to detect which character classes are present:
+//   - Lowercase letters (a-z) → include lowercase charset
+//   - Uppercase letters (A-Z) → include uppercase charset
+//   - Digits (0-9) → include numbers charset (2-9, excluding 0,1,I,O)
+//
+// Examples:
+//   - "abcd" → lowercase only
+//   - "ABCD" → uppercase only
+//   - "aBcD" → lowercase + uppercase
+//   - "5ab2" → numbers + lowercase
+//   - "5AB2" → numbers + uppercase
+//   - "5aB2" → numbers + lowercase + uppercase
+//   - "5ab2c34d" → numbers + lowercase (handles complex patterns)
+//
+// Returns an error if the mode is empty or contains invalid characters.
+func buildCharsetFromMode(mode string) (string, error) {
+	if mode == "" {
+		// Default to uppercase alphanumeric if not specified
+		return "23456789ABCDEFGHJKLMNPQRSTUVWXYZ", nil
+	}
+
+	// Character sets (excluding ambiguous characters: 0, 1, I, O, l)
+	const (
+		lowercaseChars = "abcdefghijkmnpqrstuvwxyz"
+		uppercaseChars = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+		numberChars    = "23456789"
+	)
+
+	// Detect which character classes are present in the mode
+	hasLowercase := false
+	hasUppercase := false
+	hasNumbers := false
+
+	for _, char := range mode {
+		switch {
+		case char >= 'a' && char <= 'z':
+			hasLowercase = true
+		case char >= 'A' && char <= 'Z':
+			hasUppercase = true
+		case char >= '0' && char <= '9':
+			hasNumbers = true
+		default:
+			// Invalid character in mode
+			return "", fmt.Errorf("contains invalid character %q (only letters and digits allowed)", char)
+		}
+	}
+
+	// Build charset based on detected character classes
+	var charset strings.Builder
+	if hasLowercase {
+		charset.WriteString(lowercaseChars)
+	}
+	if hasUppercase {
+		charset.WriteString(uppercaseChars)
+	}
+	if hasNumbers {
+		charset.WriteString(numberChars)
+	}
+
+	// If no valid character classes detected, return error
+	if charset.Len() == 0 {
+		return "", fmt.Errorf("must contain at least one letter or digit")
+	}
+
+	return charset.String(), nil
+}
+
 func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUID, req GenerateVouchersRequest) ([]*voucher.Voucher, error) {
 	// Validate package exists
 	_, err := s.voucherRepo.GetPackageByID(ctx, req.PackageID)
@@ -182,21 +250,10 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 		codeLength = 6
 	}
 
-	// Map character mode to charset (strictly following user request case-sensitively)
-	charset := "23456789ABCDEFGHJKLMNPQRSTUVWXYZ" // default fallback (Upper Alphanumeric)
-	switch req.CharacterMode {
-	case "abcd":
-		charset = "abcdefghijkmnpqrstuvwxyz"
-	case "ABCD":
-		charset = "ABCDEFGHJKLMNPQRSTUVWXYZ"
-	case "aBcD":
-		charset = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
-	case "5ab2":
-		charset = "abcdefghijkmnpqrstuvwxyz23456789"
-	case "5AB2":
-		charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	case "5aB2":
-		charset = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	// Build charset deterministically from character_mode pattern
+	charset, err := buildCharsetFromMode(req.CharacterMode)
+	if err != nil {
+		return nil, fmt.Errorf("invalid character_mode %q: %w", req.CharacterMode, err)
 	}
 
 	vouchers := make([]*voucher.Voucher, 0, req.Quantity)

@@ -7,26 +7,35 @@ import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import { RouterTable, NetworkProfileTable } from "@/components/network";
 import { Plus } from "lucide-react";
+import { RoleGuard } from "@/components/guards/RoleGuard";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function NetworkPage() {
   const router = useRouter();
-  const { routers, profiles, loading, fetchRouters, fetchProfiles } = useNetworkStore();
+  const { routers, profiles, routersLoading, profilesLoading, fetchRouters, fetchProfiles } = useNetworkStore();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
+    // Only fetch if authenticated
+    if (!isAuthenticated) return;
+    
     fetchRouters();
     fetchProfiles();
 
     // Auto-refresh router status every 30 seconds
     const interval = setInterval(() => {
-      fetchRouters();
+      if (isAuthenticated) {
+        fetchRouters();
+      }
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchRouters, fetchProfiles]);
+  }, [fetchRouters, fetchProfiles, isAuthenticated]);
 
   return (
-    <div className="p-6 space-y-8">
-      <h1 className="text-2xl font-bold text-slate-900">Network Management</h1>
+    <RoleGuard allowedRoles={["owner", "admin", "technician"]} redirectTo="/dashboard">
+      <div className="p-6 space-y-8">
+        <h1 className="text-2xl font-bold text-slate-900">Network Management</h1>
 
       {/* Routers Section */}
       <div className="space-y-4 text-slate-900">
@@ -36,7 +45,7 @@ export default function NetworkPage() {
             <Plus className="h-5 w-5 mr-2" /> Add Router
           </Button>
         </div>
-        {loading ? (
+        {routersLoading ? (
           <div className="flex justify-center items-center h-48">
             <LoadingSpinner size={40} />
           </div>
@@ -60,7 +69,7 @@ export default function NetworkPage() {
             <Plus className="h-5 w-5 mr-2" /> Add Profile
           </Button>
         </div>
-        {loading ? (
+        {profilesLoading ? (
           <div className="flex justify-center items-center h-48">
             <LoadingSpinner size={40} />
           </div>
@@ -75,7 +84,8 @@ export default function NetworkPage() {
           </>
         )}
       </div>
-    </div>
+      </div>
+    </RoleGuard>
   );
 }
 

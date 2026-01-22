@@ -86,6 +86,12 @@ export const useMapsStore = create<MapsState & MapsActions>((set, get) => ({
   error: null,
 
   fetchODCs: async () => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already fetching, skip this call
+    }
+    
     set({ loading: true, error: null });
     try {
       const odcs = await mapsService.getODCs();
@@ -157,6 +163,12 @@ export const useMapsStore = create<MapsState & MapsActions>((set, get) => ({
   },
 
   fetchODPs: async (odcId?: string) => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already fetching, skip this call
+    }
+    
     set({ loading: true, error: null });
     try {
       const odps = await mapsService.getODPs(odcId);
@@ -228,6 +240,12 @@ export const useMapsStore = create<MapsState & MapsActions>((set, get) => ({
   },
 
   fetchClientLocations: async (odpId?: string) => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already fetching, skip this call
+    }
+    
     set({ loading: true, error: null });
     try {
       const locations = await mapsService.getClientLocations(odpId);
@@ -340,10 +358,30 @@ export const useMapsStore = create<MapsState & MapsActions>((set, get) => ({
         outages: [outage, ...state.outages],
         loading: false,
       }));
-      // Refresh nodes to update status
-      await get().fetchODCs();
-      await get().fetchODPs();
-      await get().fetchClientLocations();
+      // Refresh nodes to update status - run sequentially to avoid race condition
+      // Only refresh if not already loading
+      const currentState = get();
+      if (!currentState.loading) {
+        try {
+          await get().fetchODCs();
+        } catch (e) {
+          // Ignore refresh errors
+        }
+      }
+      if (!get().loading) {
+        try {
+          await get().fetchODPs();
+        } catch (e) {
+          // Ignore refresh errors
+        }
+      }
+      if (!get().loading) {
+        try {
+          await get().fetchClientLocations();
+        } catch (e) {
+          // Ignore refresh errors
+        }
+      }
       return outage;
     } catch (err) {
       set({ error: toApiError(err).message, loading: false });
@@ -361,10 +399,30 @@ export const useMapsStore = create<MapsState & MapsActions>((set, get) => ({
         ),
         loading: false,
       }));
-      // Refresh nodes to update status
-      await get().fetchODCs();
-      await get().fetchODPs();
-      await get().fetchClientLocations();
+      // Refresh nodes to update status - run sequentially to avoid race condition
+      // Only refresh if not already loading
+      const currentState = get();
+      if (!currentState.loading) {
+        try {
+          await get().fetchODCs();
+        } catch (e) {
+          // Ignore refresh errors
+        }
+      }
+      if (!get().loading) {
+        try {
+          await get().fetchODPs();
+        } catch (e) {
+          // Ignore refresh errors
+        }
+      }
+      if (!get().loading) {
+        try {
+          await get().fetchClientLocations();
+        } catch (e) {
+          // Ignore refresh errors
+        }
+      }
     } catch (err) {
       set({ error: toApiError(err).message, loading: false });
       throw err;

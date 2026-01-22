@@ -7,12 +7,14 @@ interface NetworkState {
   // Routers
   routers: Router[];
   router: Router | null;
+  routersLoading: boolean;
   
   // Network Profiles
   profiles: NetworkProfile[];
   profile: NetworkProfile | null;
+  profilesLoading: boolean;
   
-  // UI State
+  // UI State (legacy, for backward compatibility)
   loading: boolean;
   error: string | null;
 }
@@ -43,20 +45,35 @@ interface NetworkActions {
 export const useNetworkStore = create<NetworkState & NetworkActions>((set, get) => ({
   routers: [],
   router: null,
+  routersLoading: false,
   profiles: [],
   profile: null,
-  loading: false,
+  profilesLoading: false,
+  loading: false, // Legacy, computed from routersLoading || profilesLoading
   error: null,
 
   fetchRouters: async () => {
-    set({ loading: true, error: null });
+    // Prevent concurrent calls for routers only
+    const state = get();
+    if (state.routersLoading) {
+      return; // Already fetching routers, skip this call
+    }
+    
+    set({ routersLoading: true, loading: true, error: null });
     try {
       const routers = await networkService.getRouters();
-      set({ routers: routers || [], loading: false });
+      const currentState = get();
+      set({ 
+        routers: routers || [], 
+        routersLoading: false,
+        loading: currentState.profilesLoading, // Keep loading true if profiles still loading
+      });
     } catch (err) {
+      const currentState = get();
       set({ 
         error: toApiError(err).message, 
-        loading: false,
+        routersLoading: false,
+        loading: currentState.profilesLoading, // Keep loading true if profiles still loading
         routers: [], // Ensure routers is always an array
       });
     }
@@ -167,14 +184,27 @@ export const useNetworkStore = create<NetworkState & NetworkActions>((set, get) 
   },
 
   fetchProfiles: async () => {
-    set({ loading: true, error: null });
+    // Prevent concurrent calls for profiles only
+    const state = get();
+    if (state.profilesLoading) {
+      return; // Already fetching profiles, skip this call
+    }
+    
+    set({ profilesLoading: true, loading: true, error: null });
     try {
       const profiles = await networkService.getNetworkProfiles();
-      set({ profiles: profiles || [], loading: false });
+      const currentState = get();
+      set({ 
+        profiles: profiles || [], 
+        profilesLoading: false,
+        loading: currentState.routersLoading, // Keep loading true if routers still loading
+      });
     } catch (err) {
+      const currentState = get();
       set({ 
         error: toApiError(err).message, 
-        loading: false,
+        profilesLoading: false,
+        loading: currentState.routersLoading, // Keep loading true if routers still loading
         profiles: [], // Ensure profiles is always an array
       });
     }

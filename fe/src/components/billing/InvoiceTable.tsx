@@ -130,17 +130,17 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-white rounded-lg shadow overflow-hidden border border-slate-200">
       <div className="flex items-center justify-end px-4 py-3 border-b border-slate-200 bg-white">
         <details className="relative">
-          <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50">
+          <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-900">
             Columns
             <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </summary>
           <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-lg p-3 z-10">
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm text-slate-900">
               {(
                 [
                   ["invoice_number", "Invoice Number"],
@@ -155,13 +155,14 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                   ["status", "Status"],
                 ] as Array<[ColumnKey, string]>
               ).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2">
+                <label key={key} className="flex items-center gap-2 text-slate-900">
                   <input
                     type="checkbox"
                     checked={!!visibleColumns[key]}
                     onChange={(e) => setColumn(key, e.target.checked)}
+                    className="text-indigo-600 border-slate-300"
                   />
-                  <span>{label}</span>
+                  <span className="text-slate-900">{label}</span>
                 </label>
               ))}
             </div>
@@ -172,50 +173,50 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              {visibleColumns.invoice_number && <TableHead>Invoice Number</TableHead>}
-              {visibleColumns.client && <TableHead>Client Name</TableHead>}
-              {visibleColumns.contact && <TableHead>Contact</TableHead>}
-              {visibleColumns.group && <TableHead>Group</TableHead>}
-              {visibleColumns.address && <TableHead>Alamat</TableHead>}
-              {visibleColumns.period && <TableHead>Period</TableHead>}
-              {visibleColumns.due_date && <TableHead>Due Date</TableHead>}
-              {visibleColumns.total_amount && <TableHead>Total Amount</TableHead>}
-              {visibleColumns.paid_amount && <TableHead>Paid Amount</TableHead>}
-              {visibleColumns.status && <TableHead>Status</TableHead>}
-              {visibleColumns.actions && <TableHead>Actions</TableHead>}
+            <TableRow className="border-slate-200">
+              {visibleColumns.invoice_number && <TableHead className="text-slate-700">Invoice Number</TableHead>}
+              {visibleColumns.client && <TableHead className="text-slate-700">Client Name</TableHead>}
+              {visibleColumns.contact && <TableHead className="text-slate-700">Contact</TableHead>}
+              {visibleColumns.group && <TableHead className="text-slate-700">Group</TableHead>}
+              {visibleColumns.address && <TableHead className="text-slate-700">Alamat</TableHead>}
+              {visibleColumns.period && <TableHead className="text-slate-700">Period</TableHead>}
+              {visibleColumns.due_date && <TableHead className="text-slate-700">Due Date</TableHead>}
+              {visibleColumns.total_amount && <TableHead className="text-slate-700">Total Amount</TableHead>}
+              {visibleColumns.paid_amount && <TableHead className="text-slate-700">Paid Amount</TableHead>}
+              {visibleColumns.status && <TableHead className="text-slate-700">Status</TableHead>}
+              {visibleColumns.actions && <TableHead className="text-slate-700">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {invoices.map((invoice) => (
-              <TableRow key={invoice.id}>
+              <TableRow key={invoice.id} className="border-slate-200">
                 {visibleColumns.invoice_number && (
-                  <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
+                  <TableCell className="font-medium text-slate-900">{invoice.invoice_number}</TableCell>
                 )}
-                {visibleColumns.client && <TableCell>{invoice.client_name || invoice.client_id}</TableCell>}
-                {visibleColumns.contact && <TableCell>{invoice.client_phone || "-"}</TableCell>}
-                {visibleColumns.group && <TableCell>{invoice.client_group_name || "-"}</TableCell>}
+                {visibleColumns.client && <TableCell className="text-slate-900">{invoice.client_name || invoice.client_id}</TableCell>}
+                {visibleColumns.contact && <TableCell className="text-slate-700">{invoice.client_phone || "-"}</TableCell>}
+                {visibleColumns.group && <TableCell className="text-slate-700">{invoice.client_group_name || "-"}</TableCell>}
                 {visibleColumns.address && (
-                  <TableCell className="max-w-xs truncate" title={invoice.client_address || undefined}>
+                  <TableCell className="max-w-xs truncate text-slate-700" title={invoice.client_address || undefined}>
                     {invoice.client_address || "-"}
                   </TableCell>
                 )}
                 {visibleColumns.period && (
-                  <TableCell>
+                  <TableCell className="text-slate-700">
                     {format(new Date(invoice.period_start), "MMM d")} -{" "}
                     {format(new Date(invoice.period_end), "MMM d, yyyy")}
                   </TableCell>
                 )}
-                {visibleColumns.due_date && <TableCell>{format(new Date(invoice.due_date), "MMM d, yyyy")}</TableCell>}
-                {visibleColumns.total_amount && <TableCell>{formatCurrency(invoice.total_amount)}</TableCell>}
-                {visibleColumns.paid_amount && <TableCell>{formatCurrency(invoice.paid_amount)}</TableCell>}
+                {visibleColumns.due_date && <TableCell className="text-slate-700">{format(new Date(invoice.due_date), "MMM d, yyyy")}</TableCell>}
+                {visibleColumns.total_amount && <TableCell className="text-slate-900 font-medium">{formatCurrency(invoice.total_amount)}</TableCell>}
+                {visibleColumns.paid_amount && <TableCell className="text-slate-900 font-medium">{formatCurrency(invoice.paid_amount)}</TableCell>}
                 {visibleColumns.status && (
-                  <TableCell>
+                  <TableCell className="text-slate-900">
                     <InvoiceStatusBadge status={invoice.status} />
                   </TableCell>
                 )}
                 {visibleColumns.actions && (
-                  <TableCell className="flex space-x-2">
+                  <TableCell className="flex space-x-2 text-slate-900">
                     <Button variant="outline" size="sm" onClick={() => handleView(invoice.id)}>
                       View
                     </Button>

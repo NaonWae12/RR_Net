@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/select";
 import { TechnicianTask, CreateTaskRequest, UpdateTaskRequest, TaskType, TaskPriority } from "@/lib/api/types";
+import { useRole } from "@/lib/hooks/useRole";
 
 const taskFormSchema = z.object({
   technician_id: z.string().min(1, "Technician is required"),
@@ -35,6 +36,7 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ initialData, onSubmit, onCancel, isLoading }: TaskFormProps) {
+  const { isTechnician, userId } = useRole();
   const {
     register,
     handleSubmit,
@@ -45,7 +47,7 @@ export function TaskForm({ initialData, onSubmit, onCancel, isLoading }: TaskFor
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
-      technician_id: "",
+      technician_id: isTechnician && userId ? userId : "",
       task_type: "maintenance",
       priority: "normal",
       title: "",
@@ -58,6 +60,13 @@ export function TaskForm({ initialData, onSubmit, onCancel, isLoading }: TaskFor
       notes: "",
     },
   });
+
+  // Auto-fill technician_id for technician users
+  useEffect(() => {
+    if (isTechnician && userId && !initialData) {
+      setValue("technician_id", userId);
+    }
+  }, [isTechnician, userId, initialData, setValue]);
 
   useEffect(() => {
     if (initialData) {
@@ -92,12 +101,44 @@ export function TaskForm({ initialData, onSubmit, onCancel, isLoading }: TaskFor
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-      <Input
-        label="Technician ID"
-        {...register("technician_id")}
-        error={errors.technician_id?.message}
-        disabled={!!initialData}
-      />
+      {/* Warning banner for technician */}
+      {isTechnician && !initialData && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="shrink-0">
+              <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-amber-800">Admin Approval Required</h3>
+              <p className="mt-1 text-sm text-amber-700">
+                This task will be reviewed by admin before activation. You will be notified once it's approved.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Technician ID field - hidden for technician, visible for admin */}
+      {!isTechnician && (
+        <Input
+          label="Technician ID"
+          {...register("technician_id")}
+          error={errors.technician_id?.message}
+          disabled={!!initialData}
+        />
+      )}
+      {isTechnician && !initialData && (
+        <div className="hidden">
+          <Input
+            label="Technician ID"
+            {...register("technician_id")}
+            error={errors.technician_id?.message}
+            disabled={true}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>

@@ -71,6 +71,12 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
     error: null,
 
     fetchTenants: async () => {
+      // Prevent concurrent calls
+      const state = get();
+      if (state.loading) {
+        return; // Already fetching, skip this call
+      }
+      
       set({ loading: true, error: null });
       try {
         console.log("[superAdminStore] Fetching tenants...");
@@ -145,6 +151,12 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
     },
 
     fetchPlans: async () => {
+      // Prevent concurrent calls
+      const state = get();
+      if (state.loading) {
+        return; // Already fetching, skip this call
+      }
+      
       set({ loading: true, error: null });
       try {
         const plans = await superAdminService.getPlans();
@@ -223,6 +235,12 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
     },
 
     fetchAddons: async () => {
+      // Prevent concurrent calls
+      const state = get();
+      if (state.loading) {
+        return; // Already fetching, skip this call
+      }
+      
       set({ loading: true, error: null });
       try {
         const addons = await superAdminService.getAddons();

@@ -148,7 +148,7 @@ export function SingleTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-6 space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 space-y-4 text-slate-900">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Single message</h2>
           <p className="text-sm text-slate-600 mt-1">
@@ -160,7 +160,7 @@ export function SingleTab() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Select client (optional)</label>
             <select
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
               value={selectedClientId}
               onChange={(e) => setSelectedClientId(e.target.value)}
               disabled={loadingClients}
@@ -175,7 +175,7 @@ export function SingleTab() {
             </select>
             {selectedClient && !selectedClient.phone && (
               <p className="text-xs text-amber-700">
-                Client ini belum punya nomor telepon di field <code>phone</code>.
+                Client ini belum punya nomor telepon di field <code className="text-amber-800">phone</code>.
               </p>
             )}
           </div>
@@ -183,7 +183,7 @@ export function SingleTab() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Use template (optional)</label>
             <select
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
               value={selectedTemplateId}
               onChange={(e) => setSelectedTemplateId(e.target.value)}
               disabled={loadingTemplates}
@@ -213,7 +213,7 @@ export function SingleTab() {
         <div className="space-y-2">
           <label className="text-sm font-medium text-slate-700">Message</label>
           <textarea
-            className="min-h-[120px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+            className="min-h-[120px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Tulis pesan di sini..."

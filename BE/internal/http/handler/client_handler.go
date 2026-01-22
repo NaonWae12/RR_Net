@@ -49,6 +49,11 @@ func (h *ClientHandler) List(w http.ResponseWriter, r *http.Request) {
 		cat := client.Category(catStr)
 		filter.Category = &cat
 	}
+	if groupIDStr := r.URL.Query().Get("group_id"); groupIDStr != "" {
+		if groupID, err := uuid.Parse(groupIDStr); err == nil {
+			filter.GroupID = &groupID
+		}
+	}
 	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil {
 			filter.Page = p

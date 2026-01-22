@@ -100,6 +100,12 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   paymentFilters: {},
 
   fetchInvoices: async () => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already fetching, skip this call
+    }
+    
     set({ loading: true, error: null });
     try {
       const { page, page_size } = get().invoicePagination;
@@ -210,6 +216,12 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   },
 
   fetchPayments: async () => {
+    // Prevent concurrent calls
+    const state = get();
+    if (state.loading) {
+      return; // Already fetching, skip this call
+    }
+    
     set({ loading: true, error: null });
     try {
       const { page, page_size } = get().paymentPagination;
@@ -260,12 +272,14 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   },
 
   fetchBillingSummary: async () => {
-    set({ loading: true, error: null });
+    // Prevent concurrent calls - use separate loading flag check
+    // Since this can be called independently, we'll allow it even if other operations are loading
+    set({ error: null });
     try {
       const summary = await billingService.getBillingSummary();
-      set({ summary, loading: false });
+      set({ summary });
     } catch (err) {
-      set({ error: toApiError(err).message, loading: false });
+      set({ error: toApiError(err).message });
     }
   },
 
