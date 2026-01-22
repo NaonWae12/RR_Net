@@ -6,6 +6,7 @@ This directory contains FreeRADIUS configuration files for RRNET voucher authent
 
 - `sites-enabled/default` - Main virtual server configuration (PAP + REST)
 - `mods-enabled/rest` - REST module configuration for backend API integration
+- `mods-config/files/authorize` - Dummy password file for PAP decode (provides password reference)
 
 ## Deployment
 
@@ -16,33 +17,33 @@ This directory contains FreeRADIUS configuration files for RRNET voucher authent
 cp infra/freeradius/sites-enabled/default /etc/freeradius/3.0/sites-enabled/default
 cp infra/freeradius/mods-enabled/rest /etc/freeradius/3.0/mods-enabled/rest
 
+# Create mods-config/files directory if it doesn't exist
+mkdir -p /etc/freeradius/3.0/mods-config/files
+
+# Copy dummy password file for PAP decode
+cp infra/freeradius/mods-config/files/authorize /etc/freeradius/3.0/mods-config/files/authorize
+
 # Set proper permissions
 chown root:freerad /etc/freeradius/3.0/sites-enabled/default
 chown root:freerad /etc/freeradius/3.0/mods-enabled/rest
+chown root:freerad /etc/freeradius/3.0/mods-config/files/authorize
 chmod 644 /etc/freeradius/3.0/sites-enabled/default
 chmod 644 /etc/freeradius/3.0/mods-enabled/rest
+chmod 644 /etc/freeradius/3.0/mods-config/files/authorize
 ```
 
-### 2. Set Environment Variables
+### 2. Configuration Notes
 
-The REST module requires environment variables to be set in the systemd service:
+**No Environment Variables Required:**
+- REST API URLs are hardcoded in `mods-enabled/rest` (default: `http://127.0.0.1:8080/api/v1/radius`)
+- REST secret is hardcoded in `sites-enabled/default` (default: `dev-radius-rest-secret`)
+- To change these values, edit the config files directly
 
-```bash
-# Edit FreeRADIUS systemd service
-systemctl edit freeradius.service
-```
-
-Add the following content:
-
-```ini
-[Service]
-Environment="RRNET_RADIUS_REST_BASE=http://127.0.0.1:8080/api/v1/radius"
-Environment="RRNET_RADIUS_REST_SECRET=your-secret-key-here"
-```
-
-**Note:** 
-- `RRNET_RADIUS_REST_BASE`: Backend API base URL (adjust IP/port if backend is on different server)
-- `RRNET_RADIUS_REST_SECRET`: Secret key for REST API authentication (must match backend config)
+**Dummy Password File:**
+- `mods-config/files/authorize` provides dummy password reference for PAP decode
+- PAP module needs password reference to decode User-Password (binary) → Cleartext-Password
+- Dummy password will always fail comparison (expected), but password is already decoded
+- REST module uses decoded Cleartext-Password for actual validation
 
 ### 3. Reload and Restart
 
@@ -66,13 +67,15 @@ systemctl status freeradius --no-pager -l
 
 1. **Authorize Phase:**
    - `preprocess` - Process incoming request
-   - `pap` - Decode User-Password (binary) → Cleartext-Password (plain text)
-   - If Cleartext-Password exists, set `Auth-Type := REST`
+   - `files` - Provides dummy password reference (allows PAP to decode)
+   - Set `Auth-Type := PAP` if User-Password exists
 
-2. **Authenticate Phase:**
-   - `Auth-Type REST` - Send request to backend REST API
-   - Backend validates voucher and password
-   - Returns success/failure
+2. **Authenticate Phase (PAP):**
+   - `pap` - Decode User-Password (binary) → Cleartext-Password (plain text)
+   - PAP comparison fails (dummy password doesn't match) - this is expected
+   - `rest` - Call REST module directly (within PAP section)
+   - REST uses decoded Cleartext-Password for validation
+   - If REST succeeds, override PAP failure with `ok`
 
 3. **Accounting Phase:**
    - Send accounting data (Start/Interim/Stop) to backend
@@ -80,27 +83,32 @@ systemctl status freeradius --no-pager -l
 
 ### REST Module Configuration
 
-- **Authenticate URI:** `$ENV{RRNET_RADIUS_REST_BASE}/auth`
-- **Accounting URI:** `$ENV{RRNET_RADIUS_REST_BASE}/acct`
+- **Authenticate URI:** `http://127.0.0.1:8080/api/v1/radius/auth` (hardcoded)
+- **Accounting URI:** `http://127.0.0.1:8080/api/v1/radius/acct` (hardcoded)
 - **Method:** POST
 - **Body:** JSON
 - **Password Field:** `Cleartext-Password` (decoded by PAP, plain text in JSON)
+- **Secret Header:** `X-RRNET-RADIUS-SECRET: dev-radius-rest-secret` (hardcoded)
 
 ## Troubleshooting
 
-### Error: "URL using bad/illegal format or missing URL"
+### Error: "No password configured for the user. Cannot do authentication"
 
-**Cause:** `RRNET_RADIUS_REST_BASE` environment variable is not set.
+**Cause:** Dummy password file (`mods-config/files/authorize`) is missing or not readable.
 
 **Solution:**
 ```bash
-# Check if env var is set
-systemctl show freeradius.service | grep Environment
+# Create directory if it doesn't exist
+mkdir -p /etc/freeradius/3.0/mods-config/files
 
-# If not set, edit service and add environment variable
-systemctl edit freeradius.service
-# Add: Environment="RRNET_RADIUS_REST_BASE=http://127.0.0.1:8080/api/v1/radius"
-systemctl daemon-reload
+# Copy dummy password file
+cp infra/freeradius/mods-config/files/authorize /etc/freeradius/3.0/mods-config/files/authorize
+
+# Set proper permissions
+chown root:freerad /etc/freeradius/3.0/mods-config/files/authorize
+chmod 644 /etc/freeradius/3.0/mods-config/files/authorize
+
+# Restart FreeRADIUS
 systemctl restart freeradius
 ```
 
@@ -121,8 +129,18 @@ rm /etc/freeradius/3.0/sites-enabled/*.backup
 
 **Solution:**
 1. Verify backend is running: `curl http://127.0.0.1:8080/api/v1/radius/auth`
-2. Check environment variable is set correctly
-3. Verify backend port matches `RRNET_RADIUS_REST_BASE`
+2. Check REST URI in `mods-enabled/rest` matches your backend URL
+3. Verify backend port matches the hardcoded URL in config
+
+### Error: "PAP comparison failed but REST not called"
+
+**Cause:** PAP failure prevents REST from being called.
+
+**Solution:**
+- This is expected behavior - PAP comparison will fail (dummy password)
+- REST module should be called after PAP decode
+- Check config: REST should be called within `Auth-Type PAP` section
+- Verify `if (ok || updated) { ok }` is present to override PAP failure
 
 ## Testing
 

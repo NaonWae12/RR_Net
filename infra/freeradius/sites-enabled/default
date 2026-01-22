@@ -18,10 +18,14 @@ server default {
 	authorize {
 		preprocess
 		#
-		# PAP is MANDATORY
-		# Set Auth-Type to PAP to allow PAP module to decode password
-		# PAP will decode User-Password (binary) -> Cleartext-Password
-		# using the NAS shared secret, even without password reference
+		# Files module provides dummy password reference
+		# This allows PAP module to decode User-Password (binary) -> Cleartext-Password
+		# Dummy password will always fail comparison, but password is already decoded
+		#
+		files
+		#
+		# PAP is MANDATORY for password decode
+		# Set Auth-Type to PAP to decode password using NAS shared secret
 		#
 		if (&User-Password) {
 			update control {
@@ -30,7 +34,7 @@ server default {
 		}
 		#
 		# PAP decode happens in authenticate section
-		# After decode, we'll switch to REST for backend validation
+		# After decode, we'll use REST for actual validation
 		#
 	}
 
@@ -39,12 +43,14 @@ server default {
 			#
 			# PAP decode: User-Password (binary) -> Cleartext-Password
 			# PAP module decodes password using NAS shared secret
-			# Cleartext-Password is now available
+			# Dummy password from files module allows decode, but comparison will fail
+			# That's OK - we use REST for actual validation
 			#
 			pap
 			#
-			# After PAP decode, call REST module directly
-			# REST module will use Cleartext-Password from PAP decode
+			# PAP comparison will fail (dummy password doesn't match)
+			# But Cleartext-Password is already decoded and available
+			# Call REST directly here (within PAP section) for validation
 			#
 			update control {
 				# REST API secret (hardcoded for simplicity)
@@ -58,9 +64,11 @@ server default {
 			# - ok      → HTTP 2xx with no reply attrs
 			# - updated → reply attrs set
 			#
+			# If REST succeeds, override PAP failure
 			if (ok || updated) {
 				ok
 			}
+			# If REST fails, PAP failure will be used (reject)
 		}
 		Auth-Type REST {
 			update control {
