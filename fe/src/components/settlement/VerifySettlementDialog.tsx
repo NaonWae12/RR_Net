@@ -17,7 +17,11 @@ const mockSettlement = {
   collectorId: "collector-1",
   settlementDate: new Date(),
   submittedAmount: 500000,
-  verifiedAmount: null,
+  verifiedAmount: null as number | null,
+  verifiedBy: undefined as string | undefined,
+  verifiedAt: undefined as Date | undefined,
+  rejectionReason: undefined as string | undefined,
+  rejectionNote: undefined as string | undefined,
   invoiceCount: 3,
   submittedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
   status: "pending",
@@ -243,7 +247,7 @@ export function VerifySettlementDialog({
             <div className="space-y-3">
               <div>
                 <div className="text-sm text-slate-500">Submitted Amount</div>
-                <div className="text-lg font-bold text-slate-900">{formatCurrency(settlement.submittedAmount || settlement.amount)}</div>
+                <div className="text-lg font-bold text-slate-900">{formatCurrency(settlement.submittedAmount)}</div>
               </div>
               <div>
                 <div className="text-sm text-slate-500">Number of Invoices</div>
@@ -283,7 +287,7 @@ export function VerifySettlementDialog({
                       Total
                     </td>
                     <td className="px-4 py-2 text-sm text-right text-slate-900">
-                      {formatCurrency(settlement.submittedAmount || settlement.amount)}
+                      {formatCurrency(settlement.submittedAmount)}
                     </td>
                   </tr>
                 </tbody>
@@ -325,7 +329,7 @@ export function VerifySettlementDialog({
           {readOnly && settlement.status !== "pending" && (
             <div className="border-t border-slate-200 pt-4 space-y-4">
               <h3 className="text-base font-semibold text-slate-900">Verification Details</h3>
-              
+
               {settlement.status === "verified" && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-start">
@@ -366,7 +370,7 @@ export function VerifySettlementDialog({
                       )}
                       <div className="mt-2 space-y-1">
                         <div className="text-sm text-yellow-700">
-                          <span className="font-medium">Submitted Amount:</span> {formatCurrency(settlement.amount || settlement.submittedAmount)}
+                          <span className="font-medium">Submitted Amount:</span> {formatCurrency(settlement.submittedAmount)}
                         </div>
                         {settlement.verifiedAmount && (
                           <div className="text-sm text-yellow-700">
@@ -375,7 +379,7 @@ export function VerifySettlementDialog({
                         )}
                         {settlement.verifiedAmount && (
                           <div className="text-sm text-yellow-800 font-medium">
-                            <span className="font-medium">Difference:</span> {formatCurrency(settlement.verifiedAmount - (settlement.amount || settlement.submittedAmount))}
+                            <span className="font-medium">Difference:</span> {formatCurrency(settlement.verifiedAmount - settlement.submittedAmount)}
                           </div>
                         )}
                       </div>
@@ -515,7 +519,7 @@ export function VerifySettlementDialog({
                   <label className="block text-sm font-medium text-slate-700 mb-1">Submitted Amount</label>
                   <Input
                     type="text"
-                    value={formatCurrency(settlement.submittedAmount || settlement.amount)}
+                    value={formatCurrency(settlement.submittedAmount)}
                     disabled
                     className="bg-slate-50"
                   />
@@ -529,7 +533,7 @@ export function VerifySettlementDialog({
                     placeholder="Enter actual amount"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    Difference: {mismatchAmount ? formatCurrency(Number(mismatchAmount) - (settlement.submittedAmount || settlement.amount)) : "-"}
+                    Difference: {mismatchAmount ? formatCurrency(Number(mismatchAmount) - settlement.submittedAmount) : "-"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -549,13 +553,12 @@ export function VerifySettlementDialog({
           {!readOnly && settlement.status !== "pending" && (
             <div className="border-t border-slate-200 pt-4">
               <div
-                className={`rounded-lg p-4 ${
-                  settlement.status === "verified"
-                    ? "bg-green-50 border border-green-200"
-                    : settlement.status === "rejected"
+                className={`rounded-lg p-4 ${settlement.status === "verified"
+                  ? "bg-green-50 border border-green-200"
+                  : settlement.status === "rejected"
                     ? "bg-red-50 border border-red-200"
                     : "bg-yellow-50 border border-yellow-200"
-                }`}
+                  }`}
               >
                 <div className="font-medium">
                   {settlement.status === "verified" && "Settlement Verified"}
