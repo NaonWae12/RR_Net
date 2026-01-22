@@ -47,7 +47,10 @@ server default {
 			# REST module will use Cleartext-Password from PAP decode
 			#
 			update control {
-				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
+				# REST API secret (hardcoded for simplicity)
+				# Default: dev-radius-rest-secret (change if needed)
+				# For production, consider using env var: $ENV{RRNET_RADIUS_REST_SECRET}
+				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: dev-radius-rest-secret"
 			}
 			rest
 			#
@@ -61,7 +64,10 @@ server default {
 		}
 		Auth-Type REST {
 			update control {
-				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
+				# REST API secret (hardcoded for simplicity)
+				# Default: dev-radius-rest-secret (change if needed)
+				# For production, consider using env var: $ENV{RRNET_RADIUS_REST_SECRET}
+				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: dev-radius-rest-secret"
 			}
 
 			rest
@@ -82,7 +88,10 @@ server default {
 
 	accounting {
 		update control {
-			&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
+			# REST API secret (hardcoded for simplicity)
+			# Default: dev-radius-rest-secret (change if needed)
+			# For production, consider using env var: $ENV{RRNET_RADIUS_REST_SECRET}
+			&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: dev-radius-rest-secret"
 		}
 
 		rest

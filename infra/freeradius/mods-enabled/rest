@@ -2,9 +2,12 @@ rest {
 	# Authenticate: Access-Request (PAP)
 	# NOTE: Use Cleartext-Password (from PAP decode), NOT User-Password (binary)
 	# 
+	# Backend REST API URL (hardcoded for simplicity)
+	# Default: http://127.0.0.1:8080/api/v1/radius (localhost)
+	# To change: edit URI below to match your backend server
 
 	authenticate {
-		uri = "$ENV{RRNET_RADIUS_REST_BASE}/auth"
+		uri = "http://127.0.0.1:8080/api/v1/radius/auth"
 		method = 'post'
 		body = 'json'
 		data = '{ "User-Name": "%{User-Name}", "User-Password": "%{Cleartext-Password}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}" }'
@@ -12,7 +15,7 @@ rest {
 
 	# Accounting: Start/Interim/Stop
 	accounting {
-		uri = "$ENV{RRNET_RADIUS_REST_BASE}/acct"
+		uri = "http://127.0.0.1:8080/api/v1/radius/acct"
 		method = 'post'
 		body = 'json'
 		data = '{ "Acct-Status-Type": "%{Acct-Status-Type}", "Acct-Session-Id": "%{Acct-Session-Id}", "User-Name": "%{User-Name}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Framed-IP-Address": "%{Framed-IP-Address}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}", "Acct-Session-Time": "%{Acct-Session-Time}", "Acct-Input-Octets": "%{Acct-Input-Octets}", "Acct-Output-Octets": "%{Acct-Output-Octets}", "Acct-Input-Packets": "%{Acct-Input-Packets}", "Acct-Output-Packets": "%{Acct-Output-Packets}", "Acct-Terminate-Cause": "%{Acct-Terminate-Cause}" }'
