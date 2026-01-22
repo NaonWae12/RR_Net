@@ -19,23 +19,45 @@ server default {
 		preprocess
 		#
 		# PAP is MANDATORY
-		# This converts User-Password (binary) -> Cleartext-Password
+		# Set Auth-Type to PAP to allow PAP module to decode password
+		# PAP will decode User-Password (binary) -> Cleartext-Password
+		# using the NAS shared secret, even without password reference
 		#
-		pap
-		#
-		# Voucher-only flow:
-		# If Cleartext-Password exists, delegate auth to REST
-		#
-		if (&Cleartext-Password) {
+		if (&User-Password) {
 			update control {
-				Auth-Type := REST
+				Auth-Type := PAP
 			}
 		}
+		#
+		# PAP decode happens in authenticate section
+		# After decode, we'll switch to REST for backend validation
+		#
 	}
 
 	authenticate {
 		Auth-Type PAP {
+			#
+			# PAP decode: User-Password (binary) -> Cleartext-Password
+			# PAP module decodes password using NAS shared secret
+			# Cleartext-Password is now available
+			#
 			pap
+			#
+			# After PAP decode, call REST module directly
+			# REST module will use Cleartext-Password from PAP decode
+			#
+			update control {
+				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
+			}
+			rest
+			#
+			# rlm_rest returns:
+			# - ok      → HTTP 2xx with no reply attrs
+			# - updated → reply attrs set
+			#
+			if (ok || updated) {
+				ok
+			}
 		}
 		Auth-Type REST {
 			update control {
