@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { format } from "date-fns";
 import { DepositModal } from "@/components/collector/DepositModal";
 import servicePackageService, { ServicePackage } from "@/lib/api/servicePackageService";
-import { Client } from "@/lib/api/clientService";
+import type { Client } from "@/lib/api/clientService";
 
 export default function CollectorPage() {
   const {
@@ -108,7 +108,7 @@ export default function CollectorPage() {
     
     // Add from paid full clients - calculate from actual total tagihan
     paidFullClients.forEach((clientId) => {
-      const client = clients.find((c) => c.id === clientId);
+      const client: Client | undefined = clients.find((c) => c.id === clientId);
       if (client) {
         const clientTotal = calculateTotal(client);
         total += clientTotal;
