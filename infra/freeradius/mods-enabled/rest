@@ -8,15 +8,7 @@ rest {
 		uri = "$ENV{RRNET_RADIUS_REST_BASE}/auth"
 		method = 'post'
 		body = 'json'
-		data = '{
-			"User-Name": "%{User-Name}",
-			"User-Password": "%{Cleartext-Password}",
-			"NAS-IP-Address": "%{NAS-IP-Address}",
-			"NAS-Identifier": "%{NAS-Identifier}",
-			"NAS-Port-Id": "%{NAS-Port-Id}",
-			"Calling-Station-Id": "%{Calling-Station-Id}",
-			"Called-Station-Id": "%{Called-Station-Id}"
-		}'
+		data = '{ "User-Name": "%{User-Name}", "User-Password": "%{Cleartext-Password}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}" }'
 	}
 
 	# Accounting: Start/Interim/Stop
@@ -24,23 +16,7 @@ rest {
 		uri = "$ENV{RRNET_RADIUS_REST_BASE}/acct"
 		method = 'post'
 		body = 'json'
-		data = '{
-			"Acct-Status-Type": "%{Acct-Status-Type}",
-			"Acct-Session-Id": "%{Acct-Session-Id}",
-			"User-Name": "%{User-Name}",
-			"NAS-IP-Address": "%{NAS-IP-Address}",
-			"NAS-Identifier": "%{NAS-Identifier}",
-			"NAS-Port-Id": "%{NAS-Port-Id}",
-			"Framed-IP-Address": "%{Framed-IP-Address}",
-			"Calling-Station-Id": "%{Calling-Station-Id}",
-			"Called-Station-Id": "%{Called-Station-Id}",
-			"Acct-Session-Time": "%{Acct-Session-Time}",
-			"Acct-Input-Octets": "%{Acct-Input-Octets}",
-			"Acct-Output-Octets": "%{Acct-Output-Octets}",
-			"Acct-Input-Packets": "%{Acct-Input-Packets}",
-			"Acct-Output-Packets": "%{Acct-Output-Packets}",
-			"Acct-Terminate-Cause": "%{Acct-Terminate-Cause}"
-		}'
+		data = '{ "Acct-Status-Type": "%{Acct-Status-Type}", "Acct-Session-Id": "%{Acct-Session-Id}", "User-Name": "%{User-Name}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Framed-IP-Address": "%{Framed-IP-Address}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}", "Acct-Session-Time": "%{Acct-Session-Time}", "Acct-Input-Octets": "%{Acct-Input-Octets}", "Acct-Output-Octets": "%{Acct-Output-Octets}", "Acct-Input-Packets": "%{Acct-Input-Packets}", "Acct-Output-Packets": "%{Acct-Output-Packets}", "Acct-Terminate-Cause": "%{Acct-Terminate-Cause}" }'
 	}
 }
 
