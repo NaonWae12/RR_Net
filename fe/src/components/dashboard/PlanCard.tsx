@@ -29,7 +29,7 @@ export function PlanCard({ plan, className = '' }: PlanCardProps) {
   };
 
   return (
-    <div className={`rounded-xl border border-slate-200 bg-gradient-to-br from-indigo-500 to-purple-600 p-6 shadow-sm text-white ${className}`}>
+    <div className={`rounded-xl border border-slate-200 bg-linear-to-br from-indigo-500 to-purple-600 p-6 shadow-sm text-white ${className}`}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm font-medium text-indigo-100">Current Plan</p>

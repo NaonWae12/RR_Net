@@ -67,7 +67,7 @@ export default function CollectorPage() {
   // Calculate total billing for a client (same logic as ClientTable)
   const calculateTotal = useCallback((client: Client): number => {
     if (!client.service_package_id) return 0;
-    
+
     const pkg = packages.find((p) => p.id === client.service_package_id);
     if (!pkg) return 0;
 
@@ -105,7 +105,7 @@ export default function CollectorPage() {
   // Calculate total collected today (from paid full + partial payments)
   const totalCollectedToday = useMemo(() => {
     let total = 0;
-    
+
     // Add from paid full clients - calculate from actual total tagihan
     paidFullClients.forEach((clientId) => {
       const client: Client | undefined = clients.find((c) => c.id === clientId);
@@ -114,12 +114,12 @@ export default function CollectorPage() {
         total += clientTotal;
       }
     });
-    
+
     // Add from partial payments
     partialPayments.forEach((amount) => {
       total += amount;
     });
-    
+
     return total;
   }, [paidFullClients, partialPayments, clients, calculateTotal]);
 
@@ -162,7 +162,7 @@ export default function CollectorPage() {
         </div>
 
         {/* Today's Collection Summary */}
-        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-lg border border-indigo-200 p-6 text-white">
+        <div className="bg-linear-to-r from-indigo-500 to-indigo-600 rounded-lg border border-indigo-200 p-6 text-white">
           <div className="flex justify-between items-center">
             <div>
               <p className="text-indigo-100 text-sm font-medium">Today's Collection</p>
