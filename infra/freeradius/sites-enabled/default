@@ -1,6 +1,6 @@
-# RRNET - Golden FreeRADIUS config (voucher-only, PAP + REST)
-# This config follows RADIUS spec: PAP decodes User-Password to Cleartext-Password
-# Cleartext-Password is then sent as plain text in JSON (valid, no binary issues)
+# RRNET - FreeRADIUS config (REST-only relay, NO password validation)
+# FreeRADIUS = relay only, Backend = single source of truth
+# User-Password sent as-is to backend (backend handles all validation)
 
 server default {
 	listen {
@@ -18,58 +18,18 @@ server default {
 	authorize {
 		preprocess
 		#
-		# Files module provides dummy password reference
-		# This allows PAP module to decode User-Password (binary) -> Cleartext-Password
-		# Dummy password will always fail comparison, but password is already decoded
-		#
-		files
-		#
-		# PAP is MANDATORY for password decode
-		# Set Auth-Type to PAP to decode password using NAS shared secret
+		# Set Auth-Type := REST directly (NO PAP)
+		# FreeRADIUS does NOT decode/validate password
+		# Backend handles all password validation
 		#
 		if (&User-Password) {
 			update control {
-				Auth-Type := PAP
+				Auth-Type := REST
 			}
 		}
-		#
-		# PAP decode happens in authenticate section
-		# After decode, we'll use REST for actual validation
-		#
 	}
 
 	authenticate {
-		Auth-Type PAP {
-			#
-			# PAP decode: User-Password (binary) -> Cleartext-Password
-			# PAP module decodes password using NAS shared secret
-			# Dummy password from files module allows decode, but comparison will fail
-			# That's OK - we use REST for actual validation
-			#
-			pap
-			#
-			# PAP comparison will fail (dummy password doesn't match)
-			# But Cleartext-Password is already decoded and available
-			# Call REST directly here (within PAP section) for validation
-			#
-			update control {
-				# REST API secret (hardcoded for simplicity)
-				# Default: dev-radius-rest-secret (change if needed)
-				# For production, consider using env var: $ENV{RRNET_RADIUS_REST_SECRET}
-				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: dev-radius-rest-secret"
-			}
-			rest
-			#
-			# rlm_rest returns:
-			# - ok      → HTTP 2xx with no reply attrs
-			# - updated → reply attrs set
-			#
-			# If REST succeeds, override PAP failure
-			if (ok || updated) {
-				ok
-			}
-			# If REST fails, PAP failure will be used (reject)
-		}
 		Auth-Type REST {
 			update control {
 				# REST API secret (hardcoded for simplicity)

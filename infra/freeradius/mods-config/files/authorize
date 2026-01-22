@@ -1,9 +1,0 @@
-# RRNET - Dummy password file for PAP decode
-# This file provides dummy password reference to allow PAP module to decode User-Password
-# PAP will decode password using NAS shared secret, then we use REST for actual validation
-#
-# Format: User-Name    Cleartext-Password := "dummy"
-# Wildcard (*) matches all users
-
-*    Cleartext-Password := "dummy"
-

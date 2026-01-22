@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"rrnet/internal/domain/radius"
@@ -97,6 +98,34 @@ func (r *RadiusRepository) UpsertSession(ctx context.Context, session *radius.Se
 		session.AcctTerminateCause, session.SessionStatus, session.CreatedAt, session.UpdatedAt,
 	)
 	return err
+}
+
+func (r *RadiusRepository) GetSessionByAcctSessionID(ctx context.Context, acctSessionID string) (*radius.Session, error) {
+	query := `
+		SELECT id, tenant_id, router_id, voucher_id, acct_session_id, acct_unique_id,
+			username, nas_ip_address, nas_port_id, framed_ip_address,
+			calling_station_id, called_station_id, acct_start_time, acct_stop_time,
+			acct_session_time, acct_input_octets, acct_output_octets,
+			acct_input_packets, acct_output_packets, acct_terminate_cause,
+			session_status, created_at, updated_at
+		FROM radius_sessions
+		WHERE acct_session_id = $1
+		LIMIT 1
+	`
+	var s radius.Session
+	err := r.db.QueryRow(ctx, query, acctSessionID).Scan(
+		&s.ID, &s.TenantID, &s.RouterID, &s.VoucherID, &s.AcctSessionID,
+		&s.AcctUniqueID, &s.Username, &s.NASIPAddress, &s.NASPortID,
+		&s.FramedIPAddress, &s.CallingStationID, &s.CalledStationID,
+		&s.AcctStartTime, &s.AcctStopTime, &s.AcctSessionTime,
+		&s.AcctInputOctets, &s.AcctOutputOctets, &s.AcctInputPackets,
+		&s.AcctOutputPackets, &s.AcctTerminateCause, &s.SessionStatus,
+		&s.CreatedAt, &s.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	return &s, err
 }
 
 func (r *RadiusRepository) ListActiveSessions(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*radius.Session, error) {
