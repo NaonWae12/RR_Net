@@ -355,6 +355,42 @@ func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uu
 	return v, nil
 }
 
+// ConsumeVoucherForAuth validates and atomically marks voucher as used
+// This should be called AFTER password validation to prevent burning voucher on wrong password
+// Returns the consumed voucher or error if validation fails or voucher already used
+func (s *VoucherService) ConsumeVoucherForAuth(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	code string,
+) (*voucher.Voucher, error) {
+	v, err := s.voucherRepo.GetVoucherByCode(ctx, tenantID, code)
+	if err != nil {
+		return nil, err
+	}
+
+	if v.Status != voucher.VoucherStatusActive {
+		return nil, fmt.Errorf("voucher already %s", v.Status)
+	}
+
+	now := time.Now()
+	var expiresAt *time.Time
+
+	if pkg, err := s.voucherRepo.GetPackageByID(ctx, v.PackageID); err == nil {
+		if pkg.DurationHours != nil {
+			exp := now.Add(time.Duration(*pkg.DurationHours) * time.Hour)
+			expiresAt = &exp
+		}
+	}
+
+	return s.voucherRepo.ConsumeVoucherAtomic(
+		ctx,
+		tenantID,
+		code,
+		now,
+		expiresAt,
+	)
+}
+
 // generateRandomFromCharset creates a random string using the provided charset and length
 func generateRandomFromCharset(charset string, length int) (string, error) {
 	b := make([]byte, length)

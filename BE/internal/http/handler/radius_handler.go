@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,7 +17,6 @@ import (
 	"rrnet/internal/auth"
 	"rrnet/internal/domain/network"
 	"rrnet/internal/domain/radius"
-	"rrnet/internal/domain/voucher"
 	"rrnet/internal/repository"
 	"rrnet/internal/service"
 )
@@ -69,22 +68,40 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		// return
 	}
 
-	// Read body to buffer for debugging in case of error
+	// Read raw body for safe JSON decode and binary/base64 handling
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("[radius_auth] ERROR: Failed to read body: %v", err)
-		http.Error(w, `{"error":"read header failed"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 		return
 	}
-	// Restore body for decoder
-	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
+	// Log raw body for debugging (truncate if too long)
+	rawBodyStr := string(bodyBytes)
+	if len(rawBodyStr) > 500 {
+		log.Printf("[radius_auth] RAW BODY (truncated): %q...", rawBodyStr[:500])
+	} else {
+		log.Printf("[radius_auth] RAW BODY: %q", rawBodyStr)
+	}
+
+	// Decode JSON from raw body bytes
 	var req AuthRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[radius_auth] ERROR: JSON Decode failed: %v | Body: %s", err, string(bodyBytes))
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		log.Printf("[radius_auth] ERROR: JSON decode failed: %v", err)
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
+
+	// Handle User-Password: try base64 decode (FreeRADIUS often sends encoded/binary)
+	if req.UserPassword != "" {
+		if decoded, err := base64.StdEncoding.DecodeString(req.UserPassword); err == nil {
+			log.Printf("[radius_auth] User-Password decoded from base64 (len: %d -> %d)", len(req.UserPassword), len(decoded))
+			req.UserPassword = string(decoded)
+		} else {
+			log.Printf("[radius_auth] User-Password not base64, using raw string (len: %d)", len(req.UserPassword))
+		}
+	}
+
 	log.Printf("[radius_auth] request: user=%q pass=%q nas=%s", req.UserName, req.UserPassword, req.NASIPAddress)
 
 	// Resolve tenant/router via NAS-IP-Address
@@ -104,7 +121,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		[]byte(req.UserName),
 	)
 
-	// Validate voucher
+	// Step 1: Validate voucher (read-only check, doesn't consume)
 	v, err := h.voucherService.ValidateVoucherForAuth(ctx, tenantID, req.UserName)
 	if err != nil {
 		log.Printf(
@@ -127,7 +144,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate password if set
+	// Step 2: Validate password (BEFORE consuming voucher to prevent burning on wrong password)
 	if v.Password != "" {
 		// Trim whitespace for comparison
 		dbPass := strings.TrimSpace(v.Password)
@@ -146,6 +163,26 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+	}
+
+	// Step 3: Consume voucher atomically (COMMIT POINT - voucher is marked as used here)
+	v, err = h.voucherService.ConsumeVoucherForAuth(ctx, tenantID, req.UserName)
+	if err != nil {
+		log.Printf(
+			"[radius_auth] voucher consume failed tenant_id=%s username=%q err=%v",
+			tenantID.String(),
+			req.UserName,
+			err,
+		)
+		h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, fmt.Sprintf("voucher consume failed: %s", err.Error()))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"reply": map[string]interface{}{
+				"Reply-Message": fmt.Sprintf("Voucher already used or expired: %s", err.Error()),
+			},
+		})
+		return
 	}
 
 	// Success: log accept
@@ -253,23 +290,8 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 	case "Start":
 		session.AcctStartTime = &now
 		session.SessionStatus = radius.SessionStatusActive
-
-		// Mark voucher as used on first session start
-		if voucherID != nil && v.Status == voucher.VoucherStatusActive {
-			usedNow := time.Now()
-			v.Status = voucher.VoucherStatusUsed
-			v.UsedAt = &usedNow
-			v.FirstSessionID = &session.ID
-			v.UpdatedAt = usedNow
-
-			// Calculate expiration based on package duration
-			if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil && pkg.DurationHours != nil {
-				expiry := usedNow.Add(time.Duration(*pkg.DurationHours) * time.Hour)
-				v.ExpiresAt = &expiry
-			}
-
-			_ = h.voucherService.VoucherRepo().UpdateVoucher(ctx, v)
-		}
+		// Note: Voucher is already consumed in Auth handler
+		// Accounting only tracks session data (bandwidth, time, etc.)
 
 	case "Interim-Update":
 		sessionTime := req.AcctSessionTime

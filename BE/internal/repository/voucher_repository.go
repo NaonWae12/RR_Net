@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -204,4 +205,51 @@ func (r *VoucherRepository) DeleteVoucher(ctx context.Context, id uuid.UUID) err
 	query := `DELETE FROM vouchers WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id)
 	return err
+}
+
+// ConsumeVoucherAtomic atomically marks a voucher as used
+// Only updates if status is 'active', preventing race conditions
+// Returns the updated voucher or error if voucher not found or already used
+func (r *VoucherRepository) ConsumeVoucherAtomic(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	code string,
+	usedAt time.Time,
+	expiresAt *time.Time,
+) (*voucher.Voucher, error) {
+	query := `
+		UPDATE vouchers
+		SET
+			status = 'used',
+			used_at = $3,
+			expires_at = COALESCE($4, expires_at),
+			updated_at = NOW()
+		WHERE
+			tenant_id = $1
+			AND code = $2
+			AND status = 'active'
+			AND (expires_at IS NULL OR expires_at > NOW())
+		RETURNING
+			id, tenant_id, package_id, router_id, code, password, status,
+			used_at, expires_at, first_session_id, notes, created_at, updated_at
+	`
+
+	var v voucher.Voucher
+	err := r.db.QueryRow(
+		ctx,
+		query,
+		tenantID,
+		code,
+		usedAt,
+		expiresAt,
+	).Scan(
+		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("voucher already used or expired")
+	}
+
+	return &v, err
 }
