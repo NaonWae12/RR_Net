@@ -498,7 +498,6 @@ export const useCollectorStore = create<CollectorState & CollectorActions>((set,
       // 1. Update payment records with deposit_id
       // 2. Call backend API to create deposit record
       // 3. Update payment status to 'deposited'
-      return newDeposit;
     } catch (err) {
       set({
         error: toApiError(err).message,
