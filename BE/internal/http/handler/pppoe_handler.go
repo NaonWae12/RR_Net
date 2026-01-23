@@ -297,4 +297,3 @@ func (h *PPPoEHandler) DisconnectSession(w http.ResponseWriter, r *http.Request)
 
 	w.WriteHeader(http.StatusNoContent)
 }
-
