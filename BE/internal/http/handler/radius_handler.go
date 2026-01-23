@@ -107,16 +107,19 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[radius_auth] REJECT: username=%q nas_ip=%s reason=%v", req.UserName, req.NASIPAddress, err)
 		h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, err.Error())
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		response := map[string]interface{}{
 			"control": map[string]interface{}{
 				"Auth-Type": makeControlAttr("Reject"),
 			},
 			"reply": map[string]interface{}{
 				"Reply-Message": makeReplyAttr(fmt.Sprintf("Voucher invalid: %s", err.Error())),
 			},
-		})
+		}
+		responseJSON, _ := json.MarshalIndent(response, "", "  ")
+		log.Printf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -129,16 +132,19 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		if dbPass != reqPass {
 			log.Printf("[radius_auth] REJECT: username=%q nas_ip=%s reason=password_mismatch", req.UserName, req.NASIPAddress)
 			h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, "password mismatch")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			response := map[string]interface{}{
 				"control": map[string]interface{}{
 					"Auth-Type": makeControlAttr("Reject"),
 				},
 				"reply": map[string]interface{}{
 					"Reply-Message": makeReplyAttr("Voucher accepted but password incorrect"),
 				},
-			})
+			}
+			responseJSON, _ := json.MarshalIndent(response, "", "  ")
+			log.Printf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(response)
 			return
 		}
 	}
@@ -148,16 +154,19 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[radius_auth] REJECT: username=%q nas_ip=%s reason=voucher_consume_failed err=%v", req.UserName, req.NASIPAddress, err)
 		h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, fmt.Sprintf("voucher consume failed: %s", err.Error()))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		response := map[string]interface{}{
 			"control": map[string]interface{}{
 				"Auth-Type": makeControlAttr("Reject"),
 			},
 			"reply": map[string]interface{}{
 				"Reply-Message": makeReplyAttr(fmt.Sprintf("Voucher already used or expired: %s", err.Error())),
 			},
-		})
+		}
+		responseJSON, _ := json.MarshalIndent(response, "", "  ")
+		log.Printf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -183,6 +192,8 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		"reply": replyAttrs,
 	}
 
+	responseJSON, _ := json.MarshalIndent(response, "", "  ")
+	log.Printf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
