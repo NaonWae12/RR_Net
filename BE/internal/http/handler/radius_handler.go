@@ -58,8 +58,8 @@ type AuthRequest struct {
 // AuthResponse is returned to FreeRADIUS with reply attributes
 type AuthResponse map[string]interface{}
 
-// Note: FreeRADIUS rlm_rest expects direct string values, not nested objects with "value" key
-// Format: {"control": {"Auth-Type": "Accept"}, "reply": {"Reply-Message": "message"}}
+// Note: FreeRADIUS rlm_rest expects array values for attributes
+// Format: {"control": {"Auth-Type": ["Accept"]}, "reply": {"Reply-Message": ["message"]}}
 
 // Auth handles RADIUS Access-Request (REST-only, NO PAP)
 // FreeRADIUS sends User-Password as-is (backend handles all validation)
@@ -98,10 +98,10 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, err.Error())
 		response := map[string]interface{}{
 			"control": map[string]interface{}{
-				"Auth-Type": "Reject",
+				"Auth-Type": []string{"Reject"},
 			},
 			"reply": map[string]interface{}{
-				"Reply-Message": fmt.Sprintf("Voucher invalid: %s", err.Error()),
+				"Reply-Message": []string{fmt.Sprintf("Voucher invalid: %s", err.Error())},
 			},
 		}
 		responseJSON, _ := json.MarshalIndent(response, "", "  ")
@@ -123,10 +123,10 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, "password mismatch")
 			response := map[string]interface{}{
 				"control": map[string]interface{}{
-					"Auth-Type": "Reject",
+					"Auth-Type": []string{"Reject"},
 				},
 				"reply": map[string]interface{}{
-					"Reply-Message": "Voucher accepted but password incorrect",
+					"Reply-Message": []string{"Voucher accepted but password incorrect"},
 				},
 			}
 			responseJSON, _ := json.MarshalIndent(response, "", "  ")
@@ -145,10 +145,10 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultReject, fmt.Sprintf("voucher consume failed: %s", err.Error()))
 		response := map[string]interface{}{
 			"control": map[string]interface{}{
-				"Auth-Type": "Reject",
+				"Auth-Type": []string{"Reject"},
 			},
 			"reply": map[string]interface{}{
-				"Reply-Message": fmt.Sprintf("Voucher already used or expired: %s", err.Error()),
+				"Reply-Message": []string{fmt.Sprintf("Voucher already used or expired: %s", err.Error())},
 			},
 		}
 		responseJSON, _ := json.MarshalIndent(response, "", "  ")
@@ -166,17 +166,17 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	// Return ACCEPT with reply attributes (FreeRADIUS rlm_rest format)
 	// MikroTik expects a string like "down/up" (e.g., "2048k/512k").
 	replyAttrs := map[string]interface{}{
-		"Reply-Message": "Voucher accepted",
+		"Reply-Message": []string{"Voucher accepted"},
 	}
 
 	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
 		mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
-		replyAttrs["Mikrotik-Rate-Limit"] = mikrotikRateLimit
+		replyAttrs["Mikrotik-Rate-Limit"] = []string{mikrotikRateLimit}
 	}
 
 	response := map[string]interface{}{
 		"control": map[string]interface{}{
-			"Auth-Type": "Accept",
+			"Auth-Type": []string{"Accept"},
 		},
 		"reply": replyAttrs,
 	}
