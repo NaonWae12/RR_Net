@@ -187,61 +187,102 @@ type AcctRequest struct {
 // default JSON decoder cannot unmarshal into *int or *int64 pointers.
 // This function converts empty strings to nil and parses non-empty strings to integers.
 func (a *AcctRequest) UnmarshalJSON(data []byte) error {
-	// Use a temporary struct with string fields for integer values
-	type Alias AcctRequest
-	aux := &struct {
-		AcctSessionTime   string `json:"Acct-Session-Time,omitempty"`
-		AcctInputOctets   string `json:"Acct-Input-Octets,omitempty"`
-		AcctOutputOctets  string `json:"Acct-Output-Octets,omitempty"`
-		AcctInputPackets  string `json:"Acct-Input-Packets,omitempty"`
-		AcctOutputPackets string `json:"Acct-Output-Packets,omitempty"`
-		*Alias
-	}{
-		Alias: (*Alias)(a),
-	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
+	// First, unmarshal into a map to handle empty strings properly
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
+	// Set string fields directly
+	if v, ok := raw["Acct-Status-Type"].(string); ok {
+		a.AcctStatusType = v
+	}
+	if v, ok := raw["Acct-Session-Id"].(string); ok {
+		a.AcctSessionID = v
+	}
+	if v, ok := raw["User-Name"].(string); ok {
+		a.UserName = v
+	}
+	if v, ok := raw["NAS-Identifier"].(string); ok {
+		a.NASIdentifier = v
+	}
+	if v, ok := raw["NAS-IP-Address"].(string); ok {
+		a.NASIPAddress = v
+	}
+	if v, ok := raw["NAS-Port-Id"].(string); ok {
+		a.NASPortID = v
+	}
+	if v, ok := raw["Framed-IP-Address"].(string); ok {
+		a.FramedIPAddress = v
+	}
+	if v, ok := raw["Calling-Station-Id"].(string); ok {
+		a.CallingStationID = v
+	}
+	if v, ok := raw["Called-Station-Id"].(string); ok {
+		a.CalledStationID = v
+	}
+	if v, ok := raw["Acct-Terminate-Cause"].(string); ok {
+		a.AcctTerminateCause = v
+	}
+
 	// Parse integer fields: empty string = nil, otherwise parse
-	if aux.AcctSessionTime != "" {
-		val, err := strconv.Atoi(aux.AcctSessionTime)
+	if v, ok := raw["Acct-Session-Time"].(string); ok && v != "" {
+		val, err := strconv.Atoi(v)
 		if err != nil {
 			return fmt.Errorf("invalid Acct-Session-Time: %w", err)
 		}
 		a.AcctSessionTime = &val
+	} else if v, ok := raw["Acct-Session-Time"].(float64); ok {
+		// Handle numeric value (in case FreeRADIUS sends number)
+		val := int(v)
+		a.AcctSessionTime = &val
 	}
 
-	if aux.AcctInputOctets != "" {
-		val, err := strconv.ParseInt(aux.AcctInputOctets, 10, 64)
+	if v, ok := raw["Acct-Input-Octets"].(string); ok && v != "" {
+		val, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid Acct-Input-Octets: %w", err)
 		}
 		a.AcctInputOctets = &val
+	} else if v, ok := raw["Acct-Input-Octets"].(float64); ok {
+		// Handle numeric value
+		val := int64(v)
+		a.AcctInputOctets = &val
 	}
 
-	if aux.AcctOutputOctets != "" {
-		val, err := strconv.ParseInt(aux.AcctOutputOctets, 10, 64)
+	if v, ok := raw["Acct-Output-Octets"].(string); ok && v != "" {
+		val, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid Acct-Output-Octets: %w", err)
 		}
 		a.AcctOutputOctets = &val
+	} else if v, ok := raw["Acct-Output-Octets"].(float64); ok {
+		// Handle numeric value
+		val := int64(v)
+		a.AcctOutputOctets = &val
 	}
 
-	if aux.AcctInputPackets != "" {
-		val, err := strconv.ParseInt(aux.AcctInputPackets, 10, 64)
+	if v, ok := raw["Acct-Input-Packets"].(string); ok && v != "" {
+		val, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid Acct-Input-Packets: %w", err)
 		}
 		a.AcctInputPackets = &val
+	} else if v, ok := raw["Acct-Input-Packets"].(float64); ok {
+		// Handle numeric value
+		val := int64(v)
+		a.AcctInputPackets = &val
 	}
 
-	if aux.AcctOutputPackets != "" {
-		val, err := strconv.ParseInt(aux.AcctOutputPackets, 10, 64)
+	if v, ok := raw["Acct-Output-Packets"].(string); ok && v != "" {
+		val, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid Acct-Output-Packets: %w", err)
 		}
+		a.AcctOutputPackets = &val
+	} else if v, ok := raw["Acct-Output-Packets"].(float64); ok {
+		// Handle numeric value
+		val := int64(v)
 		a.AcctOutputPackets = &val
 	}
 
