@@ -293,12 +293,12 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             </label>
             <select
               {...register('category')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="regular">Regular</option>
-              <option value="business">Business</option>
-              <option value="enterprise">Enterprise</option>
-              <option value="lite">Lite</option>
+              <option value="regular" className="text-slate-900">Regular</option>
+              <option value="business" className="text-slate-900">Business</option>
+              <option value="enterprise" className="text-slate-900">Enterprise</option>
+              <option value="lite" className="text-slate-900">Lite</option>
             </select>
           </div>
           <div>
@@ -307,12 +307,12 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             </label>
             <select
               {...register('group_id')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:text-slate-500 disabled:bg-slate-50"
               disabled={groupsLoading}
             >
-              <option value="">{groupsLoading ? 'Loading groups...' : 'No group'}</option>
+              <option value="" className="text-slate-900">{groupsLoading ? 'Loading groups...' : 'No group'}</option>
               {groups.map((g) => (
-                <option key={g.id} value={g.id}>
+                <option key={g.id} value={g.id} className="text-slate-900">
                   {g.name}
                 </option>
               ))}
@@ -325,10 +325,10 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             </label>
             <select
               {...register('isolir_mode')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="auto">Auto Isolir</option>
-              <option value="manual">Manual Isolir</option>
+              <option value="auto" className="text-slate-900">Auto Isolir</option>
+              <option value="manual" className="text-slate-900">Manual Isolir</option>
             </select>
             {errors.isolir_mode && <p className="mt-1 text-xs text-red-600">{errors.isolir_mode.message}</p>}
           </div>
@@ -340,7 +340,7 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
               {...register('address')}
               rows={2}
               placeholder="Full address"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             {errors.address && (
               <p className="mt-1 text-xs text-red-600">{errors.address.message}</p>
@@ -359,12 +359,12 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             </label>
             <select
               {...register('service_package_id')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:text-slate-500 disabled:bg-slate-50"
               disabled={packagesLoading}
             >
-              <option value="">{packagesLoading ? 'Loading packages...' : 'Select package'}</option>
+              <option value="" className="text-slate-900">{packagesLoading ? 'Loading packages...' : 'Select package'}</option>
               {visiblePackages.map((p) => (
-                <option key={p.id} value={p.id}>
+                <option key={p.id} value={p.id} className="text-slate-900">
                   {p.name}
                 </option>
               ))}
@@ -425,12 +425,12 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             </label>
             <select
               {...register('discount_id')}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:text-slate-500 disabled:bg-slate-50"
               disabled={discountsLoading}
             >
-              <option value="">{discountsLoading ? 'Loading discounts...' : 'No discount'}</option>
+              <option value="" className="text-slate-900">{discountsLoading ? 'Loading discounts...' : 'No discount'}</option>
               {Array.isArray(discounts) && discounts.map((d) => (
-                <option key={d.id} value={d.id}>
+                <option key={d.id} value={d.id} className="text-slate-900">
                   {d.name} ({d.type === 'percent' ? `${d.value}%` : `Rp ${d.value.toLocaleString('id-ID')}`})
                   {d.expires_at && ` - Expires: ${new Date(d.expires_at).toLocaleDateString('id-ID')}`}
                 </option>
@@ -492,11 +492,11 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
                     setTempoError(null);
                     setSelectedTemplateId(e.target.value);
                   }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">Pilih template...</option>
+                  <option value="" className="text-slate-900">Pilih template...</option>
                   {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
+                    <option key={t.id} value={t.id} className="text-slate-900">
                       {t.name} (tanggal {t.due_day})
                     </option>
                   ))}
