@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -301,12 +303,26 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 		// return
 	}
 
+	// Read body first for debugging
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("[radius_acct] ERROR: Failed to read body: %v", err)
+		http.Error(w, `{"error":"failed to read body"}`, http.StatusBadRequest)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	log.Printf("[radius_acct] DEBUG: Received body: %s", string(bodyBytes))
+
 	var req AcctRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[radius_acct] ERROR: JSON Decode failed: %v", err)
+		log.Printf("[radius_acct] ERROR: Body content: %s", string(bodyBytes))
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
+
+	log.Printf("[radius_acct] DEBUG: Parsed request - AcctStatusType=%s, AcctSessionID=%s, UserName=%s, NASIPAddress=%s",
+		req.AcctStatusType, req.AcctSessionID, req.UserName, req.NASIPAddress)
 
 	// Resolve tenant/router via NAS-IP-Address
 	tenantID, routerID, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
