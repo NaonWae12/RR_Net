@@ -912,6 +912,20 @@ func New(deps Dependencies) http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		// Check for toggle-status action: /api/v1/vouchers/{id}/toggle-status
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 && parts[1] == "toggle-status" {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodPost {
+				voucherHandler.ToggleVoucherStatus(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Single ID route: /api/v1/vouchers/{id}
 		r = setPathParam(r, "id", path)
 		switch r.Method {
 		case http.MethodDelete:
@@ -925,6 +939,103 @@ func New(deps Dependencies) http.Handler {
 	// RADIUS audit routes (Protected, tenant-scoped)
 	mux.Handle("/api/v1/radius/auth-attempts", requireAuth(methodHandler("GET", radiusHandler.ListAuthAttempts)))
 	mux.Handle("/api/v1/radius/sessions", requireAuth(methodHandler("GET", radiusHandler.ListActiveSessions)))
+
+	// PPPoE Management
+	pppoeRepo := repository.NewPPPoERepository(deps.DB)
+	pppoeService := service.NewPPPoEService(pppoeRepo, routerRepo, profileRepo, clientRepo, deps.Config.Auth.JWTSecret)
+	pppoeHandler := handler.NewPPPoEHandler(pppoeService)
+
+	mux.Handle("/api/v1/pppoe/secrets", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapNetworkView)(http.HandlerFunc(pppoeHandler.ListPPPoESecrets)).ServeHTTP(w, r)
+		case http.MethodPost:
+			requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.CreatePPPoESecret)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/pppoe/secrets/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/pppoe/secrets/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		// Nested routes: /api/v1/pppoe/secrets/{id}/toggle-status, /sync
+		if len(parts) == 2 {
+			id := parts[0]
+			action := parts[1]
+			r = setPathParam(r, "id", id)
+
+			switch action {
+			case "toggle-status":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.ToggleStatus)).ServeHTTP(w, r)
+					return
+				}
+			case "sync":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.SyncToRouter)).ServeHTTP(w, r)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// CRUD on specific secret ID
+		if len(parts) == 1 {
+			r = setPathParam(r, "id", parts[0])
+			switch r.Method {
+			case http.MethodGet:
+				requireCapability(rbac.CapNetworkView)(http.HandlerFunc(pppoeHandler.GetPPPoESecret)).ServeHTTP(w, r)
+			case http.MethodPut:
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.UpdatePPPoESecret)).ServeHTTP(w, r)
+			case http.MethodDelete:
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.DeletePPPoESecret)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
+
+	mux.Handle("/api/v1/pppoe/active", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			requireCapability(rbac.CapNetworkView)(http.HandlerFunc(pppoeHandler.ListActiveConnections)).ServeHTTP(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/pppoe/active/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/pppoe/active/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		// Disconnect: /api/v1/pppoe/active/{session_id}/disconnect
+		if len(parts) == 2 && parts[1] == "disconnect" {
+			r = setPathParam(r, "session_id", parts[0])
+			if r.Method == http.MethodPost {
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.DisconnectSession)).ServeHTTP(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
 
 	// ============================================
 	// Maps routes (Protected, tenant-scoped, feature-gated)

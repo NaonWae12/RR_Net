@@ -181,6 +181,37 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 	return vouchers, nil
 }
 
+func (r *VoucherRepository) UpdateVoucherStatus(ctx context.Context, id uuid.UUID, status voucher.VoucherStatus) error {
+	query := `
+		UPDATE vouchers SET
+			status = $2, updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := r.db.Exec(ctx, query, id, status)
+	return err
+}
+
+func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*voucher.Voucher, error) {
+	query := `
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
+			p.name as package_name
+		FROM vouchers v
+		JOIN voucher_packages p ON v.package_id = p.id
+		WHERE v.id = $1
+	`
+	var v voucher.Voucher
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
+		&v.PackageName,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("voucher not found")
+	}
+	return &v, err
+}
+
 func (r *VoucherRepository) UpdateVoucher(ctx context.Context, v *voucher.Voucher) error {
 	query := `
 		UPDATE vouchers SET

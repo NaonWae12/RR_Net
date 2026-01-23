@@ -80,6 +80,11 @@ export const voucherService = {
   async deleteVoucher(id: string): Promise<void> {
     await apiClient.delete(`/vouchers/${id}`);
   },
+
+  async toggleStatus(id: string): Promise<Voucher> {
+    const res = await apiClient.post<Voucher>(`/vouchers/${id}/toggle-status`);
+    return res.data;
+  },
 };
 
 

@@ -330,6 +330,35 @@ func (s *VoucherService) GetVoucherByCode(ctx context.Context, tenantID uuid.UUI
 	return s.voucherRepo.GetVoucherByCode(ctx, tenantID, strings.TrimSpace(code))
 }
 
+func (s *VoucherService) ToggleVoucherStatus(ctx context.Context, id uuid.UUID) (*voucher.Voucher, error) {
+	// Get current voucher
+	v, err := s.voucherRepo.GetVoucherByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only allow toggle between active and revoked
+	// Cannot toggle used or expired vouchers
+	if v.Status != voucher.VoucherStatusActive && v.Status != voucher.VoucherStatusRevoked {
+		return nil, fmt.Errorf("cannot toggle status for voucher with status: %s", v.Status)
+	}
+
+	// Toggle status: active <-> revoked
+	newStatus := voucher.VoucherStatusRevoked
+	if v.Status == voucher.VoucherStatusRevoked {
+		newStatus = voucher.VoucherStatusActive
+	}
+
+	// Update status
+	if err := s.voucherRepo.UpdateVoucherStatus(ctx, id, newStatus); err != nil {
+		return nil, err
+	}
+
+	// Return updated voucher
+	v.Status = newStatus
+	return v, nil
+}
+
 func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
 	return s.voucherRepo.DeleteVoucher(ctx, id)
 }
