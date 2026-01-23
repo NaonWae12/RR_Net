@@ -72,6 +72,7 @@ type CreateRouterRequest struct {
 	Type               network.RouterType             `json:"type"`
 	Host               string                         `json:"host"`
 	NASIP              string                         `json:"nas_ip,omitempty"`
+	NASIdentifier      string                         `json:"nas_identifier,omitempty"`
 	Port               int                            `json:"port"`
 	Username           string                         `json:"username"`
 	Password           string                         `json:"password"`
@@ -94,9 +95,16 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 	newID := uuid.New()
 
 	// 0. Enforce Uniqueness of NAS-Identifier (Anti-Duplication)
-	// Even revoked routers are checked to prevent immediate reuse during retention period.
-	if existing, err := s.routerRepo.GetByNASIdentifier(ctx, newID.String()); err == nil && existing != nil {
-		return nil, fmt.Errorf("router identifier collision: %s. This ID is reserved or in retention", newID.String())
+	// Use provided NASIdentifier or auto-generate UUID if not provided
+	// Ensure NASIdentifier is never empty/null
+	nasIdentifier := strings.TrimSpace(req.NASIdentifier)
+	if nasIdentifier == "" {
+		nasIdentifier = newID.String() // Auto-generate if not provided
+	}
+
+	// Check uniqueness of the actual NASIdentifier
+	if existing, err := s.routerRepo.GetByNASIdentifier(ctx, nasIdentifier); err == nil && existing != nil {
+		return nil, fmt.Errorf("NAS-Identifier already exists: %s", nasIdentifier)
 	}
 
 	router := &network.Router{
@@ -117,7 +125,7 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		IsDefault:        req.IsDefault,
 		RadiusEnabled:    true, // default for MVP
 		RadiusSecret:     req.RadiusSecret,
-		NASIdentifier:    newID.String(),
+		NASIdentifier:    nasIdentifier,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}

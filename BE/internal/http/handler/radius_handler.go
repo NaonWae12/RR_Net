@@ -174,12 +174,78 @@ type AcctRequest struct {
 	FramedIPAddress    string `json:"Framed-IP-Address"`
 	CallingStationID   string `json:"Calling-Station-Id"`
 	CalledStationID    string `json:"Called-Station-Id"`
-	AcctSessionTime    int    `json:"Acct-Session-Time"`
-	AcctInputOctets    int64  `json:"Acct-Input-Octets"`
-	AcctOutputOctets   int64  `json:"Acct-Output-Octets"`
-	AcctInputPackets   int64  `json:"Acct-Input-Packets"`
-	AcctOutputPackets  int64  `json:"Acct-Output-Packets"`
+	AcctSessionTime    *int   `json:"Acct-Session-Time,omitempty"`
+	AcctInputOctets    *int64 `json:"Acct-Input-Octets,omitempty"`
+	AcctOutputOctets   *int64 `json:"Acct-Output-Octets,omitempty"`
+	AcctInputPackets   *int64 `json:"Acct-Input-Packets,omitempty"`
+	AcctOutputPackets  *int64 `json:"Acct-Output-Packets,omitempty"`
 	AcctTerminateCause string `json:"Acct-Terminate-Cause"`
+}
+
+// UnmarshalJSON custom unmarshaler to handle empty strings from FreeRADIUS
+// FreeRADIUS sends empty strings ("") for missing integer fields, which Go's
+// default JSON decoder cannot unmarshal into *int or *int64 pointers.
+// This function converts empty strings to nil and parses non-empty strings to integers.
+func (a *AcctRequest) UnmarshalJSON(data []byte) error {
+	// Use a temporary struct with string fields for integer values
+	type Alias AcctRequest
+	aux := &struct {
+		AcctSessionTime   string `json:"Acct-Session-Time,omitempty"`
+		AcctInputOctets   string `json:"Acct-Input-Octets,omitempty"`
+		AcctOutputOctets  string `json:"Acct-Output-Octets,omitempty"`
+		AcctInputPackets  string `json:"Acct-Input-Packets,omitempty"`
+		AcctOutputPackets string `json:"Acct-Output-Packets,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Parse integer fields: empty string = nil, otherwise parse
+	if aux.AcctSessionTime != "" {
+		val, err := strconv.Atoi(aux.AcctSessionTime)
+		if err != nil {
+			return fmt.Errorf("invalid Acct-Session-Time: %w", err)
+		}
+		a.AcctSessionTime = &val
+	}
+
+	if aux.AcctInputOctets != "" {
+		val, err := strconv.ParseInt(aux.AcctInputOctets, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid Acct-Input-Octets: %w", err)
+		}
+		a.AcctInputOctets = &val
+	}
+
+	if aux.AcctOutputOctets != "" {
+		val, err := strconv.ParseInt(aux.AcctOutputOctets, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid Acct-Output-Octets: %w", err)
+		}
+		a.AcctOutputOctets = &val
+	}
+
+	if aux.AcctInputPackets != "" {
+		val, err := strconv.ParseInt(aux.AcctInputPackets, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid Acct-Input-Packets: %w", err)
+		}
+		a.AcctInputPackets = &val
+	}
+
+	if aux.AcctOutputPackets != "" {
+		val, err := strconv.ParseInt(aux.AcctOutputPackets, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid Acct-Output-Packets: %w", err)
+		}
+		a.AcctOutputPackets = &val
+	}
+
+	return nil
 }
 
 // Acct handles RADIUS Accounting-Request (Start/Interim-Update/Stop)
@@ -228,24 +294,34 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 	// Upsert session based on Acct-Status-Type
 	now := time.Now()
 	session := &radius.Session{
-		ID:                sessionID, // Reuse or new
-		TenantID:          tenantID,
-		RouterID:          &routerID,
-		VoucherID:         voucherID,
-		AcctSessionID:     req.AcctSessionID,
-		Username:          req.UserName,
-		NASIPAddress:      req.NASIPAddress,
-		NASPortID:         req.NASPortID,
-		FramedIPAddress:   req.FramedIPAddress,
-		CallingStationID:  req.CallingStationID,
-		CalledStationID:   req.CalledStationID,
-		AcctInputOctets:   req.AcctInputOctets,
-		AcctOutputOctets:  req.AcctOutputOctets,
-		AcctInputPackets:  req.AcctInputPackets,
-		AcctOutputPackets: req.AcctOutputPackets,
-		SessionStatus:     radius.SessionStatusActive,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		ID:               sessionID, // Reuse or new
+		TenantID:         tenantID,
+		RouterID:         &routerID,
+		VoucherID:        voucherID,
+		AcctSessionID:    req.AcctSessionID,
+		Username:         req.UserName,
+		NASIPAddress:     req.NASIPAddress,
+		NASPortID:        req.NASPortID,
+		FramedIPAddress:  req.FramedIPAddress,
+		CallingStationID: req.CallingStationID,
+		CalledStationID:  req.CalledStationID,
+		SessionStatus:    radius.SessionStatusActive,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	// Handle pointer fields for octets/packets (check for nil before dereferencing)
+	if req.AcctInputOctets != nil {
+		session.AcctInputOctets = *req.AcctInputOctets
+	}
+	if req.AcctOutputOctets != nil {
+		session.AcctOutputOctets = *req.AcctOutputOctets
+	}
+	if req.AcctInputPackets != nil {
+		session.AcctInputPackets = *req.AcctInputPackets
+	}
+	if req.AcctOutputPackets != nil {
+		session.AcctOutputPackets = *req.AcctOutputPackets
 	}
 
 	switch req.AcctStatusType {
@@ -256,14 +332,18 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 		// Accounting only tracks session data (bandwidth, time, etc.)
 
 	case "Interim-Update":
-		sessionTime := req.AcctSessionTime
-		session.AcctSessionTime = &sessionTime
+		if req.AcctSessionTime != nil {
+			sessionTime := *req.AcctSessionTime
+			session.AcctSessionTime = &sessionTime
+		}
 
 	case "Stop":
 		stopTime := now
 		session.AcctStopTime = &stopTime
-		sessionTime := req.AcctSessionTime
-		session.AcctSessionTime = &sessionTime
+		if req.AcctSessionTime != nil {
+			sessionTime := *req.AcctSessionTime
+			session.AcctSessionTime = &sessionTime
+		}
 		session.AcctTerminateCause = req.AcctTerminateCause
 		session.SessionStatus = radius.SessionStatusStopped
 	}

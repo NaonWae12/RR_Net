@@ -17,10 +17,14 @@ import (
 
 type VoucherService struct {
 	voucherRepo *repository.VoucherRepository
+	radiusRepo  *repository.RadiusRepository
 }
 
-func NewVoucherService(voucherRepo *repository.VoucherRepository) *VoucherService {
-	return &VoucherService{voucherRepo: voucherRepo}
+func NewVoucherService(voucherRepo *repository.VoucherRepository, radiusRepo *repository.RadiusRepository) *VoucherService {
+	return &VoucherService{
+		voucherRepo: voucherRepo,
+		radiusRepo:  radiusRepo,
+	}
 }
 
 // VoucherRepo exposes the underlying repository for handler access
@@ -338,18 +342,31 @@ func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uu
 		return nil, fmt.Errorf("voucher not found: %w", err)
 	}
 
-	// Check status
-	if v.Status != voucher.VoucherStatusActive {
-		return nil, fmt.Errorf("voucher is %s", v.Status)
-	}
-
-	// Check expiration
+	// Check expiration FIRST (before status check)
 	if v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt) {
 		// Mark as expired
 		v.Status = voucher.VoucherStatusExpired
 		v.UpdatedAt = time.Now()
 		_ = s.voucherRepo.UpdateVoucher(ctx, v)
 		return nil, fmt.Errorf("voucher expired")
+	}
+
+	// Allow reuse if voucher is 'used' but not expired and no active session
+	if v.Status == voucher.VoucherStatusUsed {
+		hasActive, err := s.radiusRepo.HasActiveSession(ctx, v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check active session: %w", err)
+		}
+		if hasActive {
+			return nil, fmt.Errorf("voucher is currently in use")
+		}
+		// No active session → Allow reuse
+		return v, nil
+	}
+
+	// Normal flow: Check status for 'active'
+	if v.Status != voucher.VoucherStatusActive {
+		return nil, fmt.Errorf("voucher is %s", v.Status)
 	}
 
 	return v, nil

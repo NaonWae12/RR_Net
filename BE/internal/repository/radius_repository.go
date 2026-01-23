@@ -128,6 +128,19 @@ func (r *RadiusRepository) GetSessionByAcctSessionID(ctx context.Context, acctSe
 	return &s, err
 }
 
+// HasActiveSession checks if voucher has any active session
+func (r *RadiusRepository) HasActiveSession(ctx context.Context, voucherID uuid.UUID) (bool, error) {
+	query := `
+		SELECT COUNT(*) > 0
+		FROM radius_sessions
+		WHERE voucher_id = $1 AND session_status = 'active'
+		LIMIT 1
+	`
+	var hasActive bool
+	err := r.db.QueryRow(ctx, query, voucherID).Scan(&hasActive)
+	return hasActive, err
+}
+
 func (r *RadiusRepository) ListActiveSessions(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*radius.Session, error) {
 	query := `
 		SELECT id, tenant_id, router_id, voucher_id, acct_session_id, acct_unique_id,
@@ -166,4 +179,3 @@ func (r *RadiusRepository) ListActiveSessions(ctx context.Context, tenantID uuid
 	}
 	return sessions, nil
 }
-

@@ -731,8 +731,8 @@ func New(deps Dependencies) http.Handler {
 
 	// RADIUS + Voucher (Hotspot)
 	voucherRepo := repository.NewVoucherRepository(deps.DB)
-	voucherService := service.NewVoucherService(voucherRepo)
 	radiusRepo := repository.NewRadiusRepository(deps.DB)
+	voucherService := service.NewVoucherService(voucherRepo, radiusRepo)
 	// RADIUS shared secret from env (for FreeRADIUS rlm_rest authentication)
 	// Must match FreeRADIUS env: RRNET_RADIUS_REST_SECRET (see infra/freeradius + docker-compose).
 	radiusSecret := utils.GetEnv("RRNET_RADIUS_REST_SECRET", "dev-radius-rest-secret")

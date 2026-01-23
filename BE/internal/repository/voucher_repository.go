@@ -227,8 +227,13 @@ func (r *VoucherRepository) ConsumeVoucherAtomic(
 		WHERE
 			tenant_id = $1
 			AND code = $2
-			AND status = 'active'
-			AND (expires_at IS NULL OR expires_at > NOW())
+			AND (
+				-- Allow reuse from 'used' status if not expired
+				(status = 'used' AND (expires_at IS NULL OR expires_at > NOW()))
+				OR
+				-- Original: Allow from 'active' status
+				(status = 'active' AND (expires_at IS NULL OR expires_at > NOW()))
+			)
 		RETURNING
 			id, tenant_id, package_id, router_id, code, password, status,
 			used_at, expires_at, first_session_id, notes, created_at, updated_at
