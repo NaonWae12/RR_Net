@@ -22,52 +22,59 @@ func NewPPPoEHandler(pppoeService *service.PPPoEService) *PPPoEHandler {
 func (h *PPPoEHandler) CreatePPPoESecret(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	var req service.CreatePPPoESecretRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Username == "" {
-		http.Error(w, `{"error":"username is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "username is required")
 		return
 	}
 	if req.Password == "" {
-		http.Error(w, `{"error":"password is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "password is required")
 		return
 	}
 	if req.ClientID == uuid.Nil {
-		http.Error(w, `{"error":"client_id is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "client_id is required")
 		return
 	}
 	if req.RouterID == uuid.Nil {
-		http.Error(w, `{"error":"router_id is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "router_id is required")
 		return
 	}
 	if req.ProfileID == uuid.Nil {
-		http.Error(w, `{"error":"profile_id is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "profile_id is required")
 		return
 	}
 
 	secret, err := h.pppoeService.CreatePPPoESecret(r.Context(), tenantID, req)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		// Check for specific error types and return appropriate status codes
+		switch errMsg := err.Error(); errMsg {
+		case "username already exists":
+			sendError(w, http.StatusConflict, errMsg)
+		case "router not found", "profile not found", "client not found":
+			sendError(w, http.StatusNotFound, errMsg)
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to create PPPoE secret")
+		}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(secret)
+	// Use sendJSON helper for consistent response format
+	sendJSON(w, http.StatusCreated, secret)
 }
 
 func (h *PPPoEHandler) ListPPPoESecrets(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
@@ -99,12 +106,11 @@ func (h *PPPoEHandler) ListPPPoESecrets(w http.ResponseWriter, r *http.Request) 
 
 	secrets, total, err := h.pppoeService.ListPPPoESecrets(r.Context(), tenantID, routerID, clientID, disabled, limit, offset)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		sendError(w, http.StatusInternalServerError, "Failed to list PPPoE secrets")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"data":   secrets,
 		"total":  total,
 		"limit":  limit,
@@ -115,73 +121,83 @@ func (h *PPPoEHandler) ListPPPoESecrets(w http.ResponseWriter, r *http.Request) 
 func (h *PPPoEHandler) GetPPPoESecret(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, `{"error":"Invalid PPPoE secret ID"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid PPPoE secret ID")
 		return
 	}
 
 	secret, err := h.pppoeService.GetPPPoESecret(r.Context(), tenantID, id)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+		sendError(w, http.StatusNotFound, "PPPoE secret not found")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(secret)
+	sendJSON(w, http.StatusOK, secret)
 }
 
 func (h *PPPoEHandler) UpdatePPPoESecret(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, `{"error":"Invalid PPPoE secret ID"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid PPPoE secret ID")
 		return
 	}
 
 	var req service.UpdatePPPoESecretRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	secret, err := h.pppoeService.UpdatePPPoESecret(r.Context(), tenantID, id, req)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		switch errMsg := err.Error(); errMsg {
+		case "PPPoE secret not found":
+			sendError(w, http.StatusNotFound, errMsg)
+		case "username already exists":
+			sendError(w, http.StatusConflict, errMsg)
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to update PPPoE secret")
+		}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(secret)
+	sendJSON(w, http.StatusOK, secret)
 }
 
 func (h *PPPoEHandler) DeletePPPoESecret(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, `{"error":"Invalid PPPoE secret ID"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid PPPoE secret ID")
 		return
 	}
 
 	if err := h.pppoeService.DeletePPPoESecret(r.Context(), tenantID, id); err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		switch errMsg := err.Error(); errMsg {
+		case "PPPoE secret not found":
+			sendError(w, http.StatusNotFound, errMsg)
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to delete PPPoE secret")
+		}
 		return
 	}
 
@@ -191,43 +207,52 @@ func (h *PPPoEHandler) DeletePPPoESecret(w http.ResponseWriter, r *http.Request)
 func (h *PPPoEHandler) ToggleStatus(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, `{"error":"Invalid PPPoE secret ID"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid PPPoE secret ID")
 		return
 	}
 
 	secret, err := h.pppoeService.ToggleStatus(r.Context(), tenantID, id)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		switch errMsg := err.Error(); errMsg {
+		case "PPPoE secret not found":
+			sendError(w, http.StatusNotFound, errMsg)
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to toggle status")
+		}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(secret)
+	sendJSON(w, http.StatusOK, secret)
 }
 
 func (h *PPPoEHandler) SyncToRouter(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		http.Error(w, `{"error":"Invalid PPPoE secret ID"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid PPPoE secret ID")
 		return
 	}
 
 	if err := h.pppoeService.SyncToRouter(r.Context(), tenantID, id); err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		switch errMsg := err.Error(); errMsg {
+		case "PPPoE secret not found", "router not found", "profile not found":
+			sendError(w, http.StatusNotFound, errMsg)
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to sync to router")
+		}
 		return
 	}
 
@@ -237,30 +262,34 @@ func (h *PPPoEHandler) SyncToRouter(w http.ResponseWriter, r *http.Request) {
 func (h *PPPoEHandler) ListActiveConnections(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	routerIDStr := r.URL.Query().Get("router_id")
 	if routerIDStr == "" {
-		http.Error(w, `{"error":"router_id is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "router_id is required")
 		return
 	}
 
 	routerID, err := uuid.Parse(routerIDStr)
 	if err != nil {
-		http.Error(w, `{"error":"Invalid router_id"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid router_id")
 		return
 	}
 
 	connections, err := h.pppoeService.ListActiveConnections(r.Context(), tenantID, routerID)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		switch errMsg := err.Error(); errMsg {
+		case "router not found":
+			sendError(w, http.StatusNotFound, errMsg)
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to list active connections")
+		}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"data": connections,
 	})
 }
@@ -268,30 +297,35 @@ func (h *PPPoEHandler) ListActiveConnections(w http.ResponseWriter, r *http.Requ
 func (h *PPPoEHandler) DisconnectSession(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "No tenant context")
 		return
 	}
 
 	routerIDStr := r.URL.Query().Get("router_id")
 	if routerIDStr == "" {
-		http.Error(w, `{"error":"router_id is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "router_id is required")
 		return
 	}
 
 	routerID, err := uuid.Parse(routerIDStr)
 	if err != nil {
-		http.Error(w, `{"error":"Invalid router_id"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "Invalid router_id")
 		return
 	}
 
 	sessionID := getParam(r, "session_id")
 	if sessionID == "" {
-		http.Error(w, `{"error":"session_id is required"}`, http.StatusBadRequest)
+		sendError(w, http.StatusBadRequest, "session_id is required")
 		return
 	}
 
 	if err := h.pppoeService.DisconnectSession(r.Context(), tenantID, routerID, sessionID); err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		switch errMsg := err.Error(); errMsg {
+		case "router not found":
+			sendError(w, http.StatusNotFound, errMsg)
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to disconnect session")
+		}
 		return
 	}
 

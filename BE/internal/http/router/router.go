@@ -945,6 +945,7 @@ func New(deps Dependencies) http.Handler {
 	pppoeService := service.NewPPPoEService(pppoeRepo, routerRepo, profileRepo, clientRepo, deps.Config.Auth.JWTSecret)
 	pppoeHandler := handler.NewPPPoEHandler(pppoeService)
 
+	// PPPoE secrets base route (GET list, POST create)
 	mux.Handle("/api/v1/pppoe/secrets", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -956,13 +957,22 @@ func New(deps Dependencies) http.Handler {
 		}
 	})))
 
+	// PPPoE secrets with ID (nested routes) - handles /api/v1/pppoe/secrets/{id} and nested actions
 	mux.Handle("/api/v1/pppoe/secrets/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/pppoe/secrets/")
+		path = strings.TrimSuffix(path, "/")
 		if path == "" {
-			w.WriteHeader(http.StatusBadRequest)
+			// Empty path means request to /api/v1/pppoe/secrets/ - handle same as base route
+			switch r.Method {
+			case http.MethodGet:
+				requireCapability(rbac.CapNetworkView)(http.HandlerFunc(pppoeHandler.ListPPPoESecrets)).ServeHTTP(w, r)
+			case http.MethodPost:
+				requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.CreatePPPoESecret)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
 			return
 		}
-		path = strings.TrimSuffix(path, "/")
 		parts := strings.Split(path, "/")
 
 		// Nested routes: /api/v1/pppoe/secrets/{id}/toggle-status, /sync
