@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/auth"
+	"rrnet/internal/http/middleware"
 	"rrnet/internal/service"
 )
 
@@ -246,15 +249,51 @@ func (h *PPPoEHandler) SyncToRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Info().
+		Str("request_id", middleware.GetRequestID(r.Context())).
+		Str("tenant_id", tenantID.String()).
+		Str("secret_id", id.String()).
+		Msg("PPPoE: Syncing secret to router")
+
 	if err := h.pppoeService.SyncToRouter(r.Context(), tenantID, id); err != nil {
-		switch errMsg := err.Error(); errMsg {
-		case "PPPoE secret not found", "router not found", "profile not found":
+		errMsg := err.Error()
+
+		// Log error with details
+		log.Error().
+			Str("request_id", middleware.GetRequestID(r.Context())).
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", id.String()).
+			Err(err).
+			Msg("PPPoE: Failed to sync secret to router")
+
+		// Check for specific error types
+		switch {
+		case strings.Contains(errMsg, "PPPoE secret not found") ||
+			strings.Contains(errMsg, "router not found") ||
+			strings.Contains(errMsg, "profile not found"):
 			sendError(w, http.StatusNotFound, errMsg)
+		case strings.Contains(errMsg, "connection timeout") ||
+			strings.Contains(errMsg, "unable to reach") ||
+			strings.Contains(errMsg, "connection refused") ||
+			strings.Contains(errMsg, "no route to host") ||
+			strings.Contains(errMsg, "network is unreachable"):
+			// Router connection errors - return 503 Service Unavailable
+			sendError(w, http.StatusServiceUnavailable, "Router is unreachable. Please check router connection and network.")
+		case strings.Contains(errMsg, "failed to connect") ||
+			strings.Contains(errMsg, "failed to connect/login"):
+			// Connection/auth errors - return 502 Bad Gateway
+			sendError(w, http.StatusBadGateway, "Failed to connect to router. Please check router credentials and connectivity.")
 		default:
-			sendError(w, http.StatusInternalServerError, "Failed to sync to router")
+			sendError(w, http.StatusInternalServerError, "Failed to sync to router: "+errMsg)
 		}
 		return
 	}
+
+	log.Info().
+		Str("request_id", middleware.GetRequestID(r.Context())).
+		Str("tenant_id", tenantID.String()).
+		Str("secret_id", id.String()).
+		Msg("PPPoE: Secret synced to router successfully")
 
 	w.WriteHeader(http.StatusNoContent)
 }

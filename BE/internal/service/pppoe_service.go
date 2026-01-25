@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/domain/network"
 	"rrnet/internal/infra/mikrotik"
@@ -130,8 +131,20 @@ func (s *PPPoEService) CreatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 
 	// Sync to router (non-blocking, log errors but don't fail)
 	if err := s.syncSecretToRouter(ctx, router, profile, secret, req.Password); err != nil {
-		log.Printf("[PPPoE] WARNING: Failed to sync secret to router %s: %v", router.Name, err)
+		log.Warn().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", secret.ID.String()).
+			Str("router_name", router.Name).
+			Str("router_host", router.Host).
+			Err(err).
+			Msg("PPPoE Service: Failed to sync secret to router (non-blocking)")
 		// Don't return error - secret is saved in DB, can sync later
+	} else {
+		log.Info().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", secret.ID.String()).
+			Str("router_name", router.Name).
+			Msg("PPPoE Service: Secret synced to router successfully")
 	}
 
 	return secret, nil
@@ -250,13 +263,23 @@ func (s *PPPoEService) UpdatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 	// Decrypt password for sync
 	plainPassword, err := utils.DecryptStringAESGCM(s.encKey32, secret.Password)
 	if err != nil {
-		log.Printf("[PPPoE] WARNING: Failed to decrypt password for sync: %v", err)
+		log.Warn().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", secret.ID.String()).
+			Err(err).
+			Msg("PPPoE Service: Failed to decrypt password for sync")
 		plainPassword = "" // Will fail sync but secret is updated in DB
 	}
 
 	// Sync to router
 	if err := s.syncSecretToRouter(ctx, router, profile, secret, plainPassword); err != nil {
-		log.Printf("[PPPoE] WARNING: Failed to sync secret to router %s: %v", router.Name, err)
+		log.Warn().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", secret.ID.String()).
+			Str("router_name", router.Name).
+			Str("router_host", router.Host).
+			Err(err).
+			Msg("PPPoE Service: Failed to sync secret to router (non-blocking)")
 		// Don't return error - secret is updated in DB, can sync later
 	}
 
@@ -287,7 +310,13 @@ func (s *PPPoEService) DeletePPPoESecret(ctx context.Context, tenantID uuid.UUID
 	// Remove from router (non-blocking)
 	if router.Type == network.RouterTypeMikroTik {
 		if err := s.removeSecretFromRouter(ctx, router, secret.Username); err != nil {
-			log.Printf("[PPPoE] WARNING: Failed to remove secret from router %s: %v", router.Name, err)
+			log.Warn().
+				Str("tenant_id", tenantID.String()).
+				Str("secret_id", id.String()).
+				Str("router_name", router.Name).
+				Str("router_host", router.Host).
+				Err(err).
+				Msg("PPPoE Service: Failed to remove secret from router (non-blocking)")
 			// Don't return error - secret is deleted from DB
 		}
 	}
@@ -328,14 +357,24 @@ func (s *PPPoEService) ToggleStatus(ctx context.Context, tenantID uuid.UUID, id 
 	// Decrypt password for sync
 	plainPassword, err := utils.DecryptStringAESGCM(s.encKey32, secret.Password)
 	if err != nil {
-		log.Printf("[PPPoE] WARNING: Failed to decrypt password for sync: %v", err)
+		log.Warn().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", id.String()).
+			Err(err).
+			Msg("PPPoE Service: Failed to decrypt password for sync")
 		plainPassword = ""
 	}
 
 	// Sync to router
 	if router.Type == network.RouterTypeMikroTik {
 		if err := s.syncSecretToRouter(ctx, router, profile, secret, plainPassword); err != nil {
-			log.Printf("[PPPoE] WARNING: Failed to sync secret to router %s: %v", router.Name, err)
+			log.Warn().
+				Str("tenant_id", tenantID.String()).
+				Str("secret_id", id.String()).
+				Str("router_name", router.Name).
+				Str("router_host", router.Host).
+				Err(err).
+				Msg("PPPoE Service: Failed to sync secret to router (non-blocking)")
 		}
 	}
 
@@ -343,9 +382,19 @@ func (s *PPPoEService) ToggleStatus(ctx context.Context, tenantID uuid.UUID, id 
 }
 
 func (s *PPPoEService) SyncToRouter(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) error {
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("secret_id", id.String()).
+		Msg("PPPoE Service: Starting sync to router")
+
 	// Get secret
 	secret, err := s.pppoeRepo.GetByID(ctx, id)
 	if err != nil {
+		log.Warn().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", id.String()).
+			Err(err).
+			Msg("PPPoE Service: Secret not found")
 		return fmt.Errorf("PPPoE secret not found: %w", err)
 	}
 	if secret.TenantID != tenantID {
@@ -355,26 +404,91 @@ func (s *PPPoEService) SyncToRouter(ctx context.Context, tenantID uuid.UUID, id 
 	// Get router
 	router, err := s.routerRepo.GetByID(ctx, secret.RouterID)
 	if err != nil {
+		log.Warn().
+			Str("tenant_id", tenantID.String()).
+			Str("router_id", secret.RouterID.String()).
+			Err(err).
+			Msg("PPPoE Service: Router not found")
 		return fmt.Errorf("router not found: %w", err)
 	}
 	if router.Type != network.RouterTypeMikroTik {
 		return fmt.Errorf("only MikroTik routers are supported")
 	}
 
+	log.Debug().
+		Str("tenant_id", tenantID.String()).
+		Str("secret_id", id.String()).
+		Str("router_name", router.Name).
+		Str("router_host", router.Host).
+		Int("router_port", router.APIPort).
+		Bool("router_tls", router.APIUseTLS).
+		Msg("PPPoE Service: Router details retrieved")
+
 	// Get profile
 	profile, err := s.profileRepo.GetByID(ctx, secret.ProfileID)
 	if err != nil {
+		log.Warn().
+			Str("tenant_id", tenantID.String()).
+			Str("profile_id", secret.ProfileID.String()).
+			Err(err).
+			Msg("PPPoE Service: Profile not found")
 		return fmt.Errorf("profile not found: %w", err)
 	}
 
 	// Decrypt password
 	plainPassword, err := utils.DecryptStringAESGCM(s.encKey32, secret.Password)
 	if err != nil {
+		log.Error().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", id.String()).
+			Err(err).
+			Msg("PPPoE Service: Failed to decrypt password")
 		return fmt.Errorf("failed to decrypt password: %w", err)
 	}
 
 	// Sync to router
-	return s.syncSecretToRouter(ctx, router, profile, secret, plainPassword)
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("secret_id", id.String()).
+		Str("router_name", router.Name).
+		Str("router_host", router.Host).
+		Str("username", secret.Username).
+		Msg("PPPoE Service: Attempting to sync secret to router")
+
+	err = s.syncSecretToRouter(ctx, router, profile, secret, plainPassword)
+	if err != nil {
+		// Log detailed error information
+		errMsg := err.Error()
+		log.Error().
+			Str("tenant_id", tenantID.String()).
+			Str("secret_id", id.String()).
+			Str("router_name", router.Name).
+			Str("router_host", router.Host).
+			Str("router_port", strconv.Itoa(router.APIPort)).
+			Bool("router_tls", router.APIUseTLS).
+			Str("username", secret.Username).
+			Err(err).
+			Msg("PPPoE Service: Failed to sync secret to router")
+
+		// Return error with more context
+		if strings.Contains(errMsg, "connection timeout") ||
+			strings.Contains(errMsg, "unable to reach") ||
+			strings.Contains(errMsg, "connection refused") ||
+			strings.Contains(errMsg, "no route to host") ||
+			strings.Contains(errMsg, "network is unreachable") {
+			return fmt.Errorf("router connection failed: router %s (%s:%d) is unreachable - %w", router.Name, router.Host, router.APIPort, err)
+		}
+		return err
+	}
+
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("secret_id", id.String()).
+		Str("router_name", router.Name).
+		Str("username", secret.Username).
+		Msg("PPPoE Service: Secret synced to router successfully")
+
+	return nil
 }
 
 func (s *PPPoEService) ListPPPoESecrets(ctx context.Context, tenantID uuid.UUID, routerID *uuid.UUID, clientID *uuid.UUID, disabled *bool, limit, offset int) ([]*network.PPPoESecret, int, error) {
@@ -467,25 +581,71 @@ func (s *PPPoEService) syncSecretToRouter(ctx context.Context, router *network.R
 
 	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 
+	log.Debug().
+		Str("router_name", router.Name).
+		Str("router_host", router.Host).
+		Int("router_port", router.APIPort).
+		Bool("router_tls", router.APIUseTLS).
+		Str("username", secret.Username).
+		Str("profile_name", profile.Name).
+		Msg("PPPoE Service: Connecting to router")
+
 	// Try to find existing secret on router
 	secretID, err := mikrotik.FindPPPoESecretID(ctx, addr, router.APIUseTLS, router.Username, router.Password, secret.Username)
 	if err != nil {
-		// Secret doesn't exist, create it
-		mikrotikSecret := mikrotik.PPPoESecret{
-			Username:      secret.Username,
-			Password:      plainPassword,
-			Profile:       profile.Name,
-			Service:       secret.Service,
-			CallerID:      secret.CallerID,
-			RemoteAddress: secret.RemoteAddress,
-			LocalAddress:  secret.LocalAddress,
-			Comment:       secret.Comment,
-			Disabled:      secret.IsDisabled,
+		// Check if error is "not found" vs connection error
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "PPPoE secret not found") {
+			// Secret doesn't exist, create it
+			log.Debug().
+				Str("router_name", router.Name).
+				Str("username", secret.Username).
+				Msg("PPPoE Service: Secret not found on router, creating new")
+
+			mikrotikSecret := mikrotik.PPPoESecret{
+				Username:      secret.Username,
+				Password:      plainPassword,
+				Profile:       profile.Name,
+				Service:       secret.Service,
+				CallerID:      secret.CallerID,
+				RemoteAddress: secret.RemoteAddress,
+				LocalAddress:  secret.LocalAddress,
+				Comment:       secret.Comment,
+				Disabled:      secret.IsDisabled,
+			}
+
+			if err := mikrotik.AddPPPoESecret(ctx, addr, router.APIUseTLS, router.Username, router.Password, mikrotikSecret); err != nil {
+				log.Error().
+					Str("router_name", router.Name).
+					Str("username", secret.Username).
+					Err(err).
+					Msg("PPPoE Service: Failed to add secret to router")
+				return fmt.Errorf("failed to add secret to router: %w", err)
+			}
+
+			log.Info().
+				Str("router_name", router.Name).
+				Str("username", secret.Username).
+				Msg("PPPoE Service: Secret added to router successfully")
+			return nil
 		}
-		return mikrotik.AddPPPoESecret(ctx, addr, router.APIUseTLS, router.Username, router.Password, mikrotikSecret)
+
+		// Connection error - propagate it
+		log.Error().
+			Str("router_name", router.Name).
+			Str("username", secret.Username).
+			Err(err).
+			Msg("PPPoE Service: Failed to connect to router or find secret")
+		return fmt.Errorf("failed to connect to router: %w", err)
 	}
 
 	// Secret exists, update it
+	log.Debug().
+		Str("router_name", router.Name).
+		Str("username", secret.Username).
+		Str("secret_id", secretID).
+		Msg("PPPoE Service: Secret exists on router, updating")
+
 	mikrotikSecret := mikrotik.PPPoESecret{
 		Username:      secret.Username,
 		Password:      plainPassword,
@@ -497,7 +657,22 @@ func (s *PPPoEService) syncSecretToRouter(ctx context.Context, router *network.R
 		Comment:       secret.Comment,
 		Disabled:      secret.IsDisabled,
 	}
-	return mikrotik.UpdatePPPoESecret(ctx, addr, router.APIUseTLS, router.Username, router.Password, secretID, mikrotikSecret)
+
+	if err := mikrotik.UpdatePPPoESecret(ctx, addr, router.APIUseTLS, router.Username, router.Password, secretID, mikrotikSecret); err != nil {
+		log.Error().
+			Str("router_name", router.Name).
+			Str("username", secret.Username).
+			Str("secret_id", secretID).
+			Err(err).
+			Msg("PPPoE Service: Failed to update secret on router")
+		return fmt.Errorf("failed to update secret on router: %w", err)
+	}
+
+	log.Info().
+		Str("router_name", router.Name).
+		Str("username", secret.Username).
+		Msg("PPPoE Service: Secret updated on router successfully")
+	return nil
 }
 
 // removeSecretFromRouter removes a PPPoE secret from MikroTik router
