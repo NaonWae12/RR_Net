@@ -78,7 +78,7 @@ export function NetworkProfileForm({ initialData, onSubmit, onCancel, isLoading 
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6 bg-white border border-slate-200 rounded-lg p-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Input
           label="Profile Name"
@@ -90,7 +90,7 @@ export function NetworkProfileForm({ initialData, onSubmit, onCancel, isLoading 
             type="checkbox"
             id="is_active"
             {...register("is_active")}
-            className="rounded border-slate-300"
+            className="rounded border-slate-300 text-slate-900 focus:ring-slate-500"
           />
           <label htmlFor="is_active" className="text-sm font-medium text-slate-700">
             Active
@@ -157,21 +157,21 @@ export function NetworkProfileForm({ initialData, onSubmit, onCancel, isLoading 
           placeholder="e.g., 8.8.8.8,8.8.4.4"
         />
         <div className="md:col-span-2">
-          <label className="text-sm font-medium text-slate-700">Description (optional)</label>
+          <label className="text-sm font-medium text-slate-700 block mb-2">Description (optional)</label>
           <textarea
             {...register("description")}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:border-slate-500"
             rows={3}
             placeholder="Profile description"
           />
         </div>
       </div>
 
-      <div className="flex justify-end space-x-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+      <div className="flex justify-end space-x-2 border-t border-slate-200 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="border-slate-300 text-slate-700 hover:bg-slate-50">
           Cancel
         </Button>
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading} className="bg-slate-900 text-white hover:bg-slate-800">
           {isLoading ? "Saving..." : initialData ? "Update Profile" : "Create Profile"}
         </Button>
       </div>

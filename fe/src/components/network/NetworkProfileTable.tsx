@@ -77,30 +77,30 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Download</TableHead>
-            <TableHead>Upload</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Actions</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Name</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Download</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Upload</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Priority</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Status</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {profiles.map((profile) => (
-            <TableRow key={profile.id}>
-              <TableCell className="font-medium">{profile.name}</TableCell>
-              <TableCell>{formatSpeed(profile.download_speed)}</TableCell>
-              <TableCell>{formatSpeed(profile.upload_speed)}</TableCell>
-              <TableCell>{profile.priority}</TableCell>
+            <TableRow key={profile.id} className="border-slate-200">
+              <TableCell className="font-medium text-slate-900">{profile.name}</TableCell>
+              <TableCell className="text-slate-700">{formatSpeed(profile.download_speed)}</TableCell>
+              <TableCell className="text-slate-700">{formatSpeed(profile.upload_speed)}</TableCell>
+              <TableCell className="text-slate-700">{profile.priority}</TableCell>
               <TableCell>
                 {profile.is_active ? (
-                  <span className="text-xs font-medium text-green-600">Active</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">Active</span>
                 ) : (
-                  <span className="text-xs text-slate-400">Inactive</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200">Inactive</span>
                 )}
               </TableCell>
               <TableCell className="flex space-x-2">

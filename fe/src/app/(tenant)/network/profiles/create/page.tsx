@@ -36,10 +36,10 @@ export default function CreateNetworkProfilePage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={handleCancel}>
-          <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back to Profiles
+    <div className="p-6 space-y-6 bg-white min-h-screen">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <Button variant="outline" onClick={handleCancel} className="border-slate-300 text-slate-700 hover:bg-slate-50">
+          <ArrowLeftIcon className="h-4 w-4 mr-2 text-slate-700" /> Back to Profiles
         </Button>
       </div>
       <h1 className="text-2xl font-bold text-slate-900">Create New Network Profile</h1>

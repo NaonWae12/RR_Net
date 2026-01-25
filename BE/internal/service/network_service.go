@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/domain/network"
 	"rrnet/internal/infra/mikrotik"
@@ -707,22 +707,113 @@ func (s *NetworkService) CreateProfile(ctx context.Context, tenantID uuid.UUID, 
 		return nil, fmt.Errorf("failed to create profile: %w", err)
 	}
 
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("profile_id", profile.ID.String()).
+		Str("profile_name", profile.Name).
+		Int("download_speed", profile.DownloadSpeed).
+		Int("upload_speed", profile.UploadSpeed).
+		Msg("Network Service: Profile created successfully")
+
 	// Auto-sync profile to all tenant routers (non-blocking)
 	// This ensures profile exists on routers before it can be used
 	go func() {
-		routers, err := s.routerRepo.ListByTenant(context.Background(), tenantID)
+		syncCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		log.Info().
+			Str("tenant_id", tenantID.String()).
+			Str("profile_id", profile.ID.String()).
+			Str("profile_name", profile.Name).
+			Msg("Network Service: Starting auto-sync profile to routers")
+
+		routers, err := s.routerRepo.ListByTenant(syncCtx, tenantID)
 		if err != nil {
-			log.Printf("[Network] Warning: Failed to list routers for auto-sync: %v", err)
+			log.Error().
+				Str("tenant_id", tenantID.String()).
+				Str("profile_id", profile.ID.String()).
+				Str("profile_name", profile.Name).
+				Err(err).
+				Msg("Network Service: Failed to list routers for auto-sync")
 			return
 		}
 
+		log.Info().
+			Str("tenant_id", tenantID.String()).
+			Str("profile_id", profile.ID.String()).
+			Str("profile_name", profile.Name).
+			Int("router_count", len(routers)).
+			Msg("Network Service: Found routers for auto-sync")
+
+		syncedCount := 0
+		failedCount := 0
+
 		for _, router := range routers {
-			if router.Type == network.RouterTypeMikroTik && router.Host != "" {
-				if err := s.SyncProfileToRouter(context.Background(), profile.ID, router.ID); err != nil {
-					log.Printf("[Network] Warning: Failed to auto-sync profile %s to router %s: %v", profile.Name, router.Name, err)
-				}
+			if router.Type != network.RouterTypeMikroTik {
+				log.Debug().
+					Str("tenant_id", tenantID.String()).
+					Str("profile_id", profile.ID.String()).
+					Str("router_id", router.ID.String()).
+					Str("router_name", router.Name).
+					Str("router_type", string(router.Type)).
+					Msg("Network Service: Skipping non-MikroTik router for auto-sync")
+				continue
+			}
+
+			if router.Host == "" {
+				log.Debug().
+					Str("tenant_id", tenantID.String()).
+					Str("profile_id", profile.ID.String()).
+					Str("router_id", router.ID.String()).
+					Str("router_name", router.Name).
+					Msg("Network Service: Skipping router with empty host for auto-sync")
+				continue
+			}
+
+			log.Info().
+				Str("tenant_id", tenantID.String()).
+				Str("profile_id", profile.ID.String()).
+				Str("profile_name", profile.Name).
+				Str("router_id", router.ID.String()).
+				Str("router_name", router.Name).
+				Str("router_host", router.Host).
+				Int("router_port", router.APIPort).
+				Bool("router_tls", router.APIUseTLS).
+				Msg("Network Service: Auto-syncing profile to router")
+
+			if err := s.SyncProfileToRouter(syncCtx, profile.ID, router.ID); err != nil {
+				failedCount++
+				log.Error().
+					Str("tenant_id", tenantID.String()).
+					Str("profile_id", profile.ID.String()).
+					Str("profile_name", profile.Name).
+					Str("router_id", router.ID.String()).
+					Str("router_name", router.Name).
+					Str("router_host", router.Host).
+					Int("router_port", router.APIPort).
+					Err(err).
+					Msg("Network Service: Failed to auto-sync profile to router")
+			} else {
+				syncedCount++
+				log.Info().
+					Str("tenant_id", tenantID.String()).
+					Str("profile_id", profile.ID.String()).
+					Str("profile_name", profile.Name).
+					Str("router_id", router.ID.String()).
+					Str("router_name", router.Name).
+					Str("router_host", router.Host).
+					Msg("Network Service: Successfully auto-synced profile to router")
 			}
 		}
+
+		log.Info().
+			Str("tenant_id", tenantID.String()).
+			Str("profile_id", profile.ID.String()).
+			Str("profile_name", profile.Name).
+			Int("synced_count", syncedCount).
+			Int("failed_count", failedCount).
+			Int("total_routers", len(routers)).
+			Msg("Network Service: Auto-sync profile to routers completed")
 	}()
 
 	return profile, nil
@@ -816,43 +907,148 @@ func (s *NetworkService) SyncProfileToRouter(ctx context.Context, profileID uuid
 	// Get profile
 	profile, err := s.profileRepo.GetByID(ctx, profileID)
 	if err != nil {
+		log.Error().
+			Str("profile_id", profileID.String()).
+			Str("router_id", routerID.String()).
+			Err(err).
+			Msg("Network Service: Profile not found for sync")
 		return fmt.Errorf("profile not found: %w", err)
 	}
 
 	// Get router
 	router, err := s.routerRepo.GetByID(ctx, routerID)
 	if err != nil {
+		log.Error().
+			Str("profile_id", profileID.String()).
+			Str("router_id", routerID.String()).
+			Err(err).
+			Msg("Network Service: Router not found for sync")
 		return fmt.Errorf("router not found: %w", err)
 	}
 	if router.Type != network.RouterTypeMikroTik {
+		log.Warn().
+			Str("profile_id", profileID.String()).
+			Str("router_id", routerID.String()).
+			Str("router_type", string(router.Type)).
+			Msg("Network Service: Only MikroTik routers are supported for sync")
 		return fmt.Errorf("only MikroTik routers are supported")
 	}
+
+	log.Info().
+		Str("profile_id", profileID.String()).
+		Str("profile_name", profile.Name).
+		Str("router_id", routerID.String()).
+		Str("router_name", router.Name).
+		Str("router_host", router.Host).
+		Int("router_port", router.APIPort).
+		Bool("router_tls", router.APIUseTLS).
+		Msg("Network Service: Starting sync profile to router")
 
 	// Convert to MikroTik profile format
 	mikrotikProfile := convertToMikrotikProfile(profile)
 
+	log.Debug().
+		Str("profile_id", profileID.String()).
+		Str("profile_name", profile.Name).
+		Str("router_id", routerID.String()).
+		Str("router_name", router.Name).
+		Str("mikrotik_profile_name", mikrotikProfile.Name).
+		Str("mikrotik_rate_limit", mikrotikProfile.RateLimit).
+		Str("mikrotik_local_address", mikrotikProfile.LocalAddress).
+		Str("mikrotik_remote_address", mikrotikProfile.RemoteAddress).
+		Bool("mikrotik_only_one", mikrotikProfile.OnlyOne).
+		Msg("Network Service: Converted profile to MikroTik format")
+
 	// Connect and sync
 	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+
+	log.Debug().
+		Str("profile_id", profileID.String()).
+		Str("router_id", routerID.String()).
+		Str("router_address", addr).
+		Msg("Network Service: Checking if profile exists on router")
 
 	// Check if profile exists on router
 	_, err = mikrotik.FindPPPoEProfileID(ctx, addr, router.APIUseTLS, router.Username, router.Password, profile.Name)
 	if err != nil {
 		// Profile doesn't exist, create it
+		log.Info().
+			Str("profile_id", profileID.String()).
+			Str("profile_name", profile.Name).
+			Str("router_id", routerID.String()).
+			Str("router_name", router.Name).
+			Str("router_address", addr).
+			Msg("Network Service: Profile not found on router, creating new profile")
+
 		if err := mikrotik.AddPPPoEProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, mikrotikProfile); err != nil {
+			log.Error().
+				Str("profile_id", profileID.String()).
+				Str("profile_name", profile.Name).
+				Str("router_id", routerID.String()).
+				Str("router_name", router.Name).
+				Str("router_address", addr).
+				Err(err).
+				Msg("Network Service: Failed to create profile on router")
 			return fmt.Errorf("failed to create profile on router: %w", err)
 		}
+
+		log.Info().
+			Str("profile_id", profileID.String()).
+			Str("profile_name", profile.Name).
+			Str("router_id", routerID.String()).
+			Str("router_name", router.Name).
+			Msg("Network Service: Successfully created profile on router")
 		return nil
 	}
 
 	// Profile exists, update it
+	log.Info().
+		Str("profile_id", profileID.String()).
+		Str("profile_name", profile.Name).
+		Str("router_id", routerID.String()).
+		Str("router_name", router.Name).
+		Str("router_address", addr).
+		Msg("Network Service: Profile exists on router, updating profile")
+
 	profileIDStr, err := mikrotik.FindPPPoEProfileID(ctx, addr, router.APIUseTLS, router.Username, router.Password, profile.Name)
 	if err != nil {
+		log.Error().
+			Str("profile_id", profileID.String()).
+			Str("profile_name", profile.Name).
+			Str("router_id", routerID.String()).
+			Str("router_name", router.Name).
+			Str("router_address", addr).
+			Err(err).
+			Msg("Network Service: Failed to find profile ID on router")
 		return fmt.Errorf("failed to find profile on router: %w", err)
 	}
 
+	log.Debug().
+		Str("profile_id", profileID.String()).
+		Str("profile_name", profile.Name).
+		Str("router_id", routerID.String()).
+		Str("mikrotik_profile_id", profileIDStr).
+		Msg("Network Service: Found profile ID on router, updating")
+
 	if err := mikrotik.UpdatePPPoEProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, profileIDStr, mikrotikProfile); err != nil {
+		log.Error().
+			Str("profile_id", profileID.String()).
+			Str("profile_name", profile.Name).
+			Str("router_id", routerID.String()).
+			Str("router_name", router.Name).
+			Str("router_address", addr).
+			Str("mikrotik_profile_id", profileIDStr).
+			Err(err).
+			Msg("Network Service: Failed to update profile on router")
 		return fmt.Errorf("failed to update profile on router: %w", err)
 	}
+
+	log.Info().
+		Str("profile_id", profileID.String()).
+		Str("profile_name", profile.Name).
+		Str("router_id", routerID.String()).
+		Str("router_name", router.Name).
+		Msg("Network Service: Successfully updated profile on router")
 
 	return nil
 }
@@ -1253,7 +1449,9 @@ func (s *NetworkService) purgeOldRouters(ctx context.Context) {
 	retentionDays := 30
 	routers, err := s.routerRepo.GetPurgeableRouters(ctx, retentionDays)
 	if err != nil {
-		log.Printf("[RouterCleanup] Error fetching purgeable routers: %v", err)
+		log.Error().
+			Err(err).
+			Msg("RouterCleanup: Error fetching purgeable routers")
 		return
 	}
 
@@ -1261,12 +1459,23 @@ func (s *NetworkService) purgeOldRouters(ctx context.Context) {
 		return
 	}
 
-	log.Printf("[RouterCleanup] Found %d routers to purge (older than %d days)", len(routers), retentionDays)
+	log.Info().
+		Int("router_count", len(routers)).
+		Int("retention_days", retentionDays).
+		Msg("RouterCleanup: Found routers to purge")
+
 	for _, r := range routers {
 		if err := s.routerRepo.HardDelete(ctx, r.ID); err != nil {
-			log.Printf("[RouterCleanup] Failed to hard delete router %s (%s): %v", r.Name, r.ID, err)
+			log.Error().
+				Str("router_id", r.ID.String()).
+				Str("router_name", r.Name).
+				Err(err).
+				Msg("RouterCleanup: Failed to hard delete router")
 		} else {
-			log.Printf("[RouterCleanup] Purged router %s (%s)", r.Name, r.ID)
+			log.Info().
+				Str("router_id", r.ID.String()).
+				Str("router_name", r.Name).
+				Msg("RouterCleanup: Purged router")
 		}
 	}
 }

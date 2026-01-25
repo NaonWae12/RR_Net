@@ -58,25 +58,26 @@ export default function EditNetworkProfilePage() {
 
   if (error) {
     return (
-      <div className="p-6 text-red-500">
-        Error loading profile: {error}
+      <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
+        <p className="text-red-600 font-medium">Error loading profile</p>
+        <p className="text-red-500 text-sm mt-1">{error}</p>
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="p-6 text-slate-500">
-        Profile not found.
+      <div className="p-6 bg-slate-50 border border-slate-200 rounded-lg">
+        <p className="text-slate-600">Profile not found.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={handleCancel}>
-          <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back to Profile Details
+    <div className="p-6 space-y-6 bg-white min-h-screen">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <Button variant="outline" onClick={handleCancel} className="border-slate-300 text-slate-700 hover:bg-slate-50">
+          <ArrowLeftIcon className="h-4 w-4 mr-2 text-slate-700" /> Back to Profile Details
         </Button>
       </div>
       <h1 className="text-2xl font-bold text-slate-900">Edit Profile: {profile.name}</h1>

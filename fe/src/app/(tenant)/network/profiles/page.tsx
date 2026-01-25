@@ -17,18 +17,19 @@ export default function NetworkProfilesPage() {
 
   if (error) {
     return (
-      <div className="p-6 text-red-500">
-        Error loading profiles: {error}
+      <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
+        <p className="text-red-600 font-medium">Error loading profiles</p>
+        <p className="text-red-500 text-sm mt-1">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-6 space-y-6 bg-white min-h-screen">
+      <div className="flex justify-between items-center border-b border-slate-200 pb-4">
         <h1 className="text-2xl font-bold text-slate-900">Network Profiles</h1>
         <Button onClick={() => router.push("/network/profiles/create")}>
-          <PlusIcon className="h-5 w-5 mr-2" /> Add Profile
+          <PlusIcon className="h-5 w-5 mr-2 text-white" /> Add Profile
         </Button>
       </div>
 
