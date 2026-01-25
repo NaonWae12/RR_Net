@@ -843,17 +843,62 @@ func New(deps Dependencies) http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		r = setPathParam(r, "id", path)
-		switch r.Method {
-		case http.MethodGet:
-			networkHandler.GetProfile(w, r)
-		case http.MethodPut:
-			networkHandler.UpdateProfile(w, r)
-		case http.MethodDelete:
-			networkHandler.DeleteProfile(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		// Special routes: sync and import
+		if len(parts) == 1 {
+			switch parts[0] {
+			case "sync":
+				// GET /api/v1/network/profiles/sync?router_id=xxx - list profiles from router
+				if r.Method == http.MethodGet {
+					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.ListProfilesFromRouter)).ServeHTTP(w, r)
+					return
+				}
+			case "import":
+				// POST /api/v1/network/profiles/import?router_id=xxx - import profile from router
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.ImportProfileFromRouter)).ServeHTTP(w, r)
+					return
+				}
+			}
 		}
+
+		// Nested routes: /api/v1/network/profiles/{id}/sync?router_id=xxx
+		if len(parts) == 2 {
+			id := parts[0]
+			action := parts[1]
+			r = setPathParam(r, "id", id)
+
+			switch action {
+			case "sync":
+				// POST /api/v1/network/profiles/{id}/sync?router_id=xxx - sync profile to router
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.SyncProfileToRouter)).ServeHTTP(w, r)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// CRUD on specific ID
+		if len(parts) == 1 {
+			r = setPathParam(r, "id", parts[0])
+			switch r.Method {
+			case http.MethodGet:
+				networkHandler.GetProfile(w, r)
+			case http.MethodPut:
+				networkHandler.UpdateProfile(w, r)
+			case http.MethodDelete:
+				networkHandler.DeleteProfile(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
 	})))
 
 	// ============================================

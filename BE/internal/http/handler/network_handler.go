@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"rrnet/internal/auth"
 	"rrnet/internal/service"
 )
@@ -419,4 +421,143 @@ func (h *NetworkHandler) ToggleRemoteAccess(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updatedRouter)
+}
+
+// SyncProfileToRouter syncs a network profile to a specific MikroTik router
+func (h *NetworkHandler) SyncProfileToRouter(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	profileID, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid profile ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	routerIDStr := r.URL.Query().Get("router_id")
+	if routerIDStr == "" {
+		http.Error(w, `{"error":"router_id query parameter is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	routerID, err := uuid.Parse(routerIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid router_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify profile belongs to tenant
+	profile, err := h.networkService.GetProfile(r.Context(), profileID)
+	if err != nil {
+		http.Error(w, `{"error":"Profile not found"}`, http.StatusNotFound)
+		return
+	}
+	if profile.TenantID != tenantID {
+		http.Error(w, `{"error":"Profile not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Sync profile to router
+	if err := h.networkService.SyncProfileToRouter(r.Context(), profileID, routerID); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Profile synced to router successfully",
+	})
+}
+
+// ListProfilesFromRouter lists all PPPoE profiles from a MikroTik router
+func (h *NetworkHandler) ListProfilesFromRouter(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	routerIDStr := r.URL.Query().Get("router_id")
+	if routerIDStr == "" {
+		http.Error(w, `{"error":"router_id query parameter is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	routerID, err := uuid.Parse(routerIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid router_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), routerID)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// List profiles from router
+	profiles, err := h.networkService.ListProfilesFromRouter(r.Context(), routerID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"data":  profiles,
+		"total": len(profiles),
+	})
+}
+
+// ImportProfileFromRouter imports a PPPoE profile from MikroTik router to ERP
+func (h *NetworkHandler) ImportProfileFromRouter(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	routerIDStr := r.URL.Query().Get("router_id")
+	if routerIDStr == "" {
+		http.Error(w, `{"error":"router_id query parameter is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	routerID, err := uuid.Parse(routerIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid router_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		ProfileName string `json:"profile_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.ProfileName == "" {
+		http.Error(w, `{"error":"profile_name is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Import profile from router
+	profile, err := h.networkService.ImportProfileFromRouter(r.Context(), tenantID, routerID, req.ProfileName)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(profile)
 }

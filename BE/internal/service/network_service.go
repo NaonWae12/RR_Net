@@ -707,6 +707,24 @@ func (s *NetworkService) CreateProfile(ctx context.Context, tenantID uuid.UUID, 
 		return nil, fmt.Errorf("failed to create profile: %w", err)
 	}
 
+	// Auto-sync profile to all tenant routers (non-blocking)
+	// This ensures profile exists on routers before it can be used
+	go func() {
+		routers, err := s.routerRepo.ListByTenant(context.Background(), tenantID)
+		if err != nil {
+			log.Printf("[Network] Warning: Failed to list routers for auto-sync: %v", err)
+			return
+		}
+
+		for _, router := range routers {
+			if router.Type == network.RouterTypeMikroTik && router.Host != "" {
+				if err := s.SyncProfileToRouter(context.Background(), profile.ID, router.ID); err != nil {
+					log.Printf("[Network] Warning: Failed to auto-sync profile %s to router %s: %v", profile.Name, router.Name, err)
+				}
+			}
+		}
+	}()
+
 	return profile, nil
 }
 
@@ -790,6 +808,248 @@ func (s *NetworkService) UpdateProfile(ctx context.Context, id uuid.UUID, req Up
 
 func (s *NetworkService) DeleteProfile(ctx context.Context, id uuid.UUID) error {
 	return s.profileRepo.Delete(ctx, id)
+}
+
+// SyncProfileToRouter syncs a network profile to MikroTik router
+// This ensures the profile exists on the router before it can be used in PPPoE secrets
+func (s *NetworkService) SyncProfileToRouter(ctx context.Context, profileID uuid.UUID, routerID uuid.UUID) error {
+	// Get profile
+	profile, err := s.profileRepo.GetByID(ctx, profileID)
+	if err != nil {
+		return fmt.Errorf("profile not found: %w", err)
+	}
+
+	// Get router
+	router, err := s.routerRepo.GetByID(ctx, routerID)
+	if err != nil {
+		return fmt.Errorf("router not found: %w", err)
+	}
+	if router.Type != network.RouterTypeMikroTik {
+		return fmt.Errorf("only MikroTik routers are supported")
+	}
+
+	// Convert to MikroTik profile format
+	mikrotikProfile := convertToMikrotikProfile(profile)
+
+	// Connect and sync
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+
+	// Check if profile exists on router
+	_, err = mikrotik.FindPPPoEProfileID(ctx, addr, router.APIUseTLS, router.Username, router.Password, profile.Name)
+	if err != nil {
+		// Profile doesn't exist, create it
+		if err := mikrotik.AddPPPoEProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, mikrotikProfile); err != nil {
+			return fmt.Errorf("failed to create profile on router: %w", err)
+		}
+		return nil
+	}
+
+	// Profile exists, update it
+	profileIDStr, err := mikrotik.FindPPPoEProfileID(ctx, addr, router.APIUseTLS, router.Username, router.Password, profile.Name)
+	if err != nil {
+		return fmt.Errorf("failed to find profile on router: %w", err)
+	}
+
+	if err := mikrotik.UpdatePPPoEProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, profileIDStr, mikrotikProfile); err != nil {
+		return fmt.Errorf("failed to update profile on router: %w", err)
+	}
+
+	return nil
+}
+
+// ListProfilesFromRouter lists all PPPoE profiles from a MikroTik router
+func (s *NetworkService) ListProfilesFromRouter(ctx context.Context, routerID uuid.UUID) ([]mikrotik.PPPoEProfile, error) {
+	// Get router
+	router, err := s.routerRepo.GetByID(ctx, routerID)
+	if err != nil {
+		return nil, fmt.Errorf("router not found: %w", err)
+	}
+	if router.Type != network.RouterTypeMikroTik {
+		return nil, fmt.Errorf("only MikroTik routers are supported")
+	}
+
+	// Connect and list profiles
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+	profiles, err := mikrotik.ListPPPoEProfiles(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list profiles from router: %w", err)
+	}
+
+	return profiles, nil
+}
+
+// ImportProfileFromRouter imports a PPPoE profile from MikroTik router and creates it in ERP
+func (s *NetworkService) ImportProfileFromRouter(ctx context.Context, tenantID uuid.UUID, routerID uuid.UUID, profileName string) (*network.NetworkProfile, error) {
+	// Get router
+	router, err := s.routerRepo.GetByID(ctx, routerID)
+	if err != nil {
+		return nil, fmt.Errorf("router not found: %w", err)
+	}
+	if router.TenantID != tenantID {
+		return nil, fmt.Errorf("router not found")
+	}
+	if router.Type != network.RouterTypeMikroTik {
+		return nil, fmt.Errorf("only MikroTik routers are supported")
+	}
+
+	// Get profile from router
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+	mikrotikProfiles, err := mikrotik.ListPPPoEProfiles(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list profiles from router: %w", err)
+	}
+
+	// Find the profile by name
+	var mikrotikProfile *mikrotik.PPPoEProfile
+	for i := range mikrotikProfiles {
+		if mikrotikProfiles[i].Name == profileName {
+			mikrotikProfile = &mikrotikProfiles[i]
+			break
+		}
+	}
+
+	if mikrotikProfile == nil {
+		return nil, fmt.Errorf("profile '%s' not found on router", profileName)
+	}
+
+	// Convert MikroTik profile to NetworkProfile
+	profile := convertFromMikrotikProfile(tenantID, mikrotikProfile)
+
+	// Check if profile with same name already exists
+	existingProfiles, err := s.profileRepo.ListByTenant(ctx, tenantID, false)
+	if err == nil {
+		for _, p := range existingProfiles {
+			if p.Name == profile.Name {
+				return nil, fmt.Errorf("profile with name '%s' already exists", profile.Name)
+			}
+		}
+	}
+
+	// Create profile in database
+	if err := s.profileRepo.Create(ctx, profile); err != nil {
+		return nil, fmt.Errorf("failed to create profile: %w", err)
+	}
+
+	return profile, nil
+}
+
+// convertFromMikrotikProfile converts MikroTik PPPoEProfile to NetworkProfile
+func convertFromMikrotikProfile(tenantID uuid.UUID, mikrotikProfile *mikrotik.PPPoEProfile) *network.NetworkProfile {
+	// Parse rate-limit (format: "download/upload" in bps, e.g., "10M/5M" or "10000000/5000000")
+	downloadSpeed := 0
+	uploadSpeed := 0
+
+	if mikrotikProfile.RateLimit != "" {
+		parts := strings.Split(mikrotikProfile.RateLimit, "/")
+		if len(parts) == 2 {
+			downloadBps := parseMikrotikRate(parts[0])
+			uploadBps := parseMikrotikRate(parts[1])
+			// Convert bps to Kbps
+			downloadSpeed = downloadBps / 1000
+			uploadSpeed = uploadBps / 1000
+		}
+	}
+
+	// Default values if not parsed
+	if downloadSpeed == 0 {
+		downloadSpeed = 10000 // 10 Mbps default
+	}
+	if uploadSpeed == 0 {
+		uploadSpeed = 5000 // 5 Mbps default
+	}
+
+	profile := &network.NetworkProfile{
+		ID:            uuid.New(),
+		TenantID:      tenantID,
+		Name:          mikrotikProfile.Name,
+		DownloadSpeed: downloadSpeed,
+		UploadSpeed:   uploadSpeed,
+		Priority:      8, // Default
+		SharedUsers:   1, // Default
+		IsActive:      true,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	if mikrotikProfile.LocalAddress != "" {
+		profile.LocalAddress = &mikrotikProfile.LocalAddress
+	}
+	if mikrotikProfile.RemoteAddress != "" {
+		profile.RemoteAddress = &mikrotikProfile.RemoteAddress
+	}
+	if mikrotikProfile.Comment != "" {
+		profile.Description = &mikrotikProfile.Comment
+	}
+	if mikrotikProfile.OnlyOne {
+		profile.SharedUsers = 1
+	}
+
+	return profile
+}
+
+// parseMikrotikRate parses MikroTik rate format (e.g., "10M", "5M", "10000000") to bps
+func parseMikrotikRate(rateStr string) int {
+	rateStr = strings.TrimSpace(rateStr)
+	if rateStr == "" {
+		return 0
+	}
+
+	// Check if ends with M, K, G
+	rateStr = strings.ToUpper(rateStr)
+	if strings.HasSuffix(rateStr, "G") {
+		val, _ := strconv.Atoi(strings.TrimSuffix(rateStr, "G"))
+		return val * 1000000000 // Gbps to bps
+	}
+	if strings.HasSuffix(rateStr, "M") {
+		val, _ := strconv.Atoi(strings.TrimSuffix(rateStr, "M"))
+		return val * 1000000 // Mbps to bps
+	}
+	if strings.HasSuffix(rateStr, "K") {
+		val, _ := strconv.Atoi(strings.TrimSuffix(rateStr, "K"))
+		return val * 1000 // Kbps to bps
+	}
+
+	// Raw bps
+	val, _ := strconv.Atoi(rateStr)
+	return val
+}
+
+// convertToMikrotikProfile converts NetworkProfile to MikroTik PPPoEProfile format
+func convertToMikrotikProfile(profile *network.NetworkProfile) mikrotik.PPPoEProfile {
+	// Convert Kbps to bps and format as "download/upload" (e.g., "10M/5M" or "10000000/5000000")
+	downloadBps := profile.DownloadSpeed * 1000 // Kbps to bps
+	uploadBps := profile.UploadSpeed * 1000     // Kbps to bps
+
+	// Format as readable (e.g., "10M/5M") or raw bps if < 1M
+	var rateLimit string
+	if downloadBps >= 1000000 {
+		downloadMbps := downloadBps / 1000000
+		uploadMbps := uploadBps / 1000000
+		rateLimit = fmt.Sprintf("%dM/%dM", downloadMbps, uploadMbps)
+	} else {
+		rateLimit = fmt.Sprintf("%d/%d", downloadBps, uploadBps)
+	}
+
+	mikrotikProfile := mikrotik.PPPoEProfile{
+		Name:          profile.Name,
+		RateLimit:     rateLimit,
+		OnlyOne:       profile.SharedUsers == 1,
+		ChangeTCPMSS:  "yes", // Default
+		UseUpnp:       "no",  // Default
+		Comment:       fmt.Sprintf("RR-NET Profile: %s", profile.Name),
+	}
+
+	if profile.LocalAddress != nil {
+		mikrotikProfile.LocalAddress = *profile.LocalAddress
+	}
+	if profile.RemoteAddress != nil {
+		mikrotikProfile.RemoteAddress = *profile.RemoteAddress
+	}
+	if profile.Description != nil {
+		mikrotikProfile.Comment = *profile.Description
+	}
+
+	return mikrotikProfile
 }
 
 func (s *NetworkService) ToggleRemoteAccess(ctx context.Context, id uuid.UUID, enabled bool) (*network.Router, error) {

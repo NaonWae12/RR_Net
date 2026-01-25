@@ -37,6 +37,19 @@ type ActivePPPoEConnection struct {
 	PacketsOut int64
 }
 
+// PPPoEProfile represents a PPPoE profile configuration for MikroTik
+type PPPoEProfile struct {
+	Name          string
+	LocalAddress  string
+	RemoteAddress string
+	RateLimit     string // Format: "download/upload" in bps, e.g., "10M/5M"
+	OnlyOne       bool   // Only one session per user
+	ChangeTCPMSS  string // Change TCP MSS, e.g., "yes" or "no"
+	UseUpnp       string // Use UPnP, e.g., "yes" or "no"
+	AddressList   string // Address list name
+	Comment       string
+}
+
 // connectToRouter establishes a connection to MikroTik router
 func connectToRouter(ctx context.Context, addr string, useTLS bool, username string, password string) (*routeros.Client, error) {
 	timeout := 10 * time.Second
@@ -313,4 +326,202 @@ func FindPPPoESecretID(ctx context.Context, addr string, useTLS bool, routerUser
 
 	return secretID, nil
 }
+
+// ListPPPoEProfiles lists all PPPoE profiles from MikroTik router
+func ListPPPoEProfiles(ctx context.Context, addr string, useTLS bool, routerUsername string, routerPassword string) ([]PPPoEProfile, error) {
+	client, err := connectToRouter(ctx, addr, useTLS, routerUsername, routerPassword)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	cmd := "/ppp/profile/print"
+	reply, err := client.Run(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list PPPoE profiles: %w", err)
+	}
+
+	var profiles []PPPoEProfile
+	for _, re := range reply.Re {
+		profile := PPPoEProfile{
+			Name:          re.Map["name"],
+			LocalAddress:  re.Map["local-address"],
+			RemoteAddress: re.Map["remote-address"],
+			RateLimit:     re.Map["rate-limit"],
+			ChangeTCPMSS:  re.Map["change-tcp-mss"],
+			UseUpnp:       re.Map["use-upnp"],
+			AddressList:   re.Map["address-list"],
+			Comment:       re.Map["comment"],
+		}
+
+		// Parse only-one (can be "yes", "no", or empty)
+		if re.Map["only-one"] == "yes" {
+			profile.OnlyOne = true
+		}
+
+		profiles = append(profiles, profile)
+	}
+
+	return profiles, nil
+}
+
+// FindPPPoEProfileID finds the MikroTik internal ID of a PPPoE profile by name
+func FindPPPoEProfileID(ctx context.Context, addr string, useTLS bool, routerUsername string, routerPassword string, profileName string) (string, error) {
+	client, err := connectToRouter(ctx, addr, useTLS, routerUsername, routerPassword)
+	if err != nil {
+		return "", err
+	}
+	defer client.Close()
+
+	cmd := "/ppp/profile/print"
+	args := []string{
+		cmd,
+		"?name=" + profileName,
+	}
+	reply, err := client.RunArgs(args)
+	if err != nil {
+		return "", fmt.Errorf("failed to find PPPoE profile: %w", err)
+	}
+
+	if len(reply.Re) == 0 {
+		return "", fmt.Errorf("PPPoE profile not found: %s", profileName)
+	}
+
+	profileID := reply.Re[0].Map[".id"]
+	if profileID == "" {
+		return "", fmt.Errorf("invalid profile ID")
+	}
+
+	return profileID, nil
+}
+
+// AddPPPoEProfile adds a PPPoE profile to MikroTik router
+func AddPPPoEProfile(ctx context.Context, addr string, useTLS bool, routerUsername string, routerPassword string, profile PPPoEProfile) error {
+	client, err := connectToRouter(ctx, addr, useTLS, routerUsername, routerPassword)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	cmd := "/ppp/profile/add"
+	args := []string{
+		cmd,
+		"=name=" + profile.Name,
+	}
+
+	if profile.LocalAddress != "" {
+		args = append(args, "=local-address="+profile.LocalAddress)
+	}
+	if profile.RemoteAddress != "" {
+		args = append(args, "=remote-address="+profile.RemoteAddress)
+	}
+	if profile.RateLimit != "" {
+		args = append(args, "=rate-limit="+profile.RateLimit)
+	}
+	if profile.OnlyOne {
+		args = append(args, "=only-one=yes")
+	} else {
+		args = append(args, "=only-one=no")
+	}
+	if profile.ChangeTCPMSS != "" {
+		args = append(args, "=change-tcp-mss="+profile.ChangeTCPMSS)
+	}
+	if profile.UseUpnp != "" {
+		args = append(args, "=use-upnp="+profile.UseUpnp)
+	}
+	if profile.AddressList != "" {
+		args = append(args, "=address-list="+profile.AddressList)
+	}
+	if profile.Comment != "" {
+		args = append(args, "=comment="+profile.Comment)
+	}
+
+	_, err = client.RunArgs(args)
+	if err != nil {
+		return fmt.Errorf("failed to add PPPoE profile: %w", err)
+	}
+
+	return nil
+}
+
+// UpdatePPPoEProfile updates an existing PPPoE profile on MikroTik router
+func UpdatePPPoEProfile(ctx context.Context, addr string, useTLS bool, routerUsername string, routerPassword string, profileID string, profile PPPoEProfile) error {
+	client, err := connectToRouter(ctx, addr, useTLS, routerUsername, routerPassword)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	cmd := "/ppp/profile/set"
+	args := []string{
+		cmd,
+		"=.id=" + profileID,
+	}
+
+	if profile.Name != "" {
+		args = append(args, "=name="+profile.Name)
+	}
+	if profile.LocalAddress != "" {
+		args = append(args, "=local-address="+profile.LocalAddress)
+	}
+	if profile.RemoteAddress != "" {
+		args = append(args, "=remote-address="+profile.RemoteAddress)
+	}
+	if profile.RateLimit != "" {
+		args = append(args, "=rate-limit="+profile.RateLimit)
+	}
+	if profile.OnlyOne {
+		args = append(args, "=only-one=yes")
+	} else {
+		args = append(args, "=only-one=no")
+	}
+	if profile.ChangeTCPMSS != "" {
+		args = append(args, "=change-tcp-mss="+profile.ChangeTCPMSS)
+	}
+	if profile.UseUpnp != "" {
+		args = append(args, "=use-upnp="+profile.UseUpnp)
+	}
+	if profile.AddressList != "" {
+		args = append(args, "=address-list="+profile.AddressList)
+	}
+	if profile.Comment != "" {
+		args = append(args, "=comment="+profile.Comment)
+	}
+
+	_, err = client.RunArgs(args)
+	if err != nil {
+		return fmt.Errorf("failed to update PPPoE profile: %w", err)
+	}
+
+	return nil
+}
+
+// RemovePPPoEProfile removes a PPPoE profile from MikroTik router by name
+func RemovePPPoEProfile(ctx context.Context, addr string, useTLS bool, routerUsername string, routerPassword string, profileName string) error {
+	client, err := connectToRouter(ctx, addr, useTLS, routerUsername, routerPassword)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	// First, find the profile by name
+	profileID, err := FindPPPoEProfileID(ctx, addr, useTLS, routerUsername, routerPassword, profileName)
+	if err != nil {
+		return err
+	}
+
+	// Remove the profile
+	cmd := "/ppp/profile/remove"
+	args := []string{
+		cmd,
+		"=.id=" + profileID,
+	}
+	_, err = client.RunArgs(args)
+	if err != nil {
+		return fmt.Errorf("failed to remove PPPoE profile: %w", err)
+	}
+
+	return nil
+}
+
 
