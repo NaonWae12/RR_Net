@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-routeros/routeros"
@@ -524,4 +526,48 @@ func RemovePPPoEProfile(ctx context.Context, addr string, useTLS bool, routerUse
 	return nil
 }
 
+// GetPPPoEServerLocalAddress gets the local address from PPPoE server interface on MikroTik router
+// Returns the first available local address from PPPoE server configuration
+func GetPPPoEServerLocalAddress(ctx context.Context, addr string, useTLS bool, username string, password string) (string, error) {
+	client, err := connectToRouter(ctx, addr, useTLS, username, password)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to router: %w", err)
+	}
+	defer client.Close()
+
+	// Get PPPoE server interface configuration
+	// /interface pppoe-server server print
+	reply, err := client.Run("/interface/pppoe-server/server/print")
+	if err != nil {
+		return "", fmt.Errorf("failed to get PPPoE server config: %w", err)
+	}
+
+	// Look for local-address in server configuration
+	for _, re := range reply.Re {
+		if localAddr, ok := re.Map["local-address"]; ok && localAddr != "" {
+			return localAddr, nil
+		}
+	}
+
+	// If not found in server config, try to get from interface IP
+	// Get all interfaces and find one with IP that might be used for PPPoE
+	ipReply, err := client.Run("/ip/address/print")
+	if err != nil {
+		return "", fmt.Errorf("failed to get IP addresses: %w", err)
+	}
+
+	// Return first non-loopback IP address
+	for _, re := range ipReply.Re {
+		if addrStr, ok := re.Map["address"]; ok && addrStr != "" {
+			// Parse CIDR format (e.g., "192.168.1.1/24")
+			ipStr := strings.Split(addrStr, "/")[0]
+			ip := net.ParseIP(ipStr)
+			if ip != nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
+				return ipStr, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no local address found on router")
+}
 

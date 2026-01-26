@@ -94,6 +94,57 @@ func (s *PPPoEService) CreatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 		return nil, fmt.Errorf("username already exists")
 	}
 
+	// Auto-fill local address and remote address if not provided
+	localAddress := req.LocalAddress
+	remoteAddress := req.RemoteAddress
+
+	// Priority: 1. From request, 2. From profile, 3. From router
+	if localAddress == "" {
+		if profile.LocalAddress != nil && *profile.LocalAddress != "" {
+			localAddress = *profile.LocalAddress
+			log.Info().
+				Str("tenant_id", tenantID.String()).
+				Str("profile_id", profile.ID.String()).
+				Str("local_address", localAddress).
+				Msg("PPPoE Service: Using local address from profile")
+		} else {
+			// Try to get from router
+			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+			routerLocalAddr, err := mikrotik.GetPPPoEServerLocalAddress(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+			if err == nil {
+				localAddress = routerLocalAddr
+				log.Info().
+					Str("tenant_id", tenantID.String()).
+					Str("router_id", router.ID.String()).
+					Str("local_address", localAddress).
+					Msg("PPPoE Service: Using local address from router")
+			} else {
+				log.Warn().
+					Str("tenant_id", tenantID.String()).
+					Str("router_id", router.ID.String()).
+					Err(err).
+					Msg("PPPoE Service: Failed to get local address from router, leaving empty")
+			}
+		}
+	}
+
+	// Priority: 1. From request, 2. From profile
+	if remoteAddress == "" {
+		if profile.RemoteAddress != nil && *profile.RemoteAddress != "" {
+			remoteAddress = *profile.RemoteAddress
+			log.Info().
+				Str("tenant_id", tenantID.String()).
+				Str("profile_id", profile.ID.String()).
+				Str("remote_address", remoteAddress).
+				Msg("PPPoE Service: Using remote address from profile")
+		} else {
+			log.Warn().
+				Str("tenant_id", tenantID.String()).
+				Str("profile_id", profile.ID.String()).
+				Msg("PPPoE Service: No remote address provided, leaving empty")
+		}
+	}
+
 	// Encrypt password
 	passwordEnc, err := utils.EncryptStringAESGCM(s.encKey32, req.Password)
 	if err != nil {
@@ -112,8 +163,8 @@ func (s *PPPoEService) CreatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 		Password:      passwordEnc,
 		Service:       req.Service,
 		CallerID:      req.CallerID,
-		RemoteAddress: req.RemoteAddress,
-		LocalAddress:  req.LocalAddress,
+		RemoteAddress: remoteAddress,
+		LocalAddress:  localAddress,
 		Comment:       req.Comment,
 		IsDisabled:    false,
 		CreatedAt:     now,
