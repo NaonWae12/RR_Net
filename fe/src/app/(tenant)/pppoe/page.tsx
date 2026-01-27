@@ -307,7 +307,7 @@ export default function PPPoEPage() {
       <Dialog open={createDialog} onOpenChange={setCreateDialog}>
         <DialogContent className="sm:max-w-[600px] bg-white">
           <DialogHeader>
-            <DialogTitle>Create PPPoE Secret</DialogTitle>
+            <DialogTitle className="text-slate-900">Create PPPoE Secret</DialogTitle>
             <DialogDescription>Create a new PPPoE user account.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -376,6 +376,28 @@ export default function PPPoEPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Local Address</label>
+                <Input
+                  value={formData.local_address}
+                  onChange={(e) => setFormData({ ...formData, local_address: e.target.value })}
+                  className="mt-1"
+                  placeholder="Auto-filled from profile/router"
+                />
+                <p className="text-xs text-slate-500 mt-1">Leave empty to auto-fill from profile or router</p>
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Remote Address</label>
+                <Input
+                  value={formData.remote_address}
+                  onChange={(e) => setFormData({ ...formData, remote_address: e.target.value })}
+                  className="mt-1"
+                  placeholder="Auto-filled from profile"
+                />
+                <p className="text-xs text-slate-500 mt-1">Leave empty to auto-fill from profile</p>
+              </div>
             </div>
             <div>
               <label className="text-sm font-semibold text-slate-700">Comment</label>
