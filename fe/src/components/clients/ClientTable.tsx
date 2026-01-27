@@ -228,11 +228,11 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
             <select
               value={selectedGroupId}
               onChange={(e) => handleGroupFilterChange(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="px-3 py-1.5 text-sm text-slate-900 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             >
-              <option value="">All Groups</option>
+              <option value="" className="text-slate-900 bg-white">All Groups</option>
               {availableGroups.map((group) => (
-                <option key={group.id} value={group.id}>
+                <option key={group.id} value={group.id} className="text-slate-900 bg-white">
                   {group.name}
                 </option>
               ))}
@@ -242,8 +242,8 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
         {/* Right side: Columns button (always on the right) */}
         <div className={isCollectorMode ? '' : 'ml-auto'}>
           <details className="relative">
-            <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50">
-              Columns
+            <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50">
+              <span className="text-slate-700">Columns</span>
               <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>

@@ -31,9 +31,9 @@ export function ClientPagination({
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4">
       <p className="text-sm text-slate-600">
-        Showing <span className="font-medium">{start}</span> to{' '}
-        <span className="font-medium">{end}</span> of{' '}
-        <span className="font-medium">{total}</span> results
+        Showing <span className="font-medium text-slate-900">{start}</span> to{' '}
+        <span className="font-medium text-slate-900">{end}</span> of{' '}
+        <span className="font-medium text-slate-900">{total}</span> results
       </p>
 
       <div className="flex items-center gap-1">

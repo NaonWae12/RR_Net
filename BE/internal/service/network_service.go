@@ -657,8 +657,6 @@ type CreateProfileRequest struct {
 	Priority      int    `json:"priority,omitempty"`
 	SharedUsers   int    `json:"shared_users,omitempty"`
 	AddressPool   string `json:"address_pool,omitempty"`
-	LocalAddress  string `json:"local_address,omitempty"`
-	RemoteAddress string `json:"remote_address,omitempty"`
 	DNSServers    string `json:"dns_servers,omitempty"`
 }
 
@@ -685,12 +683,6 @@ func (s *NetworkService) CreateProfile(ctx context.Context, tenantID uuid.UUID, 
 	}
 	if req.AddressPool != "" {
 		profile.AddressPool = &req.AddressPool
-	}
-	if req.LocalAddress != "" {
-		profile.LocalAddress = &req.LocalAddress
-	}
-	if req.RemoteAddress != "" {
-		profile.RemoteAddress = &req.RemoteAddress
 	}
 	if req.DNSServers != "" {
 		profile.DNSServers = &req.DNSServers
@@ -837,8 +829,6 @@ type UpdateProfileRequest struct {
 	Priority      int    `json:"priority,omitempty"`
 	SharedUsers   int    `json:"shared_users,omitempty"`
 	AddressPool   string `json:"address_pool,omitempty"`
-	LocalAddress  string `json:"local_address,omitempty"`
-	RemoteAddress string `json:"remote_address,omitempty"`
 	DNSServers    string `json:"dns_servers,omitempty"`
 	IsActive      *bool  `json:"is_active,omitempty"`
 }
@@ -875,12 +865,6 @@ func (s *NetworkService) UpdateProfile(ctx context.Context, id uuid.UUID, req Up
 	}
 	if req.AddressPool != "" {
 		profile.AddressPool = &req.AddressPool
-	}
-	if req.LocalAddress != "" {
-		profile.LocalAddress = &req.LocalAddress
-	}
-	if req.RemoteAddress != "" {
-		profile.RemoteAddress = &req.RemoteAddress
 	}
 	if req.DNSServers != "" {
 		profile.DNSServers = &req.DNSServers

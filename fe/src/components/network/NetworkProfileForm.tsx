@@ -18,8 +18,6 @@ const profileFormSchema = z.object({
   priority: z.coerce.number().min(1).max(8).default(1),
   shared_users: z.coerce.number().optional(),
   address_pool: z.string().optional(),
-  local_address: z.string().optional(),
-  remote_address: z.string().optional(),
   dns_servers: z.string().optional(),
   is_active: z.boolean().default(true),
 });
@@ -65,8 +63,6 @@ export function NetworkProfileForm({ initialData, onSubmit, onCancel, isLoading 
         priority: initialData.priority,
         shared_users: initialData.shared_users,
         address_pool: initialData.address_pool || "",
-        local_address: initialData.local_address || "",
-        remote_address: initialData.remote_address || "",
         dns_servers: initialData.dns_servers || "",
         is_active: initialData.is_active,
       });
@@ -137,18 +133,6 @@ export function NetworkProfileForm({ initialData, onSubmit, onCancel, isLoading 
           {...register("address_pool")}
           error={errors.address_pool?.message}
           placeholder="e.g., pool1"
-        />
-        <Input
-          label="Local Address (optional)"
-          {...register("local_address")}
-          error={errors.local_address?.message}
-          placeholder="e.g., 192.168.1.1"
-        />
-        <Input
-          label="Remote Address (optional)"
-          {...register("remote_address")}
-          error={errors.remote_address?.message}
-          placeholder="e.g., 192.168.1.10-192.168.1.100"
         />
         <Input
           label="DNS Servers (optional)"

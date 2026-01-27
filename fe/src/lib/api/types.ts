@@ -316,8 +316,6 @@ export interface CreateNetworkProfileRequest {
   priority?: number;
   shared_users?: number;
   address_pool?: string;
-  local_address?: string;
-  remote_address?: string;
   dns_servers?: string;
   is_active?: boolean;
 }
@@ -332,8 +330,6 @@ export interface UpdateNetworkProfileRequest {
   priority?: number;
   shared_users?: number;
   address_pool?: string;
-  local_address?: string;
-  remote_address?: string;
   dns_servers?: string;
   is_active?: boolean;
 }
