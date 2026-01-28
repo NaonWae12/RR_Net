@@ -166,17 +166,21 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	// Return ACCEPT with reply attributes (FreeRADIUS rlm_rest format)
 	// IMPORTANT: For ACCEPT, DO NOT send "control" with "Auth-Type" - rlm_rest will auto-accept on HTTP 200
 	// Setting Auth-Type=Accept in control causes FreeRADIUS to short-circuit and may skip processing reply attributes
-	// rlm_rest expects array values directly for attributes: {"reply": {"Attribute-Name": ["value"]}}
+	// rlm_rest expects expanded format with "value" key (lowercase): {"reply": {"Attribute-Name": {"value": ["value"]}}}
 	// MikroTik expects rate-limit format: "2048k/1024k" (Kbps with 'k' suffix) - more stable via RADIUS
 	replyAttrs := map[string]interface{}{
-		"Reply-Message": []string{"Voucher accepted"},
+		"Reply-Message": map[string]interface{}{
+			"value": []string{"Voucher accepted"},
+		},
 	}
 
 	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
 		// Use "k" format (Kbps) for better MikroTik compatibility via RADIUS
 		// Format: "2048k/1024k" is more stable than "M" or raw bps for RADIUS attributes
 		mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
-		replyAttrs["Mikrotik-Rate-Limit"] = []string{mikrotikRateLimit}
+		replyAttrs["Mikrotik-Rate-Limit"] = map[string]interface{}{
+			"value": []string{mikrotikRateLimit},
+		}
 	}
 
 	// For ACCEPT: Only send "reply", NO "control"
