@@ -8,8 +8,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Router, RouterStatus } from "@/lib/api/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { RouterStatusBadge } from "./RouterStatusBadge";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -27,7 +35,11 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
   const router = useRouter();
   const { deleteRouter, testRouterConnection, disconnectRouter } = useNetworkStore();
   const { showToast } = useNotificationStore();
-  const [selectedRouter, setSelectedRouter] = useState<Router | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; router: { id: string; name: string } | null }>({
+    open: false,
+    router: null,
+  });
+  const [deleting, setDeleting] = useState(false);
 
   const handleView = (id: string) => {
     router.push(`/network/routers/${id}`);
@@ -37,23 +49,29 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
     router.push(`/network/routers/${id}/edit`);
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete router "${name}"?`)) {
-      return;
-    }
+  const openDeleteDialog = (id: string, name: string) => {
+    setDeleteDialog({ open: true, router: { id, name } });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteDialog.router) return;
+    setDeleting(true);
     try {
-      await deleteRouter(id);
+      await deleteRouter(deleteDialog.router.id);
       showToast({
         title: "Router deleted",
-        description: `Router "${name}" has been successfully deleted.`,
+        description: `Router "${deleteDialog.router.name}" has been successfully deleted.`,
         variant: "success",
       });
+      setDeleteDialog({ open: false, router: null });
     } catch (error: any) {
       showToast({
         title: "Failed to delete router",
         description: error.message || "An unexpected error occurred.",
         variant: "error",
       });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -118,21 +136,21 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
       <Table>
-        <TableHeader >
-          <TableRow className="border-b border-slate-200">
-            <TableHead>Name</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Host</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Default</TableHead>
-            <TableHead>Actions</TableHead>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="text-slate-700 font-semibold">Name</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Type</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Host</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Status</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Default</TableHead>
+            <TableHead className="text-slate-700 font-semibold">Actions</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody className="divide-y divide-slate-200">
+        <TableBody>
           {routers.map((routerItem) => (
-            <TableRow key={routerItem.id}>
+            <TableRow key={routerItem.id} className="border-slate-200">
               <TableCell className="font-medium text-slate-900">{routerItem.name}</TableCell>
               <TableCell className="uppercase text-slate-500">{routerItem.type}</TableCell>
               <TableCell>
@@ -191,7 +209,7 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
                     </Button>
                   </>
                 )}
-                <Button variant="destructive" size="sm" onClick={() => handleDelete(routerItem.id, routerItem.name)}>
+                <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(routerItem.id, routerItem.name)}>
                   Delete
                 </Button>
               </TableCell>
@@ -200,6 +218,36 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
         </TableBody>
       </Table>
 
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialog.open} onOpenChange={(open) => !deleting && setDeleteDialog({ open, router: deleteDialog.router })}>
+        <DialogContent className="sm:max-w-[400px] bg-white text-slate-900">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Delete Router
+            </DialogTitle>
+            <DialogDescription className="py-3 text-slate-600 block">
+              Are you sure you want to delete router <span className="font-semibold text-slate-900">&quot;{deleteDialog.router?.name}&quot;</span>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, router: null })} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

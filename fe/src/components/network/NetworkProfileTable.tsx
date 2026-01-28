@@ -8,12 +8,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { NetworkProfile } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useNetworkStore } from "@/stores/networkStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
+import { useState } from "react";
+import { Loader2, Trash2 } from "lucide-react";
 
 interface NetworkProfileTableProps {
   profiles: NetworkProfile[] | null | undefined;
@@ -31,6 +41,11 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
   const router = useRouter();
   const { deleteProfile } = useNetworkStore();
   const { showToast } = useNotificationStore();
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; profile: { id: string; name: string } | null }>({
+    open: false,
+    profile: null,
+  });
+  const [deleting, setDeleting] = useState(false);
 
   const handleView = (id: string) => {
     router.push(`/network/profiles/${id}`);
@@ -40,23 +55,29 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
     router.push(`/network/profiles/${id}/edit`);
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete profile "${name}"?`)) {
-      return;
-    }
+  const openDeleteDialog = (id: string, name: string) => {
+    setDeleteDialog({ open: true, profile: { id, name } });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteDialog.profile) return;
+    setDeleting(true);
     try {
-      await deleteProfile(id);
+      await deleteProfile(deleteDialog.profile.id);
       showToast({
         title: "Profile deleted",
-        description: `Profile "${name}" has been successfully deleted.`,
+        description: `Profile "${deleteDialog.profile.name}" has been successfully deleted.`,
         variant: "success",
       });
+      setDeleteDialog({ open: false, profile: null });
     } catch (error: any) {
       showToast({
         title: "Failed to delete profile",
         description: error.message || "An unexpected error occurred.",
         variant: "error",
       });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -110,7 +131,7 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
                 <Button variant="outline" size="sm" onClick={() => handleEdit(profile.id)}>
                   Edit
                 </Button>
-                <Button variant="destructive" size="sm" onClick={() => handleDelete(profile.id, profile.name)}>
+                <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(profile.id, profile.name)}>
                   Delete
                 </Button>
               </TableCell>
@@ -118,6 +139,37 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
           ))}
         </TableBody>
       </Table>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialog.open} onOpenChange={(open) => !deleting && setDeleteDialog({ open, profile: deleteDialog.profile })}>
+        <DialogContent className="sm:max-w-[400px] bg-white text-slate-900">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Delete Network Profile
+            </DialogTitle>
+            <DialogDescription className="py-3 text-slate-600 block">
+              Are you sure you want to delete profile <span className="font-semibold text-slate-900">&quot;{deleteDialog.profile?.name}&quot;</span>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, profile: null })} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

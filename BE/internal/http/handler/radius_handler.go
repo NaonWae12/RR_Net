@@ -164,13 +164,25 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "")
 
 	// Return ACCEPT with reply attributes (FreeRADIUS rlm_rest format)
-	// MikroTik expects a string like "down/up" (e.g., "2048k/512k").
+	// MikroTik expects a string like "down/up" in bps or Mbps format (e.g., "10M/5M" or "2048000/1024000").
 	replyAttrs := map[string]interface{}{
 		"Reply-Message": []string{"Voucher accepted"},
 	}
 
 	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
-		mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
+		// Convert Kbps to bps (same format as Network Profile)
+		downloadBps := pkg.DownloadSpeed * 1000 // Kbps to bps
+		uploadBps := pkg.UploadSpeed * 1000     // Kbps to bps
+
+		// Format as readable (e.g., "10M/5M") or raw bps if < 1M
+		var mikrotikRateLimit string
+		if downloadBps >= 1000000 {
+			downloadMbps := downloadBps / 1000000
+			uploadMbps := uploadBps / 1000000
+			mikrotikRateLimit = fmt.Sprintf("%dM/%dM", downloadMbps, uploadMbps)
+		} else {
+			mikrotikRateLimit = fmt.Sprintf("%d/%d", downloadBps, uploadBps)
+		}
 		replyAttrs["Mikrotik-Rate-Limit"] = []string{mikrotikRateLimit}
 	}
 

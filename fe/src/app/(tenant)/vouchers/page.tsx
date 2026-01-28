@@ -87,7 +87,7 @@ export default function VouchersPage() {
   const load = async () => {
     // Only load if authenticated
     if (!isAuthenticated) return;
-    
+
     setLoading(true);
     try {
       await fetchRouters();
@@ -186,10 +186,10 @@ export default function VouchersPage() {
   const handleToggleStatus = async (voucher: Voucher) => {
     // Only allow toggle for active or revoked vouchers
     if (voucher.status !== "active" && voucher.status !== "revoked") {
-      showToast({ 
-        title: "Tidak dapat diubah", 
-        description: `Status voucher "${voucher.status}" tidak dapat diubah`, 
-        variant: "error" 
+      showToast({
+        title: "Tidak dapat diubah",
+        description: `Status voucher "${voucher.status}" tidak dapat diubah`,
+        variant: "error"
       });
       return;
     }
@@ -198,10 +198,10 @@ export default function VouchersPage() {
     try {
       await voucherService.toggleStatus(voucher.id);
       const newStatus = voucher.status === "revoked" ? "active" : "revoked";
-      showToast({ 
-        title: "Status diubah", 
-        description: `Voucher "${voucher.code}" sekarang berstatus ${newStatus}`, 
-        variant: "success" 
+      showToast({
+        title: "Status diubah",
+        description: `Voucher "${voucher.code}" sekarang berstatus ${newStatus}`,
+        variant: "success"
       });
       await load();
     } catch (err: any) {
@@ -509,28 +509,26 @@ export default function VouchersPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize shadow-sm ${
-                          v.status === 'active' ? 'bg-green-100 text-green-700 border border-green-200' :
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize shadow-sm ${v.status === 'active' ? 'bg-green-100 text-green-700 border border-green-200' :
                           v.status === 'used' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                          v.status === 'revoked' ? 'bg-red-100 text-red-700 border border-red-200' :
-                          v.status === 'expired' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
-                          'bg-slate-100 text-slate-600 border border-slate-200'
-                        }`}>
+                            v.status === 'revoked' ? 'bg-red-100 text-red-700 border border-red-200' :
+                              v.status === 'expired' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                                'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
                           {v.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                           {(v.status === "active" || v.status === "revoked") && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleToggleStatus(v)} 
-                              className={`h-9 w-9 ${
-                                v.status === "revoked" 
-                                  ? "text-green-600 hover:text-green-700 hover:bg-green-50" 
-                                  : "text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                              }`}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleToggleStatus(v)}
+                              className={`h-9 w-9 ${v.status === "revoked"
+                                ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                                : "text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                }`}
                               title={v.status === "revoked" ? "Enable voucher" : "Disable voucher"}
                               disabled={loading}
                             >
@@ -597,13 +595,12 @@ export default function VouchersPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">Status</label>
                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <Badge className={`${
-                      editDialog.voucher.status === 'active' ? 'bg-green-100 text-green-700' : 
-                      editDialog.voucher.status === 'used' ? 'bg-blue-100 text-blue-700' : 
-                      editDialog.voucher.status === 'revoked' ? 'bg-red-100 text-red-700' :
-                      editDialog.voucher.status === 'expired' ? 'bg-orange-100 text-orange-700' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
+                    <Badge className={`${editDialog.voucher.status === 'active' ? 'bg-green-100 text-green-700' :
+                      editDialog.voucher.status === 'used' ? 'bg-blue-100 text-blue-700' :
+                        editDialog.voucher.status === 'revoked' ? 'bg-red-100 text-red-700' :
+                          editDialog.voucher.status === 'expired' ? 'bg-orange-100 text-orange-700' :
+                            'bg-slate-100 text-slate-700'
+                      }`}>
                       {editDialog.voucher.status}
                     </Badge>
                   </div>
