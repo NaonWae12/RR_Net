@@ -164,32 +164,23 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	h.logAuthAttempt(ctx, tenantID, &routerID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "")
 
 	// Return ACCEPT with reply attributes (FreeRADIUS rlm_rest format)
-	// MikroTik expects a string like "down/up" in bps or Mbps format (e.g., "10M/5M" or "2048000/1024000").
+	// IMPORTANT: For ACCEPT, DO NOT send "control" with "Auth-Type" - rlm_rest will auto-accept on HTTP 200
+	// Setting Auth-Type=Accept in control causes FreeRADIUS to short-circuit and may skip processing reply attributes
+	// MikroTik expects rate-limit format: "2048k/1024k" (Kbps with 'k' suffix) - more stable via RADIUS
 	replyAttrs := map[string]interface{}{
 		"Reply-Message": []string{"Voucher accepted"},
 	}
 
 	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
-		// Convert Kbps to bps (same format as Network Profile)
-		downloadBps := pkg.DownloadSpeed * 1000 // Kbps to bps
-		uploadBps := pkg.UploadSpeed * 1000     // Kbps to bps
-
-		// Format as readable (e.g., "10M/5M") or raw bps if < 1M
-		var mikrotikRateLimit string
-		if downloadBps >= 1000000 {
-			downloadMbps := downloadBps / 1000000
-			uploadMbps := uploadBps / 1000000
-			mikrotikRateLimit = fmt.Sprintf("%dM/%dM", downloadMbps, uploadMbps)
-		} else {
-			mikrotikRateLimit = fmt.Sprintf("%d/%d", downloadBps, uploadBps)
-		}
+		// Use "k" format (Kbps) for better MikroTik compatibility via RADIUS
+		// Format: "2048k/1024k" is more stable than "M" or raw bps for RADIUS attributes
+		mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
 		replyAttrs["Mikrotik-Rate-Limit"] = []string{mikrotikRateLimit}
 	}
 
+	// For ACCEPT: Only send "reply", NO "control"
+	// rlm_rest will automatically accept on HTTP 200 with valid reply attributes
 	response := map[string]interface{}{
-		"control": map[string]interface{}{
-			"Auth-Type": []string{"Accept"},
-		},
 		"reply": replyAttrs,
 	}
 
