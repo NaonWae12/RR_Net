@@ -130,6 +130,38 @@ func (h *VoucherHandler) DeletePackage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *VoucherHandler) SyncPackageToRouters(w http.ResponseWriter, r *http.Request) {
+	idStr := getParam(r, "id")
+	packageID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid package ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		RouterIDs []uuid.UUID `json:"router_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.RouterIDs) == 0 {
+		http.Error(w, `{"error":"router_ids is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.voucherService.SyncPackageToRouters(r.Context(), packageID, req.RouterIDs); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Package synced successfully",
+	})
+}
+
 // ========== Vouchers ==========
 
 func (h *VoucherHandler) GenerateVouchers(w http.ResponseWriter, r *http.Request) {

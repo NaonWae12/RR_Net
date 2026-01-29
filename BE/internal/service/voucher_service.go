@@ -4,26 +4,32 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"regexp"
+	"rrnet/internal/domain/network"
 	"rrnet/internal/domain/voucher"
+	"rrnet/internal/infra/mikrotik"
 	"rrnet/internal/repository"
 )
 
 type VoucherService struct {
 	voucherRepo *repository.VoucherRepository
 	radiusRepo  *repository.RadiusRepository
+	routerRepo  *repository.RouterRepository
 }
 
-func NewVoucherService(voucherRepo *repository.VoucherRepository, radiusRepo *repository.RadiusRepository) *VoucherService {
+func NewVoucherService(voucherRepo *repository.VoucherRepository, radiusRepo *repository.RadiusRepository, routerRepo *repository.RouterRepository) *VoucherService {
 	return &VoucherService{
 		voucherRepo: voucherRepo,
 		radiusRepo:  radiusRepo,
+		routerRepo:  routerRepo,
 	}
 }
 
@@ -35,15 +41,16 @@ func (s *VoucherService) VoucherRepo() *repository.VoucherRepository {
 // ========== Voucher Packages ==========
 
 type CreateVoucherPackageRequest struct {
-	Name          string  `json:"name"`
-	Description   string  `json:"description,omitempty"`
-	DownloadSpeed int     `json:"download_speed"`
-	UploadSpeed   int     `json:"upload_speed"`
-	DurationHours *int    `json:"duration_hours,omitempty"`
-	Validity      string  `json:"validity,omitempty"` // Mikhmon format: 2H, 1J, etc.
-	QuotaMB       *int    `json:"quota_mb,omitempty"`
-	Price         float64 `json:"price"`
-	Currency      string  `json:"currency,omitempty"`
+	Name           string  `json:"name"`
+	Description    string  `json:"description,omitempty"`
+	DownloadSpeed  int     `json:"download_speed"`
+	UploadSpeed    int     `json:"upload_speed"`
+	DurationHours  *int    `json:"duration_hours,omitempty"`
+	Validity       string  `json:"validity,omitempty"` // Mikhmon format: 2H, 1J, etc.
+	QuotaMB        *int    `json:"quota_mb,omitempty"`
+	Price          float64 `json:"price"`
+	Currency       string  `json:"currency,omitempty"`
+	RateLimitMode  string  `json:"rate_limit_mode,omitempty"` // full_radius or radius_auth_only
 }
 
 func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, req CreateVoucherPackageRequest) (*voucher.VoucherPackage, error) {
@@ -58,6 +65,15 @@ func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, 
 		}
 	}
 
+	// Set default rate limit mode if not provided
+	rateLimitMode := req.RateLimitMode
+	if rateLimitMode == "" {
+		rateLimitMode = voucher.RateLimitModeAuthOnly // Default to MVP mode
+	}
+	if rateLimitMode != voucher.RateLimitModeFullRadius && rateLimitMode != voucher.RateLimitModeAuthOnly {
+		return nil, fmt.Errorf("invalid rate_limit_mode: %s (must be 'full_radius' or 'radius_auth_only')", rateLimitMode)
+	}
+
 	pkg := &voucher.VoucherPackage{
 		ID:            uuid.New(),
 		TenantID:      tenantID,
@@ -69,6 +85,7 @@ func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, 
 		QuotaMB:       req.QuotaMB,
 		Price:         req.Price,
 		Currency:      req.Currency,
+		RateLimitMode: rateLimitMode,
 		IsActive:      true,
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -80,6 +97,18 @@ func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, 
 
 	if err := s.voucherRepo.CreatePackage(ctx, pkg); err != nil {
 		return nil, fmt.Errorf("failed to create package: %w", err)
+	}
+
+	// If mode is radius_auth_only, sync Hotspot profile to all active routers
+	if pkg.RateLimitMode == voucher.RateLimitModeAuthOnly {
+		if err := s.syncPackageToAllRouters(ctx, tenantID, pkg); err != nil {
+			// Log error but don't fail package creation
+			log.Warn().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Err(err).
+				Msg("Voucher Service: Failed to sync package to routers, but package created successfully")
+		}
 	}
 
 	return pkg, nil
@@ -103,6 +132,7 @@ type UpdateVoucherPackageRequest struct {
 	QuotaMB       *int    `json:"quota_mb,omitempty"`
 	Price         float64 `json:"price,omitempty"`
 	Currency      string  `json:"currency,omitempty"`
+	RateLimitMode string  `json:"rate_limit_mode,omitempty"`
 	IsActive      *bool   `json:"is_active,omitempty"`
 }
 
@@ -111,6 +141,10 @@ func (s *VoucherService) UpdatePackage(ctx context.Context, id uuid.UUID, req Up
 	if err != nil {
 		return nil, err
 	}
+
+	oldDownloadSpeed := pkg.DownloadSpeed
+	oldUploadSpeed := pkg.UploadSpeed
+	oldMode := pkg.RateLimitMode
 
 	if req.Name != "" {
 		pkg.Name = req.Name
@@ -142,6 +176,12 @@ func (s *VoucherService) UpdatePackage(ctx context.Context, id uuid.UUID, req Up
 	if req.Currency != "" {
 		pkg.Currency = req.Currency
 	}
+	if req.RateLimitMode != "" {
+		if req.RateLimitMode != voucher.RateLimitModeFullRadius && req.RateLimitMode != voucher.RateLimitModeAuthOnly {
+			return nil, fmt.Errorf("invalid rate_limit_mode: %s (must be 'full_radius' or 'radius_auth_only')", req.RateLimitMode)
+		}
+		pkg.RateLimitMode = req.RateLimitMode
+	}
 	if req.IsActive != nil {
 		pkg.IsActive = *req.IsActive
 	}
@@ -151,10 +191,53 @@ func (s *VoucherService) UpdatePackage(ctx context.Context, id uuid.UUID, req Up
 		return nil, fmt.Errorf("failed to update package: %w", err)
 	}
 
+	// Sync to routers if:
+	// 1. Mode is radius_auth_only AND (speed changed OR mode changed)
+	// 2. Mode changed from full_radius to radius_auth_only (need to create profiles)
+	// 3. Mode changed from radius_auth_only to full_radius (need to remove profiles)
+	speedChanged := oldDownloadSpeed != pkg.DownloadSpeed || oldUploadSpeed != pkg.UploadSpeed
+	modeChanged := oldMode != pkg.RateLimitMode
+
+	if pkg.RateLimitMode == voucher.RateLimitModeAuthOnly && (speedChanged || modeChanged) {
+		if err := s.syncPackageToAllRouters(ctx, pkg.TenantID, pkg); err != nil {
+			log.Warn().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Err(err).
+				Msg("Voucher Service: Failed to sync package to routers after update")
+		}
+	} else if modeChanged && oldMode == voucher.RateLimitModeAuthOnly && pkg.RateLimitMode == voucher.RateLimitModeFullRadius {
+		// Mode changed from radius_auth_only to full_radius, remove profiles from routers
+		if err := s.removePackageFromAllRouters(ctx, pkg.TenantID, pkg); err != nil {
+			log.Warn().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Err(err).
+				Msg("Voucher Service: Failed to remove package profiles from routers")
+		}
+	}
+
 	return pkg, nil
 }
 
 func (s *VoucherService) DeletePackage(ctx context.Context, id uuid.UUID) error {
+	// Get package before deletion to check mode
+	pkg, err := s.voucherRepo.GetPackageByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// If mode is radius_auth_only, remove Hotspot profiles from routers before deleting
+	if pkg.RateLimitMode == voucher.RateLimitModeAuthOnly {
+		if err := s.removePackageFromAllRouters(ctx, pkg.TenantID, pkg); err != nil {
+			log.Warn().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Err(err).
+				Msg("Voucher Service: Failed to remove package profiles from routers, but continuing with deletion")
+		}
+	}
+
 	return s.voucherRepo.DeletePackage(ctx, id)
 }
 
@@ -478,4 +561,218 @@ func ParseMikhmonDuration(d string) (int, error) {
 	default:
 		return value, nil
 	}
+}
+
+// ========== MikroTik Hotspot Profile Sync ==========
+
+// syncPackageToAllRouters syncs a package to all active MikroTik routers for the tenant
+func (s *VoucherService) syncPackageToAllRouters(ctx context.Context, tenantID uuid.UUID, pkg *voucher.VoucherPackage) error {
+	// Get all routers for tenant
+	routers, err := s.routerRepo.ListByTenant(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("failed to list routers: %w", err)
+	}
+
+	var syncErrors []string
+	for _, router := range routers {
+		// Only sync to active MikroTik routers
+		if router.Type != network.RouterTypeMikroTik {
+			continue
+		}
+		if router.Status != network.RouterStatusOnline {
+			log.Debug().
+				Str("router_id", router.ID.String()).
+				Str("router_name", router.Name).
+				Str("router_status", string(router.Status)).
+				Msg("Voucher Service: Skipping router (not online)")
+			continue
+		}
+
+		if err := s.syncPackageToRouter(ctx, router, pkg); err != nil {
+			syncErrors = append(syncErrors, fmt.Sprintf("router %s (%s): %v", router.Name, router.Host, err))
+			log.Warn().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Str("router_id", router.ID.String()).
+				Str("router_name", router.Name).
+				Err(err).
+				Msg("Voucher Service: Failed to sync package to router")
+		}
+	}
+
+	if len(syncErrors) > 0 {
+		return fmt.Errorf("sync failed for some routers: %s", strings.Join(syncErrors, "; "))
+	}
+
+	return nil
+}
+
+// syncPackageToRouter syncs a package to a specific router
+func (s *VoucherService) syncPackageToRouter(ctx context.Context, router *network.Router, pkg *voucher.VoucherPackage) error {
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+
+	// Convert package to Hotspot profile
+	hotspotProfile := convertToHotspotProfile(pkg)
+
+	log.Info().
+		Str("package_id", pkg.ID.String()).
+		Str("package_name", pkg.Name).
+		Str("router_id", router.ID.String()).
+		Str("router_name", router.Name).
+		Str("router_address", addr).
+		Str("hotspot_profile_name", hotspotProfile.Name).
+		Str("hotspot_rate_limit", hotspotProfile.RateLimit).
+		Msg("Voucher Service: Syncing package to router")
+
+	// Check if profile exists
+	profileID, err := mikrotik.FindHotspotUserProfileID(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotProfile.Name)
+	if err != nil {
+		// Profile doesn't exist, create it
+		log.Info().
+			Str("package_id", pkg.ID.String()).
+			Str("package_name", pkg.Name).
+			Str("router_id", router.ID.String()).
+			Str("router_name", router.Name).
+			Msg("Voucher Service: Creating new Hotspot profile on router")
+
+		if err := mikrotik.AddHotspotUserProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotProfile); err != nil {
+			return fmt.Errorf("failed to create Hotspot profile: %w", err)
+		}
+	} else {
+		// Profile exists, update it
+		log.Info().
+			Str("package_id", pkg.ID.String()).
+			Str("package_name", pkg.Name).
+			Str("router_id", router.ID.String()).
+			Str("router_name", router.Name).
+			Str("profile_id", profileID).
+			Msg("Voucher Service: Updating existing Hotspot profile on router")
+
+		if err := mikrotik.UpdateHotspotUserProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, profileID, hotspotProfile); err != nil {
+			return fmt.Errorf("failed to update Hotspot profile: %w", err)
+		}
+	}
+
+	log.Info().
+		Str("package_id", pkg.ID.String()).
+		Str("package_name", pkg.Name).
+		Str("router_id", router.ID.String()).
+		Str("router_name", router.Name).
+		Msg("Voucher Service: Successfully synced package to router")
+
+	return nil
+}
+
+// removePackageFromAllRouters removes Hotspot profiles from all routers
+func (s *VoucherService) removePackageFromAllRouters(ctx context.Context, tenantID uuid.UUID, pkg *voucher.VoucherPackage) error {
+	routers, err := s.routerRepo.ListByTenant(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("failed to list routers: %w", err)
+	}
+
+	var removeErrors []string
+	for _, router := range routers {
+		if router.Type != network.RouterTypeMikroTik {
+			continue
+		}
+
+		if err := s.removePackageFromRouter(ctx, router, pkg); err != nil {
+			removeErrors = append(removeErrors, fmt.Sprintf("router %s (%s): %v", router.Name, router.Host, err))
+			log.Warn().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Str("router_id", router.ID.String()).
+				Str("router_name", router.Name).
+				Err(err).
+				Msg("Voucher Service: Failed to remove package profile from router")
+		}
+	}
+
+	if len(removeErrors) > 0 {
+		return fmt.Errorf("removal failed for some routers: %s", strings.Join(removeErrors, "; "))
+	}
+
+	return nil
+}
+
+// removePackageFromRouter removes Hotspot profile from a specific router
+func (s *VoucherService) removePackageFromRouter(ctx context.Context, router *network.Router, pkg *voucher.VoucherPackage) error {
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+
+	log.Info().
+		Str("package_id", pkg.ID.String()).
+		Str("package_name", pkg.Name).
+		Str("router_id", router.ID.String()).
+		Str("router_name", router.Name).
+		Msg("Voucher Service: Removing Hotspot profile from router")
+
+	if err := mikrotik.RemoveHotspotUserProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, pkg.Name); err != nil {
+		// If profile doesn't exist, that's okay (might have been deleted manually)
+		if strings.Contains(err.Error(), "not found") {
+			log.Debug().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Str("router_id", router.ID.String()).
+				Msg("Voucher Service: Hotspot profile not found on router (already removed)")
+			return nil
+		}
+		return fmt.Errorf("failed to remove Hotspot profile: %w", err)
+	}
+
+	return nil
+}
+
+// convertToHotspotProfile converts VoucherPackage to MikroTik HotspotUserProfile
+func convertToHotspotProfile(pkg *voucher.VoucherPackage) mikrotik.HotspotUserProfile {
+	// Format rate limit: "2048k/1024k" (Kbps with 'k' suffix)
+	rateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
+
+	profile := mikrotik.HotspotUserProfile{
+		Name:        pkg.Name,
+		RateLimit:   rateLimit,
+		SharedUsers: 1, // Default to 1 user per profile
+		Comment:     fmt.Sprintf("RRNET Package: %s", pkg.Name),
+	}
+
+	if pkg.Description != "" {
+		profile.Comment = pkg.Description
+	}
+
+	return profile
+}
+
+// SyncPackageToRouters syncs a package to specific routers (for manual sync)
+func (s *VoucherService) SyncPackageToRouters(ctx context.Context, packageID uuid.UUID, routerIDs []uuid.UUID) error {
+	pkg, err := s.voucherRepo.GetPackageByID(ctx, packageID)
+	if err != nil {
+		return fmt.Errorf("package not found: %w", err)
+	}
+
+	if pkg.RateLimitMode != voucher.RateLimitModeAuthOnly {
+		return fmt.Errorf("sync only supported for radius_auth_only mode")
+	}
+
+	var syncErrors []string
+	for _, routerID := range routerIDs {
+		router, err := s.routerRepo.GetByID(ctx, routerID)
+		if err != nil {
+			syncErrors = append(syncErrors, fmt.Sprintf("router %s: not found", routerID.String()))
+			continue
+		}
+
+		if router.Type != network.RouterTypeMikroTik {
+			syncErrors = append(syncErrors, fmt.Sprintf("router %s: not MikroTik", router.Name))
+			continue
+		}
+
+		if err := s.syncPackageToRouter(ctx, router, pkg); err != nil {
+			syncErrors = append(syncErrors, fmt.Sprintf("router %s: %v", router.Name, err))
+		}
+	}
+
+	if len(syncErrors) > 0 {
+		return fmt.Errorf("sync failed for some routers: %s", strings.Join(syncErrors, "; "))
+	}
+
+	return nil
 }

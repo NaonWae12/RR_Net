@@ -58,7 +58,10 @@ export default function VouchersPage() {
     upload_speed: 1024,
     validity: "2h",
     price: 0,
+    rate_limit_mode: "radius_auth_only", // Default to MVP mode
   });
+
+  const [rateLimitMode, setRateLimitMode] = useState("radius_auth_only");
 
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
@@ -126,12 +129,35 @@ export default function VouchersPage() {
         upload_speed: Number(pkgForm.upload_speed),
         validity: pkgForm.validity,
         price: Number(pkgForm.price || 0),
+        rate_limit_mode: pkgForm.rate_limit_mode,
       });
       showToast({ title: "Paket dibuat", description: "Paket voucher berhasil ditambahkan", variant: "success" });
-      setPkgForm({ name: "", download_speed: 2048, upload_speed: 1024, validity: "2H", price: 0 });
+      setPkgForm({ name: "", download_speed: 2048, upload_speed: 1024, validity: "2H", price: 0, rate_limit_mode: "radius_auth_only" });
       await load();
     } catch (err: any) {
       showToast({ title: "Gagal", description: err?.message || "Error", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const syncPackage = async (packageId: string) => {
+    setLoading(true);
+    try {
+      // Get all active MikroTik routers
+      const activeRouters = routers.filter(r => r.status === "online" && r.type === "mikrotik");
+      const routerIds = activeRouters.map(r => r.id);
+
+      if (routerIds.length === 0) {
+        showToast({ title: "Tidak ada router", description: "Tidak ada router MikroTik yang aktif", variant: "warning" });
+        return;
+      }
+
+      await voucherService.syncPackageToRouters(packageId, routerIds);
+      showToast({ title: "Sync berhasil", description: `Paket berhasil disinkronkan ke ${routerIds.length} router`, variant: "success" });
+      await load();
+    } catch (err: any) {
+      showToast({ title: "Sync gagal", description: err?.message || "Error", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -246,7 +272,15 @@ export default function VouchersPage() {
           </h1>
           <p className="text-slate-500 mt-1">Manage hotspot packages and generate batch vouchers.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <select
+            value={rateLimitMode}
+            onChange={(e) => setRateLimitMode(e.target.value)}
+            className="h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+          >
+            <option value="radius_auth_only">RADIUS Auth Only</option>
+            <option value="full_radius">Full RADIUS</option>
+          </select>
           <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
             <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sync Data
           </Button>
@@ -299,6 +333,18 @@ export default function VouchersPage() {
                   onChange={(e) => setPkgForm({ ...pkgForm, price: Number(e.target.value) })}
                 />
               </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-slate-700">Rate Limit Mode</label>
+                <select
+                  value={pkgForm.rate_limit_mode}
+                  onChange={(e) => setPkgForm({ ...pkgForm, rate_limit_mode: e.target.value })}
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+                >
+                  <option value="radius_auth_only">RADIUS Auth Only (MikroTik Profile)</option>
+                  <option value="full_radius">Full RADIUS (RADIUS Attributes)</option>
+                </select>
+                <span className="text-xs text-slate-500">RADIUS Auth Only: Rate limit via MikroTik Hotspot profiles (MVP)</span>
+              </div>
               <Button onClick={createPackage} disabled={loading || !pkgForm.name} className="w-full bg-indigo-600 hover:bg-indigo-700">
                 Simpan Paket Baru
               </Button>
@@ -317,7 +363,8 @@ export default function VouchersPage() {
                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200">
                   <tr>
                     <th className="px-4 py-3 text-left text-slate-500 font-semibold">Nama</th>
-                    <th className="px-4 py-3 text-left text-slate-500 font-semibold">Speed / Validity</th>
+                    <th className="px-4 py-3 text-left text-slate-500 font-semibold">Speed / Mode</th>
+                    <th className="px-4 py-3 text-left text-slate-500 font-semibold">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -325,11 +372,28 @@ export default function VouchersPage() {
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-200">
                       <td className="px-4 py-3 font-medium text-slate-900">{p.name}</td>
                       <td className="px-4 py-3 text-slate-600">
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-1">
                           <span className="flex items-center gap-1 font-semibold text-slate-700"><Zap className="w-3 h-3 text-amber-500" /> {formatKbps(p.download_speed)} / {formatKbps(p.upload_speed)}</span>
+                          <Badge variant="outline" className="w-fit text-xs">
+                            {p.rate_limit_mode === "radius_auth_only" ? "RADIUS Auth Only" : "Full RADIUS"}
+                          </Badge>
                           <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3 text-slate-400" /> {p.duration_hours ? `${p.duration_hours} Jam` : "Unlimited"}</span>
                         </div>
                       </td>
+                      <td className="px-4 py-3">
+                        {p.rate_limit_mode === "radius_auth_only" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => syncPackage(p.id)}
+                            disabled={loading}
+                            className="gap-1"
+                          >
+                            <RotateCw className="w-3 h-3" /> Sync
+                          </Button>
+                        )}
+                      </td>
+
                     </tr>
                   ))}
                   {packages.length === 0 && (

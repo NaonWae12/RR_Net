@@ -12,6 +12,7 @@ export interface VoucherPackage {
   quota_mb?: number | null;
   price: number;
   currency: string;
+  rate_limit_mode: string; // "full_radius" or "radius_auth_only"
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -44,6 +45,7 @@ export interface CreateVoucherPackageRequest {
   quota_mb?: number;
   price?: number;
   currency?: string;
+  rate_limit_mode?: string; // "full_radius" or "radius_auth_only"
 }
 
 export interface GenerateVouchersRequest {
@@ -84,6 +86,10 @@ export const voucherService = {
   async toggleStatus(id: string): Promise<Voucher> {
     const res = await apiClient.post<Voucher>(`/vouchers/${id}/toggle-status`);
     return res.data;
+  },
+
+  async syncPackageToRouters(packageId: string, routerIds: string[]): Promise<void> {
+    await apiClient.post(`/voucher-packages/${packageId}/sync`, { router_ids: routerIds });
   },
 };
 

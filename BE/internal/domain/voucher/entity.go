@@ -6,6 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// Rate limit mode constants
+const (
+	RateLimitModeFullRadius   = "full_radius"     // Rate limit sent via RADIUS attributes
+	RateLimitModeAuthOnly     = "radius_auth_only" // Rate limit configured via MikroTik Hotspot profiles
+)
+
 type VoucherPackage struct {
 	ID            uuid.UUID `json:"id"`
 	TenantID      uuid.UUID `json:"tenant_id"`
@@ -17,6 +23,7 @@ type VoucherPackage struct {
 	QuotaMB       *int      `json:"quota_mb,omitempty"`
 	Price         float64   `json:"price"`
 	Currency      string    `json:"currency"`
+	RateLimitMode string    `json:"rate_limit_mode"` // full_radius or radius_auth_only
 	IsActive      bool      `json:"is_active"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

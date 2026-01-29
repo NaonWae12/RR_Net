@@ -174,13 +174,19 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	// Add rate limit ONLY if package mode is "full_radius"
+	// For "radius_auth_only" mode, rate limit is handled via MikroTik Hotspot profiles
 	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
-		// Use "k" format (Kbps) for better MikroTik compatibility via RADIUS
-		// Format: "2048k/1024k" is more stable than "M" or raw bps for RADIUS attributes
-		mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
-		replyAttrs["Mikrotik-Rate-Limit"] = map[string]interface{}{
-			"value": []string{mikrotikRateLimit},
+		if pkg.RateLimitMode == "full_radius" {
+			// Use "k" format (Kbps) for better MikroTik compatibility via RADIUS
+			// Format: "2048k/1024k" is more stable than "M" or raw bps for RADIUS attributes
+			mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
+			replyAttrs["Mikrotik-Rate-Limit"] = map[string]interface{}{
+				"value": []string{mikrotikRateLimit},
+			}
 		}
+		// For "radius_auth_only" mode, we don't send rate limit via RADIUS
+		// The rate limit is configured directly on MikroTik via Hotspot user profiles
 	}
 
 	// For ACCEPT: Only send "reply", NO "control"

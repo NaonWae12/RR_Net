@@ -26,12 +26,12 @@ func (r *VoucherRepository) CreatePackage(ctx context.Context, pkg *voucher.Vouc
 	query := `
 		INSERT INTO voucher_packages (
 			id, tenant_id, name, description, download_speed, upload_speed,
-			duration_hours, quota_mb, price, currency, is_active, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			duration_hours, quota_mb, price, currency, rate_limit_mode, is_active, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	_, err := r.db.Exec(ctx, query,
 		pkg.ID, pkg.TenantID, pkg.Name, pkg.Description, pkg.DownloadSpeed, pkg.UploadSpeed,
-		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.IsActive,
+		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.RateLimitMode, pkg.IsActive,
 		pkg.CreatedAt, pkg.UpdatedAt,
 	)
 	return err
@@ -39,15 +39,15 @@ func (r *VoucherRepository) CreatePackage(ctx context.Context, pkg *voucher.Vouc
 
 func (r *VoucherRepository) GetPackageByID(ctx context.Context, id uuid.UUID) (*voucher.VoucherPackage, error) {
 	query := `
-		SELECT id, tenant_id, name, description, download_speed, upload_speed,
-			duration_hours, quota_mb, price, currency, is_active, created_at, updated_at
+		SELECT id, tenant_id, name, COALESCE(description, ''), download_speed, upload_speed,
+			duration_hours, quota_mb, price::float8, currency, rate_limit_mode, is_active, created_at, updated_at
 		FROM voucher_packages
 		WHERE id = $1
 	`
 	var pkg voucher.VoucherPackage
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&pkg.ID, &pkg.TenantID, &pkg.Name, &pkg.Description, &pkg.DownloadSpeed, &pkg.UploadSpeed,
-		&pkg.DurationHours, &pkg.QuotaMB, &pkg.Price, &pkg.Currency, &pkg.IsActive,
+		&pkg.DurationHours, &pkg.QuotaMB, &pkg.Price, &pkg.Currency, &pkg.RateLimitMode, &pkg.IsActive,
 		&pkg.CreatedAt, &pkg.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -58,8 +58,8 @@ func (r *VoucherRepository) GetPackageByID(ctx context.Context, id uuid.UUID) (*
 
 func (r *VoucherRepository) ListPackagesByTenant(ctx context.Context, tenantID uuid.UUID, activeOnly bool) ([]*voucher.VoucherPackage, error) {
 	query := `
-		SELECT id, tenant_id, name, description, download_speed, upload_speed,
-			duration_hours, quota_mb, price, currency, is_active, created_at, updated_at
+		SELECT id, tenant_id, name, COALESCE(description, ''), download_speed, upload_speed,
+			duration_hours, quota_mb, price::float8, currency, rate_limit_mode, is_active, created_at, updated_at
 		FROM voucher_packages
 		WHERE tenant_id = $1
 	`
@@ -79,7 +79,7 @@ func (r *VoucherRepository) ListPackagesByTenant(ctx context.Context, tenantID u
 		var pkg voucher.VoucherPackage
 		err := rows.Scan(
 			&pkg.ID, &pkg.TenantID, &pkg.Name, &pkg.Description, &pkg.DownloadSpeed, &pkg.UploadSpeed,
-			&pkg.DurationHours, &pkg.QuotaMB, &pkg.Price, &pkg.Currency, &pkg.IsActive,
+			&pkg.DurationHours, &pkg.QuotaMB, &pkg.Price, &pkg.Currency, &pkg.RateLimitMode, &pkg.IsActive,
 			&pkg.CreatedAt, &pkg.UpdatedAt,
 		)
 		if err != nil {
@@ -95,12 +95,12 @@ func (r *VoucherRepository) UpdatePackage(ctx context.Context, pkg *voucher.Vouc
 		UPDATE voucher_packages SET
 			name = $2, description = $3, download_speed = $4, upload_speed = $5,
 			duration_hours = $6, quota_mb = $7, price = $8, currency = $9,
-			is_active = $10, updated_at = $11
+			rate_limit_mode = $10, is_active = $11, updated_at = $12
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
 		pkg.ID, pkg.Name, pkg.Description, pkg.DownloadSpeed, pkg.UploadSpeed,
-		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.IsActive, pkg.UpdatedAt,
+		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.RateLimitMode, pkg.IsActive, pkg.UpdatedAt,
 	)
 	return err
 }

@@ -732,7 +732,7 @@ func New(deps Dependencies) http.Handler {
 	// RADIUS + Voucher (Hotspot)
 	voucherRepo := repository.NewVoucherRepository(deps.DB)
 	radiusRepo := repository.NewRadiusRepository(deps.DB)
-	voucherService := service.NewVoucherService(voucherRepo, radiusRepo)
+	voucherService := service.NewVoucherService(voucherRepo, radiusRepo, routerRepo)
 	// RADIUS shared secret from env (for FreeRADIUS rlm_rest authentication)
 	// Must match FreeRADIUS env: RRNET_RADIUS_REST_SECRET (see infra/freeradius + docker-compose).
 	radiusSecret := utils.GetEnv("RRNET_RADIUS_REST_SECRET", "dev-radius-rest-secret")
@@ -927,6 +927,20 @@ func New(deps Dependencies) http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		// Check for sync action: /api/v1/voucher-packages/{id}/sync
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 && parts[1] == "sync" {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodPost {
+				voucherHandler.SyncPackageToRouters(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Single ID route: /api/v1/voucher-packages/{id}
 		r = setPathParam(r, "id", path)
 		switch r.Method {
 		case http.MethodGet:
