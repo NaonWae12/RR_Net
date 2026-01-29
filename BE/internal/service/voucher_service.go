@@ -633,8 +633,12 @@ func (s *VoucherService) syncPackageToRouter(ctx context.Context, router *networ
 		Str("hotspot_rate_limit", hotspotProfile.RateLimit).
 		Msg("Voucher Service: Syncing package to router")
 
+	// Create a timeout context to prevent hanging on unreachable routers
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	// Check if profile exists
-	profileID, err := mikrotik.FindHotspotUserProfileID(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotProfile.Name)
+	profileID, err := mikrotik.FindHotspotUserProfileID(timeoutCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotProfile.Name)
 	if err != nil {
 		// Profile doesn't exist, create it
 		log.Info().
@@ -644,7 +648,7 @@ func (s *VoucherService) syncPackageToRouter(ctx context.Context, router *networ
 			Str("router_name", router.Name).
 			Msg("Voucher Service: Creating new Hotspot profile on router")
 
-		if err := mikrotik.AddHotspotUserProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotProfile); err != nil {
+		if err := mikrotik.AddHotspotUserProfile(timeoutCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotProfile); err != nil {
 			return fmt.Errorf("failed to create Hotspot profile: %w", err)
 		}
 	} else {
@@ -657,7 +661,7 @@ func (s *VoucherService) syncPackageToRouter(ctx context.Context, router *networ
 			Str("profile_id", profileID).
 			Msg("Voucher Service: Updating existing Hotspot profile on router")
 
-		if err := mikrotik.UpdateHotspotUserProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, profileID, hotspotProfile); err != nil {
+		if err := mikrotik.UpdateHotspotUserProfile(timeoutCtx, addr, router.APIUseTLS, router.Username, router.Password, profileID, hotspotProfile); err != nil {
 			return fmt.Errorf("failed to update Hotspot profile: %w", err)
 		}
 	}
@@ -715,7 +719,11 @@ func (s *VoucherService) removePackageFromRouter(ctx context.Context, router *ne
 		Str("router_name", router.Name).
 		Msg("Voucher Service: Removing Hotspot profile from router")
 
-	if err := mikrotik.RemoveHotspotUserProfile(ctx, addr, router.APIUseTLS, router.Username, router.Password, pkg.Name); err != nil {
+	// Create a timeout context to prevent hanging on unreachable routers
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if err := mikrotik.RemoveHotspotUserProfile(timeoutCtx, addr, router.APIUseTLS, router.Username, router.Password, pkg.Name); err != nil {
 		// If profile doesn't exist, that's okay (might have been deleted manually)
 		if strings.Contains(err.Error(), "not found") {
 			log.Debug().
@@ -724,6 +732,16 @@ func (s *VoucherService) removePackageFromRouter(ctx context.Context, router *ne
 				Str("router_id", router.ID.String()).
 				Msg("Voucher Service: Hotspot profile not found on router (already removed)")
 			return nil
+		}
+		// If timeout or connection error, log but don't fail the deletion
+		if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "connection") || strings.Contains(err.Error(), "context") {
+			log.Warn().
+				Str("package_id", pkg.ID.String()).
+				Str("package_name", pkg.Name).
+				Str("router_id", router.ID.String()).
+				Err(err).
+				Msg("Voucher Service: Router unreachable, skipping profile removal")
+			return nil // Don't fail deletion if router is unreachable
 		}
 		return fmt.Errorf("failed to remove Hotspot profile: %w", err)
 	}
