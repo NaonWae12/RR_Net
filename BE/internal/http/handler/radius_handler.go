@@ -166,10 +166,9 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	// Return ACCEPT with reply attributes (FreeRADIUS rlm_rest format)
 	// IMPORTANT: For ACCEPT, DO NOT send "control" with "Auth-Type" - rlm_rest will auto-accept on HTTP 200
 	// Setting Auth-Type=Accept in control causes FreeRADIUS to short-circuit and may skip processing reply attributes
-	// FreeRADIUS rlm_rest expects SIMPLE key-value pairs: {"Attribute-Name": "value"}
-	// NOT nested objects: {"Attribute-Name": {"value": ["value"]}}
+	// TESTING: Flat format - attributes at root level (no "reply" wrapper)
 	// MikroTik expects rate-limit format: "2048k/1024k" (Kbps with 'k' suffix) - more stable via RADIUS
-	replyAttrs := map[string]interface{}{
+	response := map[string]interface{}{
 		"Reply-Message": "Voucher accepted",
 	}
 
@@ -181,26 +180,20 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			// Use "k" format (Kbps) for better MikroTik compatibility via RADIUS
 			// Format: "2048k/1024k" is more stable than "M" or raw bps for RADIUS attributes
 			mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
-			replyAttrs["Mikrotik-Rate-Limit"] = mikrotikRateLimit
+			response["Mikrotik-Rate-Limit"] = mikrotikRateLimit
 			log.Printf("[radius_auth] full_radius mode: Sending rate limit '%s'", mikrotikRateLimit)
 		case "radius_auth_only":
 			// For "radius_auth_only" mode, assign user to Hotspot profile via Class attribute
 			// NOTE: Mikrotik-Group is marked as "unused" in FreeRADIUS dictionary and doesn't work
 			// Class is the standard RADIUS attribute that MikroTik uses for Hotspot profile assignment
 			// Profile must exist on MikroTik with matching name and rate-limit configured
-			replyAttrs["Class"] = pkg.Name // Package name must match MikroTik profile name
+			response["Class"] = pkg.Name // Package name must match MikroTik profile name
 			log.Printf("[radius_auth] radius_auth_only mode: Assigning user to profile '%s' via Class attribute", pkg.Name)
 		}
 	}
 
-	// For ACCEPT: Only send "reply", NO "control"
-	// rlm_rest will automatically accept on HTTP 200 with valid reply attributes
-	response := map[string]interface{}{
-		"reply": replyAttrs,
-	}
-
 	responseJSON, _ := json.MarshalIndent(response, "", "  ")
-	log.Printf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
+	log.Printf("[radius_auth] DEBUG: Response JSON (FLAT FORMAT TEST):\n%s", string(responseJSON))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
