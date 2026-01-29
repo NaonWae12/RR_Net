@@ -91,7 +91,22 @@ export default function VouchersPage() {
       setDeletePackageDialog({ open: false, pkg: null });
       await load();
     } catch (err: any) {
-      showToast({ title: "Gagal menghapus", description: err?.message || "Error", variant: "error" });
+      // Check if error is about vouchers still using this package
+      const errorMessage = err?.message || "";
+      if (errorMessage.includes("voucher(s) are still using this package")) {
+        // Extract voucher count from error message
+        const match = errorMessage.match(/(\d+) voucher\(s\)/);
+        const voucherCount = match ? match[1] : "beberapa";
+
+        showToast({
+          title: "Tidak dapat menghapus paket",
+          description: `Paket "${deletePackageDialog.pkg.name}" masih digunakan oleh ${voucherCount} voucher. Silakan hapus voucher tersebut terlebih dahulu atau pilih paket lain.`,
+          variant: "warning"
+        });
+      } else {
+        showToast({ title: "Gagal menghapus", description: errorMessage || "Error", variant: "error" });
+      }
+      // Don't close dialog so user can see which package failed
     } finally {
       setLoading(false);
     }
