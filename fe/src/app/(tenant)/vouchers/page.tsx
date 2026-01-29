@@ -73,6 +73,30 @@ export default function VouchersPage() {
     voucher: { id: string; code: string } | null;
   }>({ open: false, voucher: null });
 
+  const [deletePackageDialog, setDeletePackageDialog] = useState<{
+    open: boolean;
+    pkg: { id: string; name: string } | null;
+  }>({ open: false, pkg: null });
+
+  const handleDeletePackageClick = (id: string, name: string) => {
+    setDeletePackageDialog({ open: true, pkg: { id, name } });
+  };
+
+  const confirmDeletePackage = async () => {
+    if (!deletePackageDialog.pkg) return;
+    setLoading(true);
+    try {
+      await voucherService.deletePackage(deletePackageDialog.pkg.id);
+      showToast({ title: "Paket dihapus", description: `Paket "${deletePackageDialog.pkg.name}" berhasil dihapus`, variant: "success" });
+      setDeletePackageDialog({ open: false, pkg: null });
+      await load();
+    } catch (err: any) {
+      showToast({ title: "Gagal menghapus", description: err?.message || "Error", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const [genForm, setGenForm] = useState({
     package_id: "",
     router_id: "all",
@@ -383,15 +407,26 @@ export default function VouchersPage() {
                       <td className="px-4 py-3">
                         {p.rate_limit_mode === "radius_auth_only" && (
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             onClick={() => syncPackage(p.id)}
                             disabled={loading}
-                            className="gap-1"
+                            title="Sync ke Router"
+                            className="mr-1"
                           >
-                            <RotateCw className="w-3 h-3" /> Sync
+                            <RotateCw className="w-3.5 h-3.5 text-indigo-600" />
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeletePackageClick(p.id, p.name)}
+                          disabled={loading}
+                          title="Hapus Paket"
+                          className="text-slate-400 hover:text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </td>
 
                     </tr>
@@ -721,6 +756,30 @@ export default function VouchersPage() {
             </Button>
             <Button variant="destructive" onClick={confirmDeleteVoucher} disabled={loading} className="bg-red-600 hover:bg-red-700">
               {loading ? "Menghapus..." : "Ya, Hapus Voucher"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Package Confirmation Dialog */}
+      <Dialog open={deletePackageDialog.open} onOpenChange={(open) => setDeletePackageDialog({ open, pkg: deletePackageDialog.pkg })}>
+        <DialogContent className="sm:max-w-[400px] bg-white text-slate-900">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Hapus Paket
+            </DialogTitle>
+            <DialogDescription className="py-3 text-slate-600 block">
+              Apakah Anda yakin ingin menghapus paket <span className="font-mono font-bold text-slate-900">{deletePackageDialog.pkg?.name}</span>?
+              <br />
+              <span className="text-slate-500 text-sm mt-2 block">Voucher yang sudah dibuat dengan paket ini TETAP ADA, namun pembuatan voucher baru dengan paket ini tidak bisa dilakukan lagi.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeletePackageDialog({ open: false, pkg: null })}>
+              Batal
+            </Button>
+            <Button variant="destructive" onClick={confirmDeletePackage} disabled={loading} className="bg-red-600 hover:bg-red-700">
+              {loading ? "Menghapus..." : "Ya, Hapus Paket"}
             </Button>
           </DialogFooter>
         </DialogContent>

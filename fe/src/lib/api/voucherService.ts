@@ -91,6 +91,10 @@ export const voucherService = {
   async syncPackageToRouters(packageId: string, routerIds: string[]): Promise<void> {
     await apiClient.post(`/voucher-packages/${packageId}/sync`, { router_ids: routerIds });
   },
+
+  async deletePackage(id: string): Promise<void> {
+    await apiClient.delete(`/voucher-packages/${id}`);
+  },
 };
 
 
