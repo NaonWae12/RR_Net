@@ -6,29 +6,30 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
 	"rrnet/internal/metrics"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
-	csrfTokenHeader = "X-CSRF-Token"
-	csrfCookieName = "csrf_token"
-	csrfTokenLength = 32
+	csrfTokenHeader  = "X-CSRF-Token"
+	csrfCookieName   = "csrf_token"
+	csrfTokenLength  = 32
 	csrfCookieMaxAge = 3600 // 1 hour
 )
 
 // CSRFProtection implements double-submit cookie pattern for CSRF protection
 type CSRFProtection struct {
-	exemptPaths []string // Paths that don't require CSRF protection
-	cookieSecure bool   // Set Secure flag (HTTPS only)
+	exemptPaths    []string // Paths that don't require CSRF protection
+	cookieSecure   bool     // Set Secure flag (HTTPS only)
 	cookieSameSite http.SameSite
 }
 
 // NewCSRFProtection creates a new CSRF protection middleware
 func NewCSRFProtection(exemptPaths []string, cookieSecure bool, cookieSameSite http.SameSite) *CSRFProtection {
 	return &CSRFProtection{
-		exemptPaths:   exemptPaths,
-		cookieSecure: cookieSecure,
+		exemptPaths:    exemptPaths,
+		cookieSecure:   cookieSecure,
 		cookieSameSite: cookieSameSite,
 	}
 }
@@ -45,7 +46,7 @@ func generateToken() (string, error) {
 // isExemptPath checks if the path is exempt from CSRF protection
 func (c *CSRFProtection) isExemptPath(path string) bool {
 	for _, exempt := range c.exemptPaths {
-		if path == exempt || (len(exempt) > 0 && exempt[len(exempt)-1] == '*' && 
+		if path == exempt || (len(exempt) > 0 && exempt[len(exempt)-1] == '*' &&
 			len(path) >= len(exempt)-1 && path[:len(exempt)-1] == exempt[:len(exempt)-1]) {
 			return true
 		}
@@ -55,8 +56,8 @@ func (c *CSRFProtection) isExemptPath(path string) bool {
 
 // isStateChangingMethod checks if the HTTP method changes state
 func isStateChangingMethod(method string) bool {
-	return method == http.MethodPost || method == http.MethodPut || 
-		   method == http.MethodPatch || method == http.MethodDelete
+	return method == http.MethodPost || method == http.MethodPut ||
+		method == http.MethodPatch || method == http.MethodDelete
 }
 
 // CSRFMiddleware returns a middleware that enforces CSRF protection
@@ -76,7 +77,7 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 			if r.Method == http.MethodGet {
 				cookie, err := r.Cookie(csrfCookieName)
 				token := ""
-				
+
 				if err != nil || cookie == nil || cookie.Value == "" {
 					// Generate new token
 					var genErr error
@@ -100,7 +101,7 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 					// Use existing token from cookie
 					token = cookie.Value
 				}
-				
+
 				// IMPORTANT: Always expose CSRF token in response header for frontend to read
 				// This is needed because frontend (localhost:3000) cannot read cookie from backend (localhost:8080)
 				// Frontend will send this token back in X-CSRF-Token header for state-changing requests
@@ -120,13 +121,13 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 				Str("method", r.Method).
 				Str("path", r.URL.Path).
 				Msg("CSRF token cookie missing")
-			
+
 			// Record CSRF hit in metrics
 			m := metrics.Get()
 			if m != nil {
 				m.RecordCSRFHit(r.URL.Path, "cookie_missing")
 			}
-			
+
 			http.Error(w, "CSRF token missing", http.StatusForbidden)
 			return
 		}
@@ -141,13 +142,13 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 				Str("method", r.Method).
 				Str("path", r.URL.Path).
 				Msg("CSRF token header missing")
-			
+
 			// Record CSRF hit in metrics
 			m := metrics.Get()
 			if m != nil {
 				m.RecordCSRFHit(r.URL.Path, "header_missing")
 			}
-			
+
 			http.Error(w, "CSRF token header missing", http.StatusForbidden)
 			return
 		}
@@ -159,13 +160,13 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 				Str("method", r.Method).
 				Str("path", r.URL.Path).
 				Msg("CSRF token mismatch")
-			
+
 			// Record CSRF hit in metrics
 			m := metrics.Get()
 			if m != nil {
 				m.RecordCSRFHit(r.URL.Path, "token_mismatch")
 			}
-			
+
 			http.Error(w, "CSRF token mismatch", http.StatusForbidden)
 			return
 		}
@@ -193,12 +194,13 @@ func DefaultCSRFProtection() *CSRFProtection {
 		"/api/v1/network/routers/*/disconnect",
 		// Public (non-JWT) endpoints authenticated by shared-secret headers
 		"/api/v1/radius/*",
+		// Voucher package operations (Sync requires POST)
+		"/api/v1/voucher-packages/*",
 	}
 
 	return NewCSRFProtection(
 		exemptPaths,
-		false, // Secure cookie only in production with HTTPS
+		false,                // Secure cookie only in production with HTTPS
 		http.SameSiteLaxMode, // LaxMode allows cookies in cross-origin GET requests and same-origin POST/PATCH/etc
 	)
 }
-
