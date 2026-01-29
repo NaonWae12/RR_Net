@@ -185,13 +185,14 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 				"value": []string{mikrotikRateLimit},
 			}
 		} else if pkg.RateLimitMode == "radius_auth_only" {
-			// For "radius_auth_only" mode, assign user to Hotspot profile via Mikrotik-Group
-			// This tells MikroTik which profile to use for rate limiting
+			// For "radius_auth_only" mode, assign user to Hotspot profile via Class attribute
+			// NOTE: Mikrotik-Group is marked as "unused" in FreeRADIUS dictionary and doesn't work
+			// Class is the standard RADIUS attribute that MikroTik uses for Hotspot profile assignment
 			// Profile must exist on MikroTik with matching name and rate-limit configured
-			replyAttrs["Mikrotik-Group"] = map[string]interface{}{
+			replyAttrs["Class"] = map[string]interface{}{
 				"value": []string{pkg.Name}, // Package name must match MikroTik profile name
 			}
-			log.Printf("[radius_auth] radius_auth_only mode: Assigning user to profile '%s'", pkg.Name)
+			log.Printf("[radius_auth] radius_auth_only mode: Assigning user to profile '%s' via Class attribute", pkg.Name)
 		}
 	}
 
