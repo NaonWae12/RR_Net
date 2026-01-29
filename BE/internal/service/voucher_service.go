@@ -331,8 +331,8 @@ func buildCharsetFromMode(mode string) (string, error) {
 }
 
 func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUID, req GenerateVouchersRequest) ([]*voucher.Voucher, error) {
-	// Validate package exists
-	_, err := s.voucherRepo.GetPackageByID(ctx, req.PackageID)
+	// Validate package exists and get package details
+	pkg, err := s.voucherRepo.GetPackageByID(ctx, req.PackageID)
 	if err != nil {
 		return nil, fmt.Errorf("package not found: %w", err)
 	}
@@ -399,6 +399,62 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 		}
 
 		vouchers = append(vouchers, v)
+	}
+
+	// For radius_auth_only mode, create Hotspot users on MikroTik routers
+	// This is required because MikroTik Hotspot doesn't support dynamic profile assignment via RADIUS
+	if pkg.RateLimitMode == "radius_auth_only" {
+		log.Info().
+			Str("package_id", pkg.ID.String()).
+			Str("package_name", pkg.Name).
+			Str("mode", pkg.RateLimitMode).
+			Int("voucher_count", len(vouchers)).
+			Msg("Creating Hotspot users on routers for radius_auth_only mode")
+
+		// Get all active routers for this tenant
+		routers, err := s.routerRepo.ListByTenant(ctx, tenantID)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to get routers for Hotspot user creation, vouchers created but users not synced to routers")
+		} else {
+			// Create Hotspot users on each router
+			for _, router := range routers {
+				if router.Status != network.RouterStatusOnline {
+					continue
+				}
+
+				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+
+				for _, v := range vouchers {
+					hotspotUser := mikrotik.HotspotUser{
+						Name:     v.Code,
+						Password: v.Password,
+						Profile:  pkg.Name, // Package name must match MikroTik profile name
+						Comment:  fmt.Sprintf("RRNET Voucher - Generated %s", now.Format("2006-01-02 15:04:05")),
+					}
+
+					// Create timeout context for each user creation
+					userCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					err := mikrotik.AddHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotUser)
+					cancel()
+
+					if err != nil {
+						log.Warn().
+							Err(err).
+							Str("router_id", router.ID.String()).
+							Str("router_name", router.Name).
+							Str("voucher_code", v.Code).
+							Msg("Failed to create Hotspot user on router (voucher still valid, user can be created manually)")
+					} else {
+						log.Info().
+							Str("router_id", router.ID.String()).
+							Str("router_name", router.Name).
+							Str("voucher_code", v.Code).
+							Str("profile", pkg.Name).
+							Msg("Successfully created Hotspot user on router")
+					}
+				}
+			}
+		}
 	}
 
 	return vouchers, nil
