@@ -51,7 +51,7 @@ type HotspotUserProfile struct {
 	Name        string
 	RateLimit   string // Format: "download/upload" e.g., "2048k/1024k"
 	AddressList string
-	SharedUsers int    // Number of shared users (default: 1)
+	SharedUsers int // Number of shared users (default: 1)
 	Comment     string
 }
 
@@ -116,9 +116,10 @@ func UpdateHotspotUserProfile(ctx context.Context, addr string, useTLS bool, rou
 	if profile.SharedUsers > 0 {
 		args = append(args, fmt.Sprintf("=shared-users=%d", profile.SharedUsers))
 	}
-	if profile.Comment != "" {
-		args = append(args, "=comment="+profile.Comment)
-	}
+	// Comment removed to avoid 'unknown parameter' error
+	// if profile.Comment != "" {
+	// 	args = append(args, "=comment="+profile.Comment)
+	// }
 
 	_, err = client.RunArgs(args)
 	if err != nil {
