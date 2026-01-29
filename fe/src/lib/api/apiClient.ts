@@ -262,6 +262,45 @@ apiClient.interceptors.request.use(
     config.headers = new axios.AxiosHeaders();
   }
   
+  // CRITICAL: Wait for auth to be ready before sending requests
+  // This prevents race conditions where requests are sent before token is synced
+  // Only applies if we're in browser and auth is authenticated but not ready yet
+  if (typeof window !== 'undefined') {
+    try {
+      const authStore = (await import("@/stores/authStore")).useAuthStore;
+      const state = authStore.getState();
+      
+      // If authenticated but not ready, wait for ready state
+      if (state.isAuthenticated && !state.ready) {
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            // Timeout after 3 seconds - proceed anyway to avoid hanging
+            console.warn('[apiClient] Auth ready timeout - proceeding with request');
+            resolve();
+          }, 3000);
+          
+          const unsubscribe = authStore.subscribe((newState) => {
+            if (newState.ready) {
+              clearTimeout(timeout);
+              unsubscribe();
+              resolve();
+            }
+          });
+          
+          // Double-check if ready now (might have changed during async)
+          if (authStore.getState().ready) {
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve();
+          }
+        });
+      }
+    } catch (e) {
+      // Ignore errors in ready check - proceed with request
+      console.warn('[apiClient] Error checking auth ready state:', e);
+    }
+  }
+  
   // Get latest token from authStore if available (for better sync)
   // This ensures we always use the most up-to-date token
   let currentToken = accessToken;
@@ -502,7 +541,7 @@ function getErrorMessage(error: AxiosError): string {
 }
 
 // Retry configuration
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 1; // Reduced from 3 - fail fast for better UX
 const RETRY_DELAY = 1000; // 1 second
 const RETRYABLE_STATUSES = [408, 500, 502, 503, 504]; // Removed 429 - don't retry rate limit errors
 const RETRYABLE_CODES = ["ECONNABORTED", "ETIMEDOUT", "ERR_NETWORK"];
@@ -548,8 +587,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Circuit breaker for 401 errors - prevent infinite auth loops
+let consecutiveAuthFailures = 0;
+const MAX_AUTH_FAILURES = 3;
+
 apiClient.interceptors.response.use(
   (response) => {
+    // Reset auth failure counter on successful response
+    consecutiveAuthFailures = 0;
+    
     // Extract CSRF token from response header (backend sends this on GET requests)
     // Axios normalizes headers to lowercase in response.headers object
     const token = response.headers['x-csrf-token'];
@@ -593,6 +639,31 @@ apiClient.interceptors.response.use(
     }
 
     const status = error?.response?.status;
+    
+    // Circuit breaker: Force logout after too many consecutive 401s
+    if (status === 401) {
+      consecutiveAuthFailures++;
+      
+      if (consecutiveAuthFailures >= MAX_AUTH_FAILURES) {
+        console.error('[AUTH CIRCUIT BREAKER] Too many consecutive 401 errors, forcing logout');
+        
+        // Force logout to break the loop
+        try {
+          const authStore = (await import("@/stores/authStore")).useAuthStore;
+          await authStore.getState().logout();
+        } catch (e) {
+          console.error('[AUTH CIRCUIT BREAKER] Failed to logout:', e);
+        }
+        
+        return Promise.reject(
+          new ApiError(
+            "Authentication failed multiple times. Please log in again.",
+            401,
+            "AUTH_CIRCUIT_BREAKER_TRIGGERED"
+          )
+        );
+      }
+    }
     
     // Handle 401 Unauthorized - try to refresh token
     // if (status === 401) {
@@ -771,13 +842,24 @@ apiClient.interceptors.response.use(
 
     // Log error for debugging
     if (status && status >= 500) {
-      console.error("Server error:", {
+      console.error("[SERVER ERROR]", {
         status,
         url: originalRequest?.url,
         method: originalRequest?.method,
         message: apiError.message,
         responseData: error?.response?.data,
         error: error?.response?.data || error?.message || "Unknown error",
+        retryCount: originalRequest._retryCount || 0,
+        authFailures: consecutiveAuthFailures,
+      });
+    } else if (status === 401) {
+      console.warn("[AUTH ERROR]", {
+        status,
+        url: originalRequest?.url,
+        method: originalRequest?.method,
+        message: apiError.message,
+        authFailures: consecutiveAuthFailures,
+        retryCount: originalRequest._retryCount || 0,
       });
     }
 

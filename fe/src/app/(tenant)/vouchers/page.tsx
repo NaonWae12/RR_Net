@@ -61,8 +61,6 @@ export default function VouchersPage() {
     rate_limit_mode: "radius_auth_only", // Default to MVP mode
   });
 
-  const [rateLimitMode, setRateLimitMode] = useState("radius_auth_only");
-
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
     voucher: Voucher | null;
@@ -91,11 +89,22 @@ export default function VouchersPage() {
       setDeletePackageDialog({ open: false, pkg: null });
       await load();
     } catch (err: any) {
+      // Debug: log the entire error object to see its structure
+      console.log('[DELETE PACKAGE ERROR]', {
+        err,
+        message: err?.message,
+        details: err?.details,
+        data: err?.data,
+      });
+
       // Check if error is about vouchers still using this package
+      // The error might be in different places depending on apiClient transformation
       const errorMessage = err?.message || "";
-      if (errorMessage.includes("voucher(s) are still using this package")) {
+      const backendError = err?.details?.error || err?.data?.error || "";
+      const fullErrorText = errorMessage + " " + backendError;
+      if (fullErrorText.includes("voucher(s) are still using this package")) {
         // Extract voucher count from error message
-        const match = errorMessage.match(/(\d+) voucher\(s\)/);
+        const match = fullErrorText.match(/(\d+) voucher\(s\)/);
         const voucherCount = match ? match[1] : "beberapa";
 
         showToast({
@@ -171,7 +180,7 @@ export default function VouchersPage() {
         rate_limit_mode: pkgForm.rate_limit_mode,
       });
       showToast({ title: "Paket dibuat", description: "Paket voucher berhasil ditambahkan", variant: "success" });
-      setPkgForm({ name: "", download_speed: 2048, upload_speed: 1024, validity: "2H", price: 0, rate_limit_mode: "radius_auth_only" });
+      setPkgForm({ name: "", download_speed: 2048, upload_speed: 1024, validity: "2h", price: 0, rate_limit_mode: "radius_auth_only" });
       await load();
     } catch (err: any) {
       showToast({ title: "Gagal", description: err?.message || "Error", variant: "error" });
@@ -311,19 +320,9 @@ export default function VouchersPage() {
           </h1>
           <p className="text-slate-500 mt-1">Manage hotspot packages and generate batch vouchers.</p>
         </div>
-        <div className="flex gap-2 items-center">
-          <select
-            value={rateLimitMode}
-            onChange={(e) => setRateLimitMode(e.target.value)}
-            className="h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
-          >
-            <option value="radius_auth_only">RADIUS Auth Only</option>
-            <option value="full_radius">Full RADIUS</option>
-          </select>
-          <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
-            <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sync Data
-          </Button>
-        </div>
+        <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
+          <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sync Data
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
@@ -360,7 +359,7 @@ export default function VouchersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Input
                   label="Batas Waktu (Validity)"
-                  placeholder="Contoh: 2H, 1J"
+                  placeholder="Contoh: 2h, 1J"
                   value={pkgForm.validity}
                   onChange={(e) => setPkgForm({ ...pkgForm, validity: e.target.value })}
                   info="Format: H=Hari, J=Jam, M=Minggu, B=Bulan"
