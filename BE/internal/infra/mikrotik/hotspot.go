@@ -72,15 +72,17 @@ func AddHotspotUserProfile(ctx context.Context, addr string, useTLS bool, router
 	if profile.RateLimit != "" {
 		args = append(args, "=rate-limit="+profile.RateLimit)
 	}
-	if profile.AddressList != "" {
-		args = append(args, "=address-list="+profile.AddressList)
-	}
-	if profile.SharedUsers > 0 {
-		args = append(args, fmt.Sprintf("=shared-users=%d", profile.SharedUsers))
-	}
-	if profile.Comment != "" {
-		args = append(args, "=comment="+profile.Comment)
-	}
+	// Removed optional parameters to avoid 'unknown parameter' errors on some RouterOS versions
+	// Only name and rate-limit are sent, which are the essential parameters for rate limiting
+	// if profile.AddressList != "" {
+	// 	args = append(args, "=address-list="+profile.AddressList)
+	// }
+	// if profile.SharedUsers > 0 {
+	// 	args = append(args, fmt.Sprintf("=shared-users=%d", profile.SharedUsers))
+	// }
+	// if profile.Comment != "" {
+	// 	args = append(args, "=comment="+profile.Comment)
+	// }
 
 	_, err = client.RunArgs(args)
 	if err != nil {
@@ -110,12 +112,13 @@ func UpdateHotspotUserProfile(ctx context.Context, addr string, useTLS bool, rou
 	if profile.RateLimit != "" {
 		args = append(args, "=rate-limit="+profile.RateLimit)
 	}
-	if profile.AddressList != "" {
-		args = append(args, "=address-list="+profile.AddressList)
-	}
-	if profile.SharedUsers > 0 {
-		args = append(args, fmt.Sprintf("=shared-users=%d", profile.SharedUsers))
-	}
+	// Removed optional parameters to avoid 'unknown parameter' errors on some RouterOS versions
+	// if profile.AddressList != "" {
+	// 	args = append(args, "=address-list="+profile.AddressList)
+	// }
+	// if profile.SharedUsers > 0 {
+	// 	args = append(args, fmt.Sprintf("=shared-users=%d", profile.SharedUsers))
+	// }
 	// Comment removed to avoid 'unknown parameter' error
 	// if profile.Comment != "" {
 	// 	args = append(args, "=comment="+profile.Comment)

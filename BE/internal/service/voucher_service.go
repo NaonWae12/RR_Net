@@ -41,16 +41,16 @@ func (s *VoucherService) VoucherRepo() *repository.VoucherRepository {
 // ========== Voucher Packages ==========
 
 type CreateVoucherPackageRequest struct {
-	Name           string  `json:"name"`
-	Description    string  `json:"description,omitempty"`
-	DownloadSpeed  int     `json:"download_speed"`
-	UploadSpeed    int     `json:"upload_speed"`
-	DurationHours  *int    `json:"duration_hours,omitempty"`
-	Validity       string  `json:"validity,omitempty"` // Mikhmon format: 2H, 1J, etc.
-	QuotaMB        *int    `json:"quota_mb,omitempty"`
-	Price          float64 `json:"price"`
-	Currency       string  `json:"currency,omitempty"`
-	RateLimitMode  string  `json:"rate_limit_mode,omitempty"` // full_radius or radius_auth_only
+	Name          string  `json:"name"`
+	Description   string  `json:"description,omitempty"`
+	DownloadSpeed int     `json:"download_speed"`
+	UploadSpeed   int     `json:"upload_speed"`
+	DurationHours *int    `json:"duration_hours,omitempty"`
+	Validity      string  `json:"validity,omitempty"` // Mikhmon format: 2H, 1J, etc.
+	QuotaMB       *int    `json:"quota_mb,omitempty"`
+	Price         float64 `json:"price"`
+	Currency      string  `json:"currency,omitempty"`
+	RateLimitMode string  `json:"rate_limit_mode,omitempty"` // full_radius or radius_auth_only
 }
 
 func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, req CreateVoucherPackageRequest) (*voucher.VoucherPackage, error) {
@@ -225,6 +225,15 @@ func (s *VoucherService) DeletePackage(ctx context.Context, id uuid.UUID) error 
 	pkg, err := s.voucherRepo.GetPackageByID(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// Check if there are any vouchers using this package
+	voucherCount, err := s.voucherRepo.CountVouchersByPackage(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to check voucher count: %w", err)
+	}
+	if voucherCount > 0 {
+		return fmt.Errorf("cannot delete package: %d voucher(s) are still using this package. Please delete the vouchers first", voucherCount)
 	}
 
 	// If mode is radius_auth_only, remove Hotspot profiles from routers before deleting

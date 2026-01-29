@@ -232,6 +232,13 @@ func (r *VoucherRepository) CountVouchersByTenant(ctx context.Context, tenantID 
 	return count, err
 }
 
+func (r *VoucherRepository) CountVouchersByPackage(ctx context.Context, packageID uuid.UUID) (int, error) {
+	query := `SELECT COUNT(*) FROM vouchers WHERE package_id = $1`
+	var count int
+	err := r.db.QueryRow(ctx, query, packageID).Scan(&count)
+	return count, err
+}
+
 func (r *VoucherRepository) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM vouchers WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id)
