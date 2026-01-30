@@ -297,6 +297,7 @@ export default function RouterDetailPage() {
                           variant: "success"
                         });
                         const status = await networkService.getIsolirStatus(routerData.id);
+                        console.log('[Isolir] Status after install:', status);
                         setIsolirStatus(status);
                         setHotspotIP("");
                       } catch (err: any) {
