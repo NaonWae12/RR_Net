@@ -340,6 +340,81 @@ func (h *NetworkHandler) CreateProfile(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(profile)
 }
 
+// ========== Isolir Handlers ==========
+
+// InstallIsolirFirewall installs the firewall rule to block isolated users on a router
+func (h *NetworkHandler) InstallIsolirFirewall(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Install firewall
+	if err := h.networkService.InstallIsolirFirewall(r.Context(), id); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Isolir firewall installed successfully",
+	})
+}
+
+// GetIsolirStatus checks if isolir firewall is installed on a router
+func (h *NetworkHandler) GetIsolirStatus(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Get isolir status
+	status, err := h.networkService.GetIsolirStatus(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(status)
+}
+
 func (h *NetworkHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	id, ok := getUUIDParam(r, "id")
 	if !ok {

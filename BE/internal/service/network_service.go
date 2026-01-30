@@ -1211,12 +1211,12 @@ func convertToMikrotikProfile(profile *network.NetworkProfile) mikrotik.PPPoEPro
 	}
 
 	mikrotikProfile := mikrotik.PPPoEProfile{
-		Name:          profile.Name,
-		RateLimit:     rateLimit,
-		OnlyOne:       profile.SharedUsers == 1,
-		ChangeTCPMSS:  "yes", // Default
-		UseUpnp:       "no",  // Default
-		Comment:       fmt.Sprintf("RR-NET Profile: %s", profile.Name),
+		Name:         profile.Name,
+		RateLimit:    rateLimit,
+		OnlyOne:      profile.SharedUsers == 1,
+		ChangeTCPMSS: "yes", // Default
+		UseUpnp:      "no",  // Default
+		Comment:      fmt.Sprintf("RR-NET Profile: %s", profile.Name),
 	}
 
 	if profile.LocalAddress != nil {
@@ -1462,4 +1462,78 @@ func (s *NetworkService) purgeOldRouters(ctx context.Context) {
 				Msg("RouterCleanup: Purged router")
 		}
 	}
+}
+
+// ========== Isolir Management ==========
+
+// InstallIsolirFirewall installs the firewall rule to block isolated users on a router
+func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uuid.UUID) error {
+	router, err := s.routerRepo.GetByID(ctx, routerID)
+	if err != nil {
+		return fmt.Errorf("router not found: %w", err)
+	}
+
+	if router.Type != network.RouterTypeMikroTik {
+		return fmt.Errorf("only MikroTik routers are supported")
+	}
+
+	// Build MikroTik API address
+	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
+
+	// Install firewall rule
+	err = mikrotik.InstallIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("router_id", routerID.String()).
+			Str("router_name", router.Name).
+			Msg("Failed to install isolir firewall")
+		return fmt.Errorf("failed to install isolir firewall: %w", err)
+	}
+
+	log.Info().
+		Str("router_id", routerID.String()).
+		Str("router_name", router.Name).
+		Msg("Isolir firewall installed successfully")
+
+	return nil
+}
+
+// IsolirStatus represents the isolir configuration status on a router
+type IsolirStatus struct {
+	FirewallInstalled bool   `json:"firewall_installed"`
+	RouterID          string `json:"router_id"`
+	RouterName        string `json:"router_name"`
+}
+
+// GetIsolirStatus checks if isolir firewall is installed on a router
+func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID) (*IsolirStatus, error) {
+	router, err := s.routerRepo.GetByID(ctx, routerID)
+	if err != nil {
+		return nil, fmt.Errorf("router not found: %w", err)
+	}
+
+	if router.Type != network.RouterTypeMikroTik {
+		return nil, fmt.Errorf("only MikroTik routers are supported")
+	}
+
+	// Build MikroTik API address
+	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
+
+	// Check firewall status
+	installed, err := mikrotik.CheckIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("router_id", routerID.String()).
+			Str("router_name", router.Name).
+			Msg("Failed to check isolir firewall status")
+		return nil, fmt.Errorf("failed to check isolir firewall status: %w", err)
+	}
+
+	return &IsolirStatus{
+		FirewallInstalled: installed,
+		RouterID:          router.ID.String(),
+		RouterName:        router.Name,
+	}, nil
 }

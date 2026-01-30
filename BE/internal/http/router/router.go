@@ -802,6 +802,17 @@ func New(deps Dependencies) http.Handler {
 					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.ToggleRemoteAccess)).ServeHTTP(w, r)
 					return
 				}
+
+			case "isolir-install":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.InstallIsolirFirewall)).ServeHTTP(w, r)
+					return
+				}
+			case "isolir-status":
+				if r.Method == http.MethodGet {
+					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetIsolirStatus)).ServeHTTP(w, r)
+					return
+				}
 			}
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
