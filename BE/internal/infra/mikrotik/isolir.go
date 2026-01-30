@@ -139,8 +139,19 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 		}
 	}
 
+	// TEST REDIRECT: Use placehold.jp IP for proof of concept
+	testIP := "160.16.238.49"
+
+	// 1. Add Walled Garden for test IP
+	_, err = client.Run(
+		"/ip/hotspot/walled-garden/add",
+		fmt.Sprintf("=dst-address=%s", testIP),
+		"=action=allow",
+		"=comment=Isolir-TEST: Allow placeholder image",
+	)
+
 	// 2. Install NAT redirect for HTTP traffic (port 80)
-	// EXCLUDE serverHost from redirection so they can reach the suspended page
+	// Redirect direct to testIP:80
 	natArgs := []string{
 		"/ip/firewall/nat/add",
 		"=chain=dstnat",
@@ -148,14 +159,9 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 		"=protocol=tcp",
 		"=dst-port=80",
 		"=action=dst-nat",
-		fmt.Sprintf("=to-addresses=%s", hotspotIP),
+		fmt.Sprintf("=to-addresses=%s", testIP),
 		"=to-ports=80",
-		"=comment=Isolir-NAT: Redirect HTTP to error page",
-	}
-
-	// If serverHost is an IP, exclude it from NAT redirection
-	if serverHost != "" && net.ParseIP(serverHost) != nil {
-		natArgs = append(natArgs, fmt.Sprintf("=dst-address=!%s", serverHost))
+		"=comment=Isolir-NAT: TEST REDIRECT",
 	}
 
 	_, err = client.Run(natArgs...)
