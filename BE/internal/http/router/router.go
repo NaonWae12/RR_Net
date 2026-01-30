@@ -984,6 +984,17 @@ func New(deps Dependencies) http.Handler {
 			return
 		}
 
+		// Check for toggle-isolate action: /api/v1/vouchers/{id}/toggle-isolate
+		if len(parts) == 2 && parts[1] == "toggle-isolate" {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodPost {
+				voucherHandler.ToggleIsolate(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
 		// Single ID route: /api/v1/vouchers/{id}
 		r = setPathParam(r, "id", path)
 		switch r.Method {
