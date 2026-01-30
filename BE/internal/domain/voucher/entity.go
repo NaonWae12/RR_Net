@@ -8,8 +8,8 @@ import (
 
 // Rate limit mode constants
 const (
-	RateLimitModeFullRadius   = "full_radius"     // Rate limit sent via RADIUS attributes
-	RateLimitModeAuthOnly     = "radius_auth_only" // Rate limit configured via MikroTik Hotspot profiles
+	RateLimitModeFullRadius = "full_radius"      // Rate limit sent via RADIUS attributes
+	RateLimitModeAuthOnly   = "radius_auth_only" // Rate limit configured via MikroTik Hotspot profiles
 )
 
 type VoucherPackage struct {
@@ -46,6 +46,7 @@ type Voucher struct {
 	Code           string        `json:"code"`
 	Password       string        `json:"password"`
 	Status         VoucherStatus `json:"status"`
+	Isolated       bool          `json:"isolated"` // Whether user is isolated (blocked from internet)
 	UsedAt         *time.Time    `json:"used_at,omitempty"`
 	ExpiresAt      *time.Time    `json:"expires_at,omitempty"`
 	FirstSessionID *uuid.UUID    `json:"first_session_id,omitempty"`

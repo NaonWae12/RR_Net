@@ -129,7 +129,7 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 
 func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
@@ -138,7 +138,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 	`
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, tenantID, code).Scan(
-		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
+		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
 		&v.PackageName,
 	)
@@ -150,7 +150,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 
 func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
@@ -169,7 +169,7 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 	for rows.Next() {
 		var v voucher.Voucher
 		err := rows.Scan(
-			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
+			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
 			&v.PackageName,
 		)
@@ -193,7 +193,7 @@ func (r *VoucherRepository) UpdateVoucherStatus(ctx context.Context, id uuid.UUI
 
 func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
@@ -202,7 +202,7 @@ func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*
 	`
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
+		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
 		&v.PackageName,
 	)
@@ -273,7 +273,7 @@ func (r *VoucherRepository) ConsumeVoucherAtomic(
 				(status = 'active' AND (expires_at IS NULL OR expires_at > NOW()))
 			)
 		RETURNING
-			id, tenant_id, package_id, router_id, code, password, status,
+			id, tenant_id, package_id, router_id, code, password, status, isolated,
 			used_at, expires_at, first_session_id, notes, created_at, updated_at
 	`
 
@@ -286,12 +286,35 @@ func (r *VoucherRepository) ConsumeVoucherAtomic(
 		usedAt,
 		expiresAt,
 	).Scan(
-		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status,
+		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
 	)
 
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("voucher already used or expired")
+	}
+
+	return &v, err
+}
+
+// ToggleIsolate toggles the isolated status of a voucher
+func (r *VoucherRepository) ToggleIsolate(ctx context.Context, id uuid.UUID) (*voucher.Voucher, error) {
+	query := `
+		UPDATE vouchers
+		SET isolated = NOT isolated, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, tenant_id, package_id, router_id, code, password, status, isolated,
+			used_at, expires_at, first_session_id, notes, created_at, updated_at
+	`
+
+	var v voucher.Voucher
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("voucher not found")
 	}
 
 	return &v, err
