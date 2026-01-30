@@ -26,6 +26,7 @@ export interface Voucher {
   code: string;
   password?: string;
   status: string;
+  isolated: boolean; // Isolir status
   used_at?: string | null;
   expires_at?: string | null;
   first_session_id?: string | null;
@@ -85,6 +86,11 @@ export const voucherService = {
 
   async toggleStatus(id: string): Promise<Voucher> {
     const res = await apiClient.post<Voucher>(`/vouchers/${id}/toggle-status`);
+    return res.data;
+  },
+
+  async toggleIsolate(id: string): Promise<Voucher> {
+    const res = await apiClient.post<Voucher>(`/vouchers/${id}/toggle-isolate`);
     return res.data;
   },
 

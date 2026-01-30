@@ -28,7 +28,9 @@ import {
   Search,
   Router as RouterIcon,
   Power,
-  PowerOff
+  PowerOff,
+  Shield,
+  ShieldOff
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Badge } from "@/components/ui/badge";
@@ -280,6 +282,34 @@ export default function VouchersPage() {
       await load();
     } catch (err: any) {
       showToast({ title: "Gagal mengubah status", description: err?.message || "Error", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleIsolate = async (voucher: Voucher) => {
+    // Only allow isolate for used vouchers
+    if (voucher.status !== "used") {
+      showToast({
+        title: "Tidak dapat di-isolir",
+        description: `Hanya voucher dengan status "used" yang dapat di-isolir`,
+        variant: "error"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await voucherService.toggleIsolate(voucher.id);
+      const newStatus = voucher.isolated ? "aktif" : "terisolir";
+      showToast({
+        title: "Status isolir diubah",
+        description: `Voucher "${voucher.code}" sekarang ${newStatus}`,
+        variant: "success"
+      });
+      await load();
+    } catch (err: any) {
+      showToast({ title: "Gagal mengubah status isolir", description: err?.message || "Error", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -622,14 +652,22 @@ export default function VouchersPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize shadow-sm ${v.status === 'active' ? 'bg-green-100 text-green-700 border border-green-200' :
-                          v.status === 'used' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                            v.status === 'revoked' ? 'bg-red-100 text-red-700 border border-red-200' :
-                              v.status === 'expired' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
-                                'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}>
-                          {v.status}
-                        </span>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize shadow-sm ${v.status === 'active' ? 'bg-green-100 text-green-700 border border-green-200' :
+                            v.status === 'used' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                              v.status === 'revoked' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                v.status === 'expired' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                                  'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                            {v.status}
+                          </span>
+                          {v.status === 'used' && v.isolated && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200 shadow-sm">
+                              <ShieldOff className="w-3 h-3 mr-1" />
+                              ISOLATED
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -649,6 +687,25 @@ export default function VouchersPage() {
                                 <Power className="w-4 h-4" />
                               ) : (
                                 <PowerOff className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
+                          {v.status === "used" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleToggleIsolate(v)}
+                              className={`h-9 w-9 ${v.isolated
+                                ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                                : "text-red-600 hover:text-red-700 hover:bg-red-50"
+                                }`}
+                              title={v.isolated ? "Un-Isolir (Aktifkan)" : "Isolir (Blokir)"}
+                              disabled={loading}
+                            >
+                              {v.isolated ? (
+                                <Shield className="w-4 h-4" />
+                              ) : (
+                                <ShieldOff className="w-4 h-4" />
                               )}
                             </Button>
                           )}
