@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/go-routeros/routeros"
+	"github.com/rs/zerolog/log"
 )
 
 // IsolirConfig holds MikroTik isolir configuration
@@ -113,8 +114,8 @@ func DisconnectHotspotUser(ctx context.Context, addr string, useTLS bool, userna
 }
 
 // InstallIsolirFirewall installs the complete isolir firewall setup (idempotent)
-// Includes: NAT redirect for HTTP, Filter reject for HTTPS and other traffic
-func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password, hotspotIP string) error {
+// Includes: NAT redirect for HTTP, Filter reject for HTTPS and other traffic, and Walled Garden for the portal
+func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password, hotspotIP, serverHost string) error {
 	client, err := dialMikroTik(addr, useTLS, username, password)
 	if err != nil {
 		return err
@@ -124,8 +125,21 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 	// Remove old rules first (idempotent - safe to call multiple times)
 	_ = removeIsolirRules(client)
 
-	// 1. Install NAT redirect for HTTP traffic (port 80)
-	// This redirects HTTP requests to hotspot error page
+	// 1. Add to Walled Garden so isolated users can still reach the suspended page
+	if serverHost != "" {
+		_, err = client.Run(
+			"/ip/hotspot/walled-garden/add",
+			fmt.Sprintf("=dst-host=%s", serverHost),
+			"=action=allow",
+			"=comment=Isolir-WP: Allow access to suspended portal",
+		)
+		if err != nil {
+			log.Warn().Err(err).Str("host", serverHost).Msg("Failed to add walled garden entry, continuing...")
+		}
+	}
+
+	// 2. Install NAT redirect for HTTP traffic (port 80)
+	// This redirects HTTP requests to hotspot error page (which we will hijack with JS)
 	_, err = client.Run(
 		"/ip/firewall/nat/add",
 		"=chain=dstnat",
@@ -141,7 +155,7 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 		return fmt.Errorf("failed to install NAT redirect: %w", err)
 	}
 
-	// 2. Install filter to block HTTPS (port 443)
+	// 3. Install filter to block HTTPS (port 443)
 	_, err = client.Run(
 		"/ip/firewall/filter/add",
 		"=chain=forward",
@@ -156,7 +170,7 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 		return fmt.Errorf("failed to install HTTPS block: %w", err)
 	}
 
-	// 3. Install filter to block all other traffic
+	// 4. Install filter to block all other traffic
 	_, err = client.Run(
 		"/ip/firewall/filter/add",
 		"=chain=forward",
@@ -211,6 +225,22 @@ func removeIsolirRules(client *routeros.Client) error {
 			if id, ok := re.Map[".id"]; ok {
 				_, _ = client.Run(
 					"/ip/firewall/filter/remove",
+					fmt.Sprintf("=.id=%s", id),
+				)
+			}
+		}
+	}
+
+	// Remove Walled Garden rules
+	wgReply, err := client.Run(
+		"/ip/hotspot/walled-garden/print",
+		"?comment~Isolir-",
+	)
+	if err == nil {
+		for _, re := range wgReply.Re {
+			if id, ok := re.Map[".id"]; ok {
+				_, _ = client.Run(
+					"/ip/hotspot/walled-garden/remove",
 					fmt.Sprintf("=.id=%s", id),
 				)
 			}

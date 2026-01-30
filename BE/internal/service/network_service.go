@@ -1467,7 +1467,7 @@ func (s *NetworkService) purgeOldRouters(ctx context.Context) {
 // ========== Isolir Management ==========
 
 // InstallIsolirFirewall installs the complete isolir firewall setup on a router
-func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uuid.UUID, hotspotIP string) (*IsolirStatus, error) {
+func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uuid.UUID, hotspotIP, serverHost string) (*IsolirStatus, error) {
 	router, err := s.routerRepo.GetByID(ctx, routerID)
 	if err != nil {
 		return nil, fmt.Errorf("router not found: %w", err)
@@ -1481,7 +1481,7 @@ func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uui
 	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
 
 	// Install firewall
-	err = mikrotik.InstallIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotIP)
+	err = mikrotik.InstallIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotIP, serverHost)
 	if err != nil {
 		log.Error().
 			Err(err).

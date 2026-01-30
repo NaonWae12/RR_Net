@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -381,8 +382,14 @@ func (h *NetworkHandler) InstallIsolirFirewall(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Install firewall with hotspot IP
-	status, err := h.networkService.InstallIsolirFirewall(r.Context(), id, req.HotspotIP)
+	// Determine server host for walled garden (can be IP or domain)
+	serverHost := r.Host
+	if host, _, err := net.SplitHostPort(r.Host); err == nil {
+		serverHost = host
+	}
+
+	// Install firewall with hotspot IP and server host
+	status, err := h.networkService.InstallIsolirFirewall(r.Context(), id, req.HotspotIP, serverHost)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
