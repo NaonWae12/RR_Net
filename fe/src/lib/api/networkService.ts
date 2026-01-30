@@ -105,5 +105,24 @@ export const networkService = {
   async deleteNetworkProfile(id: string): Promise<void> {
     await apiClient.delete(`/network/profiles/${id}`);
   },
+
+  // ========== Isolir Management ==========
+  async installIsolirFirewall(routerId: string): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>(`/network/routers/${routerId}/isolir-install`);
+    return response.data;
+  },
+
+  async getIsolirStatus(routerId: string): Promise<{
+    firewall_installed: boolean;
+    router_id: string;
+    router_name: string;
+  }> {
+    const response = await apiClient.get<{
+      firewall_installed: boolean;
+      router_id: string;
+      router_name: string;
+    }>(`/network/routers/${routerId}/isolir-status`);
+    return response.data;
+  },
 };
 

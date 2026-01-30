@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { format } from "date-fns";
+import { networkService } from "@/lib/api/networkService";
 
 export default function RouterDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,10 +28,20 @@ export default function RouterDetailPage() {
   const { router: routerData, loading, error, fetchRouter, deleteRouter, clearRouter } = useNetworkStore();
   const { showToast } = useNotificationStore();
   const [currentHost, setCurrentHost] = useState("");
+  const [isolirStatus, setIsolirStatus] = useState<{
+    firewall_installed: boolean;
+    router_id: string;
+    router_name: string;
+  } | null>(null);
+  const [installingFirewall, setInstallingFirewall] = useState(false);
 
   useEffect(() => {
     if (id) {
       fetchRouter(id);
+      // Fetch isolir status
+      networkService.getIsolirStatus(id).then(setIsolirStatus).catch(() => {
+        // Ignore errors (router might not support isolir)
+      });
     }
     if (typeof window !== "undefined") {
       setCurrentHost(window.location.hostname);
@@ -224,14 +235,33 @@ export default function RouterDetailPage() {
                 variant="outline" 
                 size="sm"
                 className="w-full border-orange-200 text-orange-700 hover:bg-orange-100"
-                onClick={() => showToast({
-                  title: "Coming Soon",
-                  description: "Firewall installation will be implemented soon",
-                  variant: "default"
-                })}
+                disabled={isolirStatus?.firewall_installed || installingFirewall}
+                onClick={async () => {
+                  if (!routerData) return;
+                  setInstallingFirewall(true);
+                  try {
+                    await networkService.installIsolirFirewall(routerData.id);
+                    showToast({
+                      title: "Firewall Installed",
+                      description: "Isolir firewall rule installed successfully",
+                      variant: "success"
+                    });
+                    // Refresh status
+                    const status = await networkService.getIsolirStatus(routerData.id);
+                    setIsolirStatus(status);
+                  } catch (err: any) {
+                    showToast({
+                      title: "Installation Failed",
+                      description: err?.message || "Failed to install firewall",
+                      variant: "error"
+                    });
+                  } finally {
+                    setInstallingFirewall(false);
+                  }
+                }}
               >
                 <Shield className="w-4 h-4 mr-2" />
-                Install Isolir Firewall
+                {installingFirewall ? "Installing..." : isolirStatus?.firewall_installed ? "✓ Installed" : "Install Isolir Firewall"}
               </Button>
               <p className="text-xs text-slate-400 mt-1">Creates firewall rule to block 'isolated' address-list</p>
             </div>
@@ -248,8 +278,17 @@ export default function RouterDetailPage() {
             </div>
 
             <div className="pt-2 border-t border-orange-100">
-              <p className="text-xs text-orange-600 font-medium">⚠️ Setup Required</p>
-              <p className="text-xs text-slate-500 mt-1">Configure firewall and redirect before using Isolir feature</p>
+              {isolirStatus?.firewall_installed ? (
+                <>
+                  <p className="text-xs text-green-600 font-medium">✓ Firewall Configured</p>
+                  <p className="text-xs text-slate-500 mt-1">Isolir feature is ready to use</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-orange-600 font-medium">⚠️ Setup Required</p>
+                  <p className="text-xs text-slate-500 mt-1">Install firewall before using Isolir feature</p>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
