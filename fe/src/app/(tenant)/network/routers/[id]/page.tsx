@@ -40,6 +40,7 @@ export default function RouterDetailPage() {
   const [installingFirewall, setInstallingFirewall] = useState(false);
   const [uninstallingFirewall, setUninstallingFirewall] = useState(false);
   const [hotspotIP, setHotspotIP] = useState("");
+  const [isUpdateMode, setIsUpdateMode] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -235,96 +236,182 @@ export default function RouterDetailPage() {
             <Shield className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            {/* Hotspot IP Input */}
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Hotspot IP Address</p>
-              <input
-                type="text"
-                placeholder="192.168.88.1"
-                value={hotspotIP || isolirStatus?.hotspot_ip || ""}
-                onChange={(e) => setHotspotIP(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                disabled={installingFirewall || uninstallingFirewall}
-              />
-              <p className="text-xs text-slate-400 mt-1">Gateway IP for HTTP redirect (usually router's LAN IP)</p>
-            </div>
+            {/* Show input only if: not installed yet OR in update mode */}
+            {(!isolirStatus?.firewall_installed || isUpdateMode) && (
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Hotspot IP Address</p>
+                <input
+                  type="text"
+                  placeholder="192.168.88.1"
+                  value={hotspotIP || routerData?.host || ""}
+                  onChange={(e) => setHotspotIP(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  disabled={installingFirewall || uninstallingFirewall}
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  {!isolirStatus?.firewall_installed 
+                    ? "Gateway IP for HTTP redirect (auto-detected from router host)" 
+                    : "Enter new IP to update firewall rules"}
+                </p>
+              </div>
+            )}
 
-            {/* Install/Reinstall Button */}
+            {/* Show status if already installed and not in update mode */}
+            {isolirStatus?.firewall_installed && !isUpdateMode && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                <p className="text-xs font-medium text-green-900 mb-1">✓ Firewall Installed</p>
+                <p className="text-xs text-green-700">
+                  {isolirStatus.rule_count} rules active • Hotspot IP: {isolirStatus.hotspot_ip}
+                </p>
+              </div>
+            )}
+
+            {/* Buttons */}
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Firewall Rules</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Actions</p>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="flex-1 border-orange-200 text-orange-700 hover:bg-orange-100"
-                  disabled={!hotspotIP || installingFirewall || uninstallingFirewall}
-                  onClick={async () => {
-                    if (!routerData || !hotspotIP) return;
-                    setInstallingFirewall(true);
-                    try {
-                      await networkService.installIsolirFirewall(routerData.id, hotspotIP);
-                      showToast({
-                        title: "Firewall Installed",
-                        description: "Isolir firewall rules installed successfully",
-                        variant: "success"
-                      });
-                      // Refresh status
-                      const status = await networkService.getIsolirStatus(routerData.id);
-                      setIsolirStatus(status);
-                      setHotspotIP(""); // Clear input after success
-                    } catch (err: any) {
-                      showToast({
-                        title: "Installation Failed",
-                        description: err?.message || "Failed to install firewall",
-                        variant: "error"
-                      });
-                    } finally {
-                      setInstallingFirewall(false);
-                    }
-                  }}
-                >
-                  <Shield className="w-4 h-4 mr-2" />
-                  {installingFirewall ? "Installing..." : isolirStatus?.firewall_installed ? "Reinstall Firewall" : "Install Firewall"}
-                </Button>
-                
-                {isolirStatus?.firewall_installed && (
+                {!isolirStatus?.firewall_installed ? (
+                  // First time install
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="border-red-200 text-red-700 hover:bg-red-100"
-                    disabled={installingFirewall || uninstallingFirewall}
+                    className="flex-1 border-orange-200 text-orange-700 hover:bg-orange-100"
+                    disabled={installingFirewall}
                     onClick={async () => {
                       if (!routerData) return;
-                      setUninstallingFirewall(true);
-                      try {
-                        await networkService.uninstallIsolirFirewall(routerData.id);
+                      const ipToUse = hotspotIP || routerData.host;
+                      if (!ipToUse) {
                         showToast({
-                          title: "Firewall Uninstalled",
-                          description: "Isolir firewall rules removed successfully",
+                          title: "Missing IP",
+                          description: "Please enter hotspot IP address",
+                          variant: "error"
+                        });
+                        return;
+                      }
+                      setInstallingFirewall(true);
+                      try {
+                        await networkService.installIsolirFirewall(routerData.id, ipToUse);
+                        showToast({
+                          title: "Firewall Installed",
+                          description: "Isolir firewall rules installed successfully",
                           variant: "success"
                         });
-                        // Refresh status
                         const status = await networkService.getIsolirStatus(routerData.id);
                         setIsolirStatus(status);
+                        setHotspotIP("");
                       } catch (err: any) {
                         showToast({
-                          title: "Uninstall Failed",
-                          description: err?.message || "Failed to uninstall firewall",
+                          title: "Installation Failed",
+                          description: err?.message || "Failed to install firewall",
                           variant: "error"
                         });
                       } finally {
-                        setUninstallingFirewall(false);
+                        setInstallingFirewall(false);
                       }
                     }}
                   >
-                    {uninstallingFirewall ? "Uninstalling..." : "Uninstall"}
+                    <Shield className="w-4 h-4 mr-2" />
+                    {installingFirewall ? "Installing..." : "Install Firewall"}
                   </Button>
+                ) : isUpdateMode ? (
+                  // Update mode: Reinstall or Cancel
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex-1 border-orange-200 text-orange-700 hover:bg-orange-100"
+                      disabled={!hotspotIP || installingFirewall}
+                      onClick={async () => {
+                        if (!routerData || !hotspotIP) return;
+                        setInstallingFirewall(true);
+                        try {
+                          await networkService.installIsolirFirewall(routerData.id, hotspotIP);
+                          showToast({
+                            title: "Firewall Updated",
+                            description: "Isolir firewall rules reinstalled with new IP",
+                            variant: "success"
+                          });
+                          const status = await networkService.getIsolirStatus(routerData.id);
+                          setIsolirStatus(status);
+                          setHotspotIP("");
+                          setIsUpdateMode(false);
+                        } catch (err: any) {
+                          showToast({
+                            title: "Update Failed",
+                            description: err?.message || "Failed to update firewall",
+                            variant: "error"
+                          });
+                        } finally {
+                          setInstallingFirewall(false);
+                        }
+                      }}
+                    >
+                      <Shield className="w-4 h-4 mr-2" />
+                      {installingFirewall ? "Reinstalling..." : "Reinstall Firewall"}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-slate-200 text-slate-700 hover:bg-slate-100"
+                      disabled={installingFirewall}
+                      onClick={() => {
+                        setIsUpdateMode(false);
+                        setHotspotIP("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  // Already installed: Update IP or Uninstall
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex-1 border-blue-200 text-blue-700 hover:bg-blue-100"
+                      onClick={() => setIsUpdateMode(true)}
+                    >
+                      📝 Update IP
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-red-200 text-red-700 hover:bg-red-100"
+                      disabled={uninstallingFirewall}
+                      onClick={async () => {
+                        if (!routerData) return;
+                        setUninstallingFirewall(true);
+                        try {
+                          await networkService.uninstallIsolirFirewall(routerData.id);
+                          showToast({
+                            title: "Firewall Uninstalled",
+                            description: "Isolir firewall rules removed successfully",
+                            variant: "success"
+                          });
+                          const status = await networkService.getIsolirStatus(routerData.id);
+                          setIsolirStatus(status);
+                        } catch (err: any) {
+                          showToast({
+                            title: "Uninstall Failed",
+                            description: err?.message || "Failed to uninstall firewall",
+                            variant: "error"
+                          });
+                        } finally {
+                          setUninstallingFirewall(false);
+                        }
+                      }}
+                    >
+                      {uninstallingFirewall ? "Uninstalling..." : "🗑️ Uninstall"}
+                    </Button>
+                  </>
                 )}
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                {isolirStatus?.firewall_installed 
-                  ? `✓ Installed (${isolirStatus.rule_count} rules: NAT redirect + Filter blocks)` 
-                  : "Creates NAT redirect for HTTP and blocks HTTPS/other traffic"}
+                {!isolirStatus?.firewall_installed 
+                  ? "Creates NAT redirect for HTTP and blocks HTTPS/other traffic" 
+                  : isUpdateMode
+                  ? "Enter new IP and click Reinstall to update rules"
+                  : "NAT redirect + Filter blocks active"}
               </p>
             </div>
 
