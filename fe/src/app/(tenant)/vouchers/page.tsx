@@ -288,16 +288,6 @@ export default function VouchersPage() {
   };
 
   const handleToggleIsolate = async (voucher: Voucher) => {
-    // Only allow isolate for used vouchers
-    if (voucher.status !== "used") {
-      showToast({
-        title: "Tidak dapat di-isolir",
-        description: `Hanya voucher dengan status "used" yang dapat di-isolir`,
-        variant: "error"
-      });
-      return;
-    }
-
     setLoading(true);
     try {
       await voucherService.toggleIsolate(voucher.id);
@@ -661,7 +651,7 @@ export default function VouchersPage() {
                             }`}>
                             {v.status}
                           </span>
-                          {v.status === 'used' && v.isolated && (
+                          {v.isolated && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200 shadow-sm">
                               <ShieldOff className="w-3 h-3 mr-1" />
                               ISOLATED
@@ -690,25 +680,23 @@ export default function VouchersPage() {
                               )}
                             </Button>
                           )}
-                          {v.status === "used" && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleToggleIsolate(v)}
-                              className={`h-9 w-9 ${v.isolated
-                                ? "text-green-600 hover:text-green-700 hover:bg-green-50"
-                                : "text-red-600 hover:text-red-700 hover:bg-red-50"
-                                }`}
-                              title={v.isolated ? "Un-Isolir (Aktifkan)" : "Isolir (Blokir)"}
-                              disabled={loading}
-                            >
-                              {v.isolated ? (
-                                <Shield className="w-4 h-4" />
-                              ) : (
-                                <ShieldOff className="w-4 h-4" />
-                              )}
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleToggleIsolate(v)}
+                            className={`h-9 w-9 ${v.isolated
+                              ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                              : "text-red-600 hover:text-red-700 hover:bg-red-50"
+                              }`}
+                            title={v.isolated ? "Un-Isolir (Aktifkan)" : "Isolir (Blokir)"}
+                            disabled={loading}
+                          >
+                            {v.isolated ? (
+                              <Shield className="w-4 h-4" />
+                            ) : (
+                              <ShieldOff className="w-4 h-4" />
+                            )}
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleEditVoucher(v)} className="h-9 w-9 text-slate-500 hover:text-blue-600 hover:bg-blue-50" title="Edit voucher"><Edit className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(v.id, v.code)} className="h-9 w-9 text-slate-500 hover:text-red-600 hover:bg-red-50" title="Hapus voucher"><Trash2 className="w-4 h-4" /></Button>
                         </div>
