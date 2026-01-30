@@ -264,7 +264,8 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 		status.RuleCount += len(filterReply.Re)
 	}
 
-	status.Installed = status.HasNAT && status.HasFilter
+	// Installed if we have at least one rule (NAT or Filter)
+	status.Installed = status.HasNAT || status.HasFilter
 
 	return status, nil
 }

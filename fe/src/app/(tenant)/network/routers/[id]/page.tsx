@@ -41,14 +41,21 @@ export default function RouterDetailPage() {
   const [uninstallingFirewall, setUninstallingFirewall] = useState(false);
   const [hotspotIP, setHotspotIP] = useState("");
   const [isUpdateMode, setIsUpdateMode] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
 
   useEffect(() => {
     if (id) {
       fetchRouter(id);
       // Fetch isolir status
-      networkService.getIsolirStatus(id).then(setIsolirStatus).catch(() => {
-        // Ignore errors (router might not support isolir)
-      });
+      setStatusLoading(true);
+      networkService.getIsolirStatus(id)
+        .then(setIsolirStatus)
+        .catch((err) => {
+          console.error('[Isolir] Error fetching status:', err);
+        })
+        .finally(() => {
+          setStatusLoading(false);
+        });
     }
     if (typeof window !== "undefined") {
       setCurrentHost(window.location.hostname);
@@ -270,7 +277,11 @@ export default function RouterDetailPage() {
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Actions</p>
               <div className="flex gap-2">
-                {!isolirStatus?.firewall_installed ? (
+                {statusLoading ? (
+                  <div className="flex items-center justify-center p-2 w-full">
+                    <LoadingSpinner size={20} />
+                  </div>
+                ) : !isolirStatus?.firewall_installed ? (
                   // First time install
                   <Button 
                     variant="outline" 
