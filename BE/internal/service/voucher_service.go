@@ -507,6 +507,27 @@ func (s *VoucherService) ToggleVoucherStatus(ctx context.Context, id uuid.UUID) 
 	return v, nil
 }
 
+func (s *VoucherService) ToggleIsolate(ctx context.Context, id uuid.UUID) (*voucher.Voucher, error) {
+	// Toggle isolated status in database
+	v, err := s.voucherRepo.ToggleIsolate(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: MikroTik integration
+	// - Add/remove user from address-list "isolated"
+	// - Disconnect active session to force re-auth
+	// - Apply firewall rules
+
+	log.Info().
+		Str("voucher_id", v.ID.String()).
+		Str("code", v.Code).
+		Bool("isolated", v.Isolated).
+		Msg("Voucher isolation status toggled")
+
+	return v, nil
+}
+
 func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
 	return s.voucherRepo.DeleteVoucher(ctx, id)
 }

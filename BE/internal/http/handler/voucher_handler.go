@@ -237,6 +237,24 @@ func (h *VoucherHandler) ToggleVoucherStatus(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(voucher)
 }
 
+func (h *VoucherHandler) ToggleIsolate(w http.ResponseWriter, r *http.Request) {
+	idStr := getParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid voucher ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	voucher, err := h.voucherService.ToggleIsolate(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(voucher)
+}
+
 func (h *VoucherHandler) DeleteVoucher(w http.ResponseWriter, r *http.Request) {
 	idStr := getParam(r, "id")
 	id, err := uuid.Parse(idStr)
