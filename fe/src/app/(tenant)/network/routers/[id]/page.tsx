@@ -211,6 +211,49 @@ export default function RouterDetailPage() {
           </CardContent>
         </Card>
 
+        {/* Card: Isolir Setup */}
+        <Card className="border-orange-100 bg-orange-50/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-orange-900">Isolir Setup (Hotspot)</CardTitle>
+            <Shield className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Firewall Rule</p>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="w-full border-orange-200 text-orange-700 hover:bg-orange-100"
+                onClick={() => showToast({
+                  title: "Coming Soon",
+                  description: "Firewall installation will be implemented soon",
+                  variant: "default"
+                })}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Install Isolir Firewall
+              </Button>
+              <p className="text-xs text-slate-400 mt-1">Creates firewall rule to block 'isolated' address-list</p>
+            </div>
+
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Redirect URL</p>
+              <input
+                type="text"
+                placeholder="http://billing.example.com/please-pay"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                disabled
+              />
+              <p className="text-xs text-slate-400 mt-1">URL to redirect isolated users</p>
+            </div>
+
+            <div className="pt-2 border-t border-orange-100">
+              <p className="text-xs text-orange-600 font-medium">⚠️ Setup Required</p>
+              <p className="text-xs text-slate-500 mt-1">Configure firewall and redirect before using Isolir feature</p>
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
