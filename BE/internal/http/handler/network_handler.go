@@ -356,6 +356,20 @@ func (h *NetworkHandler) InstallIsolirFirewall(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parse request body for hotspot IP
+	var req struct {
+		HotspotIP string `json:"hotspot_ip"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.HotspotIP == "" {
+		http.Error(w, `{"error":"hotspot_ip is required"}`, http.StatusBadRequest)
+		return
+	}
+
 	// Verify router belongs to tenant
 	router, err := h.networkService.GetRouter(r.Context(), id)
 	if err != nil {
@@ -367,8 +381,8 @@ func (h *NetworkHandler) InstallIsolirFirewall(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Install firewall
-	if err := h.networkService.InstallIsolirFirewall(r.Context(), id); err != nil {
+	// Install firewall with hotspot IP
+	if err := h.networkService.InstallIsolirFirewall(r.Context(), id, req.HotspotIP); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
@@ -376,6 +390,43 @@ func (h *NetworkHandler) InstallIsolirFirewall(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Isolir firewall installed successfully",
+	})
+}
+
+// UninstallIsolirFirewall removes all isolir firewall rules from a router
+func (h *NetworkHandler) UninstallIsolirFirewall(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Uninstall firewall
+	if err := h.networkService.UninstallIsolirFirewall(r.Context(), id); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Isolir firewall uninstalled successfully",
 	})
 }
 

@@ -107,8 +107,15 @@ export const networkService = {
   },
 
   // ========== Isolir Management ==========
-  async installIsolirFirewall(routerId: string): Promise<{ message: string }> {
-    const response = await apiClient.post<{ message: string }>(`/network/routers/${routerId}/isolir-install`);
+  async installIsolirFirewall(routerId: string, hotspotIP: string): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>(`/network/routers/${routerId}/isolir-install`, {
+      hotspot_ip: hotspotIP,
+    });
+    return response.data;
+  },
+
+  async uninstallIsolirFirewall(routerId: string): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>(`/network/routers/${routerId}/isolir-uninstall`);
     return response.data;
   },
 
@@ -116,13 +123,20 @@ export const networkService = {
     firewall_installed: boolean;
     router_id: string;
     router_name: string;
+    rule_count: number;
+    hotspot_ip?: string;
+    has_nat: boolean;
+    has_filter: boolean;
   }> {
     const response = await apiClient.get<{
       firewall_installed: boolean;
       router_id: string;
       router_name: string;
+      rule_count: number;
+      hotspot_ip?: string;
+      has_nat: boolean;
+      has_filter: boolean;
     }>(`/network/routers/${routerId}/isolir-status`);
     return response.data;
   },
 };
-

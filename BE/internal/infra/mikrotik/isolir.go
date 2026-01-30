@@ -112,65 +112,161 @@ func DisconnectHotspotUser(ctx context.Context, addr string, useTLS bool, userna
 	return nil
 }
 
-// InstallIsolirFirewall installs the firewall rule to block isolated users
-func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password string) error {
+// InstallIsolirFirewall installs the complete isolir firewall setup (idempotent)
+// Includes: NAT redirect for HTTP, Filter reject for HTTPS and other traffic
+func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password, hotspotIP string) error {
 	client, err := dialMikroTik(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
-	// Check if rule already exists
-	reply, err := client.Run(
-		"/ip/firewall/filter/print",
-		"?chain=forward",
-		"?src-address-list=isolated",
+	// Remove old rules first (idempotent - safe to call multiple times)
+	_ = removeIsolirRules(client)
+
+	// 1. Install NAT redirect for HTTP traffic (port 80)
+	// This redirects HTTP requests to hotspot error page
+	_, err = client.Run(
+		"/ip/firewall/nat/add",
+		"=chain=dstnat",
+		"=src-address-list=isolated",
+		"=protocol=tcp",
+		"=dst-port=80",
+		"=action=dst-nat",
+		fmt.Sprintf("=to-addresses=%s", hotspotIP),
+		"=to-ports=80",
+		"=comment=Isolir-NAT: Redirect HTTP to error page",
 	)
 	if err != nil {
-		return fmt.Errorf("failed to check existing firewall rules: %w", err)
+		return fmt.Errorf("failed to install NAT redirect: %w", err)
 	}
 
-	// If rule already exists, skip
-	if len(reply.Re) > 0 {
-		return nil // Already installed
+	// 2. Install filter to block HTTPS (port 443)
+	_, err = client.Run(
+		"/ip/firewall/filter/add",
+		"=chain=forward",
+		"=src-address-list=isolated",
+		"=protocol=tcp",
+		"=dst-port=443",
+		"=action=reject",
+		"=reject-with=tcp-reset",
+		"=comment=Isolir-Filter: Block HTTPS",
+	)
+	if err != nil {
+		return fmt.Errorf("failed to install HTTPS block: %w", err)
 	}
 
-	// Add firewall rule to reject traffic from isolated address-list
-	// /ip/firewall/filter/add chain=forward src-address-list=isolated action=reject reject-with=icmp-network-unreachable comment="Isolir: Block isolated users"
+	// 3. Install filter to block all other traffic
 	_, err = client.Run(
 		"/ip/firewall/filter/add",
 		"=chain=forward",
 		"=src-address-list=isolated",
 		"=action=reject",
 		"=reject-with=icmp-network-unreachable",
-		"=comment=Isolir: Block isolated users",
+		"=comment=Isolir-Filter: Block isolated users",
 	)
 	if err != nil {
-		return fmt.Errorf("failed to install firewall rule: %w", err)
+		return fmt.Errorf("failed to install general block: %w", err)
 	}
 
 	return nil
 }
 
-// CheckIsolirFirewall checks if the isolir firewall rule is installed
-func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password string) (bool, error) {
+// UninstallIsolirFirewall removes all isolir firewall rules
+func UninstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password string) error {
 	client, err := dialMikroTik(addr, useTLS, username, password)
 	if err != nil {
-		return false, err
+		return err
 	}
 	defer client.Close()
 
-	// Check if rule exists
-	reply, err := client.Run(
-		"/ip/firewall/filter/print",
-		"?chain=forward",
-		"?src-address-list=isolated",
+	return removeIsolirRules(client)
+}
+
+// removeIsolirRules is a helper to remove all rules with "Isolir-" prefix
+func removeIsolirRules(client *routeros.Client) error {
+	// Remove NAT rules
+	natReply, err := client.Run(
+		"/ip/firewall/nat/print",
+		"?comment~Isolir-",
 	)
-	if err != nil {
-		return false, fmt.Errorf("failed to check firewall rules: %w", err)
+	if err == nil {
+		for _, re := range natReply.Re {
+			if id, ok := re.Map[".id"]; ok {
+				_, _ = client.Run(
+					"/ip/firewall/nat/remove",
+					fmt.Sprintf("=.id=%s", id),
+				)
+			}
+		}
 	}
 
-	return len(reply.Re) > 0, nil
+	// Remove filter rules
+	filterReply, err := client.Run(
+		"/ip/firewall/filter/print",
+		"?comment~Isolir-",
+	)
+	if err == nil {
+		for _, re := range filterReply.Re {
+			if id, ok := re.Map[".id"]; ok {
+				_, _ = client.Run(
+					"/ip/firewall/filter/remove",
+					fmt.Sprintf("=.id=%s", id),
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
+// IsolirFirewallStatus contains detailed status of isolir firewall setup
+type IsolirFirewallStatus struct {
+	Installed bool   `json:"installed"`
+	RuleCount int    `json:"rule_count"`
+	HotspotIP string `json:"hotspot_ip,omitempty"`
+	HasNAT    bool   `json:"has_nat"`
+	HasFilter bool   `json:"has_filter"`
+}
+
+// CheckIsolirFirewall checks if the isolir firewall rules are installed and returns details
+func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password string) (*IsolirFirewallStatus, error) {
+	client, err := dialMikroTik(addr, useTLS, username, password)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	status := &IsolirFirewallStatus{}
+
+	// Check NAT rules
+	natReply, err := client.Run(
+		"/ip/firewall/nat/print",
+		"?comment~Isolir-",
+	)
+	if err == nil && len(natReply.Re) > 0 {
+		status.HasNAT = true
+		status.RuleCount += len(natReply.Re)
+
+		// Try to extract hotspot IP from NAT rule
+		if toAddr, ok := natReply.Re[0].Map["to-addresses"]; ok {
+			status.HotspotIP = toAddr
+		}
+	}
+
+	// Check filter rules
+	filterReply, err := client.Run(
+		"/ip/firewall/filter/print",
+		"?comment~Isolir-",
+	)
+	if err == nil && len(filterReply.Re) > 0 {
+		status.HasFilter = true
+		status.RuleCount += len(filterReply.Re)
+	}
+
+	status.Installed = status.HasNAT && status.HasFilter
+
+	return status, nil
 }
 
 // GetHotspotUserIP gets the IP address of an active Hotspot user

@@ -1467,7 +1467,7 @@ func (s *NetworkService) purgeOldRouters(ctx context.Context) {
 // ========== Isolir Management ==========
 
 // InstallIsolirFirewall installs the firewall rule to block isolated users on a router
-func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uuid.UUID) error {
+func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uuid.UUID, hotspotIP string) error {
 	router, err := s.routerRepo.GetByID(ctx, routerID)
 	if err != nil {
 		return fmt.Errorf("router not found: %w", err)
@@ -1480,13 +1480,14 @@ func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uui
 	// Build MikroTik API address
 	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
 
-	// Install firewall rule
-	err = mikrotik.InstallIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+	// Install firewall rules (NAT redirect + Filter blocks)
+	err = mikrotik.InstallIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotIP)
 	if err != nil {
 		log.Error().
 			Err(err).
 			Str("router_id", routerID.String()).
 			Str("router_name", router.Name).
+			Str("hotspot_ip", hotspotIP).
 			Msg("Failed to install isolir firewall")
 		return fmt.Errorf("failed to install isolir firewall: %w", err)
 	}
@@ -1494,16 +1495,54 @@ func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uui
 	log.Info().
 		Str("router_id", routerID.String()).
 		Str("router_name", router.Name).
+		Str("hotspot_ip", hotspotIP).
 		Msg("Isolir firewall installed successfully")
 
 	return nil
 }
 
-// IsolirStatus represents the isolir configuration status on a router
+// UninstallIsolirFirewall removes all isolir firewall rules from a router
+func (s *NetworkService) UninstallIsolirFirewall(ctx context.Context, routerID uuid.UUID) error {
+	router, err := s.routerRepo.GetByID(ctx, routerID)
+	if err != nil {
+		return fmt.Errorf("router not found: %w", err)
+	}
+
+	if router.Type != network.RouterTypeMikroTik {
+		return fmt.Errorf("only MikroTik routers are supported")
+	}
+
+	// Build MikroTik API address
+	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
+
+	// Uninstall firewall rules
+	err = mikrotik.UninstallIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("router_id", routerID.String()).
+			Str("router_name", router.Name).
+			Msg("Failed to uninstall isolir firewall")
+		return fmt.Errorf("failed to uninstall isolir firewall: %w", err)
+	}
+
+	log.Info().
+		Str("router_id", routerID.String()).
+		Str("router_name", router.Name).
+		Msg("Isolir firewall uninstalled successfully")
+
+	return nil
+}
+
+// IsolirStatus represents the status of isolir firewall on a router
 type IsolirStatus struct {
 	FirewallInstalled bool   `json:"firewall_installed"`
 	RouterID          string `json:"router_id"`
 	RouterName        string `json:"router_name"`
+	RuleCount         int    `json:"rule_count"`
+	HotspotIP         string `json:"hotspot_ip,omitempty"`
+	HasNAT            bool   `json:"has_nat"`
+	HasFilter         bool   `json:"has_filter"`
 }
 
 // GetIsolirStatus checks if isolir firewall is installed on a router
@@ -1521,7 +1560,7 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
 
 	// Check firewall status
-	installed, err := mikrotik.CheckIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password)
+	status, err := mikrotik.CheckIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -1532,8 +1571,12 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 	}
 
 	return &IsolirStatus{
-		FirewallInstalled: installed,
+		FirewallInstalled: status.Installed,
 		RouterID:          router.ID.String(),
 		RouterName:        router.Name,
+		RuleCount:         status.RuleCount,
+		HotspotIP:         status.HotspotIP,
+		HasNAT:            status.HasNAT,
+		HasFilter:         status.HasFilter,
 	}, nil
 }
