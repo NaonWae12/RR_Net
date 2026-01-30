@@ -382,15 +382,14 @@ func (h *NetworkHandler) InstallIsolirFirewall(w http.ResponseWriter, r *http.Re
 	}
 
 	// Install firewall with hotspot IP
-	if err := h.networkService.InstallIsolirFirewall(r.Context(), id, req.HotspotIP); err != nil {
+	status, err := h.networkService.InstallIsolirFirewall(r.Context(), id, req.HotspotIP)
+	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Isolir firewall installed successfully",
-	})
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 // UninstallIsolirFirewall removes all isolir firewall rules from a router

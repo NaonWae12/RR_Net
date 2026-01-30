@@ -1466,30 +1466,29 @@ func (s *NetworkService) purgeOldRouters(ctx context.Context) {
 
 // ========== Isolir Management ==========
 
-// InstallIsolirFirewall installs the firewall rule to block isolated users on a router
-func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uuid.UUID, hotspotIP string) error {
+// InstallIsolirFirewall installs the complete isolir firewall setup on a router
+func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uuid.UUID, hotspotIP string) (*IsolirStatus, error) {
 	router, err := s.routerRepo.GetByID(ctx, routerID)
 	if err != nil {
-		return fmt.Errorf("router not found: %w", err)
+		return nil, fmt.Errorf("router not found: %w", err)
 	}
 
 	if router.Type != network.RouterTypeMikroTik {
-		return fmt.Errorf("only MikroTik routers are supported")
+		return nil, fmt.Errorf("only MikroTik routers are supported")
 	}
 
 	// Build MikroTik API address
 	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
 
-	// Install firewall rules (NAT redirect + Filter blocks)
+	// Install firewall
 	err = mikrotik.InstallIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password, hotspotIP)
 	if err != nil {
 		log.Error().
 			Err(err).
 			Str("router_id", routerID.String()).
 			Str("router_name", router.Name).
-			Str("hotspot_ip", hotspotIP).
 			Msg("Failed to install isolir firewall")
-		return fmt.Errorf("failed to install isolir firewall: %w", err)
+		return nil, fmt.Errorf("failed to install isolir firewall: %w", err)
 	}
 
 	log.Info().
@@ -1498,7 +1497,16 @@ func (s *NetworkService) InstallIsolirFirewall(ctx context.Context, routerID uui
 		Str("hotspot_ip", hotspotIP).
 		Msg("Isolir firewall installed successfully")
 
-	return nil
+	// Return "Optimistic" status based on success
+	return &IsolirStatus{
+		FirewallInstalled: true,
+		RouterID:          router.ID.String(),
+		RouterName:        router.Name,
+		RuleCount:         3, // NAT + 2 Filters
+		HotspotIP:         hotspotIP,
+		HasNAT:            true,
+		HasFilter:         true,
+	}, nil
 }
 
 // UninstallIsolirFirewall removes all isolir firewall rules from a router

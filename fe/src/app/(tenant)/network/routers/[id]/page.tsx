@@ -300,16 +300,20 @@ export default function RouterDetailPage() {
                         return;
                       }
                       setInstallingFirewall(true);
+                      console.log('[Isolir Debug] 4. Starting installation...');
                       try {
-                        await networkService.installIsolirFirewall(routerData.id, ipToUse);
+                        const newStatus = await networkService.installIsolirFirewall(routerData.id, ipToUse);
+                        console.log('[Isolir Debug] 5. Installation API call succeeded, status:', newStatus);
+
                         showToast({
                           title: "Firewall Installed",
                           description: "Isolir firewall rules installed successfully",
                           variant: "success"
                         });
-                        const status = await networkService.getIsolirStatus(routerData.id);
-                        console.log('[Isolir] Status after install:', status);
-                        setIsolirStatus(status);
+
+                        // 🔥 OPTIMISTIC UPDATE: Use data directly from POST response
+                        // This avoids the race condition where MikroTik hasn't indexed the rules yet
+                        setIsolirStatus(newStatus);
                         setHotspotIP("");
                       } catch (err: any) {
                         showToast({
