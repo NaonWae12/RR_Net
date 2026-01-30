@@ -595,48 +595,31 @@ func (s *VoucherService) ToggleIsolate(ctx context.Context, id uuid.UUID) (*vouc
 				}
 
 			} else {
-				// UN-ISOLATE: Remove from address-list
+				// UN-ISOLATE: Remove from address-list using comment (no need for IP)
 				log.Info().
 					Str("voucher_code", v.Code).
 					Str("router", router.Name).
 					Msg("Un-isolating user on MikroTik")
 
-				// Get user's IP address (if active)
-				userIP, err := mikrotik.GetHotspotUserIP(
+				// Remove from isolated address-list by comment (voucher:CODE)
+				comment := fmt.Sprintf("voucher:%s", v.Code)
+				err = mikrotik.RemoveFromIsolatedList(
 					ctx,
 					addr,
 					router.APIUseTLS,
 					router.Username,
 					router.Password,
-					v.Code,
+					comment,
 				)
 				if err != nil {
-					log.Warn().
+					log.Error().
 						Err(err).
 						Str("voucher_code", v.Code).
-						Msg("Failed to get user IP for un-isolate, user may not be active")
+						Msg("Failed to remove user from isolated list")
 				} else {
-					// Remove IP from isolated address-list
-					err = mikrotik.RemoveFromIsolatedList(
-						ctx,
-						addr,
-						router.APIUseTLS,
-						router.Username,
-						router.Password,
-						userIP,
-					)
-					if err != nil {
-						log.Error().
-							Err(err).
-							Str("voucher_code", v.Code).
-							Str("user_ip", userIP).
-							Msg("Failed to remove user from isolated list")
-					} else {
-						log.Info().
-							Str("voucher_code", v.Code).
-							Str("user_ip", userIP).
-							Msg("User removed from isolated address-list")
-					}
+					log.Info().
+						Str("voucher_code", v.Code).
+						Msg("User removed from isolated address-list")
 				}
 			}
 		}

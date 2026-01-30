@@ -45,22 +45,22 @@ func AddToIsolatedList(ctx context.Context, addr string, useTLS bool, username, 
 	return nil
 }
 
-// RemoveFromIsolatedList removes a user IP from the isolated address-list
-func RemoveFromIsolatedList(ctx context.Context, addr string, useTLS bool, username, password, userIP string) error {
+// RemoveFromIsolatedList removes a user from the isolated address-list by comment
+func RemoveFromIsolatedList(ctx context.Context, addr string, useTLS bool, username, password, comment string) error {
 	client, err := dialMikroTik(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
-	// Find the address-list entry by IP
+	// Find the address-list entry by comment (voucher:CODE)
 	reply, err := client.Run(
 		"/ip/firewall/address-list/print",
 		"?list=isolated",
-		fmt.Sprintf("?address=%s", userIP),
+		fmt.Sprintf("?comment=%s", comment),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to find isolated entry: %w", err)
+		return fmt.Errorf("failed to find isolated entry by comment: %w", err)
 	}
 
 	// Remove all matching entries
