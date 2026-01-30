@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 
 	"github.com/go-routeros/routeros"
 	"github.com/rs/zerolog/log"
@@ -139,8 +140,8 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 	}
 
 	// 2. Install NAT redirect for HTTP traffic (port 80)
-	// This redirects HTTP requests to hotspot error page (which we will hijack with JS)
-	_, err = client.Run(
+	// EXCLUDE serverHost from redirection so they can reach the suspended page
+	natArgs := []string{
 		"/ip/firewall/nat/add",
 		"=chain=dstnat",
 		"=src-address-list=isolated",
@@ -150,12 +151,35 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 		fmt.Sprintf("=to-addresses=%s", hotspotIP),
 		"=to-ports=80",
 		"=comment=Isolir-NAT: Redirect HTTP to error page",
-	)
+	}
+
+	// If serverHost is an IP, exclude it from NAT redirection
+	if serverHost != "" && net.ParseIP(serverHost) != nil {
+		natArgs = append(natArgs, fmt.Sprintf("=dst-address=!%s", serverHost))
+	}
+
+	_, err = client.Run(natArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to install NAT redirect: %w", err)
 	}
 
-	// 3. Install filter to block HTTPS (port 443)
+	// 3. Install filter to ALLOW access to serverHost (Bypass isolation)
+	if serverHost != "" && net.ParseIP(serverHost) != nil {
+		_, err = client.Run(
+			"/ip/firewall/filter/add",
+			"=chain=forward",
+			"=src-address-list=isolated",
+			fmt.Sprintf("=dst-address=%s", serverHost),
+			"=action=accept",
+			"=place-before=0",
+			"=comment=Isolir-Filter: Allow portal access",
+		)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to install filter allow rule, continuing...")
+		}
+	}
+
+	// 4. Install filter to block HTTPS (port 443)
 	_, err = client.Run(
 		"/ip/firewall/filter/add",
 		"=chain=forward",
@@ -170,7 +194,7 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 		return fmt.Errorf("failed to install HTTPS block: %w", err)
 	}
 
-	// 4. Install filter to block all other traffic
+	// 5. Install filter to block all other traffic
 	_, err = client.Run(
 		"/ip/firewall/filter/add",
 		"=chain=forward",
