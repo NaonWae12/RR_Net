@@ -293,33 +293,33 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 
 	status := &IsolirFirewallStatus{}
 
-	// Check NAT rules
-	natReply, err := client.Run(
-		"/ip/firewall/nat/print",
-		"?comment~Isolir-",
-	)
+	// 1. Check NAT rules
+	natReply, err := client.Run("/ip/firewall/nat/print", "?comment~Isolir-")
 	if err == nil && len(natReply.Re) > 0 {
 		status.HasNAT = true
 		status.RuleCount += len(natReply.Re)
-
-		// Try to extract hotspot IP from NAT rule
 		if toAddr, ok := natReply.Re[0].Map["to-addresses"]; ok {
 			status.HotspotIP = toAddr
 		}
 	}
 
-	// Check filter rules
-	filterReply, err := client.Run(
-		"/ip/firewall/filter/print",
-		"?comment~Isolir-",
-	)
+	// 2. Check Filter rules
+	filterReply, err := client.Run("/ip/firewall/filter/print", "?comment~Isolir-")
 	if err == nil && len(filterReply.Re) > 0 {
 		status.HasFilter = true
 		status.RuleCount += len(filterReply.Re)
 	}
 
-	// Installed if we have at least Filter rules. NAT is preferred but Filter is essential for blocking.
-	status.Installed = status.HasFilter && status.RuleCount >= 1
+	// 3. Check Walled Garden (New component)
+	wgReply, err := client.Run("/ip/hotspot/walled-garden/print", "?comment~Isolir-")
+	hasWG := err == nil && len(wgReply.Re) > 0
+	if hasWG {
+		status.RuleCount += len(wgReply.Re)
+	}
+
+	// Installed if ANY of our components exist.
+	// This is more robust against MikroTik's eventual consistency.
+	status.Installed = status.HasNAT || status.HasFilter || hasWG
 
 	return status, nil
 }
