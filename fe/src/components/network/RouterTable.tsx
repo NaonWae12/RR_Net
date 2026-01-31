@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Router } from "@/lib/api/types";
 import { Eye, Edit, Activity, PowerOff, Trash2, Loader2, ArrowRight } from "lucide-react";
 import { RouterStatusBadge } from "./RouterStatusBadge";
 import { Button } from "@/components/ui/button";
