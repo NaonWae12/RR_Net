@@ -236,6 +236,7 @@ export interface Router {
 export interface NetworkProfile {
   id: string;
   tenant_id: string;
+  router_id?: string | null;
   name: string;
   description?: string;
   download_speed: number; // in Kbps
@@ -308,6 +309,7 @@ export interface ProvisionResponse {
 
 export interface CreateNetworkProfileRequest {
   name: string;
+  router_id?: string | null;
   description?: string;
   download_speed: number;
   upload_speed: number;
@@ -322,6 +324,7 @@ export interface CreateNetworkProfileRequest {
 
 export interface UpdateNetworkProfileRequest {
   name?: string;
+  router_id?: string | null;
   description?: string;
   download_speed?: number;
   upload_speed?: number;

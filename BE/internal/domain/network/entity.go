@@ -71,23 +71,24 @@ type Router struct {
 
 // NetworkProfile represents a bandwidth/QoS profile
 type NetworkProfile struct {
-	ID            uuid.UUID `json:"id"`
-	TenantID      uuid.UUID `json:"tenant_id"`
-	Name          string    `json:"name"`
-	Description   *string   `json:"description,omitempty"`
-	DownloadSpeed int       `json:"download_speed"` // in Kbps
-	UploadSpeed   int       `json:"upload_speed"`   // in Kbps
-	BurstDownload int       `json:"burst_download,omitempty"`
-	BurstUpload   int       `json:"burst_upload,omitempty"`
-	Priority      int       `json:"priority"`
-	SharedUsers   int       `json:"shared_users,omitempty"`
-	AddressPool   *string   `json:"address_pool,omitempty"`
-	LocalAddress  *string   `json:"local_address,omitempty"`
-	RemoteAddress *string   `json:"remote_address,omitempty"`
-	DNSServers    *string   `json:"dns_servers,omitempty"`
-	IsActive      bool      `json:"is_active"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            uuid.UUID  `json:"id"`
+	TenantID      uuid.UUID  `json:"tenant_id"`
+	RouterID      *uuid.UUID `json:"router_id,omitempty"`
+	Name          string     `json:"name"`
+	Description   *string    `json:"description,omitempty"`
+	DownloadSpeed int        `json:"download_speed"` // in Kbps
+	UploadSpeed   int        `json:"upload_speed"`   // in Kbps
+	BurstDownload int        `json:"burst_download,omitempty"`
+	BurstUpload   int        `json:"burst_upload,omitempty"`
+	Priority      int        `json:"priority"`
+	SharedUsers   int        `json:"shared_users,omitempty"`
+	AddressPool   *string    `json:"address_pool,omitempty"`
+	LocalAddress  *string    `json:"local_address,omitempty"`
+	RemoteAddress *string    `json:"remote_address,omitempty"`
+	DNSServers    *string    `json:"dns_servers,omitempty"`
+	IsActive      bool       `json:"is_active"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 // PPPoESecret represents a PPPoE user account

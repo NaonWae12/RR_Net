@@ -192,8 +192,8 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 	}
 
 	if req.EnableRemoteAccess {
-		// ToggleRemoteAccess logic (port finding part)
-		routers, err := s.routerRepo.ListByTenant(ctx, router.TenantID)
+		// ToggleRemoteAccess logic (port finding part) - LINT: Use ListAll for global uniqueness
+		routers, err := s.routerRepo.ListAll(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -520,6 +520,25 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 }
 
 func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
+	router, err := s.routerRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// 1. Cleanup OS Resources (IPTables)
+	if router.RemoteAccessEnabled && runtime.GOOS == "linux" {
+		_ = s.removeRemoteAccessRules(router)
+	}
+
+	// 2. Cleanup VPN Account if applicable
+	if router.ConnectivityMode == network.RouterConnectivityModeVPN && router.VPNUsername != "" && runtime.GOOS == "linux" {
+		cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_del_user_auto.sh", router.VPNUsername)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Warning: failed to remove VPN user %s: %v, output: %s", router.VPNUsername, err, string(out))
+		}
+	}
+
+	// 3. Soft Delete in Database
 	return s.routerRepo.Delete(ctx, id)
 }
 
@@ -648,16 +667,17 @@ func (s *NetworkService) checkAndUpdateStatusAsync(router *network.Router) {
 // ========== Network Profile Operations ==========
 
 type CreateProfileRequest struct {
-	Name          string `json:"name"`
-	Description   string `json:"description,omitempty"`
-	DownloadSpeed int    `json:"download_speed"` // Kbps
-	UploadSpeed   int    `json:"upload_speed"`   // Kbps
-	BurstDownload int    `json:"burst_download,omitempty"`
-	BurstUpload   int    `json:"burst_upload,omitempty"`
-	Priority      int    `json:"priority,omitempty"`
-	SharedUsers   int    `json:"shared_users,omitempty"`
-	AddressPool   string `json:"address_pool,omitempty"`
-	DNSServers    string `json:"dns_servers,omitempty"`
+	Name          string     `json:"name"`
+	RouterID      *uuid.UUID `json:"router_id,omitempty"`
+	Description   string     `json:"description,omitempty"`
+	DownloadSpeed int        `json:"download_speed"` // Kbps
+	UploadSpeed   int        `json:"upload_speed"`   // Kbps
+	BurstDownload int        `json:"burst_download,omitempty"`
+	BurstUpload   int        `json:"burst_upload,omitempty"`
+	Priority      int        `json:"priority,omitempty"`
+	SharedUsers   int        `json:"shared_users,omitempty"`
+	AddressPool   string     `json:"address_pool,omitempty"`
+	DNSServers    string     `json:"dns_servers,omitempty"`
 }
 
 func (s *NetworkService) CreateProfile(ctx context.Context, tenantID uuid.UUID, req CreateProfileRequest) (*network.NetworkProfile, error) {
@@ -665,6 +685,7 @@ func (s *NetworkService) CreateProfile(ctx context.Context, tenantID uuid.UUID, 
 	profile := &network.NetworkProfile{
 		ID:            uuid.New(),
 		TenantID:      tenantID,
+		RouterID:      req.RouterID,
 		Name:          req.Name,
 		DownloadSpeed: req.DownloadSpeed,
 		UploadSpeed:   req.UploadSpeed,
@@ -719,7 +740,18 @@ func (s *NetworkService) CreateProfile(ctx context.Context, tenantID uuid.UUID, 
 			Str("profile_name", profile.Name).
 			Msg("Network Service: Starting auto-sync profile to routers")
 
-		routers, err := s.routerRepo.ListByTenant(syncCtx, tenantID)
+		var routers []*network.Router
+		var err error
+		if profile.RouterID != nil {
+			r, e := s.routerRepo.GetByID(syncCtx, *profile.RouterID)
+			if e == nil {
+				routers = []*network.Router{r}
+			}
+			err = e
+		} else {
+			routers, err = s.routerRepo.ListByTenant(syncCtx, tenantID)
+		}
+
 		if err != nil {
 			log.Error().
 				Str("tenant_id", tenantID.String()).
@@ -820,17 +852,18 @@ func (s *NetworkService) ListProfiles(ctx context.Context, tenantID uuid.UUID, a
 }
 
 type UpdateProfileRequest struct {
-	Name          string `json:"name,omitempty"`
-	Description   string `json:"description,omitempty"`
-	DownloadSpeed int    `json:"download_speed,omitempty"`
-	UploadSpeed   int    `json:"upload_speed,omitempty"`
-	BurstDownload int    `json:"burst_download,omitempty"`
-	BurstUpload   int    `json:"burst_upload,omitempty"`
-	Priority      int    `json:"priority,omitempty"`
-	SharedUsers   int    `json:"shared_users,omitempty"`
-	AddressPool   string `json:"address_pool,omitempty"`
-	DNSServers    string `json:"dns_servers,omitempty"`
-	IsActive      *bool  `json:"is_active,omitempty"`
+	Name          string     `json:"name,omitempty"`
+	RouterID      *uuid.UUID `json:"router_id,omitempty"`
+	Description   string     `json:"description,omitempty"`
+	DownloadSpeed int        `json:"download_speed,omitempty"`
+	UploadSpeed   int        `json:"upload_speed,omitempty"`
+	BurstDownload int        `json:"burst_download,omitempty"`
+	BurstUpload   int        `json:"burst_upload,omitempty"`
+	Priority      int        `json:"priority,omitempty"`
+	SharedUsers   int        `json:"shared_users,omitempty"`
+	AddressPool   string     `json:"address_pool,omitempty"`
+	DNSServers    string     `json:"dns_servers,omitempty"`
+	IsActive      *bool      `json:"is_active,omitempty"`
 }
 
 func (s *NetworkService) UpdateProfile(ctx context.Context, id uuid.UUID, req UpdateProfileRequest) (*network.NetworkProfile, error) {
@@ -872,11 +905,43 @@ func (s *NetworkService) UpdateProfile(ctx context.Context, id uuid.UUID, req Up
 	if req.IsActive != nil {
 		profile.IsActive = *req.IsActive
 	}
+	if req.RouterID != nil {
+		profile.RouterID = req.RouterID
+	}
 	profile.UpdatedAt = time.Now()
 
 	if err := s.profileRepo.Update(ctx, profile); err != nil {
 		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
+
+	// Auto-sync profile to routers (non-blocking)
+	go func() {
+		syncCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		var routers []*network.Router
+		var err error
+		if profile.RouterID != nil {
+			r, e := s.routerRepo.GetByID(syncCtx, *profile.RouterID)
+			if e == nil {
+				routers = []*network.Router{r}
+			}
+			err = e
+		} else {
+			routers, err = s.routerRepo.ListByTenant(syncCtx, profile.TenantID)
+		}
+
+		if err != nil {
+			return
+		}
+
+		for _, router := range routers {
+			if router.Type != network.RouterTypeMikroTik || router.Host == "" {
+				continue
+			}
+			_ = s.SyncProfileToRouter(syncCtx, profile.ID, router.ID)
+		}
+	}()
 
 	return profile, nil
 }
@@ -1327,10 +1392,19 @@ func generateRandomString(n int) string {
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
 	publicIP := s.getPublicIP()
 	psk := s.getIPsecPSK()
+	radiusSecret := os.Getenv("RRNET_RADIUS_REST_SECRET")
+	if radiusSecret == "" {
+		radiusSecret = "testing123" // Fallback to your current VPS default
+	}
+
+	vpnSubnet := os.Getenv("VPN_SUBNET")
+	if vpnSubnet == "" {
+		vpnSubnet = "10.10.10.0/24"
+	}
 
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
 /interface l2tp-client add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet password=%s user=%s use-ipsec=yes ipsec-secret=%s
-/ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=10.10.10.0/24 dst-port=8728,8291 protocol=tcp place-before=0
+/ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
 /ip service set api disabled=no port=8728
 /ip service set api-ssl disabled=yes
 /ip service set winbox disabled=no port=8291
@@ -1341,10 +1415,10 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /system identity set name="RR-%s"
 
 ## RADIUS & HOTSPOT SETUP
-/radius add address=10.10.10.1 secret=dev-radius-rest-secret service=hotspot comment="RR-NET RADIUS"
+/radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS"
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, router.Name)
+`, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, vpnSubnet, router.Name, radiusSecret)
 
 	return script
 }
@@ -1383,11 +1457,16 @@ func (s *NetworkService) applyRemoteAccessRules(router *network.Router) error {
 	}
 
 	// Ensure Masquerade for VPN subnet (critical for return path)
+	vpnSubnet := os.Getenv("VPN_SUBNET")
+	if vpnSubnet == "" {
+		vpnSubnet = "10.10.10.0/24"
+	}
+
 	// We use -C to check if rule exists first to avoid duplicates
-	checkCmd := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE")
+	checkCmd := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-d", vpnSubnet, "-j", "MASQUERADE")
 	if err := checkCmd.Run(); err != nil {
 		// Rule does not exist, add it
-		if err := exec.Command("sudo", "iptables", "-t", "nat", "-A", "POSTROUTING", "-d", "10.10.10.0/24", "-j", "MASQUERADE").Run(); err != nil {
+		if err := exec.Command("sudo", "iptables", "-t", "nat", "-A", "POSTROUTING", "-d", vpnSubnet, "-j", "MASQUERADE").Run(); err != nil {
 			fmt.Printf("Warning: failed to add masquerade rule: %v\n", err)
 		}
 	}
