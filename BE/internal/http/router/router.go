@@ -108,6 +108,7 @@ func New(deps Dependencies) http.Handler {
 	waCampaignHandler := handler.NewWACampaignHandler(waCampaignService)
 	waTemplateHandler := handler.NewWATemplateHandler(waTemplateService)
 	waLogHandler := handler.NewWALogHandler(waLogRepo)
+	dashboardHandler := handler.NewDashboardHandler(clientService, planService, featureResolver, limitResolver)
 
 	// WhatsApp Gateway (Baileys) proxy client + handler (tenant-scoped; protected)
 	waGatewayClient := wagw.NewClient(deps.Config.WAGateway.URL, deps.Config.WAGateway.AdminToken)
@@ -441,6 +442,11 @@ func New(deps Dependencies) http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})))
+
+	// ============================================
+	// Dashboard routes (Consolidated)
+	// ============================================
+	mux.Handle("/api/v1/dashboard/summary", requireAuth(methodHandler("GET", dashboardHandler.GetSummary)))
 
 	// ============================================
 	// Tenant feature/limit routes (Protected, tenant context)

@@ -127,44 +127,8 @@ export const dashboardService = {
   },
 
   async getDashboardData(): Promise<DashboardData> {
-    const [clientStats, plan, features, limits] = await Promise.allSettled([
-      this.getClientStats(),
-      this.getPlan(),
-      this.getFeatures(),
-      this.getLimits(),
-    ]);
-
-    // Check if ALL requests failed with 401 (unauthorized)
-    // This indicates auth is not ready or token is invalid
-    const allRejected = 
-      clientStats.status === 'rejected' &&
-      plan.status === 'rejected' &&
-      features.status === 'rejected' &&
-      limits.status === 'rejected';
-    
-    const all401 = allRejected &&
-      clientStats.reason?.response?.status === 401 &&
-      plan.reason?.response?.status === 401 &&
-      features.reason?.response?.status === 401 &&
-      limits.reason?.response?.status === 401;
-
-    // If all requests failed with 401, throw error instead of returning empty data
-    // This prevents silent failure where page thinks dashboard loaded but data is empty
-    if (all401) {
-      const error = new Error('All dashboard endpoints returned 401 Unauthorized. Auth may not be ready.');
-      (error as any).code = 'DASHBOARD_UNAUTHORIZED';
-      (error as any).statusCode = 401;
-      throw error;
-    }
-
-    // Return partial data if some requests succeeded
-    // This allows best-effort loading even if some endpoints fail
-    return {
-      clientStats: clientStats.status === 'fulfilled' ? clientStats.value : { total: 0, limit: 0, unlimited: false, remaining: 0 },
-      plan: plan.status === 'fulfilled' ? plan.value : null,
-      features: features.status === 'fulfilled' ? features.value : {},
-      limits: limits.status === 'fulfilled' ? limits.value : {},
-    };
+    const response = await apiClient.get('/dashboard/summary');
+    return response.data;
   },
 };
 

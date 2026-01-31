@@ -638,10 +638,23 @@ apiClient.interceptors.response.use(
       originalRequest._retryCount = 0;
     }
 
-    const status = error?.response?.status;
+    const statusCode = error?.response?.status;
+    const url = (originalRequest?.url ?? '').toString();
+    const isDashboardEndpoint = 
+      url.includes('/clients/stats') ||
+      url.includes('/my/plan') ||
+      url.includes('/my/features') ||
+      url.includes('/my/limits') ||
+      url.includes('/dashboard/summary') ||
+      url.includes('/tenant/me');
     
+    const isCriticalAuthEndpoint = 
+      url.includes('/auth/me') ||
+      url.includes('/auth/logout');
+
     // Circuit breaker: Force logout after too many consecutive 401s
-    if (status === 401) {
+    // Skip counting for dashboard endpoints as they are non-critical/best-effort
+    if (statusCode === 401 && !isDashboardEndpoint) {
       consecutiveAuthFailures++;
       
       if (consecutiveAuthFailures >= MAX_AUTH_FAILURES) {
@@ -680,7 +693,7 @@ apiClient.interceptors.response.use(
     
     // OPTION A: Retry-once dengan token dari authStore (defensive fix untuk timing issue)
     // Hanya retry sekali jika token tersedia di authStore tapi belum terpasang di request
-    if (status === 401 && !originalRequest._retryOnce) {
+    if (statusCode === 401 && !originalRequest._retryOnce) {
       originalRequest._retryOnce = true;
       
       try {
@@ -716,19 +729,8 @@ apiClient.interceptors.response.use(
     // Handle 401 Unauthorized - try to refresh token (existing logic)
     // SAFETY NET: Dashboard endpoints are best-effort, don't trigger logout on 401
     // Only critical auth endpoints should trigger logout
-    const url = (originalRequest?.url ?? '').toString();
-    const isDashboardEndpoint = 
-      url.includes('/clients/stats') ||
-      url.includes('/my/plan') ||
-      url.includes('/my/features') ||
-      url.includes('/my/limits') ||
-      url.includes('/tenant/me');
     
-    const isCriticalAuthEndpoint = 
-      url.includes('/auth/me') ||
-      url.includes('/auth/logout');
-    
-    if (status === 401 && !originalRequest._retry && refreshTokenCallback && getRefreshTokenCallback) {
+    if (statusCode === 401 && !originalRequest._retry && refreshTokenCallback && getRefreshTokenCallback) {
       originalRequest._retry = true;
       const currentRefreshToken = getRefreshTokenCallback();
       
@@ -798,7 +800,7 @@ apiClient.interceptors.response.use(
     }
     
     // If 401 and no refresh token available, only trigger logout for critical endpoints
-    if (status === 401 && !originalRequest._retry && (!refreshTokenCallback || !getRefreshTokenCallback || !getRefreshTokenCallback())) {
+    if (statusCode === 401 && !originalRequest._retry && (!refreshTokenCallback || !getRefreshTokenCallback || !getRefreshTokenCallback())) {
       if (isCriticalAuthEndpoint) {
         return Promise.reject(
           new ApiError("Session expired. Please log in again.", 401, "SESSION_EXPIRED")
@@ -835,15 +837,15 @@ apiClient.interceptors.response.use(
     const errorCode = errorData?.code ?? (error as any)?.code;
     const apiError = new ApiError(
       message,
-      status,
+      statusCode,
       errorCode,
       errorData
     );
 
     // Log error for debugging
-    if (status && status >= 500) {
+    if (statusCode && statusCode >= 500) {
       console.error("[SERVER ERROR]", {
-        status,
+        status: statusCode,
         url: originalRequest?.url,
         method: originalRequest?.method,
         message: apiError.message,
@@ -852,9 +854,9 @@ apiClient.interceptors.response.use(
         retryCount: originalRequest._retryCount || 0,
         authFailures: consecutiveAuthFailures,
       });
-    } else if (status === 401) {
+    } else if (statusCode === 401) {
       console.warn("[AUTH ERROR]", {
-        status,
+        status: statusCode,
         url: originalRequest?.url,
         method: originalRequest?.method,
         message: apiError.message,
