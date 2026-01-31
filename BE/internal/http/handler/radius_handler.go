@@ -192,6 +192,17 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 🔥 NINJA ISOLATION OVERRIDE: If account is isolated, handcuff them!
+	if v.Isolated {
+		log.Printf("[radius_auth] WARN: User '%s' is ISOLATED. Applying handcuffs (Rate=0/0, List=isolated)", req.UserName)
+		response["Mikrotik-Rate-Limit"] = "1k/1k"      // Near zero speed to keep them quiet
+		response["Mikrotik-Address-List"] = "isolated" // Force into firewall redirection list
+		response["Reply-Message"] = "Account suspended - Contact admin"
+
+		// Note: We leave 'Class' if it exists, so Mikrotik still sees it as a Hotspot user,
+		// but Address-List 'isolated' in Firewall will override everything.
+	}
+
 	responseJSON, _ := json.MarshalIndent(response, "", "  ")
 	log.Printf("[radius_auth] DEBUG: Response JSON (FLAT FORMAT TEST):\n%s", string(responseJSON))
 	w.Header().Set("Content-Type", "application/json")

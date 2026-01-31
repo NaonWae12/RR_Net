@@ -676,14 +676,6 @@ func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uu
 		return nil, fmt.Errorf("voucher not found: %w", err)
 	}
 
-	// Check isolation FIRST - isolated users cannot login
-	if v.Isolated {
-		log.Warn().
-			Str("voucher_code", v.Code).
-			Msg("Login attempt blocked: voucher is isolated")
-		return nil, fmt.Errorf("access denied: account suspended")
-	}
-
 	// Check expiration FIRST (before status check)
 	if v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt) {
 		// Mark as expired
@@ -728,7 +720,12 @@ func (s *VoucherService) ConsumeVoucherForAuth(
 	}
 
 	if v.Status != voucher.VoucherStatusActive {
-		return nil, fmt.Errorf("voucher already %s", v.Status)
+		// Allow if already used but not expired (reuse session)
+		if v.Status == voucher.VoucherStatusUsed && (v.ExpiresAt == nil || time.Now().Before(*v.ExpiresAt)) {
+			// Continue
+		} else {
+			return nil, fmt.Errorf("voucher is %s", v.Status)
+		}
 	}
 
 	now := time.Now()
