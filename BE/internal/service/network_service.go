@@ -40,7 +40,7 @@ func NewNetworkService(
 
 func (s *NetworkService) StartHealthCheckScheduler(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
+		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 
 		for {
