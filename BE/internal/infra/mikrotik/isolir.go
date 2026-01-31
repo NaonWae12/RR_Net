@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/go-routeros/routeros"
 	"github.com/rs/zerolog/log"
@@ -223,50 +224,41 @@ func UninstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, user
 
 // removeIsolirRules is a helper to remove all rules with "Isolir-" prefix
 func removeIsolirRules(client *routeros.Client) error {
-	// Remove NAT rules
-	natReply, err := client.Run(
-		"/ip/firewall/nat/print",
-		"?comment~Isolir-",
-	)
+	// 1. Remove NAT rules
+	natReply, err := client.Run("/ip/firewall/nat/print")
 	if err == nil {
 		for _, re := range natReply.Re {
-			if id, ok := re.Map[".id"]; ok {
-				_, _ = client.Run(
-					"/ip/firewall/nat/remove",
-					fmt.Sprintf("=.id=%s", id),
-				)
+			comment := re.Map["comment"]
+			if strings.Contains(strings.ToLower(comment), "isolir-") {
+				if id, ok := re.Map[".id"]; ok {
+					_, _ = client.Run("/ip/firewall/nat/remove", fmt.Sprintf("=.id=%s", id))
+				}
 			}
 		}
 	}
 
-	// Remove filter rules
-	filterReply, err := client.Run(
-		"/ip/firewall/filter/print",
-		"?comment~Isolir-",
-	)
+	// 2. Remove filter rules
+	filterReply, err := client.Run("/ip/firewall/filter/print")
 	if err == nil {
 		for _, re := range filterReply.Re {
-			if id, ok := re.Map[".id"]; ok {
-				_, _ = client.Run(
-					"/ip/firewall/filter/remove",
-					fmt.Sprintf("=.id=%s", id),
-				)
+			comment := re.Map["comment"]
+			if strings.Contains(strings.ToLower(comment), "isolir-") {
+				if id, ok := re.Map[".id"]; ok {
+					_, _ = client.Run("/ip/firewall/filter/remove", fmt.Sprintf("=.id=%s", id))
+				}
 			}
 		}
 	}
 
-	// Remove Walled Garden rules
-	wgReply, err := client.Run(
-		"/ip/hotspot/walled-garden/print",
-		"?comment~Isolir-",
-	)
+	// 3. Remove Walled Garden rules
+	wgReply, err := client.Run("/ip/hotspot/walled-garden/print")
 	if err == nil {
 		for _, re := range wgReply.Re {
-			if id, ok := re.Map[".id"]; ok {
-				_, _ = client.Run(
-					"/ip/hotspot/walled-garden/remove",
-					fmt.Sprintf("=.id=%s", id),
-				)
+			comment := re.Map["comment"]
+			if strings.Contains(strings.ToLower(comment), "isolir-") {
+				if id, ok := re.Map[".id"]; ok {
+					_, _ = client.Run("/ip/hotspot/walled-garden/remove", fmt.Sprintf("=.id=%s", id))
+				}
 			}
 		}
 	}
@@ -293,32 +285,47 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 
 	status := &IsolirFirewallStatus{}
 
-	// 1. Check NAT rules
-	natReply, err := client.Run("/ip/firewall/nat/print", "?comment~Isolir-")
-	if err == nil && len(natReply.Re) > 0 {
-		status.HasNAT = true
-		status.RuleCount += len(natReply.Re)
-		if toAddr, ok := natReply.Re[0].Map["to-addresses"]; ok {
-			status.HotspotIP = toAddr
+	// 1. Check NAT rules (Get all and filter in Go for reliability)
+	natReply, err := client.Run("/ip/firewall/nat/print")
+	if err == nil {
+		for _, re := range natReply.Re {
+			comment := re.Map["comment"]
+			if strings.Contains(strings.ToLower(comment), "isolir-") {
+				status.HasNAT = true
+				status.RuleCount++
+				if toAddr, ok := re.Map["to-addresses"]; ok {
+					status.HotspotIP = toAddr
+				}
+			}
 		}
 	}
 
 	// 2. Check Filter rules
-	filterReply, err := client.Run("/ip/firewall/filter/print", "?comment~Isolir-")
-	if err == nil && len(filterReply.Re) > 0 {
-		status.HasFilter = true
-		status.RuleCount += len(filterReply.Re)
+	filterReply, err := client.Run("/ip/firewall/filter/print")
+	if err == nil {
+		for _, re := range filterReply.Re {
+			comment := re.Map["comment"]
+			if strings.Contains(strings.ToLower(comment), "isolir-") {
+				status.HasFilter = true
+				status.RuleCount++
+			}
+		}
 	}
 
-	// 3. Check Walled Garden (New component)
-	wgReply, err := client.Run("/ip/hotspot/walled-garden/print", "?comment~Isolir-")
-	hasWG := err == nil && len(wgReply.Re) > 0
-	if hasWG {
-		status.RuleCount += len(wgReply.Re)
+	// 3. Check Walled Garden
+	wgReply, err := client.Run("/ip/hotspot/walled-garden/print")
+	hasWG := false
+	if err == nil {
+		for _, re := range wgReply.Re {
+			comment := re.Map["comment"]
+			if strings.Contains(strings.ToLower(comment), "isolir-") {
+				hasWG = true
+				status.RuleCount++
+			}
+		}
 	}
 
 	// Installed if ANY of our components exist.
-	// This is more robust against MikroTik's eventual consistency.
 	status.Installed = status.HasNAT || status.HasFilter || hasWG
 
 	return status, nil
