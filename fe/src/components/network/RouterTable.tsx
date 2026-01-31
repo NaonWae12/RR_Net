@@ -16,8 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Router, RouterStatus } from "@/lib/api/types";
-import { Loader2, Trash2 } from "lucide-react";
+import { Eye, Edit, Activity, PowerOff, Trash2, Loader2, ArrowRight } from "lucide-react";
 import { RouterStatusBadge } from "./RouterStatusBadge";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -40,6 +39,8 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
     router: null,
   });
   const [deleting, setDeleting] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
 
   const handleView = (id: string) => {
     router.push(`/network/routers/${id}`);
@@ -76,46 +77,52 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
   };
 
   const handleTestConnection = async (id: string, name: string) => {
+    setTestingId(id);
     try {
       const result = await testRouterConnection(id);
       if (result.ok) {
         showToast({
-          title: "Connection successful",
+          title: "Connection Successful",
           description: result.identity
-            ? `Connected to ${result.identity}${result.latency_ms ? ` (${result.latency_ms}ms)` : ""}`
-            : "Router is reachable.",
+            ? `Successfully connected to ${result.identity}${result.latency_ms ? ` (${result.latency_ms}ms)` : ""}`
+            : `Successfully connected to router "${name}".`,
           variant: "success",
         });
       } else {
         showToast({
-          title: "Connection failed",
-          description: result.error || "Could not connect to router.",
+          title: "Connection Failed",
+          description: result.error || `Could not establish connection to "${name}".`,
           variant: "error",
         });
       }
     } catch (error: any) {
       showToast({
-        title: "Connection test failed",
-        description: error.message || "An unexpected error occurred.",
+        title: "Test Connection Error",
+        description: error.message || "An unexpected error occurred during testing.",
         variant: "error",
       });
+    } finally {
+      setTestingId(null);
     }
   };
 
   const handleDisconnect = async (id: string, name: string) => {
+    setDisconnectingId(id);
     try {
       await disconnectRouter(id);
       showToast({
-        title: "Router disconnected",
+        title: "Router Disconnected",
         description: `Router "${name}" has been marked offline.`,
         variant: "success",
       });
     } catch (error: any) {
       showToast({
-        title: "Failed to disconnect router",
-        description: error.message || "An unexpected error occurred.",
+        title: "Disconnect Failed",
+        description: error.message || "An unexpected error occurred while disconnecting.",
         variant: "error",
       });
+    } finally {
+      setDisconnectingId(null);
     }
   };
 
@@ -173,44 +180,78 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
                   <span className="text-xs text-slate-400">No</span>
                 )}
               </TableCell>
-              <TableCell className="flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => handleView(routerItem.id)}>
-                  View
+              <TableCell className="flex items-center space-x-1">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-slate-500 hover:text-indigo-600"
+                  onClick={() => handleView(routerItem.id)}
+                  title="View Details"
+                >
+                  <Eye className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleEdit(routerItem.id)}>
-                  Edit
+                
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-slate-500 hover:text-amber-600"
+                  onClick={() => handleEdit(routerItem.id)}
+                  title="Edit Settings"
+                >
+                  <Edit className="h-4 w-4" />
                 </Button>
+
                 {routerItem.status === "provisioning" ? (
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => handleEdit(routerItem.id)}
-                    className="bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                    className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
+                    title="Continue Setup"
                   >
-                    Continue Setup →
+                    <ArrowRight className="h-4 w-4" />
                   </Button>
                 ) : (
                   <>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleTestConnection(routerItem.id, routerItem.name)}
-                      className="text-green-600 hover:text-green-700"
+                      className="h-8 w-8 text-green-600 hover:bg-green-50"
+                      title="Test Connection"
+                      disabled={testingId === routerItem.id}
                     >
-                      Connect/Test
+                      {testingId === routerItem.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Activity className="h-4 w-4" />
+                      )}
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleDisconnect(routerItem.id, routerItem.name)}
-                      className="text-orange-600 hover:text-orange-700"
+                      className="h-8 w-8 text-orange-600 hover:bg-orange-50"
+                      title="Disconnect"
+                      disabled={disconnectingId === routerItem.id}
                     >
-                      Disconnect
+                      {disconnectingId === routerItem.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <PowerOff className="h-4 w-4" />
+                      )}
                     </Button>
                   </>
                 )}
-                <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(routerItem.id, routerItem.name)}>
-                  Delete
+
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-rose-500 hover:bg-rose-50"
+                  onClick={() => openDeleteDialog(routerItem.id, routerItem.name)}
+                  title="Delete Router"
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </TableCell>
             </TableRow>
