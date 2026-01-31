@@ -1578,6 +1578,14 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 		return nil, fmt.Errorf("failed to check isolir firewall status: %w", err)
 	}
 
+	log.Info().
+		Str("router_name", router.Name).
+		Bool("installed", status.Installed).
+		Int("rule_count", status.RuleCount).
+		Bool("has_nat", status.HasNAT).
+		Bool("has_filter", status.HasFilter).
+		Msg("Isolir status check result")
+
 	return &IsolirStatus{
 		FirewallInstalled: status.Installed,
 		RouterID:          router.ID.String(),
