@@ -330,6 +330,85 @@ func buildCharsetFromMode(mode string) (string, error) {
 	return charset.String(), nil
 }
 
+type CreateVoucherRequest struct {
+	PackageID uuid.UUID  `json:"package_id"`
+	RouterID  *uuid.UUID `json:"router_id,omitempty"`
+	Code      string     `json:"code"`
+	Password  string     `json:"password"`
+	Notes     string     `json:"notes,omitempty"`
+}
+
+func (s *VoucherService) CreateVoucher(ctx context.Context, tenantID uuid.UUID, req CreateVoucherRequest) (*voucher.Voucher, error) {
+	// Validate package exists
+	pkg, err := s.voucherRepo.GetPackageByID(ctx, req.PackageID)
+	if err != nil {
+		return nil, fmt.Errorf("package not found: %w", err)
+	}
+
+	now := time.Now()
+	v := &voucher.Voucher{
+		ID:        uuid.New(),
+		TenantID:  tenantID,
+		PackageID: req.PackageID,
+		RouterID:  req.RouterID,
+		Code:      req.Code,
+		Password:  req.Password,
+		Status:    voucher.VoucherStatusActive,
+		Notes:     req.Notes,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := s.voucherRepo.CreateVoucher(ctx, v); err != nil {
+		return nil, fmt.Errorf("failed to create voucher: %w", err)
+	}
+
+	// For radius_auth_only mode, create Hotspot user on the router(s)
+	if pkg.RateLimitMode == "radius_auth_only" {
+		if req.RouterID != nil {
+			// Sync to specific router
+			router, err := s.routerRepo.GetByID(ctx, *req.RouterID)
+			if err == nil && router.Status == network.RouterStatusOnline {
+				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+				hotspotUser := mikrotik.HotspotUser{
+					Name:     v.Code,
+					Password: v.Password,
+					Profile:  pkg.Name,
+					Comment:  fmt.Sprintf("RRNET Voucher - Created %s", now.Format("2006-01-02 15:04:05")),
+				}
+				userCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				_ = mikrotik.AddHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotUser)
+			}
+		} else {
+			// Sync to all routers for this tenant
+			routers, err := s.routerRepo.ListByTenant(ctx, tenantID)
+			if err == nil {
+				for _, router := range routers {
+					if router.Status != network.RouterStatusOnline {
+						continue
+					}
+					addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+					hotspotUser := mikrotik.HotspotUser{
+						Name:     v.Code,
+						Password: v.Password,
+						Profile:  pkg.Name,
+						Comment:  fmt.Sprintf("RRNET Voucher - Created %s", now.Format("2006-01-02 15:04:05")),
+					}
+					userCtx, cancel := context.WithTimeout(ctx, 10*time.Second) // Shorter timeout per router when syncing all
+					err := mikrotik.AddHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotUser)
+					cancel()
+					if err != nil {
+						log.Warn().Err(err).Str("router", router.Name).Msg("Failed to sync Hotspot user to router during all-router sync")
+					}
+				}
+			}
+		}
+	}
+
+	return v, nil
+}
+
 func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUID, req GenerateVouchersRequest) ([]*voucher.Voucher, error) {
 	// Validate package exists and get package details
 	pkg, err := s.voucherRepo.GetPackageByID(ctx, req.PackageID)

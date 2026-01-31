@@ -3,13 +3,15 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/domain/client"
 	"rrnet/internal/repository"
@@ -17,25 +19,29 @@ import (
 )
 
 var (
-	ErrClientCodeRequired   = errors.New("client code is required")
-	ErrClientNameRequired   = errors.New("client name is required")
-	ErrClientLimitExceeded  = errors.New("client limit exceeded for this plan")
-	ErrInvalidStatusChange  = errors.New("invalid status change")
+	ErrClientCodeRequired  = errors.New("client code is required")
+	ErrClientNameRequired  = errors.New("client name is required")
+	ErrClientLimitExceeded = errors.New("client limit exceeded for this plan")
+	ErrInvalidStatusChange = errors.New("invalid status change")
 )
 
 // ClientService handles client business logic
 type ClientService struct {
-	clientRepo      *repository.ClientRepository
+	clientRepo         *repository.ClientRepository
 	servicePackageRepo *repository.ServicePackageRepository
-	featureResolver *FeatureResolver
-	limitResolver   *LimitResolver
-	encKey32        [32]byte
+	pppoeService       *PPPoEService
+	voucherService     *VoucherService
+	featureResolver    *FeatureResolver
+	limitResolver      *LimitResolver
+	encKey32           [32]byte
 }
 
 // NewClientService creates a new client service
 func NewClientService(
 	clientRepo *repository.ClientRepository,
 	servicePackageRepo *repository.ServicePackageRepository,
+	pppoeService *PPPoEService,
+	voucherService *VoucherService,
 	featureResolver *FeatureResolver,
 	limitResolver *LimitResolver,
 	encryptionSecret string,
@@ -43,6 +49,8 @@ func NewClientService(
 	return &ClientService{
 		clientRepo:         clientRepo,
 		servicePackageRepo: servicePackageRepo,
+		pppoeService:       pppoeService,
+		voucherService:     voucherService,
 		featureResolver:    featureResolver,
 		limitResolver:      limitResolver,
 		encKey32:           utils.DeriveKey32(encryptionSecret),
@@ -51,27 +59,33 @@ func NewClientService(
 
 // CreateClientRequest represents request to create a client
 type CreateClientRequest struct {
-	ClientCode    string   `json:"client_code"`
-	Name          string   `json:"name"`
-	Email         *string  `json:"email,omitempty"`
-	Phone         *string  `json:"phone,omitempty"`
-	Address       *string  `json:"address,omitempty"`
-	Latitude      *float64 `json:"latitude,omitempty"`
-	Longitude     *float64 `json:"longitude,omitempty"`
-	GroupID       *uuid.UUID `json:"group_id,omitempty"`
+	ClientCode string     `json:"client_code"`
+	Name       string     `json:"name"`
+	Email      *string    `json:"email,omitempty"`
+	Phone      *string    `json:"phone,omitempty"`
+	Address    *string    `json:"address,omitempty"`
+	Latitude   *float64   `json:"latitude,omitempty"`
+	Longitude  *float64   `json:"longitude,omitempty"`
+	GroupID    *uuid.UUID `json:"group_id,omitempty"`
 
 	// New service model
-	Category         client.Category `json:"category"`
-	ServicePackageID uuid.UUID       `json:"service_package_id"`
-	DeviceCount      *int            `json:"device_count,omitempty"` // lite only
-	PPPoEUsername    *string         `json:"pppoe_username,omitempty"`
-	PPPoEPassword    *string         `json:"pppoe_password,omitempty"` // never returned back
+	Category           client.Category       `json:"category"`
+	ConnectionType     client.ConnectionType `json:"connection_type"`
+	RouterID           *uuid.UUID            `json:"router_id,omitempty"`
+	PPPoEUsername      *string               `json:"pppoe_username,omitempty"`
+	PPPoEPassword      *string               `json:"pppoe_password,omitempty"` // never returned back
+	PPPoELocalAddress  *string               `json:"pppoe_local_address,omitempty"`
+	PPPoERemoteAddress *string               `json:"pppoe_remote_address,omitempty"`
+	PPPoEComment       *string               `json:"pppoe_comment,omitempty"`
+	ServicePackageID   uuid.UUID             `json:"service_package_id"`
+	VoucherPackageID   *uuid.UUID            `json:"voucher_package_id,omitempty"`
+	DeviceCount        *int                  `json:"device_count,omitempty"` // lite only
 
 	// Deprecated (kept for backward compatibility; not used by new UI)
-	ServicePlan  *string `json:"service_plan,omitempty"`
-	SpeedProfile *string `json:"speed_profile,omitempty"`
+	ServicePlan  *string  `json:"service_plan,omitempty"`
+	SpeedProfile *string  `json:"speed_profile,omitempty"`
 	MonthlyFee   *float64 `json:"monthly_fee,omitempty"`
-	BillingDate  *int    `json:"billing_date,omitempty"`
+	BillingDate  *int     `json:"billing_date,omitempty"`
 
 	// Payment tempo (new)
 	PaymentTempoOption     *string    `json:"payment_tempo_option,omitempty"` // default|template|manual
@@ -81,32 +95,38 @@ type CreateClientRequest struct {
 
 // ClientDTO represents client data for API responses
 type ClientDTO struct {
-	ID            uuid.UUID      `json:"id"`
-	TenantID      uuid.UUID      `json:"tenant_id"`
-	ClientCode    string         `json:"client_code"`
-	Name          string         `json:"name"`
-	Email         *string        `json:"email,omitempty"`
-	Phone         *string        `json:"phone,omitempty"`
-	Address       *string        `json:"address,omitempty"`
-	Latitude      *float64       `json:"latitude,omitempty"`
-	Longitude     *float64       `json:"longitude,omitempty"`
-	GroupID       *uuid.UUID     `json:"group_id,omitempty"`
-	Category      client.Category `json:"category"`
-	ServicePackageID *uuid.UUID   `json:"service_package_id,omitempty"`
-	DeviceCount   *int            `json:"device_count,omitempty"`
-	ServicePlan   *string        `json:"service_plan,omitempty"`
-	SpeedProfile  *string        `json:"speed_profile,omitempty"`
-	MonthlyFee    float64        `json:"monthly_fee"`
-	BillingDate   *int           `json:"billing_date,omitempty"`
-	PaymentTempoOption     string     `json:"payment_tempo_option"`
-	PaymentDueDay          int        `json:"payment_due_day"`
-	PaymentTempoTemplateID *uuid.UUID `json:"payment_tempo_template_id,omitempty"`
-	Status        client.Status  `json:"status"`
-	IsolirReason  *string        `json:"isolir_reason,omitempty"`
-	IsolirAt      *time.Time     `json:"isolir_at,omitempty"`
-	PPPoEUsername *string        `json:"pppoe_username,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID                     uuid.UUID             `json:"id"`
+	TenantID               uuid.UUID             `json:"tenant_id"`
+	ClientCode             string                `json:"client_code"`
+	Name                   string                `json:"name"`
+	Email                  *string               `json:"email,omitempty"`
+	Phone                  *string               `json:"phone,omitempty"`
+	Address                *string               `json:"address,omitempty"`
+	Latitude               *float64              `json:"latitude,omitempty"`
+	Longitude              *float64              `json:"longitude,omitempty"`
+	GroupID                *uuid.UUID            `json:"group_id,omitempty"`
+	Category               client.Category       `json:"category"`
+	ConnectionType         client.ConnectionType `json:"connection_type"`
+	ServicePackageID       *uuid.UUID            `json:"service_package_id,omitempty"`
+	VoucherPackageID       *uuid.UUID            `json:"voucher_package_id,omitempty"`
+	DeviceCount            *int                  `json:"device_count,omitempty"`
+	ServicePlan            *string               `json:"service_plan,omitempty"`
+	SpeedProfile           *string               `json:"speed_profile,omitempty"`
+	MonthlyFee             float64               `json:"monthly_fee"`
+	BillingDate            *int                  `json:"billing_date,omitempty"`
+	PaymentTempoOption     string                `json:"payment_tempo_option"`
+	PaymentDueDay          int                   `json:"payment_due_day"`
+	PaymentTempoTemplateID *uuid.UUID            `json:"payment_tempo_template_id,omitempty"`
+	Status                 client.Status         `json:"status"`
+	IsolirReason           *string               `json:"isolir_reason,omitempty"`
+	IsolirAt               *time.Time            `json:"isolir_at,omitempty"`
+	RouterID               *uuid.UUID            `json:"router_id,omitempty"`
+	PPPoEUsername          *string               `json:"pppoe_username,omitempty"`
+	PPPoELocalAddress      *string               `json:"pppoe_local_address,omitempty"`
+	PPPoERemoteAddress     *string               `json:"pppoe_remote_address,omitempty"`
+	PPPoEComment           *string               `json:"pppoe_comment,omitempty"`
+	CreatedAt              time.Time             `json:"created_at"`
+	UpdatedAt              time.Time             `json:"updated_at"`
 }
 
 // Create creates a new client
@@ -208,6 +228,12 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 	if paymentOption != "default" && paymentOption != "template" && paymentOption != "manual" {
 		return nil, errors.New("payment_tempo_option must be one of: default, template, manual")
 	}
+
+	connType := req.ConnectionType
+	if connType == "" {
+		connType = client.ConnectionTypePPPoE // Default
+	}
+
 	paymentDueDay := now.Day()
 	if req.PaymentDueDay != nil {
 		if *req.PaymentDueDay < 1 || *req.PaymentDueDay > 31 {
@@ -230,37 +256,79 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 	}
 
 	c := &client.Client{
-		ID:            uuid.New(),
-		TenantID:      tenantID,
-		ClientCode:    req.ClientCode,
-		Name:          req.Name,
-		Email:         req.Email,
-		Phone:         req.Phone,
-		Address:       req.Address,
-		Latitude:      req.Latitude,
-		Longitude:     req.Longitude,
-		GroupID:       req.GroupID,
-		Category:      req.Category,
-		ServicePackageID: &req.ServicePackageID,
-		DeviceCount:   req.DeviceCount,
-		PPPoEPasswordEnc: pppoePasswordEnc,
+		ID:                     uuid.New(),
+		TenantID:               tenantID,
+		ClientCode:             req.ClientCode,
+		Name:                   req.Name,
+		Email:                  req.Email,
+		Phone:                  req.Phone,
+		Address:                req.Address,
+		Latitude:               req.Latitude,
+		Longitude:              req.Longitude,
+		GroupID:                req.GroupID,
+		Category:               req.Category,
+		ConnectionType:         connType,
+		RouterID:               req.RouterID,
+		PPPoEUsername:          req.PPPoEUsername,
+		PPPoELocalAddress:      req.PPPoELocalAddress,
+		PPPoERemoteAddress:     req.PPPoERemoteAddress,
+		PPPoEComment:           req.PPPoEComment,
+		ServicePackageID:       &req.ServicePackageID,
+		VoucherPackageID:       req.VoucherPackageID,
+		DeviceCount:            req.DeviceCount,
+		PPPoEPasswordEnc:       pppoePasswordEnc,
 		PPPoEPasswordUpdatedAt: pppoePasswordUpdatedAt,
-		ServicePlan:   servicePlan,
-		SpeedProfile:  req.SpeedProfile,
-		MonthlyFee:    0,
-		BillingDate:   nil,
-		PaymentTempoOption: paymentOption,
-		PaymentDueDay:      paymentDueDay,
+		ServicePlan:            servicePlan,
+		SpeedProfile:           req.SpeedProfile,
+		MonthlyFee:             utils.Value(req.MonthlyFee),
+		BillingDate:            req.BillingDate,
+		PaymentTempoOption:     paymentOption,
+		PaymentDueDay:          paymentDueDay,
 		PaymentTempoTemplateID: paymentTemplateID,
-		Status:        client.StatusActive,
-		PPPoEUsername: req.PPPoEUsername,
-		Metadata:      metadata,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		Status:                 client.StatusActive,
+		Metadata:               metadata,
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 
 	if err := s.clientRepo.Create(ctx, c); err != nil {
 		return nil, err
+	}
+
+	// Create PPPoE secret if connection type is pppoe
+	if c.ConnectionType == client.ConnectionTypePPPoE && c.RouterID != nil && c.PPPoEUsername != nil && req.PPPoEPassword != nil && c.ServicePackageID != nil {
+		pkg, err := s.servicePackageRepo.GetByID(ctx, tenantID, *c.ServicePackageID)
+		if err == nil {
+			pppoeReq := CreatePPPoESecretRequest{
+				ClientID:      c.ID,
+				RouterID:      *c.RouterID,
+				ProfileID:     pkg.NetworkProfileID,
+				Username:      *c.PPPoEUsername,
+				Password:      *req.PPPoEPassword,
+				LocalAddress:  utils.Value(c.PPPoELocalAddress),
+				RemoteAddress: utils.Value(c.PPPoERemoteAddress),
+				Comment:       utils.Value(c.PPPoEComment),
+			}
+			_, pppoeErr := s.pppoeService.CreatePPPoESecret(ctx, tenantID, pppoeReq)
+			if pppoeErr != nil {
+				log.Error().Err(pppoeErr).Msg("Failed to auto-create PPPoE secret during client creation")
+			}
+		}
+	}
+
+	// Create Hotspot voucher if connection type is hotspot
+	if c.ConnectionType == client.ConnectionTypeHotspot && c.VoucherPackageID != nil && c.PPPoEUsername != nil && req.PPPoEPassword != nil {
+		voucherReq := CreateVoucherRequest{
+			PackageID: *c.VoucherPackageID,
+			RouterID:  c.RouterID,
+			Code:      *c.PPPoEUsername,
+			Password:  *req.PPPoEPassword,
+			Notes:     fmt.Sprintf("Client: %s (%s)", c.Name, c.ClientCode),
+		}
+		_, voucherErr := s.voucherService.CreateVoucher(ctx, tenantID, voucherReq)
+		if voucherErr != nil {
+			log.Error().Err(voucherErr).Msg("Failed to auto-create Hotspot voucher during client creation")
+		}
 	}
 
 	return s.toDTO(c), nil
@@ -312,20 +380,26 @@ func (s *ClientService) List(ctx context.Context, tenantID uuid.UUID, filter *cl
 
 // UpdateClientRequest represents request to update a client
 type UpdateClientRequest struct {
-	Name     string   `json:"name"`
-	Email    *string  `json:"email,omitempty"`
-	Phone    *string  `json:"phone,omitempty"`
-	Address  *string  `json:"address,omitempty"`
-	Latitude *float64 `json:"latitude,omitempty"`
-	Longitude *float64 `json:"longitude,omitempty"`
-	GroupID  *uuid.UUID `json:"group_id,omitempty"`
+	Name      string     `json:"name"`
+	Email     *string    `json:"email,omitempty"`
+	Phone     *string    `json:"phone,omitempty"`
+	Address   *string    `json:"address,omitempty"`
+	Latitude  *float64   `json:"latitude,omitempty"`
+	Longitude *float64   `json:"longitude,omitempty"`
+	GroupID   *uuid.UUID `json:"group_id,omitempty"`
 
 	// New service model
-	Category         client.Category `json:"category"`
-	ServicePackageID uuid.UUID       `json:"service_package_id"`
-	DeviceCount      *int            `json:"device_count,omitempty"`
-	PPPoEUsername    *string         `json:"pppoe_username,omitempty"`
-	PPPoEPassword    *string         `json:"pppoe_password,omitempty"`
+	Category           client.Category       `json:"category"`
+	ConnectionType     client.ConnectionType `json:"connection_type"`
+	RouterID           *uuid.UUID            `json:"router_id,omitempty"`
+	PPPoEUsername      *string               `json:"pppoe_username,omitempty"`
+	PPPoEPassword      *string               `json:"pppoe_password,omitempty"`
+	PPPoELocalAddress  *string               `json:"pppoe_local_address,omitempty"`
+	PPPoERemoteAddress *string               `json:"pppoe_remote_address,omitempty"`
+	PPPoEComment       *string               `json:"pppoe_comment,omitempty"`
+	ServicePackageID   uuid.UUID             `json:"service_package_id"`
+	VoucherPackageID   *uuid.UUID            `json:"voucher_package_id,omitempty"`
+	DeviceCount        *int                  `json:"device_count,omitempty"`
 
 	// Deprecated (kept only for compatibility; not used by new UI)
 	ServicePlan  *string `json:"service_plan,omitempty"`
@@ -398,7 +472,15 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	}
 
 	c.Category = req.Category
+	if req.ConnectionType != "" {
+		c.ConnectionType = req.ConnectionType
+	}
+	c.RouterID = req.RouterID
+	c.PPPoELocalAddress = req.PPPoELocalAddress
+	c.PPPoERemoteAddress = req.PPPoERemoteAddress
+	c.PPPoEComment = req.PPPoEComment
 	c.ServicePackageID = &req.ServicePackageID
+	c.VoucherPackageID = req.VoucherPackageID
 	c.DeviceCount = req.DeviceCount
 	c.PPPoEUsername = req.PPPoEUsername
 
@@ -495,32 +577,37 @@ func (s *ClientService) GetStats(ctx context.Context, tenantID uuid.UUID) (map[s
 // toDTO converts client entity to DTO
 func (s *ClientService) toDTO(c *client.Client) *ClientDTO {
 	return &ClientDTO{
-		ID:            c.ID,
-		TenantID:      c.TenantID,
-		ClientCode:    c.ClientCode,
-		Name:          c.Name,
-		Email:         c.Email,
-		Phone:         c.Phone,
-		Address:       c.Address,
-		Latitude:      c.Latitude,
-		Longitude:     c.Longitude,
-		GroupID:       c.GroupID,
-		Category:      c.Category,
-		ServicePackageID: c.ServicePackageID,
-		DeviceCount:   c.DeviceCount,
-		ServicePlan:   c.ServicePlan,
-		SpeedProfile:  c.SpeedProfile,
-		MonthlyFee:    c.MonthlyFee,
-		BillingDate:   c.BillingDate,
-		PaymentTempoOption: c.PaymentTempoOption,
-		PaymentDueDay:      c.PaymentDueDay,
+		ID:                     c.ID,
+		TenantID:               c.TenantID,
+		ClientCode:             c.ClientCode,
+		Name:                   c.Name,
+		Email:                  c.Email,
+		Phone:                  c.Phone,
+		Address:                c.Address,
+		Latitude:               c.Latitude,
+		Longitude:              c.Longitude,
+		GroupID:                c.GroupID,
+		Category:               c.Category,
+		ConnectionType:         c.ConnectionType,
+		ServicePackageID:       c.ServicePackageID,
+		VoucherPackageID:       c.VoucherPackageID,
+		DeviceCount:            c.DeviceCount,
+		ServicePlan:            c.ServicePlan,
+		SpeedProfile:           c.SpeedProfile,
+		MonthlyFee:             c.MonthlyFee,
+		BillingDate:            c.BillingDate,
+		PaymentTempoOption:     c.PaymentTempoOption,
+		PaymentDueDay:          c.PaymentDueDay,
 		PaymentTempoTemplateID: c.PaymentTempoTemplateID,
-		Status:        c.Status,
-		IsolirReason:  c.IsolirReason,
-		IsolirAt:      c.IsolirAt,
-		PPPoEUsername: c.PPPoEUsername,
-		CreatedAt:     c.CreatedAt,
-		UpdatedAt:     c.UpdatedAt,
+		Status:                 c.Status,
+		IsolirReason:           c.IsolirReason,
+		IsolirAt:               c.IsolirAt,
+		RouterID:               c.RouterID,
+		PPPoEUsername:          c.PPPoEUsername,
+		PPPoELocalAddress:      c.PPPoELocalAddress,
+		PPPoERemoteAddress:     c.PPPoERemoteAddress,
+		PPPoEComment:           c.PPPoEComment,
+		CreatedAt:              c.CreatedAt,
+		UpdatedAt:              c.UpdatedAt,
 	}
 }
-

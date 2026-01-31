@@ -10,6 +10,10 @@ import clientGroupService, { ClientGroup } from '@/lib/api/clientGroupService';
 import { discountService, Discount } from '@/lib/api/discountService';
 import type { TempoTemplate } from '@/lib/api/types';
 import { billingService } from '@/lib/api/billingService';
+import { ActionIcon } from '@mantine/core'; // Assuming it's used or just adding networkService
+import { networkService } from '@/lib/api/networkService';
+import { voucherService, VoucherPackage } from '@/lib/api/voucherService';
+import { Router } from '@/lib/api/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/utilities/LoadingSpinner';
@@ -24,9 +28,15 @@ const clientSchema = z.object({
   group_id: z.string().uuid('Invalid group ID').optional().or(z.literal('')),
   discount_id: z.string().uuid('Invalid discount ID').optional().or(z.literal('')),
   isolir_mode: z.enum(['auto', 'manual']).optional(),
+  connection_type: z.enum(['pppoe', 'hotspot']).optional(),
   service_package_id: z.string().min(1, 'Service package is required'),
+  router_id: z.string().uuid('Invalid router ID').optional().or(z.literal('')),
   pppoe_username: z.string().optional(),
   pppoe_password: z.string().optional(),
+  pppoe_local_address: z.string().optional(),
+  pppoe_remote_address: z.string().optional(),
+  pppoe_comment: z.string().optional(),
+  voucher_package_id: z.string().uuid('Invalid voucher package ID').optional().or(z.literal('')),
   device_count: z.number().int().min(1).optional().nullable(),
 });
 
@@ -49,6 +59,9 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
   const [discountsLoading, setDiscountsLoading] = useState(false);
   const [templates, setTemplates] = useState<TempoTemplate[]>([]);
   const [tempoError, setTempoError] = useState<string | null>(null);
+  const [routers, setRouters] = useState<Router[]>([]);
+  const [voucherPackages, setVoucherPackages] = useState<VoucherPackage[]>([]);
+  const [routersLoading, setRoutersLoading] = useState(false);
   
   // Tempo payment state
   type TempoOption = 'default' | 'template' | 'manual';
@@ -74,14 +87,21 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       group_id: client?.group_id || '',
       discount_id: client?.discount_id || '',
       isolir_mode: (client as any)?.isolir_mode || 'auto',
+      connection_type: client?.connection_type || 'pppoe',
       service_package_id: client?.service_package_id || '',
+      router_id: client?.router_id || '',
       pppoe_username: client?.pppoe_username || '',
-      pppoe_password: '',
-      device_count: client?.device_count ?? null,
+      pppoe_password: '', // Password never returned
+      pppoe_local_address: client?.pppoe_local_address || '',
+      pppoe_remote_address: client?.pppoe_remote_address || '',
+      pppoe_comment: client?.pppoe_comment || '',
+      voucher_package_id: client?.voucher_package_id || '',
+      device_count: client?.device_count || null,
     },
   });
 
   const category = watch('category');
+  const connectionType = watch('connection_type');
 
   const visiblePackages = useMemo(() => {
     return packages.filter((p) => p.category === category);
@@ -114,56 +134,61 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+
+    const fetchData = async () => {
+      // Fetch Groups
       setGroupsLoading(true);
       try {
         const list = await clientGroupService.list();
-        if (!alive) return;
-        setGroups(list);
-      } catch {
-        // ignore - optional field
+        if (alive) setGroups(list);
+      } catch (e) {
+        console.error('Failed to fetch groups', e);
       } finally {
         if (alive) setGroupsLoading(false);
       }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
+      // Fetch Discounts
       setDiscountsLoading(true);
       try {
-        const list = await discountService.getDiscounts(false, true); // Only valid discounts
-        if (!alive) return;
-        setDiscounts(Array.isArray(list) ? list : []);
-      } catch {
-        // ignore - optional field, but ensure discounts is always an array
+        const list = await discountService.getDiscounts(false, true);
+        if (alive) setDiscounts(Array.isArray(list) ? list : []);
+      } catch (e) {
+        console.error('Failed to fetch discounts', e);
         if (alive) setDiscounts([]);
       } finally {
         if (alive) setDiscountsLoading(false);
       }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
 
-  useEffect(() => {
-    // Load tempo templates
-    let alive = true;
-    (async () => {
+      // Fetch Tempo Templates
       try {
         const list = await billingService.getTempoTemplates();
-        if (!alive) return;
-        setTemplates(list);
+        if (alive) setTemplates(list);
       } catch (e) {
-        // keep UI usable; template option will show guidance
         console.error('Failed to load tempo templates', e);
       }
-    })();
+
+      // Fetch Routers
+      setRoutersLoading(true);
+      try {
+        const list = await networkService.getRouters();
+        if (alive) setRouters(list);
+      } catch (e) {
+        console.error('Failed to fetch routers', e);
+      } finally {
+        if (alive) setRoutersLoading(false);
+      }
+
+      // Fetch Voucher Packages (profiles)
+      try {
+        const list = await voucherService.listPackages();
+        if (alive) setVoucherPackages(list);
+      } catch (e) {
+        console.error('Failed to fetch voucher packages', e);
+      }
+    };
+
+    fetchData();
+
     return () => {
       alive = false;
     };
@@ -213,9 +238,15 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       service_package_id: data.service_package_id,
       group_id: data.group_id ? data.group_id : undefined,
       isolir_mode: data.isolir_mode || 'auto',
+      connection_type: data.connection_type || 'pppoe',
       device_count: data.category === 'lite' ? data.device_count ?? undefined : undefined,
       pppoe_username: data.category !== 'lite' ? data.pppoe_username : undefined,
       pppoe_password: data.category !== 'lite' ? (data.pppoe_password || undefined) : undefined,
+      router_id: data.router_id ? data.router_id : undefined,
+      pppoe_local_address: data.pppoe_local_address ? data.pppoe_local_address : undefined,
+      pppoe_remote_address: data.pppoe_remote_address ? data.pppoe_remote_address : undefined,
+      pppoe_comment: data.pppoe_comment ? data.pppoe_comment : undefined,
+      voucher_package_id: data.voucher_package_id ? data.voucher_package_id : undefined,
       discount_id: data.discount_id ? data.discount_id : undefined,
     };
 
@@ -332,7 +363,20 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             </select>
             {errors.isolir_mode && <p className="mt-1 text-xs text-red-600">{errors.isolir_mode.message}</p>}
           </div>
-          <div className="sm:col-span-2">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Connection Type
+            </label>
+            <select
+              {...register('connection_type')}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="pppoe" className="text-slate-900">PPPoE</option>
+              <option value="hotspot" className="text-slate-900">Hotspot</option>
+            </select>
+            {errors.connection_type && <p className="mt-1 text-xs text-red-600">{errors.connection_type.message}</p>}
+          </div>
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Address <span className="text-red-500">*</span>
             </label>
@@ -391,17 +435,17 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
             <>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  PPPoE Username
+                  {connectionType === 'hotspot' ? 'Hotspot Username' : 'PPPoE Username'}
                 </label>
                 <Input
                   {...register('pppoe_username')}
-                  placeholder="pppoe_user"
+                  placeholder={connectionType === 'hotspot' ? 'hotspot_user' : 'pppoe_user'}
                   error={errors.pppoe_username?.message}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  PPPoE Password {isEdit ? '(optional)' : ''}
+                  {connectionType === 'hotspot' ? 'Hotspot Password' : 'PPPoE Password'} {isEdit ? '(optional)' : ''}
                 </label>
                 <Input
                   type="password"
@@ -410,6 +454,90 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
                   error={errors.pppoe_password?.message}
                 />
               </div>
+
+              {(connectionType === 'pppoe' || connectionType === 'hotspot') && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Router
+                  </label>
+                  <select
+                    {...register('router_id')}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:text-slate-500 disabled:bg-slate-50"
+                    disabled={routersLoading}
+                  >
+                    <option value="" className="text-slate-900">{routersLoading ? 'Loading routers...' : 'Select router'}</option>
+                    {connectionType === 'hotspot' && (
+                      <option value="" className="text-slate-900">Semua Router</option>
+                    )}
+                    {routers.map((r) => (
+                      <option key={r.id} value={r.id} className="text-slate-900">
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.router_id && (
+                    <p className="mt-1 text-xs text-red-600">{errors.router_id.message}</p>
+                  )}
+                </div>
+              )}
+
+              {connectionType === 'hotspot' && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Voucher Profile (Package)
+                  </label>
+                  <select
+                    {...register('voucher_package_id')}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="" className="text-slate-900">Select profile...</option>
+                    {voucherPackages.map((vp) => (
+                      <option key={vp.id} value={vp.id} className="text-slate-900">
+                        {vp.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.voucher_package_id && (
+                    <p className="mt-1 text-xs text-red-600">{errors.voucher_package_id.message}</p>
+                  )}
+                </div>
+              )}
+
+              {connectionType === 'pppoe' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Local Address
+                    </label>
+                    <Input
+                      {...register('pppoe_local_address')}
+                      placeholder="e.g. 10.0.0.1"
+                      error={errors.pppoe_local_address?.message}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Remote Address
+                    </label>
+                    <Input
+                      {...register('pppoe_remote_address')}
+                      placeholder="e.g. 10.0.10.1"
+                      error={errors.pppoe_remote_address?.message}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Comment
+                    </label>
+                    <textarea
+                      {...register('pppoe_comment')}
+                      rows={2}
+                      placeholder="Notes for this PPPoE secret"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

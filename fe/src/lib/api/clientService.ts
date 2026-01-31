@@ -12,14 +12,20 @@ export interface Client {
   address?: string | null;
   status: ClientStatus;
   category: ClientCategory;
+  connection_type?: 'pppoe' | 'hotspot';
   service_package_id?: string | null;
+  voucher_package_id?: string | null;
   group_id?: string | null;
   discount_id?: string | null;
   // Discount fields (populated when discount is included in response)
   discount_type?: 'percent' | 'fixed' | null;
   discount_value?: number | null;
   device_count?: number | null;
+  router_id?: string | null;
   pppoe_username?: string;
+  pppoe_local_address?: string | null;
+  pppoe_remote_address?: string | null;
+  pppoe_comment?: string | null;
   // Optional display/service fields (some endpoints may include these)
   package_name?: string | null;
   monthly_fee?: number | null;
@@ -55,12 +61,18 @@ export interface CreateClientRequest {
   phone?: string;
   address?: string;
   category: ClientCategory;
+  connection_type?: 'pppoe' | 'hotspot';
   service_package_id: string;
   group_id?: string;
   isolir_mode?: 'auto' | 'manual';
   device_count?: number;
+  router_id?: string;
   pppoe_username?: string;
   pppoe_password?: string;
+  pppoe_local_address?: string;
+  pppoe_remote_address?: string;
+  pppoe_comment?: string;
+  voucher_package_id?: string;
   // Optional: allow manual client_code entry; if omitted backend will generate
   client_code?: string;
   discount_id?: string;
@@ -130,12 +142,18 @@ export const clientService = {
       group_id: data.group_id,
       discount_id: data.discount_id,
       isolir_mode: data.isolir_mode,
+      connection_type: data.connection_type,
       device_count: data.device_count,
       pppoe_username: data.pppoe_username,
       pppoe_password: data.pppoe_password,
       payment_tempo_option: data.payment_tempo_option,
       payment_due_day: data.payment_due_day,
       payment_tempo_template_id: data.payment_tempo_template_id,
+      router_id: data.router_id,
+      pppoe_local_address: data.pppoe_local_address,
+      pppoe_remote_address: data.pppoe_remote_address,
+      pppoe_comment: data.pppoe_comment,
+      voucher_package_id: data.voucher_package_id,
     };
     const response = await apiClient.post('/clients', payload);
     return response.data;
@@ -152,12 +170,18 @@ export const clientService = {
       group_id: data.group_id,
       discount_id: data.discount_id,
       isolir_mode: data.isolir_mode,
+      connection_type: data.connection_type,
       device_count: data.device_count,
       pppoe_username: data.pppoe_username,
       pppoe_password: data.pppoe_password,
       payment_tempo_option: data.payment_tempo_option,
       payment_due_day: data.payment_due_day,
       payment_tempo_template_id: data.payment_tempo_template_id,
+      router_id: data.router_id,
+      pppoe_local_address: data.pppoe_local_address,
+      pppoe_remote_address: data.pppoe_remote_address,
+      pppoe_comment: data.pppoe_comment,
+      voucher_package_id: data.voucher_package_id,
     };
     const response = await apiClient.put(`/clients/${id}`, payload);
     return response.data;

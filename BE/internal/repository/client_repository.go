@@ -35,21 +35,23 @@ func (r *ClientRepository) Create(ctx context.Context, c *client.Client) error {
 		INSERT INTO clients (
 			id, tenant_id, user_id, client_code, name, email, phone, address,
 			latitude, longitude, odp_id, group_id, discount_id,
-			category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
+			category, connection_type, router_id, pppoe_username, pppoe_local_address, pppoe_remote_address, pppoe_comment,
+			service_package_id, voucher_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			service_plan, speed_profile, monthly_fee, billing_date,
 			payment_tempo_option, payment_due_day, payment_tempo_template_id,
-			status, pppoe_username, ip_address, mac_address, metadata,
+			status, ip_address, mac_address, metadata,
 			created_at, updated_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
 	`
 	_, err := r.db.Exec(ctx, query,
 		c.ID, c.TenantID, c.UserID, c.ClientCode, c.Name, c.Email, c.Phone, c.Address,
 		c.Latitude, c.Longitude, c.ODPID, c.GroupID, c.DiscountID,
-		c.Category, c.ServicePackageID, c.DeviceCount, c.PPPoEPasswordEnc, c.PPPoEPasswordUpdatedAt,
+		c.Category, c.ConnectionType, c.RouterID, c.PPPoEUsername, c.PPPoELocalAddress, c.PPPoERemoteAddress, c.PPPoEComment,
+		c.ServicePackageID, c.VoucherPackageID, c.DeviceCount, c.PPPoEPasswordEnc, c.PPPoEPasswordUpdatedAt,
 		c.ServicePlan, c.SpeedProfile, c.MonthlyFee, c.BillingDate,
 		c.PaymentTempoOption, c.PaymentDueDay, c.PaymentTempoTemplateID,
-		c.Status, c.PPPoEUsername, c.IPAddress, c.MACAddress, c.Metadata,
+		c.Status, c.IPAddress, c.MACAddress, c.Metadata,
 		c.CreatedAt, c.UpdatedAt,
 	)
 	return err
@@ -60,10 +62,11 @@ func (r *ClientRepository) GetByID(ctx context.Context, tenantID, clientID uuid.
 	query := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
 			   latitude, longitude, odp_id, group_id, discount_id,
-			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
+			   category, connection_type, router_id, pppoe_username, pppoe_local_address, pppoe_remote_address, pppoe_comment,
+			   service_package_id, voucher_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
-			   status, isolir_reason, isolir_at, pppoe_username,
+			   status, isolir_reason, isolir_at,
 			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
 		FROM clients
 		WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -76,10 +79,11 @@ func (r *ClientRepository) GetByCode(ctx context.Context, tenantID uuid.UUID, cl
 	query := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
 			   latitude, longitude, odp_id, group_id, discount_id,
-			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
+			   category, connection_type, router_id, pppoe_username, pppoe_local_address, pppoe_remote_address, pppoe_comment,
+			   service_package_id, voucher_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
-			   status, isolir_reason, isolir_at, pppoe_username,
+			   status, isolir_reason, isolir_at,
 			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
 		FROM clients
 		WHERE client_code = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -137,10 +141,11 @@ func (r *ClientRepository) List(ctx context.Context, tenantID uuid.UUID, filter 
 	selectQuery := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
 			   latitude, longitude, odp_id, group_id, discount_id,
-			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
+			   category, connection_type, router_id, pppoe_username, pppoe_local_address, pppoe_remote_address, pppoe_comment,
+			   service_package_id, voucher_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
-			   status, isolir_reason, isolir_at, pppoe_username,
+			   status, isolir_reason, isolir_at,
 			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
 		` + baseQuery + fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, argNum, argNum+1)
 	args = append(args, pageSize, offset)
@@ -169,10 +174,11 @@ func (r *ClientRepository) ListByGroupID(ctx context.Context, tenantID, groupID 
 	query := `
 		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
 			   latitude, longitude, odp_id, group_id, discount_id,
-			   category, service_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
+			   category, connection_type, router_id, pppoe_username, pppoe_local_address, pppoe_remote_address, pppoe_comment,
+			   service_package_id, voucher_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
-			   status, isolir_reason, isolir_at, pppoe_username,
+			   status, isolir_reason, isolir_at,
 			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
 		FROM clients
 		WHERE tenant_id = $1 AND group_id = $2 AND deleted_at IS NULL
@@ -201,22 +207,26 @@ func (r *ClientRepository) Update(ctx context.Context, c *client.Client) error {
 		UPDATE clients
 		SET user_id = $3, name = $4, email = $5, phone = $6, address = $7,
 			latitude = $8, longitude = $9, odp_id = $10, group_id = $11, discount_id = $12,
-			category = $13, service_package_id = $14, device_count = $15,
-			pppoe_password_enc = $16, pppoe_password_updated_at = $17,
-			service_plan = $18, speed_profile = $19, monthly_fee = $20, billing_date = $21,
-			payment_tempo_option = $22, payment_due_day = $23, payment_tempo_template_id = $24,
-			pppoe_username = $25, ip_address = $26, mac_address = $27,
-			metadata = $28, updated_at = NOW()
+			category = $13, connection_type = $14, router_id = $15, pppoe_username = $16,
+			pppoe_local_address = $17, pppoe_remote_address = $18, pppoe_comment = $19,
+			service_package_id = $20, voucher_package_id = $21, device_count = $22,
+			pppoe_password_enc = $23, pppoe_password_updated_at = $24,
+			service_plan = $25, speed_profile = $26, monthly_fee = $27, billing_date = $28,
+			payment_tempo_option = $29, payment_due_day = $30, payment_tempo_template_id = $31,
+			ip_address = $32, mac_address = $33,
+			metadata = $34, updated_at = NOW()
 		WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
 	`
 	result, err := r.db.Exec(ctx, query,
 		c.ID, c.TenantID, c.UserID, c.Name, c.Email, c.Phone, c.Address,
 		c.Latitude, c.Longitude, c.ODPID, c.GroupID, c.DiscountID,
-		c.Category, c.ServicePackageID, c.DeviceCount,
+		c.Category, c.ConnectionType, c.RouterID, c.PPPoEUsername,
+		c.PPPoELocalAddress, c.PPPoERemoteAddress, c.PPPoEComment,
+		c.ServicePackageID, c.VoucherPackageID, c.DeviceCount,
 		c.PPPoEPasswordEnc, c.PPPoEPasswordUpdatedAt,
 		c.ServicePlan, c.SpeedProfile, c.MonthlyFee, c.BillingDate,
 		c.PaymentTempoOption, c.PaymentDueDay, c.PaymentTempoTemplateID,
-		c.PPPoEUsername, c.IPAddress, c.MACAddress, c.Metadata,
+		c.IPAddress, c.MACAddress, c.Metadata,
 	)
 	if err != nil {
 		return err
@@ -314,10 +324,11 @@ func (r *ClientRepository) scanClient(row pgx.Row) (*client.Client, error) {
 	err := row.Scan(
 		&c.ID, &c.TenantID, &c.UserID, &c.ClientCode, &c.Name, &c.Email, &c.Phone, &c.Address,
 		&c.Latitude, &c.Longitude, &c.ODPID, &c.GroupID, &c.DiscountID,
-		&c.Category, &c.ServicePackageID, &c.DeviceCount, &c.PPPoEPasswordEnc, &c.PPPoEPasswordUpdatedAt,
+		&c.Category, &c.ConnectionType, &c.RouterID, &c.PPPoEUsername, &c.PPPoELocalAddress, &c.PPPoERemoteAddress, &c.PPPoEComment,
+		&c.ServicePackageID, &c.VoucherPackageID, &c.DeviceCount, &c.PPPoEPasswordEnc, &c.PPPoEPasswordUpdatedAt,
 		&c.ServicePlan, &c.SpeedProfile, &c.MonthlyFee, &c.BillingDate,
 		&c.PaymentTempoOption, &c.PaymentDueDay, &c.PaymentTempoTemplateID,
-		&c.Status, &c.IsolirReason, &c.IsolirAt, &c.PPPoEUsername,
+		&c.Status, &c.IsolirReason, &c.IsolirAt,
 		&ipAddress, &macAddress, &c.Metadata, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
 	)
 	if err != nil {
@@ -345,10 +356,11 @@ func (r *ClientRepository) scanClientFromRows(rows pgx.Rows) (*client.Client, er
 	err := rows.Scan(
 		&c.ID, &c.TenantID, &c.UserID, &c.ClientCode, &c.Name, &c.Email, &c.Phone, &c.Address,
 		&c.Latitude, &c.Longitude, &c.ODPID, &c.GroupID, &c.DiscountID,
-		&c.Category, &c.ServicePackageID, &c.DeviceCount, &c.PPPoEPasswordEnc, &c.PPPoEPasswordUpdatedAt,
+		&c.Category, &c.ConnectionType, &c.RouterID, &c.PPPoEUsername, &c.PPPoELocalAddress, &c.PPPoERemoteAddress, &c.PPPoEComment,
+		&c.ServicePackageID, &c.VoucherPackageID, &c.DeviceCount, &c.PPPoEPasswordEnc, &c.PPPoEPasswordUpdatedAt,
 		&c.ServicePlan, &c.SpeedProfile, &c.MonthlyFee, &c.BillingDate,
 		&c.PaymentTempoOption, &c.PaymentDueDay, &c.PaymentTempoTemplateID,
-		&c.Status, &c.IsolirReason, &c.IsolirAt, &c.PPPoEUsername,
+		&c.Status, &c.IsolirReason, &c.IsolirAt,
 		&ipAddress, &macAddress, &c.Metadata, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
 	)
 	if err != nil {
@@ -363,4 +375,3 @@ func (r *ClientRepository) scanClientFromRows(rows pgx.Rows) (*client.Client, er
 
 	return &c, nil
 }
-

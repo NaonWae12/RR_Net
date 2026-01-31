@@ -66,6 +66,9 @@ func New(deps Dependencies) http.Handler {
 	servicePackageRepo := repository.NewServicePackageRepository(deps.DB)
 	clientGroupRepo := repository.NewClientGroupRepository(deps.DB)
 	discountRepo := repository.NewDiscountRepository(deps.DB)
+	routerRepo := repository.NewRouterRepository(deps.DB)
+	profileRepo := repository.NewNetworkProfileRepository(deps.DB)
+	pppoeRepo := repository.NewPPPoERepository(deps.DB)
 
 	// Asynq client (optional injection; fallback to creating one)
 	asynqClient := deps.Asynq
@@ -79,7 +82,14 @@ func New(deps Dependencies) http.Handler {
 	addonService := service.NewAddonService(addonRepo, planRepo, tenantRepo)
 	featureResolver := service.NewFeatureResolver(planRepo, addonRepo, featureRepo)
 	limitResolver := service.NewLimitResolver(planRepo, addonRepo)
-	clientService := service.NewClientService(clientRepo, servicePackageRepo, featureResolver, limitResolver, deps.Config.Auth.JWTSecret)
+
+	// RADIUS + Voucher (Hotspot)
+	voucherRepo := repository.NewVoucherRepository(deps.DB)
+	radiusRepo := repository.NewRadiusRepository(deps.DB)
+	voucherService := service.NewVoucherService(voucherRepo, radiusRepo, routerRepo)
+
+	pppoeService := service.NewPPPoEService(pppoeRepo, routerRepo, profileRepo, clientRepo, deps.Config.Auth.JWTSecret)
+	clientService := service.NewClientService(clientRepo, servicePackageRepo, pppoeService, voucherService, featureResolver, limitResolver, deps.Config.Auth.JWTSecret)
 	servicePackageService := service.NewServicePackageService(servicePackageRepo)
 	serviceSettingsService := service.NewServiceSettingsService(tenantRepo)
 	clientGroupService := service.NewClientGroupService(clientGroupRepo)
@@ -729,16 +739,11 @@ func New(deps Dependencies) http.Handler {
 	// ============================================
 	// Network routes (Protected, tenant-scoped)
 	// ============================================
-	routerRepo := repository.NewRouterRepository(deps.DB)
-	profileRepo := repository.NewNetworkProfileRepository(deps.DB)
 	networkService := service.NewNetworkService(routerRepo, profileRepo)
 	networkService.StartHealthCheckScheduler(context.Background())
 	networkHandler := handler.NewNetworkHandler(networkService)
 
-	// RADIUS + Voucher (Hotspot)
-	voucherRepo := repository.NewVoucherRepository(deps.DB)
-	radiusRepo := repository.NewRadiusRepository(deps.DB)
-	voucherService := service.NewVoucherService(voucherRepo, radiusRepo, routerRepo)
+	// RADIUS + Voucher (Hotspot) - initialized above for clientService
 	// RADIUS shared secret from env (for FreeRADIUS rlm_rest authentication)
 	// Must match FreeRADIUS env: RRNET_RADIUS_REST_SECRET (see infra/freeradius + docker-compose).
 	radiusSecret := utils.GetEnv("RRNET_RADIUS_REST_SECRET", "dev-radius-rest-secret")
@@ -1033,8 +1038,6 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/radius/sessions", requireAuth(methodHandler("GET", radiusHandler.ListActiveSessions)))
 
 	// PPPoE Management
-	pppoeRepo := repository.NewPPPoERepository(deps.DB)
-	pppoeService := service.NewPPPoEService(pppoeRepo, routerRepo, profileRepo, clientRepo, deps.Config.Auth.JWTSecret)
 	pppoeHandler := handler.NewPPPoEHandler(pppoeService)
 
 	// PPPoE secrets base route (GET list, POST create)
