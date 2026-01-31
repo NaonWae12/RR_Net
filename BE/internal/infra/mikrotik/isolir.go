@@ -99,15 +99,22 @@ func DisconnectHotspotUser(ctx context.Context, addr string, useTLS bool, userna
 		return fmt.Errorf("failed to find hotspot session: %w", err)
 	}
 
-	// Remove all matching sessions
+	// 1. Remove from active sessions
 	for _, re := range reply.Re {
 		if id, ok := re.Map[".id"]; ok {
-			_, err = client.Run(
-				"/ip/hotspot/active/remove",
-				fmt.Sprintf("=.id=%s", id),
-			)
-			if err != nil {
-				return fmt.Errorf("failed to disconnect hotspot user: %w", err)
+			_, _ = client.Run("/ip/hotspot/active/remove", fmt.Sprintf("=.id=%s", id))
+		}
+	}
+
+	// 2. Remove from cookies to prevent auto-login
+	cookieReply, err := client.Run(
+		"/ip/hotspot/cookie/print",
+		fmt.Sprintf("?user=%s", hotspotUsername),
+	)
+	if err == nil {
+		for _, re := range cookieReply.Re {
+			if id, ok := re.Map[".id"]; ok {
+				_, _ = client.Run("/ip/hotspot/cookie/remove", fmt.Sprintf("=.id=%s", id))
 			}
 		}
 	}

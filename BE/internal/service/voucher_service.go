@@ -665,7 +665,36 @@ func (s *VoucherService) ToggleIsolate(ctx context.Context, id uuid.UUID) (*vouc
 }
 
 func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
-	return s.voucherRepo.DeleteVoucher(ctx, id)
+	// 1. Get voucher info before deletion so we know which user/router to kick
+	v, err := s.voucherRepo.GetVoucherByID(ctx, id)
+	if err != nil {
+		return err // Already gone or error
+	}
+
+	// 2. Perform deletion in DB
+	if err := s.voucherRepo.DeleteVoucher(ctx, id); err != nil {
+		return err
+	}
+
+	// 3. Force disconnect from MikroTik (if assigned to a router)
+	// This cleans up active sessions AND cookies so they can't auto-login anymore
+	if v.RouterID != nil {
+		router, err := s.routerRepo.GetByID(ctx, *v.RouterID)
+		if err == nil {
+			addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
+			log.Info().
+				Str("voucher_code", v.Code).
+				Str("router", router.Name).
+				Msg("Voucher deleted: Kicking user from MikroTik and clearing cookies")
+
+			// Non-blocking kick (we don't want to fail the whole delete if router is offline)
+			go func() {
+				_ = mikrotik.DisconnectHotspotUser(context.Background(), addr, router.APIUseTLS, router.Username, router.Password, v.Code)
+			}()
+		}
+	}
+
+	return nil
 }
 
 // ValidateVoucherForAuth checks if voucher can be used for authentication
