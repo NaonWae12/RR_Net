@@ -49,7 +49,10 @@ export default function RouterDetailPage() {
       // Fetch isolir status
       setStatusLoading(true);
       networkService.getIsolirStatus(id)
-        .then(setIsolirStatus)
+        .then(data => {
+          console.log('[Isolir Debug] Raw status from API:', data);
+          setIsolirStatus(data);
+        })
         .catch((err) => {
           console.error('[Isolir] Error fetching status:', err);
         })
