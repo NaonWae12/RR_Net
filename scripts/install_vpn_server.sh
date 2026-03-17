@@ -173,8 +173,8 @@ fi
 
 echo ""
 echo "Step 7: Restart services..."
-systemctl enable strongswan xl2tpd >/dev/null 2>&1 || true
-systemctl restart strongswan
+systemctl enable strongswan-starter xl2tpd >/dev/null 2>&1 || true
+systemctl restart strongswan-starter
 systemctl restart xl2tpd
 echo "✓ Services restarted"
 
