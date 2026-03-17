@@ -114,13 +114,17 @@ func (r *TenantRepository) UpdateSettings(ctx context.Context, tenantID uuid.UUI
 	return nil
 }
 
-// ListAll retrieves all tenants (for super admin)
+// ListAll retrieves all tenants with their plan details (for super admin)
 func (r *TenantRepository) ListAll(ctx context.Context) ([]*tenant.Tenant, error) {
 	query := `
-		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
-		FROM tenants
-		WHERE deleted_at IS NULL
-		ORDER BY created_at DESC
+		SELECT 
+			t.id, t.name, t.company_name, t.slug, t.domain, t.status, t.plan_id, t.billing_status, 
+			t.trial_ends_at, t.settings, t.created_at, t.updated_at, t.deleted_at,
+			p.code as plan_code, p.name as plan_name
+		FROM tenants t
+		LEFT JOIN plans p ON t.plan_id = p.id
+		WHERE t.deleted_at IS NULL
+		ORDER BY t.created_at DESC
 	`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
@@ -132,7 +136,9 @@ func (r *TenantRepository) ListAll(ctx context.Context) ([]*tenant.Tenant, error
 	for rows.Next() {
 		var t tenant.Tenant
 		err := rows.Scan(
-			&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+			&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, 
+			&t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+			&t.PlanCode, &t.PlanName,
 		)
 		if err != nil {
 			return nil, err

@@ -40,6 +40,10 @@ type Tenant struct {
 	CreatedAt     time.Time              `json:"created_at"`
 	UpdatedAt     time.Time              `json:"updated_at"`
 	DeletedAt     *time.Time             `json:"deleted_at,omitempty"`
+
+	// Virtual fields for joined data
+	PlanCode *string `json:"plan_code,omitempty"`
+	PlanName *string `json:"plan_name,omitempty"`
 }
 
 // IsActive checks if tenant is active
