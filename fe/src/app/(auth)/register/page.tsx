@@ -37,9 +37,11 @@ import { paymentMethodService, PaymentMethod } from "@/lib/api/paymentMethodServ
 import { platformDiscountService } from "@/lib/api/platformDiscountService";
 import { tenantService } from "@/lib/api/tenantService";
 
+import { Suspense } from "react";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
 
-export default function RegisterPage() {
+function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useNotificationStore();
@@ -1322,5 +1324,17 @@ export default function RegisterPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <RegisterContent />
+    </Suspense>
   );
 }

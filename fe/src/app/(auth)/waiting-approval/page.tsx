@@ -35,9 +35,11 @@ import {
   X
 } from "lucide-react";
 
+import { Suspense } from "react";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
 
-export default function WaitingApprovalPage() {
+function WaitingApprovalContent() {
   const router = useRouter();
   const { user, tenant, ready, logout } = useAuth();
   const { showToast } = useNotificationStore();
@@ -589,5 +591,17 @@ export default function WaitingApprovalPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function WaitingApprovalPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <WaitingApprovalContent />
+    </Suspense>
   );
 }
