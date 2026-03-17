@@ -1249,19 +1249,19 @@ export function NetworkMap({
           <div className="mb-4">
             <p className="text-xs font-medium text-slate-600 mb-2">Status Colors:</p>
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs text-slate-700">
                 <div className="w-4 h-4 rounded-full bg-[#10B981] border-2 border-white"></div>
                 <span>OK</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs text-slate-700">
                 <div className="w-4 h-4 rounded-full bg-[#EAB308] border-2 border-white"></div>
                 <span>Warning</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs text-slate-700">
                 <div className="w-4 h-4 rounded-full bg-[#F59E0B] border-2 border-white"></div>
                 <span>Full</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs text-slate-700">
                 <div className="w-4 h-4 rounded-full bg-[#DC2626] border-2 border-white"></div>
                 <span>Outage</span>
               </div>
@@ -1272,16 +1272,16 @@ export function NetworkMap({
           <div className="mb-4">
             <p className="text-xs font-medium text-slate-600 mb-2">Node Types:</p>
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-mono font-bold">O</span>
+              <div className="flex items-center gap-2 text-xs text-slate-700">
+                <span className="font-mono font-bold w-4 text-center">O</span>
                 <span>ODC</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-mono font-bold">P</span>
+              <div className="flex items-center gap-2 text-xs text-slate-700">
+                <span className="font-mono font-bold w-4 text-center">P</span>
                 <span>ODP</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-mono font-bold">C</span>
+              <div className="flex items-center gap-2 text-xs text-slate-700">
+                <span className="font-mono font-bold w-4 text-center">C</span>
                 <span>Client</span>
               </div>
             </div>
@@ -1292,11 +1292,11 @@ export function NetworkMap({
             <div className="mb-4">
               <p className="text-xs font-medium text-slate-600 mb-2">Topology Lines:</p>
               <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs text-slate-700">
                   <div className="w-8 h-0.5 bg-[#3B82F6]"></div>
                   <span>ODC → ODP</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs text-slate-700">
                   <div className="w-8 h-0.5 bg-[#10B981]"></div>
                   <span>ODP → Client</span>
                 </div>
@@ -1307,22 +1307,22 @@ export function NetworkMap({
           {/* Summary Stats */}
           <div className="border-t pt-3">
             <p className="text-xs font-medium text-slate-600 mb-2">Summary:</p>
-            <div className="space-y-1 text-xs">
+            <div className="space-y-1 text-xs text-slate-700">
               <div className="flex justify-between">
                 <span>ODCs:</span>
-                <span className="font-semibold">{odcs.length}</span>
+                <span className="font-semibold text-slate-900">{odcs.length}</span>
               </div>
               <div className="flex justify-between">
                 <span>ODPs:</span>
-                <span className="font-semibold">{odps.length}</span>
+                <span className="font-semibold text-slate-900">{odps.length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Clients:</span>
-                <span className="font-semibold">{clientLocations.length}</span>
+                <span className="font-semibold text-slate-900">{clientLocations.length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Active Outages:</span>
-                <span className={cn("font-semibold", activeOutages > 0 ? "text-red-600" : "text-green-600")}>
+                <span className={cn("font-semibold", activeOutages > 0 ? "text-red-600" : "text-emerald-600")}>
                   {activeOutages}
                 </span>
               </div>

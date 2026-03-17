@@ -38,6 +38,16 @@ function defaultPackageForm(category: ServicePackageCategory = 'regular'): Packa
   };
 }
 
+const formatNumber = (num: number | string) => {
+  if (num === 0 || num === '0') return '';
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
+
+const parseNumber = (val: string) => {
+  const clean = val.replace(/\./g, '');
+  return parseInt(clean, 10) || 0;
+};
+
 export default function ServiceSetupPage() {
   const { showToast } = useNotificationStore();
   const [loading, setLoading] = useState(true);
@@ -405,9 +415,10 @@ export default function ServiceSetupPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Price per device (IDR) *</label>
                 <Input
-                  type="number"
-                  value={packageForm.price_per_device}
-                  onChange={(e) => setPackageForm({ ...packageForm, price_per_device: Number(e.target.value) })}
+                  type="text"
+                  value={formatNumber(packageForm.price_per_device)}
+                  onChange={(e) => setPackageForm({ ...packageForm, price_per_device: parseNumber(e.target.value) })}
+                  placeholder="0"
                 />
               </div>
             ) : (
@@ -415,9 +426,10 @@ export default function ServiceSetupPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Monthly price (IDR) *</label>
                   <Input
-                    type="number"
-                    value={packageForm.price_monthly}
-                    onChange={(e) => setPackageForm({ ...packageForm, price_monthly: Number(e.target.value) })}
+                    type="text"
+                    value={formatNumber(packageForm.price_monthly)}
+                    onChange={(e) => setPackageForm({ ...packageForm, price_monthly: parseNumber(e.target.value) })}
+                    placeholder="0"
                   />
                 </div>
                 <div>
@@ -577,17 +589,14 @@ export default function ServiceSetupPage() {
                   Value * {discountForm.type === 'nominal' && '(Rupiah)'}
                 </label>
                 <Input
-                  type="number"
-                  value={discountForm.value}
+                  type="text"
+                  value={discountForm.type === 'nominal' ? formatNumber(discountForm.value) : (discountForm.value || '')}
                   onChange={(e) => {
-                    const inputValue = Number(e.target.value);
-                    // For nominal, only allow integers (round if needed)
-                    const finalValue = discountForm.type === 'nominal' ? Math.round(inputValue) : inputValue;
+                    const val = e.target.value;
+                    const finalValue = discountForm.type === 'nominal' ? parseNumber(val) : (parseFloat(val) || 0);
                     setDiscountForm({ ...discountForm, value: finalValue });
                   }}
-                  min={0}
-                  max={discountForm.type === 'percent' ? 100 : undefined}
-                  step={discountForm.type === 'nominal' ? '1' : '0.01'}
+                  placeholder="0"
                 />
                 {discountForm.type === 'nominal' && discountForm.value > 0 && (
                   <p className="mt-1 text-xs text-slate-500">
