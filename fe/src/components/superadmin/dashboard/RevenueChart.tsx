@@ -75,7 +75,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
     }));
 
     return (
-      <Card className={cn("overflow-hidden border-none shadow-sm h-full", className)}>
+      <Card className={cn("overflow-hidden border border-slate-100/50 shadow-sm h-full", className)}>
         <CardHeader className="pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <CardTitle className="text-lg font-bold flex items-center gap-2">

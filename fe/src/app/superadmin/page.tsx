@@ -69,7 +69,7 @@ function QuickActionCard({ href, title, value, icon: Icon, color, description }:
   return (
     <motion.div variants={item} whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 300 }}>
       <Link href={href}>
-        <Card className="overflow-hidden border-none shadow-sm hover:shadow-md transition-all duration-300 group">
+        <Card className="overflow-hidden border border-slate-100/50 shadow-sm hover:shadow-md transition-all duration-300 group">
           <CardContent className={cn("p-0 h-full bg-gradient-to-br", colorMap[color])}>
             <div className="p-6 flex flex-col h-full">
               <div className="flex justify-between items-start mb-4">

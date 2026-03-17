@@ -90,7 +90,7 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
     };
 
     return (
-      <Card className={cn("overflow-hidden border-none shadow-sm h-full", className)}>
+      <Card className={cn("overflow-hidden border border-slate-100/50 shadow-sm h-full", className)}>
         <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg font-bold flex items-center gap-2">
             <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
@@ -105,7 +105,7 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
         </CardHeader>
         <CardContent className="pt-4">
           <div className="space-y-8">
-            <div className="flex justify-center py-4 bg-slate-50/50 rounded-xl">
+            <div className="flex justify-center py-4 bg-slate-50/50 border border-slate-100/80 rounded-xl">
               <GaugeChart
                 height={180}
                 value={data.overallScore}

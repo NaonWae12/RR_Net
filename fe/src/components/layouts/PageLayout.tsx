@@ -37,24 +37,24 @@ export const PageLayout = React.memo<PageLayoutProps>(
       <div className={cn("flex flex-col min-h-screen", className)}>
         {/* Header */}
         {(title || subtitle || breadcrumbs || actions || header) && (
-          <div className="border-b bg-background">
-            <div className="mx-auto w-full" style={{ paddingLeft: `${padding * 4}px`, paddingRight: `${padding * 4}px` }}>
-              <div className="flex items-center justify-between py-4">
-                <div className="flex-1">
-                  {breadcrumbs && breadcrumbs.length > 0 && (
-                    <Breadcrumb items={breadcrumbs} className="mb-2" />
-                  )}
-                  {title && (
-                    <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-                  )}
-                  {subtitle && (
-                    <p className="text-slate-600 mt-1">{subtitle}</p>
-                  )}
-                  {header}
-                </div>
-                {actions && <div className="flex items-center gap-2">{actions}</div>}
+          <div className="mx-auto w-full" style={{ paddingLeft: `${padding * 4}px`, paddingRight: `${padding * 4}px` }}>
+            <div className="flex items-center justify-between py-6">
+              <div className="flex-1">
+                {breadcrumbs && breadcrumbs.length > 0 && (
+                  <Breadcrumb items={breadcrumbs} className="mb-2" />
+                )}
+                {title && (
+                  <h1 className="text-3xl font-bold tracking-tight text-slate-900">{title}</h1>
+                )}
+                {subtitle && (
+                  <p className="text-slate-500 mt-1 font-medium">{subtitle}</p>
+                )}
+                {header}
               </div>
+              {actions && <div className="flex items-center gap-2">{actions}</div>}
             </div>
+            {/* Defined horizontal line - transparent gray */}
+            <div className="border-b border-slate-300/50 w-full mb-6" />
           </div>
         )}
 

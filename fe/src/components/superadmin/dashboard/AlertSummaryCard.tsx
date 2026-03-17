@@ -95,7 +95,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
     };
 
     return (
-      <Card className={cn("overflow-hidden border-none shadow-sm h-full", className)}>
+      <Card className={cn("overflow-hidden border border-slate-100/50 shadow-sm h-full", className)}>
         <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg font-bold flex items-center gap-2">
             <div className="p-1.5 bg-red-50 text-red-600 rounded-lg">
