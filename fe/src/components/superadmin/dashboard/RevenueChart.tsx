@@ -75,7 +75,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
     }));
 
     return (
-      <Card className={cn("overflow-hidden border border-slate-100/50 shadow-sm h-full", className)}>
+      <Card className={cn("overflow-hidden border border-slate-100/20 shadow-sm h-full", className)}>
         <CardHeader className="pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <CardTitle className="text-lg font-bold flex items-center gap-2">
@@ -125,7 +125,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                 <LineIcon size={14} /> Monthly Growth
               </h4>
-              <div className="bg-slate-50/50 border border-slate-200/50 rounded-xl p-4">
+              <div className="bg-slate-50/50 border border-slate-100/30 rounded-xl p-4">
                 <LineChart
                   data={chartData}
                   xAxis={{ dataKey: "month" }}
@@ -151,7 +151,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                 <BarChart3 size={14} /> Source Comparison
               </h4>
-              <div className="bg-slate-50/50 border border-slate-200/50 rounded-xl p-4">
+              <div className="bg-slate-50/50 border border-slate-100/30 rounded-xl p-4">
                 <BarChart
                   data={chartData}
                   xAxisKey="month"

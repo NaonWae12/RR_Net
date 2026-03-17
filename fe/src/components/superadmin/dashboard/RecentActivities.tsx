@@ -77,7 +77,7 @@ export const RecentActivities = React.memo<RecentActivitiesProps>(
     }
 
     return (
-      <Card className={cn("overflow-hidden border border-slate-100/50 shadow-sm h-full", className)}>
+      <Card className={cn("overflow-hidden border border-slate-100/20 shadow-sm h-full", className)}>
         <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg font-bold flex items-center gap-2">
             <div className="p-1.5 bg-slate-50 text-slate-600 rounded-lg">

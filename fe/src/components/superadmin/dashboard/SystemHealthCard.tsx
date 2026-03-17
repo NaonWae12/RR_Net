@@ -90,7 +90,7 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
     };
 
     return (
-      <Card className={cn("overflow-hidden border border-slate-100/50 shadow-sm h-full", className)}>
+      <Card className={cn("overflow-hidden border border-slate-100/20 shadow-sm h-full", className)}>
         <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg font-bold flex items-center gap-2">
             <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
@@ -105,7 +105,7 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
         </CardHeader>
         <CardContent className="pt-4">
           <div className="space-y-8">
-            <div className="flex justify-center py-4 bg-slate-50/50 border border-slate-100/80 rounded-xl">
+            <div className="flex justify-center py-4 bg-slate-50/50 border border-slate-100/20 rounded-xl">
               <GaugeChart
                 height={180}
                 value={data.overallScore}
@@ -152,7 +152,7 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
                 </h4>
                 <div className="grid grid-cols-1 gap-2">
                   {data.services.map((service) => (
-                    <div key={service.name} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors">
+                    <div key={service.name} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100/30 hover:bg-slate-100 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className={cn("w-2 h-2 rounded-full", 
                           service.status === "healthy" ? "bg-green-500" : 

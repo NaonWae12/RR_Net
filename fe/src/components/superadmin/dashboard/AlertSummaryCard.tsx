@@ -95,7 +95,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
     };
 
     return (
-      <Card className={cn("overflow-hidden border border-slate-100/50 shadow-sm h-full", className)}>
+      <Card className={cn("overflow-hidden border border-slate-100/20 shadow-sm h-full", className)}>
         <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-lg font-bold flex items-center gap-2">
             <div className="p-1.5 bg-red-50 text-red-600 rounded-lg">
@@ -139,7 +139,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
                           title={alert.title}
                           message={alert.message}
                           icon={<Icon className="h-4 w-4" />}
-                          className="border border-slate-100 shadow-sm bg-white hover:bg-blue-50/50 hover:border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                          className="border border-slate-100/30 shadow-sm bg-white hover:bg-blue-50/50 hover:border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                         >
                           <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-slate-400">
                             <span className="flex items-center gap-1">
