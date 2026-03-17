@@ -65,7 +65,7 @@ export default function AffiliatesManagementPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+            className="bg-white p-6 rounded-[32px] border border-slate-100/20 shadow-sm hover:shadow-md transition-all group"
           >
             <div className="flex items-center justify-between mb-4">
               <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg", stat.color)}>
@@ -80,14 +80,14 @@ export default function AffiliatesManagementPage() {
       </div>
 
       {/* Main Table Section */}
-      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-[32px] border border-slate-100/20 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative group flex-1 max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
             <input 
               type="text" 
               placeholder="Search partner name or email..."
-              className="w-full bg-slate-50 border-none rounded-2xl py-3.5 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-indigo-600/10 transition-all"
+              className="w-full bg-slate-50 border-none rounded-2xl py-3.5 pl-12 pr-4 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-600/10 transition-all outline-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -116,7 +116,7 @@ export default function AffiliatesManagementPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-50">
+              <tr className="border-b border-slate-200/60">
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Partner Info</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Referrals</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Balance</th>
@@ -125,7 +125,7 @@ export default function AffiliatesManagementPage() {
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100/50">
               {filteredAffiliates.map((aff) => (
                 <tr key={aff.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-8 py-5">
