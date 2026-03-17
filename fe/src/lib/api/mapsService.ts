@@ -21,7 +21,7 @@ export const mapsService = {
   // ========== ODCs ==========
   async getODCs(): Promise<ODC[]> {
     const response = await apiClient.get<MapsListResponse<ODC>>("/maps/odcs");
-    return response.data.data;
+    return response.data?.data || [];
   },
 
   async getODC(id: string): Promise<ODC> {
@@ -47,7 +47,7 @@ export const mapsService = {
   async getODPs(odcId?: string): Promise<ODP[]> {
     const params = odcId ? { odc_id: odcId } : {};
     const response = await apiClient.get<MapsListResponse<ODP>>("/maps/odps", { params });
-    return response.data.data;
+    return response.data?.data || [];
   },
 
   async getODP(id: string): Promise<ODP> {
@@ -73,7 +73,7 @@ export const mapsService = {
   async getClientLocations(odpId?: string): Promise<ClientLocation[]> {
     const params = odpId ? { odp_id: odpId } : {};
     const response = await apiClient.get<MapsListResponse<ClientLocation>>("/maps/clients", { params });
-    return response.data.data;
+    return response.data?.data || [];
   },
 
   async getClientLocation(id: string): Promise<ClientLocation> {
@@ -107,7 +107,7 @@ export const mapsService = {
     const response = await apiClient.get<MapsListResponse<OutageEvent>>("/maps/outages", {
       params: { include_resolved: includeResolved },
     });
-    return response.data.data;
+    return response.data?.data || [];
   },
 
   async getOutage(id: string): Promise<OutageEvent> {
