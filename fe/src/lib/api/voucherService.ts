@@ -1,40 +1,5 @@
 import { apiClient } from "./apiClient";
-
-export interface VoucherPackage {
-  id: string;
-  tenant_id: string;
-  name: string;
-  description?: string;
-  download_speed: number;
-  upload_speed: number;
-  duration_hours?: number | null;
-  validity?: string;
-  quota_mb?: number | null;
-  price: number;
-  currency: string;
-  rate_limit_mode: string; // "full_radius" or "radius_auth_only"
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Voucher {
-  id: string;
-  tenant_id: string;
-  package_id: string;
-  router_id?: string | null;
-  code: string;
-  password?: string;
-  status: string;
-  isolated: boolean; // Isolir status
-  used_at?: string | null;
-  expires_at?: string | null;
-  first_session_id?: string | null;
-  notes?: string | null;
-  package_name?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import { Voucher, VoucherPackage } from "./types";
 
 export interface CreateVoucherPackageRequest {
   name: string;
@@ -59,6 +24,14 @@ export interface GenerateVouchersRequest {
   code_length?: number;
 }
 
+export interface UpdateVoucherRequest {
+  package_id: string;
+  code: string;
+  password?: string;
+  shared_users: number;
+  notes?: string;
+}
+
 export const voucherService = {
   async listPackages(): Promise<VoucherPackage[]> {
     const res = await apiClient.get<{ data: VoucherPackage[] }>("/voucher-packages");
@@ -70,7 +43,7 @@ export const voucherService = {
     return res.data;
   },
 
-  async listVouchers(params?: { limit?: number; offset?: number }): Promise<{ data: Voucher[]; total: number }> {
+  async listVouchers(params?: { limit?: number; offset?: number; status?: string; search?: string }): Promise<{ data: Voucher[]; total: number }> {
     const res = await apiClient.get<{ data: Voucher[]; total: number }>("/vouchers", { params });
     return res.data;
   },
@@ -100,6 +73,14 @@ export const voucherService = {
 
   async deletePackage(id: string): Promise<void> {
     await apiClient.delete(`/voucher-packages/${id}`);
+  },
+  async updatePackage(id: string, req: Partial<CreateVoucherPackageRequest>): Promise<VoucherPackage> {
+    const res = await apiClient.put<VoucherPackage>(`/voucher-packages/${id}`, req);
+    return res.data;
+  },
+  async updateVoucher(id: string, req: UpdateVoucherRequest): Promise<Voucher> {
+    const res = await apiClient.put<Voucher>(`/vouchers/${id}`, req);
+    return res.data;
   },
 };
 

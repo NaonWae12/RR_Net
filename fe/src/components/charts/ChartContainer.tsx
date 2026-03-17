@@ -15,6 +15,7 @@ export interface TooltipConfig {
   show?: boolean;
   // Match Recharts Tooltip formatter signature loosely (name can be undefined)
   formatter?: (value: any, name?: string, ...args: any[]) => any;
+  labelFormatter?: (label: any) => string;
 }
 
 export interface ChartContainerProps {

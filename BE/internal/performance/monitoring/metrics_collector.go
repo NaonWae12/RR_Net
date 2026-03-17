@@ -95,7 +95,7 @@ func (mc *MetricsCollector) GetAllMetrics() map[string]*MetricSeries {
 
 // PerformanceMonitor monitors performance in real-time
 type PerformanceMonitor struct {
-	collector *MetricsCollector
+	collector  *MetricsCollector
 	thresholds map[string]float64
 }
 
@@ -145,4 +145,3 @@ func (pm *PerformanceMonitor) MonitorOperation(
 
 	return err
 }
-

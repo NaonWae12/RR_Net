@@ -31,5 +31,3 @@ func NewWACampaignSendTask(tenantID, campaignID, recipientID uuid.UUID, to, text
 	}
 	return asynq.NewTask(TaskWACampaignSend, b), nil
 }
-
-

@@ -7,10 +7,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"rrnet/internal/repository"
-	"rrnet/internal/service"
 	"rrnet/internal/auth"
 	"rrnet/internal/domain/tenant"
+	"rrnet/internal/repository"
+	"rrnet/internal/service"
 	"rrnet/internal/testing/helpers"
 )
 
@@ -31,7 +31,8 @@ func TestAuthIntegration(t *testing.T) {
 	)
 
 	// Create services
-	_ = service.NewAuthService(userRepo, tenantRepo, jwtManager)
+	oauthManager := auth.NewOAuthManager()
+	_ = service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager)
 
 	// Test: Create tenant
 	tenantID := uuid.New()
@@ -59,9 +60,8 @@ func TestAuthIntegration(t *testing.T) {
 	_ = now
 	// userID := uuid.New()
 	// userEntity := &user.User{...}
-	
+
 	// Note: This test requires role_id which needs to be set up first
 	// Integration tests will be expanded once database schema with roles is complete
 	// For now, this serves as a placeholder for integration test infrastructure
 }
-

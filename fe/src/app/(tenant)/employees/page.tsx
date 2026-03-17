@@ -21,7 +21,6 @@ const CREATABLE_ROLES: Array<{ value: Exclude<Role, 'super_admin' | 'owner'>; la
   { value: 'finance', label: 'Finance' },
   { value: 'technician', label: 'Technician' },
   { value: 'collector', label: 'Collector' },
-  { value: 'client', label: 'Client' },
 ];
 
 export default function EmployeesPage() {
@@ -268,7 +267,7 @@ export default function EmployeesPage() {
         {/* List */}
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-200">
-            <h2 className="text-sm font-semibold text-slate-800">Users ({employees.length})</h2>
+            <h2 className="text-sm font-semibold text-slate-800">Employees ({employees.length})</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">

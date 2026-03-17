@@ -3,10 +3,11 @@ package router
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
@@ -30,10 +31,11 @@ import (
 
 // Dependencies holds all dependencies required by the router
 type Dependencies struct {
-	Config *config.Config
-	DB     *pgxpool.Pool
-	Redis  *redis.Client
-	Asynq  *asynq.Client
+	Config    *config.Config
+	DB        *pgxpool.Pool
+	Redis     *redis.Client
+	Asynq     *asynq.Client
+	WAGateway *wagw.Client
 }
 
 // New creates the HTTP router with all routes and middlewares.
@@ -61,6 +63,7 @@ func New(deps Dependencies) http.Handler {
 		deps.Config.Auth.AccessTokenTTL,
 		deps.Config.Auth.RefreshTokenTTL,
 	)
+	oauthManager := auth.NewOAuthManager()
 
 	clientRepo := repository.NewClientRepository(deps.DB)
 	servicePackageRepo := repository.NewServicePackageRepository(deps.DB)
@@ -69,6 +72,11 @@ func New(deps Dependencies) http.Handler {
 	routerRepo := repository.NewRouterRepository(deps.DB)
 	profileRepo := repository.NewNetworkProfileRepository(deps.DB)
 	pppoeRepo := repository.NewPPPoERepository(deps.DB)
+	platformBillingRepo := repository.NewPlatformBillingRepository(deps.DB)
+	invoiceRepo := repository.NewInvoiceRepository(deps.DB)
+	paymentRepo := repository.NewPaymentRepository(deps.DB)
+	siteSettingRepo := repository.NewSiteSettingRepository(deps.DB)
+	platformDiscountRepo := repository.NewPlatformDiscountRepository(deps.DB)
 
 	// Asynq client (optional injection; fallback to creating one)
 	asynqClient := deps.Asynq
@@ -77,7 +85,11 @@ func New(deps Dependencies) http.Handler {
 	}
 
 	// Services
-	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager)
+	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager)
+	platformBillingService := service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo)
+	platformDiscountService := service.NewPlatformDiscountService(platformDiscountRepo)
+
+	tenantService := service.NewTenantService(tenantRepo, userRepo, planRepo, jwtManager, deps.Redis, deps.WAGateway, platformBillingService)
 	planService := service.NewPlanService(planRepo, tenantRepo)
 	addonService := service.NewAddonService(addonRepo, planRepo, tenantRepo)
 	featureResolver := service.NewFeatureResolver(planRepo, addonRepo, featureRepo)
@@ -86,14 +98,23 @@ func New(deps Dependencies) http.Handler {
 	// RADIUS + Voucher (Hotspot)
 	voucherRepo := repository.NewVoucherRepository(deps.DB)
 	radiusRepo := repository.NewRadiusRepository(deps.DB)
-	voucherService := service.NewVoucherService(voucherRepo, radiusRepo, routerRepo)
+	financeRepo := repository.NewFinanceRepository(deps.DB)
+
+	// Services
+	financeService := service.NewFinanceService(financeRepo)
+	voucherService := service.NewVoucherService(voucherRepo, radiusRepo, routerRepo, financeService, limitResolver)
+	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 
 	pppoeService := service.NewPPPoEService(pppoeRepo, routerRepo, profileRepo, clientRepo, deps.Config.Auth.JWTSecret)
-	clientService := service.NewClientService(clientRepo, servicePackageRepo, pppoeService, voucherService, featureResolver, limitResolver, deps.Config.Auth.JWTSecret)
+	clientService := service.NewClientService(clientRepo, servicePackageRepo, pppoeService, voucherService, billingService, featureResolver, limitResolver, userRepo, routerRepo, discountRepo, deps.Config.Auth.JWTSecret)
 	servicePackageService := service.NewServicePackageService(servicePackageRepo)
 	serviceSettingsService := service.NewServiceSettingsService(tenantRepo)
 	clientGroupService := service.NewClientGroupService(clientGroupRepo)
 	discountService := service.NewDiscountService(discountRepo)
+
+	// Reseller management
+	resellerRepo := repository.NewResellerRepository(deps.DB)
+	resellerService := service.NewResellerService(resellerRepo, clientRepo, discountRepo, voucherService, financeService)
 
 	// WhatsApp campaigns (async)
 	waCampaignRepo := repository.NewWACampaignRepository(deps.DB)
@@ -104,21 +125,36 @@ func New(deps Dependencies) http.Handler {
 	waLogService := service.NewWALogService(waLogRepo)
 
 	// Handlers
-	authHandler := handler.NewAuthHandler(authService)
+	authHandler := handler.NewAuthHandler(authService, oauthManager)
+	tenantHandler := handler.NewTenantHandler(tenantService)
 	planHandler := handler.NewPlanHandler(planService, featureResolver, limitResolver)
 	addonHandler := handler.NewAddonHandler(addonService)
 	clientHandler := handler.NewClientHandler(clientService)
-	featureHandler := handler.NewFeatureHandler()
-	superAdminHandler := handler.NewSuperAdminHandler(tenantRepo, planRepo, addonRepo, planService, addonService)
+	featureHandler := handler.NewFeatureHandler(featureRepo)
+	superAdminHandler := handler.NewSuperAdminHandler(tenantRepo, planRepo, addonRepo, planService, addonService, tenantService, userRepo, deps.WAGateway)
 	employeeHandler := handler.NewEmployeeHandler(authService, userRepo)
 	servicePackageHandler := handler.NewServicePackageHandler(servicePackageService)
 	serviceSettingsHandler := handler.NewServiceSettingsHandler(serviceSettingsService)
 	clientGroupHandler := handler.NewClientGroupHandler(clientGroupService)
 	discountHandler := handler.NewDiscountHandler(discountService)
+	resellerHandler := handler.NewResellerHandler(resellerService)
 	waCampaignHandler := handler.NewWACampaignHandler(waCampaignService)
 	waTemplateHandler := handler.NewWATemplateHandler(waTemplateService)
 	waLogHandler := handler.NewWALogHandler(waLogRepo)
-	dashboardHandler := handler.NewDashboardHandler(clientService, planService, featureResolver, limitResolver)
+	dashboardHandler := handler.NewDashboardHandler(clientService, planService, featureResolver, limitResolver, routerRepo, voucherRepo)
+	financeHandler := handler.NewFinanceHandler(financeService)
+	siteSettingService := service.NewSiteSettingService(siteSettingRepo)
+	siteSettingHandler := handler.NewSiteSettingHandler(siteSettingService)
+
+	platformBillingHandler := handler.NewPlatformBillingHandler(platformBillingService)
+
+	platformDiscountHandler := handler.NewPlatformDiscountHandler(platformDiscountService)
+
+	// AI & Migration
+	aiService := service.NewAIService(tenantRepo, siteSettingRepo, deps.Config.Auth.JWTSecret)
+	migrationService := service.NewMigrationService(aiService, clientRepo, pppoeRepo, servicePackageRepo, voucherRepo, clientService)
+	aiHandler := handler.NewAIHandler(aiService)
+	migrationHandler := handler.NewMigrationHandler(migrationService)
 
 	// WhatsApp Gateway (Baileys) proxy client + handler (tenant-scoped; protected)
 	waGatewayClient := wagw.NewClient(deps.Config.WAGateway.URL, deps.Config.WAGateway.AdminToken)
@@ -129,6 +165,37 @@ func New(deps Dependencies) http.Handler {
 	activityLogRepo := repository.NewActivityLogRepository(deps.DB)
 	technicianService := service.NewTechnicianService(taskRepo, activityLogRepo)
 	technicianHandler := handler.NewTechnicianHandler(technicianService)
+
+	// HR module (repositories, service, handler)
+	reimbursementRepo := repository.NewReimbursementRepository(deps.DB)
+	timeOffRepo := repository.NewTimeOffRepository(deps.DB)
+	hrService := service.NewHRService(reimbursementRepo, timeOffRepo, userRepo)
+	hrHandler := handler.NewHRHandler(hrService)
+
+	// Attendance module
+	attendanceRepo := repository.NewAttendanceRepository(deps.DB)
+	attendanceService := service.NewAttendanceService(attendanceRepo)
+	attendanceHandler := handler.NewAttendanceHandler(attendanceService)
+
+	// Payroll module
+	payrollRepo := repository.NewPayrollRepository(deps.DB)
+	payrollService := service.NewPayrollService(payrollRepo, userRepo, reimbursementRepo)
+	payrollHandler := handler.NewPayrollHandler(payrollService)
+
+	// Payment Method module
+	paymentMethodRepo := repository.NewPaymentMethodRepository(deps.DB)
+	paymentMethodService := service.NewPaymentMethodService(paymentMethodRepo)
+	paymentMethodHandler := handler.NewPaymentMethodHandler(paymentMethodService)
+
+	// Inventory module
+	inventoryRepo := repository.NewInventoryRepository(deps.DB)
+	inventoryService := service.NewInventoryService(inventoryRepo)
+	inventoryHandler := handler.NewInventoryHandler(inventoryService)
+
+	// Expense module
+	expenseRepo := repository.NewExpenseRepository(deps.DB)
+	expenseService := service.NewExpenseService(expenseRepo)
+	expenseHandler := handler.NewExpenseHandler(expenseService)
 
 	// RBAC service
 	rbacService := rbac.NewService()
@@ -141,7 +208,7 @@ func New(deps Dependencies) http.Handler {
 	requireCapability := func(cap rbac.Capability) func(http.Handler) http.Handler {
 		return middleware.RequireCapability(rbacService, cap)
 	}
-	_ = func(caps ...rbac.Capability) func(http.Handler) http.Handler {
+	requireAnyCapability := func(caps ...rbac.Capability) func(http.Handler) http.Handler {
 		return middleware.RequireAnyCapability(rbacService, caps...)
 	}
 	_ = middleware.RequireTenantAdmin()
@@ -167,17 +234,98 @@ func New(deps Dependencies) http.Handler {
 	// because http.ServeMux uses longest prefix matching
 	// ============================================
 
+	// OAuth routes (public - registered before generic auth/login)
+	log.Info().Msg("Registering Google OAuth routes")
+	mux.HandleFunc("/api/v1/auth/google/login", func(w http.ResponseWriter, r *http.Request) {
+		log.Info().Msg("Google Login endpoint hit")
+		r = setPathParam(r, "provider", "google")
+		authHandler.OAuthRedirect(w, r)
+	})
+	mux.HandleFunc("/api/v1/auth/google/callback", func(w http.ResponseWriter, r *http.Request) {
+		log.Info().Msg("Google Callback endpoint hit")
+		r = setPathParam(r, "provider", "google")
+		authHandler.OAuthCallback(w, r)
+	})
+
 	// Auth routes (public)
 	mux.HandleFunc("/api/v1/auth/login", method("POST", authHandler.Login))
 	mux.HandleFunc("/api/v1/auth/register", method("POST", authHandler.Register))
 	mux.HandleFunc("/api/v1/auth/refresh", method("POST", authHandler.RefreshToken))
 	mux.HandleFunc("/api/v1/auth/logout", method("POST", authHandler.Logout))
 
-	// Feature catalog route (public - just a catalog listing)
-	mux.HandleFunc("/api/v1/features", method("GET", featureHandler.List))
+	// Tenant registration (public)
+	mux.HandleFunc("/api/v1/tenants/register", method("POST", tenantHandler.RegisterTenant))
+	mux.HandleFunc("/api/v1/tenants/verify-otp", method("POST", tenantHandler.VerifyOTP))
+	mux.HandleFunc("/api/v1/tenants/resend-otp", method("POST", tenantHandler.ResendOTP))
+	mux.Handle("/api/v1/tenants/pending-invoice", requireAuth(methodHandler("GET", tenantHandler.GetPendingInvoice)))
+	mux.Handle("/api/v1/tenants/update-plan", requireAuth(methodHandler("PATCH", tenantHandler.UpdateRegistrationPlan)))
+
+	// Validation routes (public - for checking email/phone availability)
+	validationHandler := handler.NewValidationHandler(userRepo, tenantRepo)
+	mux.HandleFunc("/api/v1/validation/email", method("GET", validationHandler.CheckEmailAvailable))
+	mux.HandleFunc("/api/v1/validation/phone", method("GET", validationHandler.CheckPhoneAvailable))
+	mux.HandleFunc("/api/v1/validation/slug", method("GET", validationHandler.CheckSlugAvailable))
+
+	// Public payment methods route (for registration/waiting approval pages)
+	mux.HandleFunc("/api/v1/public/payment-methods", method("GET", paymentMethodHandler.ListActivePaymentMethods))
+	mux.HandleFunc("/api/v1/public/payment-methods/", method("GET", paymentMethodHandler.ListActivePaymentMethods))
+
+	// Feature catalog route (CRITICAL: Moved to support CRUD)
+	mux.Handle("/api/v1/features", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			featureHandler.List(w, r)
+		case http.MethodPost:
+			requireSuperAdmin(http.HandlerFunc(featureHandler.Create)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.Handle("/api/v1/features/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/features/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r = setPathParam(r, "id", strings.TrimSuffix(path, "/"))
+
+		switch r.Method {
+		case http.MethodPut, http.MethodPatch:
+			requireSuperAdmin(http.HandlerFunc(featureHandler.Update)).ServeHTTP(w, r)
+		case http.MethodDelete:
+			requireSuperAdmin(http.HandlerFunc(featureHandler.Delete)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Discount validation (public - for registration)
+	mux.HandleFunc("/api/v1/public/validate-discount", method("POST", platformDiscountHandler.Validate))
+	mux.HandleFunc("/api/v1/public/apply-discount", method("POST", platformBillingHandler.ApplyDiscount))
 
 	// Protected routes
 	mux.Handle("/api/v1/auth/me", requireAuth(methodHandler("GET", authHandler.Me)))
+
+	// AI Settings
+	// Tenants can only GET (check if configured)
+	mux.Handle("/api/v1/ai/config", requireAuth(methodHandler("GET", aiHandler.GetConfig)))
+
+	// Super Admin can manage global AI
+	mux.Handle("/api/v1/superadmin/ai/config", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			aiHandler.GetConfig(w, r)
+		case http.MethodPost:
+			aiHandler.SaveConfig(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Migration Tool
+	mux.Handle("/api/v1/migration/extract-image", requireAuth(methodHandler("POST", migrationHandler.ExtractFromImage)))
+	mux.Handle("/api/v1/migration/process", requireAuth(methodHandler("POST", migrationHandler.ProcessImport)))
 	mux.Handle("/api/v1/auth/change-password", requireAuth(methodHandler("POST", authHandler.ChangePassword)))
 
 	// Tenant info route (protected)
@@ -274,124 +422,41 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/wa-logs/", requireAuth(requireWAGatewayFeature(requireCapability(rbac.CapWAView)(methodHandler("GET", waLogHandler.List)))))
 
 	// ============================================
-	// Plan routes (Super Admin only for CRUD, tenant admin can view via /api/v1/my/plan)
-	// ============================================
-	// Use requireSuperAdmin (checks TenantID == uuid.Nil) for consistency with other super admin routes
-	mux.Handle("/api/v1/plans", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			planHandler.List(w, r)
-		case http.MethodPost:
-			planHandler.Create(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})))
+	// Public Plan listing (no auth required for landing pages)
+	mux.HandleFunc("/api/v1/plans/public", method("GET", planHandler.List))
 
-	// Plan detail routes - protected with super admin middleware (checks TenantID == uuid.Nil)
-	planDetailHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract plan ID from path: /api/v1/plans/{id}
-		path := strings.TrimPrefix(r.URL.Path, "/api/v1/plans/")
-		if path == "" {
-			w.WriteHeader(http.StatusBadRequest)
+	// Tenant management (Admin) - moved under /api/v1/superadmin/tenants/
+
+	// Public Addon listing (optional)
+	mux.HandleFunc("/api/v1/addons/public", method("GET", addonHandler.List))
+
+	// Public Site Settings (SEO/Pricing)
+	mux.HandleFunc("/api/v1/public/site-settings/seo", method("GET", siteSettingHandler.GetSEO))
+	mux.HandleFunc("/api/v1/public/site-settings/pricing", method("GET", siteSettingHandler.GetPricingConfig))
+
+	// Public Inventory
+	mux.HandleFunc("/api/v1/public/inventory/instance/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		// Inject path value via context
-		r = setPathParam(r, "id", path)
-
-		switch r.Method {
-		case http.MethodGet:
-			planHandler.Get(w, r)
-		case http.MethodPut, http.MethodPatch:
-			// Support both PUT and PATCH for update
-			planHandler.Update(w, r)
-		case http.MethodDelete:
-			planHandler.Delete(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})
-	// Apply super admin middleware - checks TenantID == uuid.Nil (same as /api/v1/superadmin/tenants)
-	mux.Handle("/api/v1/plans/", requireSuperAdmin(planDetailHandler))
-
-	// Tenant plan assignment (Admin)
-	mux.HandleFunc("/api/v1/tenants/", func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/api/v1/tenants/")
-		parts := strings.Split(path, "/")
-		if len(parts) < 2 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		tenantID := parts[0]
-		action := parts[1]
-		r = setPathParam(r, "tenant_id", tenantID)
-
-		switch action {
-		case "plan":
-			switch r.Method {
-			case http.MethodPost:
-				planHandler.AssignToTenant(w, r)
-			default:
-				w.WriteHeader(http.StatusMethodNotAllowed)
-			}
-		case "addons":
-			switch r.Method {
-			case http.MethodPost:
-				addonHandler.AssignToTenant(w, r)
-			case http.MethodGet:
-				// Get tenant addons by tenant_id (for admin)
-				w.WriteHeader(http.StatusNotImplemented)
-			default:
-				w.WriteHeader(http.StatusMethodNotAllowed)
-			}
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
-
-	// ============================================
-	// Addon routes (Admin)
-	// ============================================
-	mux.HandleFunc("/api/v1/addons", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			addonHandler.List(w, r)
-		case http.MethodPost:
-			addonHandler.Create(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/v1/addons/", func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/api/v1/addons/")
-		if path == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		r = setPathParam(r, "id", path)
-		switch r.Method {
-		case http.MethodGet:
-			addonHandler.Get(w, r)
-		case http.MethodPut:
-			addonHandler.Update(w, r)
-		case http.MethodDelete:
-			addonHandler.Delete(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/public/inventory/instance/")
+		r = setPathParam(r, "id", strings.TrimSuffix(path, "/"))
+		inventoryHandler.GetPublicInstanceDetail(w, r)
 	})
 
 	// ============================================
 	// Billing service initialization (needed for client routes)
 	// ============================================
-	invoiceRepo := repository.NewInvoiceRepository(deps.DB)
-	paymentRepo := repository.NewPaymentRepository(deps.DB)
-	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo)
+	// Billing service initialization (moved up)
 	billingHandler := handler.NewBillingHandler(billingService)
 
 	tempoTemplateRepo := repository.NewBillingTempoTemplateRepository(deps.DB)
 	tempoTemplateService := service.NewBillingTempoTemplateService(tempoTemplateRepo)
 	tempoTemplateHandler := handler.NewBillingTempoTemplateHandler(tempoTemplateService)
+
+	portalService := service.NewPortalService(clientRepo, invoiceRepo, servicePackageRepo, paymentRepo)
+	portalHandler := handler.NewPortalHandler(portalService)
 
 	// ============================================
 	// Client routes (Protected, tenant-scoped, requires client capabilities)
@@ -457,6 +522,45 @@ func New(deps Dependencies) http.Handler {
 	// Dashboard routes (Consolidated)
 	// ============================================
 	mux.Handle("/api/v1/dashboard/summary", requireAuth(methodHandler("GET", dashboardHandler.GetSummary)))
+	mux.Handle("/api/v1/dashboard/bootstrap", requireAuth(methodHandler("GET", dashboardHandler.GetBootstrap)))
+
+	// Portal routes
+	mux.Handle("/api/v1/portal/dashboard", requireAuth(methodHandler("GET", portalHandler.GetDashboard)))
+	mux.Handle("/api/v1/portal/invoices", requireAuth(methodHandler("GET", portalHandler.GetInvoices)))
+	mux.Handle("/api/v1/portal/invoices/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/portal/invoices/")
+		path = strings.TrimSuffix(path, "/") // Remove trailing slash
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		parts := strings.Split(path, "/")
+		invoiceID := parts[0]
+		r = setPathParam(r, "id", invoiceID)
+
+		// Check for payment route: /api/v1/portal/invoices/{id}/payments
+		if len(parts) >= 2 && parts[1] == "payments" {
+			r = setPathParam(r, "invoice_id", invoiceID)
+			if r.Method == http.MethodPost {
+				portalHandler.RecordPayment(w, r)
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		// Invoice detail route: /api/v1/portal/invoices/{id}
+		if len(parts) == 1 {
+			if r.Method == http.MethodGet {
+				portalHandler.GetInvoiceDetail(w, r)
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
 
 	// ============================================
 	// Tenant feature/limit routes (Protected, tenant context)
@@ -532,12 +636,223 @@ func New(deps Dependencies) http.Handler {
 			discountHandler.Get(w, r)
 		case http.MethodPut:
 			discountHandler.Update(w, r)
-		case http.MethodDelete:
 			discountHandler.Delete(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))))
+
+	// ============================================
+	// Reseller routes (Protected, tenant-scoped, feature-gated: service_packages)
+	// ============================================
+	// Note: We use a combination of prefix matching and explicit sub-path handling
+	// to avoid "Method Not Allowed" (405) errors caused by redirect collisions.
+
+	mux.Handle("/api/v1/resellers", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			resellerHandler.ListResellers(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))))
+
+	mux.Handle("/api/v1/resellers/global-prices", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			resellerHandler.GetGlobalPrices(w, r)
+		case http.MethodPost:
+			resellerHandler.SetGlobalPrice(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))))
+
+	mux.Handle("/api/v1/resellers/", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/resellers/")
+
+		// 1. Explicit sub-paths (must check before ID logic)
+		if path == "upgrade" || path == "upgrade/" {
+			if r.Method == http.MethodPost {
+				resellerHandler.UpgradeClient(w, r)
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		resellerID := parts[0]
+		r = setPathParam(r, "reseller_id", resellerID)
+
+		// 2. Nested routes: /api/v1/resellers/{id}/status, /prices, /purchases, /active-vouchers
+		if len(parts) >= 2 {
+			action := parts[1]
+			switch action {
+			case "status":
+				if r.Method == http.MethodPatch {
+					resellerHandler.UpdateStatus(w, r)
+					return
+				}
+			case "prices":
+				if len(parts) == 2 {
+					// /api/v1/resellers/{id}/prices
+					switch r.Method {
+					case http.MethodGet:
+						resellerHandler.GetPrices(w, r)
+					case http.MethodPost:
+						resellerHandler.SetPrice(w, r)
+					default:
+						w.WriteHeader(http.StatusMethodNotAllowed)
+					}
+					return
+				} else if len(parts) == 3 {
+					// /api/v1/resellers/{id}/prices/{price_id}
+					r = setPathParam(r, "price_id", parts[2])
+					if r.Method == http.MethodDelete {
+						resellerHandler.DeletePrice(w, r)
+						return
+					}
+				}
+			case "purchases":
+				// /api/v1/resellers/{id}/purchases
+				if r.Method == http.MethodPost {
+					resellerHandler.ProcessPurchase(w, r)
+					return
+				}
+			case "active-vouchers":
+				// /api/v1/resellers/{id}/active-vouchers/count
+				if len(parts) == 3 && parts[2] == "count" {
+					if r.Method == http.MethodGet {
+						resellerHandler.CountActiveVouchers(w, r)
+						return
+					}
+				}
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// 3. ID-specific routes (Method based on context)
+		if len(parts) == 1 {
+			// /api/v1/resellers/{id}
+			if r.Method == http.MethodDelete {
+				resellerHandler.DeleteReseller(w, r)
+				return
+			}
+		}
+
+		// 4. Fallback for illegal paths
+		w.WriteHeader(http.StatusNotFound)
+	}))))
+
+	// Promo codes
+	mux.Handle("/api/v1/resellers/promos", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			resellerHandler.ListPromos(w, r)
+		case http.MethodPost:
+			resellerHandler.CreatePromo(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))))
+	mux.Handle("/api/v1/resellers/promos/", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/resellers/promos/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		parts := strings.Split(path, "/")
+		promoID := parts[0]
+		r = setPathParam(r, "promo_id", promoID)
+
+		if len(parts) == 2 && parts[1] == "toggle" {
+			if r.Method == http.MethodPost {
+				resellerHandler.TogglePromoStatus(w, r)
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		if len(parts) == 1 {
+			if r.Method == http.MethodDelete {
+				resellerHandler.DeletePromo(w, r)
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))))
+
+	// Purchase history
+	mux.Handle("/api/v1/resellers/purchases", requireAuth(requireServicePackagesFeature(methodHandler("GET", resellerHandler.GetPurchaseHistory))))
+	mux.Handle("/api/v1/resellers/purchases/", requireAuth(requireServicePackagesFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/resellers/purchases/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		parts := strings.Split(path, "/")
+		purchaseID := parts[0]
+		r = setPathParam(r, "purchase_id", purchaseID)
+
+		// Handle nested routes like /api/v1/resellers/purchases/{id}/confirm
+		if len(parts) == 2 {
+			action := parts[1]
+			if action == "confirm" {
+				if r.Method == http.MethodPost {
+					resellerHandler.ConfirmPurchase(w, r)
+					return
+				}
+			}
+			if action == "submit-payment" {
+				if r.Method == http.MethodPost {
+					resellerHandler.SubmitPayment(w, r)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodDelete:
+				resellerHandler.DeletePurchase(w, r)
+			case http.MethodGet:
+				resellerHandler.GetPurchase(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))))
+
+	// ============================================
+	// Client Portal Reseller Routes
+	// ============================================
+	mux.Handle("/api/v1/portal/reseller/join", requireAuth(methodHandler("POST", resellerHandler.RegisterReseller)))
+	mux.Handle("/api/v1/portal/reseller/me", requireAuth(methodHandler("GET", resellerHandler.GetMyResellerStatus)))
+	mux.Handle("/api/v1/portal/reseller/prices", requireAuth(methodHandler("GET", resellerHandler.GetMyPrices)))
+	mux.Handle("/api/v1/portal/reseller/purchases", requireAuth(methodHandler("POST", resellerHandler.ProcessMyPurchase)))
+	mux.Handle("/api/v1/portal/reseller/payment-methods", requireAuth(methodHandler("GET", paymentMethodHandler.List)))
 
 	// ============================================
 	// Client group routes (Protected, tenant-scoped, feature-gated: service_packages)
@@ -580,6 +895,22 @@ func New(deps Dependencies) http.Handler {
 			requireCapability(rbac.CapUserView)(http.HandlerFunc(employeeHandler.List)).ServeHTTP(w, r)
 		case http.MethodPost:
 			requireCapability(rbac.CapUserCreate)(http.HandlerFunc(employeeHandler.Create)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))))
+	mux.Handle("/api/v1/employees/", requireAuth(requireEmployeeFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/employees/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r = setPathParam(r, "id", path)
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapUserView)(http.HandlerFunc(employeeHandler.Get)).ServeHTTP(w, r)
+		case http.MethodPatch:
+			requireCapability(rbac.CapUserUpdate)(http.HandlerFunc(employeeHandler.Update)).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -665,7 +996,6 @@ func New(deps Dependencies) http.Handler {
 		w.WriteHeader(http.StatusNotFound)
 	})))
 
-	// Activity log routes
 	mux.Handle("/api/v1/technician/activities", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -677,6 +1007,303 @@ func New(deps Dependencies) http.Handler {
 		}
 	})))
 
+	// Technician Time Off routes
+	mux.Handle("/api/v1/technician/time-off", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			// List current user's time off requests
+			userID, _ := auth.GetUserID(r.Context())
+			q := r.URL.Query()
+			q.Set("user_id", userID.String())
+			r.URL.RawQuery = q.Encode()
+			hrHandler.ListTimeOffs(w, r)
+		case http.MethodPost:
+			hrHandler.CreateTimeOff(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/technician/time-off/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/technician/time-off/")
+		id := strings.TrimSuffix(path, "/")
+		r = setPathParam(r, "id", id)
+		switch r.Method {
+		case http.MethodGet:
+			hrHandler.GetTimeOff(w, r)
+		case http.MethodDelete:
+			hrHandler.DeleteTimeOff(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Attendance routes (Technician - for backward compatibility)
+	mux.Handle("/api/v1/technician/attendance", requireAuth(methodHandler("GET", attendanceHandler.List)))
+	mux.Handle("/api/v1/technician/attendance/today", requireAuth(methodHandler("GET", attendanceHandler.GetToday)))
+	mux.Handle("/api/v1/technician/attendance/check-in", requireAuth(methodHandler("POST", attendanceHandler.CheckIn)))
+	mux.Handle("/api/v1/technician/attendance/check-out", requireAuth(methodHandler("POST", attendanceHandler.CheckOut)))
+
+	// Employee Self-Service Attendance routes (Available for all roles)
+	mux.Handle("/api/v1/employee/attendance", requireAuth(methodHandler("GET", attendanceHandler.List)))
+	mux.Handle("/api/v1/employee/attendance/today", requireAuth(methodHandler("GET", attendanceHandler.GetToday)))
+	mux.Handle("/api/v1/employee/attendance/check-in", requireAuth(methodHandler("POST", attendanceHandler.CheckIn)))
+	mux.Handle("/api/v1/employee/attendance/check-out", requireAuth(methodHandler("POST", attendanceHandler.CheckOut)))
+
+	// Employee Self-Service Reimbursement routes (Available for all roles)
+	mux.Handle("/api/v1/employee/reimbursements", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			// For list, we force filtering by current user
+			userID, _ := auth.GetUserID(r.Context())
+			// Add user_id to query params to ensure hrHandler.ListReimbursements filters by user
+			q := r.URL.Query()
+			q.Set("user_id", userID.String())
+			r.URL.RawQuery = q.Encode()
+			hrHandler.ListReimbursements(w, r)
+		case http.MethodPost:
+			hrHandler.CreateReimbursement(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/employee/reimbursements/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/employee/reimbursements/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		// Handle potential trailing slash
+		id := strings.TrimSuffix(path, "/")
+		r = setPathParam(r, "id", id)
+
+		switch r.Method {
+		case http.MethodGet:
+			hrHandler.GetReimbursement(w, r)
+		case http.MethodPut:
+			hrHandler.UpdateReimbursement(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Employee Self-Service Payroll routes
+	mux.Handle("/api/v1/employee/payroll/mypayslips", requireAuth(http.HandlerFunc(payrollHandler.ListMyPayslips)))
+	mux.Handle("/api/v1/employee/payroll/mypayslips/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/employee/payroll/mypayslips/")
+		if path == "" {
+			payrollHandler.ListMyPayslips(w, r)
+			return
+		}
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) == 2 && parts[1] == "download" {
+			r = setPathParam(r, "id", parts[0])
+			payrollHandler.DownloadMyPayslip(w, r)
+			return
+		}
+
+		if len(parts) == 1 {
+			r = setPathParam(r, "id", parts[0])
+			payrollHandler.GetMyPayslip(w, r)
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
+
+	// ============================================
+	// HR Reimbursement routes (Protected, tenant-scoped)
+	// ============================================
+	mux.Handle("/api/v1/hr/reimbursements", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			hrHandler.ListReimbursements(w, r)
+		case http.MethodPost:
+			hrHandler.CreateReimbursement(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/hr/reimbursements/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/hr/reimbursements/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) == 2 {
+			id := parts[0]
+			action := parts[1]
+			r = setPathParam(r, "id", id)
+
+			switch action {
+			case "approve":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapHRManage)(http.HandlerFunc(hrHandler.ApproveReimbursement)).ServeHTTP(w, r)
+					return
+				}
+			case "reject":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapHRManage)(http.HandlerFunc(hrHandler.RejectReimbursement)).ServeHTTP(w, r)
+					return
+				}
+			case "pay":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(hrHandler.MarkAsPaid)).ServeHTTP(w, r)
+					return
+				}
+			case "payroll-consolidate":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(hrHandler.SetPayWithPayroll)).ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+
+		if len(parts) == 1 {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodGet {
+				hrHandler.GetReimbursement(w, r)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
+
+	mux.Handle("/api/v1/hr/time-offs", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			requireCapability(rbac.CapHRView)(http.HandlerFunc(hrHandler.ListTimeOffs)).ServeHTTP(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/hr/stats/employees", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			requireCapability(rbac.CapHRView)(http.HandlerFunc(hrHandler.GetEmployeeStats)).ServeHTTP(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/hr/time-offs/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/hr/time-offs/")
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) == 2 {
+			id := parts[0]
+			action := parts[1]
+			r = setPathParam(r, "id", id)
+
+			switch action {
+			case "approve":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapHRManage)(http.HandlerFunc(hrHandler.ApproveTimeOff)).ServeHTTP(w, r)
+					return
+				}
+			case "reject":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapHRManage)(http.HandlerFunc(hrHandler.RejectTimeOff)).ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+
+		if len(parts) == 1 {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodGet {
+				requireCapability(rbac.CapHRView)(http.HandlerFunc(hrHandler.GetTimeOff)).ServeHTTP(w, r)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
+
+	// HR Attendance Settings
+	mux.Handle("/api/v1/hr/attendance/settings", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapHRView)(http.HandlerFunc(attendanceHandler.GetSettings)).ServeHTTP(w, r)
+		case http.MethodPut:
+			requireCapability(rbac.CapHRManage)(http.HandlerFunc(attendanceHandler.UpdateSettings)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/hr/attendance", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			requireCapability(rbac.CapHRView)(http.HandlerFunc(attendanceHandler.ListAll)).ServeHTTP(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// HR Payroll
+	payrollRunsHandler := requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Remove both potential prefixes to handle exact and trailing slash cases
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/hr/payroll/runs")
+		path = strings.TrimPrefix(path, "/")
+
+		if path == "" {
+			// Base path: /api/v1/hr/payroll/runs or /api/v1/hr/payroll/runs/
+			switch r.Method {
+			case http.MethodGet:
+				requireCapability(rbac.CapHRView)(http.HandlerFunc(payrollHandler.ListRuns)).ServeHTTP(w, r)
+			case http.MethodPost:
+				requireCapability(rbac.CapHRManage)(http.HandlerFunc(payrollHandler.CreateRun)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		// Specific ID: /api/v1/hr/payroll/runs/{id} or /api/v1/hr/payroll/runs/{id}/pay
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 && parts[1] == "pay" {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodPost {
+				requireAnyCapability(rbac.CapHRManage, rbac.CapBillingUpdate)(http.HandlerFunc(payrollHandler.PayRun)).ServeHTTP(w, r)
+				return
+			}
+		}
+
+		r = setPathParam(r, "id", path)
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapHRView)(http.HandlerFunc(payrollHandler.GetRun)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.Handle("/api/v1/hr/payroll/runs", payrollRunsHandler)
+	mux.Handle("/api/v1/hr/payroll/runs/", payrollRunsHandler)
+
+	mux.Handle("/api/v1/hr/payroll/preview", requireAuth(requireCapability(rbac.CapHRView)(http.HandlerFunc(payrollHandler.GetPreview))))
+	mux.Handle("/api/v1/hr/payroll/payslips", requireAuth(requireCapability(rbac.CapHRManage)(http.HandlerFunc(payrollHandler.UpsertPayslip))))
+	mux.Handle("/api/v1/hr/payroll/payslips/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/hr/payroll/payslips/")
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 && parts[1] == "pay" {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodPost {
+				requireAnyCapability(rbac.CapHRManage, rbac.CapBillingUpdate)(http.HandlerFunc(payrollHandler.PayPayslip)).ServeHTTP(w, r)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})))
+
 	// ============================================
 	// Super Admin routes (Protected, super admin only)
 	// ============================================
@@ -684,10 +1311,14 @@ func New(deps Dependencies) http.Handler {
 		switch r.Method {
 		case http.MethodGet:
 			superAdminHandler.ListTenants(w, r)
+		case http.MethodPost:
+			superAdminHandler.CreateTenant(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})))
+	// mux.Handle("/api/v1/superadmin/tenants/", ... already handled below or vice versa
+	// Removing the redundant block to prevent panic
 	mux.Handle("/api/v1/superadmin/tenants/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/tenants/")
 		if path == "" {
@@ -722,6 +1353,36 @@ func New(deps Dependencies) http.Handler {
 					w.WriteHeader(http.StatusMethodNotAllowed)
 				}
 				return
+			case "plan": // /api/v1/superadmin/tenants/{id}/plan
+				r = setPathParam(r, "tenant_id", tenantID)
+				if r.Method == http.MethodPost {
+					planHandler.AssignToTenant(w, r)
+					return
+				}
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			case "addons": // /api/v1/superadmin/tenants/{id}/addons
+				r = setPathParam(r, "tenant_id", tenantID)
+				if r.Method == http.MethodPost {
+					addonHandler.AssignToTenant(w, r)
+					return
+				}
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			case "approve": // /api/v1/superadmin/tenants/{id}/approve
+				if r.Method == http.MethodPatch {
+					tenantHandler.ApproveTenant(w, r)
+					return
+				}
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			case "reject": // /api/v1/superadmin/tenants/{id}/reject
+				if r.Method == http.MethodPatch {
+					tenantHandler.RejectTenant(w, r)
+					return
+				}
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
 			}
 		}
 
@@ -731,6 +1392,103 @@ func New(deps Dependencies) http.Handler {
 			superAdminHandler.GetTenant(w, r)
 		case http.MethodPatch:
 			superAdminHandler.UpdateTenant(w, r)
+		case http.MethodDelete:
+			superAdminHandler.DeleteTenant(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Super Admin Plans
+	mux.Handle("/api/v1/superadmin/plans", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			superAdminHandler.ListPlans(w, r)
+		case http.MethodPost:
+			superAdminHandler.CreatePlan(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/superadmin/plans/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/plans/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r = setPathParam(r, "id", path)
+		switch r.Method {
+		case http.MethodGet:
+			superAdminHandler.GetPlan(w, r)
+		case http.MethodPatch, http.MethodPut:
+			superAdminHandler.UpdatePlan(w, r)
+		case http.MethodDelete:
+			superAdminHandler.DeletePlan(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Super Admin Site Settings
+	mux.Handle("/api/v1/superadmin/site-settings", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			siteSettingHandler.List(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/superadmin/site-settings/seo", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			siteSettingHandler.GetSEO(w, r)
+		case http.MethodPost, http.MethodPut:
+			siteSettingHandler.UpdateSEO(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/superadmin/site-settings/pricing", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			siteSettingHandler.GetPricingConfig(w, r)
+		case http.MethodPost, http.MethodPut:
+			siteSettingHandler.UpdatePricingConfig(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Super Admin WhatsApp Management (Platform level)
+	mux.Handle("/api/v1/superadmin/whatsapp/status", requireSuperAdmin(methodHandler("GET", superAdminHandler.GetWhatsAppStatus)))
+	mux.Handle("/api/v1/superadmin/whatsapp/connect", requireSuperAdmin(methodHandler("POST", superAdminHandler.ConnectWhatsApp)))
+	mux.Handle("/api/v1/superadmin/whatsapp/qr", requireSuperAdmin(methodHandler("GET", superAdminHandler.GetWhatsAppQR)))
+
+	// Super Admin Addons
+	mux.Handle("/api/v1/superadmin/addons", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			superAdminHandler.ListAddons(w, r)
+		case http.MethodPost:
+			superAdminHandler.CreateAddon(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/superadmin/addons/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/addons/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r = setPathParam(r, "id", path)
+		switch r.Method {
+		case http.MethodGet:
+			superAdminHandler.GetAddon(w, r)
+		case http.MethodPatch, http.MethodPut:
+			superAdminHandler.UpdateAddon(w, r)
+		case http.MethodDelete:
+			superAdminHandler.DeleteAddon(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -739,7 +1497,7 @@ func New(deps Dependencies) http.Handler {
 	// ============================================
 	// Network routes (Protected, tenant-scoped)
 	// ============================================
-	networkService := service.NewNetworkService(routerRepo, profileRepo)
+	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver)
 	networkService.StartHealthCheckScheduler(context.Background())
 	networkHandler := handler.NewNetworkHandler(networkService)
 
@@ -985,7 +1743,7 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/vouchers/generate", requireAuth(methodHandler("POST", voucherHandler.GenerateVouchers)))
 	mux.Handle("/api/v1/vouchers/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Log request for debugging
-		log.Printf("[VoucherRoute] Method=%s URL=%s", r.Method, r.URL.Path)
+		log.Info().Str("method", r.Method).Str("path", r.URL.Path).Msg("Voucher request")
 
 		// CORS fallback
 		if r.Method == http.MethodOptions {
@@ -1028,7 +1786,7 @@ func New(deps Dependencies) http.Handler {
 		case http.MethodDelete:
 			voucherHandler.DeleteVoucher(w, r)
 		default:
-			log.Printf("[VoucherRoute] 405 Method Not Allowed: %s", r.Method)
+			log.Warn().Str("method", r.Method).Msg("Voucher method not allowed")
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})))
@@ -1151,7 +1909,7 @@ func New(deps Dependencies) http.Handler {
 	clientLocRepo := repository.NewClientLocationRepository(deps.DB)
 	outageRepo := repository.NewOutageRepository(deps.DB)
 	topologyRepo := repository.NewTopologyRepository(deps.DB)
-	mapsService := service.NewMapsService(odcRepo, odpRepo, clientLocRepo, outageRepo, topologyRepo)
+	mapsService := service.NewMapsService(odcRepo, odpRepo, clientLocRepo, outageRepo, topologyRepo, resellerRepo)
 	mapsHandler := handler.NewMapsHandler(mapsService)
 
 	// ODCs
@@ -1370,6 +2128,8 @@ func New(deps Dependencies) http.Handler {
 		switch r.Method {
 		case http.MethodGet:
 			billingHandler.GetPayment(w, r)
+		case http.MethodDelete:
+			billingHandler.DeletePayment(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -1380,6 +2140,19 @@ func New(deps Dependencies) http.Handler {
 
 	// Payment Matrix (12-month view)
 	mux.Handle("/api/v1/billing/payment-matrix", requireAuth(methodHandler("GET", billingHandler.GetPaymentMatrix)))
+
+	// Revenue Analytics
+	mux.Handle("/api/v1/billing/revenue-analytics", requireAuth(methodHandler("GET", billingHandler.GetRevenueAnalytics)))
+
+	// Settlements
+	mux.Handle("/api/v1/billing/settlements", requireAuth(methodHandler("GET", billingHandler.GetSettlements)))
+	mux.Handle("/api/v1/billing/settlements/verify", requireAuth(methodHandler("POST", billingHandler.VerifySettlement)))
+
+	// New Finance Management Routes
+	mux.Handle("/api/v1/finance/summary", requireAuth(methodHandler("GET", financeHandler.GetSummary)))
+	mux.Handle("/api/v1/finance/trend", requireAuth(methodHandler("GET", financeHandler.GetTrend)))
+	mux.Handle("/api/v1/finance/balance", requireAuth(methodHandler("GET", financeHandler.GetBalance)))
+	mux.Handle("/api/v1/finance/transactions", requireAuth(methodHandler("GET", financeHandler.ListTransactions)))
 
 	// Tempo Templates (tenant-scoped, RBAC: billing.view/list, billing.update for mutations)
 	mux.Handle("/api/v1/billing/tempo-templates", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1410,6 +2183,305 @@ func New(deps Dependencies) http.Handler {
 	})))
 
 	// ============================================
+	// Subscription routes (Tenant-scoped)
+	// ============================================
+	mux.Handle("/api/v1/subscription/invoices", requireAuth(methodHandler("GET", platformBillingHandler.GetMyInvoices)))
+	mux.Handle("/api/v1/subscription/pay", requireAuth(methodHandler("POST", platformBillingHandler.SubmitPayment)))
+
+	// ============================================
+	// Inventory routes (Protected, tenant-scoped)
+	// ============================================
+	mux.Handle("/api/v1/inventory/summary", requireAuth(requireCapability(rbac.CapInventoryView)(http.HandlerFunc(inventoryHandler.GetGlobalSummary))))
+	mux.Handle("/api/v1/inventory/assets", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapInventoryView)(http.HandlerFunc(inventoryHandler.ListAssets)).ServeHTTP(w, r)
+		case http.MethodPost:
+			requireCapability(rbac.CapInventoryManage)(http.HandlerFunc(inventoryHandler.CreateAsset)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/inventory/assets/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/inventory/assets/")
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) == 0 || parts[0] == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		assetID := parts[0]
+		r = setPathParam(r, "id", assetID)
+
+		// Nested routes: /api/v1/inventory/assets/{id}/instances, /bulk-update
+		if len(parts) >= 2 {
+			r = setPathParam(r, "asset_id", assetID)
+			action := parts[1]
+			switch action {
+			case "instances":
+				if len(parts) == 2 {
+					switch r.Method {
+					case http.MethodGet:
+						requireCapability(rbac.CapInventoryView)(http.HandlerFunc(inventoryHandler.ListInstances)).ServeHTTP(w, r)
+					case http.MethodPost:
+						requireCapability(rbac.CapInventoryManage)(http.HandlerFunc(inventoryHandler.AddInstance)).ServeHTTP(w, r)
+					default:
+						w.WriteHeader(http.StatusMethodNotAllowed)
+					}
+					return
+				}
+				if len(parts) == 3 {
+					r = setPathParam(r, "id", parts[2])
+					if r.Method == http.MethodPut {
+						requireCapability(rbac.CapInventoryManage)(http.HandlerFunc(inventoryHandler.UpdateInstance)).ServeHTTP(w, r)
+						return
+					}
+				}
+			case "bulk-update":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapInventoryManage)(http.HandlerFunc(inventoryHandler.BulkUpdate)).ServeHTTP(w, r)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// GET or DELETE asset
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapInventoryView)(http.HandlerFunc(inventoryHandler.GetAsset)).ServeHTTP(w, r)
+		case http.MethodDelete:
+			requireCapability(rbac.CapInventoryManage)(http.HandlerFunc(inventoryHandler.DeleteAsset)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/inventory/history", requireAuth(requireCapability(rbac.CapInventoryView)(methodHandler("GET", inventoryHandler.GetHistory))))
+
+	// ============================================
+	// Expense routes (Protected, tenant-scoped)
+	// ============================================
+	// Handle exact path /expenses
+	mux.Handle("/api/v1/finance/expenses", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapBillingView)(http.HandlerFunc(expenseHandler.List)).ServeHTTP(w, r)
+		case http.MethodPost:
+			requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(expenseHandler.Create)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Handle /expenses/ and sub-routes (ID-based)
+	mux.Handle("/api/v1/finance/expenses/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/finance/expenses/")
+
+		// If path is empty (root of expenses via trailing slash), handle same as above
+		if path == "" {
+			switch r.Method {
+			case http.MethodGet:
+				requireCapability(rbac.CapBillingView)(http.HandlerFunc(expenseHandler.List)).ServeHTTP(w, r)
+			case http.MethodPost:
+				requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(expenseHandler.Create)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		expenseID := parts[0]
+		r = setPathParam(r, "id", expenseID)
+
+		// Handle nested routes like /expenses/{id}/pay
+		if len(parts) == 2 && parts[1] == "pay" {
+			if r.Method == http.MethodPost {
+				requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(expenseHandler.MarkAsPaid)).ServeHTTP(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Handle single expense operations
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodDelete:
+				requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(expenseHandler.Delete)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	})))
+
+	// Payment Methods routes
+	// Handle exact path /payment-methods
+	mux.Handle("/api/v1/finance/payment-methods", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapBillingView)(http.HandlerFunc(paymentMethodHandler.List)).ServeHTTP(w, r)
+		case http.MethodPost:
+			requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(paymentMethodHandler.Create)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Handle /payment-methods/ and sub-routes
+	mux.Handle("/api/v1/finance/payment-methods/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/finance/payment-methods/")
+
+		// If path is empty (root), handle List/Create
+		if path == "" || strings.Trim(path, "/") == "" {
+			switch r.Method {
+			case http.MethodGet:
+				requireCapability(rbac.CapBillingView)(http.HandlerFunc(paymentMethodHandler.List)).ServeHTTP(w, r)
+			case http.MethodPost:
+				requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(paymentMethodHandler.Create)).ServeHTTP(w, r)
+			default:
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		r = setPathParam(r, "id", strings.TrimSuffix(path, "/"))
+		switch r.Method {
+		case http.MethodPut:
+			requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(paymentMethodHandler.Update)).ServeHTTP(w, r)
+		case http.MethodDelete:
+			requireCapability(rbac.CapBillingUpdate)(http.HandlerFunc(paymentMethodHandler.Delete)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// ============================================
+	// Super Admin Billing routes
+	// ============================================
+	mux.Handle("/api/v1/superadmin/billing/invoices", requireSuperAdmin(methodHandler("GET", platformBillingHandler.ListAllInvoices)))
+	mux.Handle("/api/v1/superadmin/billing/payments", requireSuperAdmin(methodHandler("GET", platformBillingHandler.ListAllPayments)))
+	mux.Handle("/api/v1/superadmin/billing/payments/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/billing/payments/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+
+		if len(parts) == 2 && parts[1] == "verify" {
+			r = setPathParam(r, "id", parts[0])
+			if r.Method == http.MethodPost {
+				platformBillingHandler.VerifyPayment(w, r)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})))
+	mux.Handle("/api/v1/superadmin/billing/generate", requireSuperAdmin(methodHandler("POST", platformBillingHandler.GenerateInvoices)))
+
+	// Platform Discounts (Coupons)
+	mux.Handle("/api/v1/superadmin/billing/discounts", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[router] /superadmin/billing/discounts hit: %s", r.Method)
+		switch r.Method {
+		case http.MethodGet:
+			platformDiscountHandler.List(w, r)
+		case http.MethodPost:
+			platformDiscountHandler.Create(w, r)
+		default:
+			log.Printf("[router] /superadmin/billing/discounts method not allowed: %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/superadmin/billing/discounts/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/billing/discounts/")
+		idStr := strings.TrimSuffix(path, "/")
+		log.Printf("[router] /superadmin/billing/discounts/ subtree hit: %s path=%s id=%s", r.Method, path, idStr)
+
+		if idStr == "" {
+			// Subtree hit with no ID usually means trailing slash /discounts/
+			switch r.Method {
+			case http.MethodGet:
+				platformDiscountHandler.List(w, r)
+			case http.MethodPost:
+				platformDiscountHandler.Create(w, r)
+			default:
+				log.Printf("[router] /superadmin/billing/discounts/ subtree no-id method not allowed: %s", r.Method)
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
+		r = setPathParam(r, "id", idStr)
+		switch r.Method {
+		case http.MethodGet:
+			platformDiscountHandler.GetByID(w, r)
+		case http.MethodPut:
+			platformDiscountHandler.Update(w, r)
+		case http.MethodDelete:
+			platformDiscountHandler.Delete(w, r)
+		default:
+			log.Printf("[router] /superadmin/billing/discounts/ subtree id method not allowed: %s", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// ============================================
+	// Payment Methods Routes (Super Admin only)
+	// ============================================
+	mux.Handle("/api/v1/superadmin/payment-methods", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			paymentMethodHandler.ListPaymentMethods(w, r)
+		case http.MethodPost:
+			paymentMethodHandler.CreatePaymentMethod(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/superadmin/payment-methods/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/payment-methods/")
+		if path == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		// /{id}/toggle
+		if strings.HasSuffix(path, "/toggle") {
+			if r.Method == http.MethodPatch {
+				idStr := strings.TrimSuffix(path, "/toggle")
+				idStr = strings.TrimSuffix(idStr, "/")
+				r = setPathParam(r, "id", idStr)
+				paymentMethodHandler.TogglePaymentMethodStatus(w, r)
+				return
+			}
+		}
+
+		// /{id}
+		idStr := strings.TrimSuffix(path, "/")
+		r = setPathParam(r, "id", idStr)
+
+		switch r.Method {
+		case http.MethodGet:
+			paymentMethodHandler.GetPaymentMethod(w, r)
+		case http.MethodPut:
+			paymentMethodHandler.UpdatePaymentMethod(w, r)
+		case http.MethodDelete:
+			paymentMethodHandler.DeletePaymentMethod(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// ============================================
 	// API Root (must be last to avoid catching all /api/v1/* routes)
 	// ============================================
 	mux.HandleFunc("/api/v1/", method("GET", handleAPIRoot))
@@ -1424,15 +2496,15 @@ func New(deps Dependencies) http.Handler {
 	finalHandler = middleware.TenantContext(tenantRepo)(finalHandler)
 
 	// 8. Rate Limiting - Per-tenant and per-IP rate limiting
-	// Configure rate limits (default: 100 requests per minute)
-	defaultLimit := 100
+	// Configure rate limits (default: 300 requests per minute for rich UI)
+	defaultLimit := 300
 	defaultWindow := 1 * time.Minute
 	rateLimiter := middleware.NewRateLimiter(deps.Redis, defaultLimit, defaultWindow)
 
 	// Set stricter limits for auth endpoints
-	rateLimiter.SetEndpointLimit("/api/v1/auth/login", 5, 1*time.Minute)
-	rateLimiter.SetEndpointLimit("/api/v1/auth/register", 3, 1*time.Minute)
-	rateLimiter.SetEndpointLimit("/api/v1/auth/refresh", 10, 1*time.Minute)
+	rateLimiter.SetEndpointLimit("/api/v1/auth/login", 60, 1*time.Minute)
+	rateLimiter.SetEndpointLimit("/api/v1/auth/register", 10, 1*time.Minute)
+	rateLimiter.SetEndpointLimit("/api/v1/auth/refresh", 30, 1*time.Minute)
 
 	// WhatsApp gateway UI polls status/qr; allow higher throughput for these endpoints
 	// (still scoped by tenant/user/ip via RateLimiter.getClientIdentifier)
@@ -1501,6 +2573,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 // handleAPIRoot returns the API root handler
 func handleAPIRoot(w http.ResponseWriter, r *http.Request) {
+	log.Debug().Str("method", r.Method).Str("url", r.URL.String()).Msg("API Root hit")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"message": "RRNET API v1",

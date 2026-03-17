@@ -1,59 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/select";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { useNotificationStore } from "@/stores/notificationStore";
-import { format } from "date-fns";
+import { hrService } from "@/lib/api/hrService";
+import { TimeOff } from "@/lib/api/types";
+import { format, parseISO } from "date-fns";
 import { CheckCircleIcon, XCircleIcon, ClockIcon } from "@heroicons/react/20/solid";
-
-// Mock data - akan diganti dengan API call
-const mockLeaveRequests = [
-  {
-    id: "1",
-    employeeName: "Budi Santoso",
-    employeeId: "emp-1",
-    type: "Sick Leave",
-    dateFrom: new Date(),
-    dateTo: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    reason: "Sakit demam",
-    status: "pending",
-    submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: "2",
-    employeeName: "Siti Nurhaliza",
-    employeeId: "emp-2",
-    type: "Annual Leave",
-    dateFrom: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    dateTo: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-    reason: "Liburan keluarga",
-    status: "pending",
-    submittedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: "3",
-    employeeName: "Ahmad Fauzi",
-    employeeId: "emp-3",
-    type: "Personal Leave",
-    dateFrom: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    dateTo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    reason: "Urusan keluarga",
-    status: "approved",
-    submittedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    reviewedBy: "Admin User",
-    reviewedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
-  },
-];
 
 export function LeaveRequestsTab() {
   const { showToast } = useNotificationStore();
   const [loading, setLoading] = useState(false);
+  const [timeOffs, setTimeOffs] = useState<TimeOff[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [approving, setApproving] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
+
+  const fetchTimeOffs = async () => {
+    try {
+      setLoading(true);
+      const status = statusFilter !== "all" ? statusFilter : undefined;
+      const data = await hrService.getTimeOffs(status);
+      setTimeOffs(data || []);
+    } catch (error: any) {
+      showToast({
+        title: "Failed to load time off requests",
+        description: error?.message || "An unexpected error occurred",
+        variant: "error",
+      });
+      setTimeOffs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTimeOffs();
+  }, [statusFilter]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -71,7 +57,7 @@ export function LeaveRequestsTab() {
             Rejected
           </span>
         );
-      case "pending":
+      case "pending_approval":
         return (
           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-yellow-100 text-yellow-800 border border-yellow-200">
             <ClockIcon className="w-3 h-3" />
@@ -83,21 +69,29 @@ export function LeaveRequestsTab() {
     }
   };
 
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "sick":
+        return "Sick Leave";
+      case "leave":
+        return "Annual Leave";
+      case "emergency":
+        return "Emergency Leave";
+      default:
+        return type;
+    }
+  };
+
   const handleApprove = async (requestId: string) => {
     setApproving(requestId);
     try {
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await hrService.approveTimeOff(requestId);
       showToast({
         title: "Leave Request Approved",
         description: "The leave request has been approved",
         variant: "success",
       });
-      // Refresh data
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-      }, 500);
+      await fetchTimeOffs();
     } catch (error: any) {
       showToast({
         title: "Approval Failed",
@@ -110,20 +104,20 @@ export function LeaveRequestsTab() {
   };
 
   const handleReject = async (requestId: string) => {
+    const reason = prompt("Please provide a reason for rejection:");
+    if (!reason) {
+      return; // User cancelled
+    }
+
     setRejecting(requestId);
     try {
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await hrService.rejectTimeOff(requestId, reason);
       showToast({
         title: "Leave Request Rejected",
         description: "The leave request has been rejected",
         variant: "success",
       });
-      // Refresh data
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-      }, 500);
+      await fetchTimeOffs();
     } catch (error: any) {
       showToast({
         title: "Rejection Failed",
@@ -135,7 +129,7 @@ export function LeaveRequestsTab() {
     }
   };
 
-  const filteredRequests = mockLeaveRequests.filter((request) => {
+  const filteredRequests = timeOffs.filter((request) => {
     if (statusFilter !== "all" && request.status !== statusFilter) {
       return false;
     }
@@ -151,7 +145,7 @@ export function LeaveRequestsTab() {
             <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
             <SimpleSelect value={statusFilter} onValueChange={setStatusFilter}>
               <option value="all" className="text-slate-900 bg-white">All Status</option>
-              <option value="pending" className="text-slate-900 bg-white">Pending</option>
+              <option value="pending_approval" className="text-slate-900 bg-white">Pending</option>
               <option value="approved" className="text-slate-900 bg-white">Approved</option>
               <option value="rejected" className="text-slate-900 bg-white">Rejected</option>
             </SimpleSelect>
@@ -184,6 +178,7 @@ export function LeaveRequestsTab() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Employee</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Type</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date Range</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Days</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Reason</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Submitted</th>
@@ -194,19 +189,22 @@ export function LeaveRequestsTab() {
                 {filteredRequests.map((request) => (
                   <tr key={request.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                      {request.employeeName}
+                      {request.user_name || "Unknown"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{request.type}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{getTypeLabel(request.type)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                      {format(request.dateFrom, "MMM d")} - {format(request.dateTo, "MMM d, yyyy")}
+                      {format(parseISO(request.start_date), "MMM d")} - {format(parseISO(request.end_date), "MMM d, yyyy")}
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{request.reason}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                      {request.days_count} day{request.days_count > 1 ? "s" : ""}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate">{request.reason}</td>
                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(request.status)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                      {format(request.submittedAt, "MMM d, yyyy")}
+                      {format(parseISO(request.created_at), "MMM d, yyyy")}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {request.status === "pending" && (
+                      {request.status === "pending_approval" && (
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
@@ -246,9 +244,9 @@ export function LeaveRequestsTab() {
                           </Button>
                         </div>
                       )}
-                      {request.status !== "pending" && (
+                      {request.status !== "pending_approval" && (
                         <span className="text-xs text-slate-500">
-                          {request.reviewedBy} on {request.reviewedAt ? format(request.reviewedAt, "MMM d") : "-"}
+                          {request.approved_at ? format(parseISO(request.approved_at), "MMM d, yyyy") : "-"}
                         </span>
                       )}
                     </td>

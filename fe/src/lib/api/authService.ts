@@ -1,5 +1,5 @@
 import { apiClient, setAccessToken, setTenantSlug } from "./apiClient";
-import type { LoginRequest, LoginResponse, User } from "./types";
+import type { LoginRequest, LoginResponse, User, ProfileResponse } from "./types";
 
 export const authService = {
   async login(data: LoginRequest, tenantSlug?: string): Promise<LoginResponse> {
@@ -26,8 +26,8 @@ export const authService = {
     return res.data;
   },
 
-  async me(): Promise<User> {
-    const res = await apiClient.get<User>("/auth/me");
+  async me(): Promise<ProfileResponse> {
+    const res = await apiClient.get<ProfileResponse>("/auth/me");
     return res.data;
   },
 
@@ -48,6 +48,10 @@ export const authService = {
     const res = await apiClient.post<LoginResponse>("/auth/mfa/verify", { code });
     setAccessToken(res.data.access_token);
     return res.data;
+  },
+
+  async changePassword(data: { current_password?: string; password: string; password_confirmation: string }): Promise<void> {
+    await apiClient.post("/auth/change-password", data);
   },
 };
 

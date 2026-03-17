@@ -5,7 +5,28 @@ import { useParams, useRouter } from "next/navigation";
 import { useSuperAdminStore } from "@/stores/superAdminStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Pencil } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  ArrowLeft,
+  Pencil,
+  Check,
+  CreditCard,
+  Calendar,
+  Layers,
+  Activity,
+  Globe,
+  Hash,
+  Clock,
+  Tag,
+  ShieldCheck,
+} from "lucide-react";
 import { format } from "date-fns";
 import { featureService } from "@/lib/api/featureService";
 import type { Feature } from "@/lib/api/types";
@@ -31,7 +52,6 @@ export default function PlanDetailPage() {
       try {
         const catalog = await featureService.getFeatures();
         setFeatureCatalog(catalog);
-        console.log("[PlanDetail] Feature catalog loaded:", catalog.length, "features");
       } catch (err) {
         console.error("Failed to load feature catalog:", err);
       }
@@ -64,16 +84,19 @@ export default function PlanDetailPage() {
 
   if (error) {
     return (
-      <div className="p-6 text-red-600">
-        Error loading plan: {error}
+      <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-4">
+        <div className="text-red-600 font-medium text-lg">Error loading plan</div>
+        <p className="text-slate-500">{error}</p>
+        <Button onClick={() => router.push("/superadmin/plans")}>Back to Plans</Button>
       </div>
     );
   }
 
   if (!plan) {
     return (
-      <div className="p-6 text-slate-500">
-        Plan not found.
+      <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-4">
+        <div className="text-slate-900 font-medium text-lg">Plan not found</div>
+        <Button onClick={() => router.push("/superadmin/plans")}>Back to Plans</Button>
       </div>
     );
   }
@@ -83,156 +106,237 @@ export default function PlanDetailPage() {
 
   // Get all features if wildcard, otherwise use plan features
   const displayFeatures = hasWildcardFeature
-    ? featureCatalog.map(f => f.code)
-    : (plan.features || []);
-
-  // Debug: Log features
-  console.log("[PlanDetail] Plan:", plan.code);
-  console.log("[PlanDetail] Plan features array:", plan.features);
-  console.log("[PlanDetail] Plan features type:", typeof plan.features);
-  console.log("[PlanDetail] Plan features is array:", Array.isArray(plan.features));
-  console.log("[PlanDetail] Has wildcard:", hasWildcardFeature);
-  console.log("[PlanDetail] Feature catalog count:", featureCatalog.length);
-  console.log("[PlanDetail] Display features count:", displayFeatures.length);
-  console.log("[PlanDetail] Has client_maps in plan.features:", plan.features && plan.features.includes("client_maps"));
-  console.log("[PlanDetail] Display features:", displayFeatures);
+    ? featureCatalog.map((f) => f.code)
+    : plan.features || [];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={() => router.push("/superadmin/plans")}>
-          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Plans
-        </Button>
-        <Button variant="outline" onClick={() => router.push(`/superadmin/plans/${plan.id}/edit`)}>
-          <Pencil className="h-4 w-4 mr-2" /> Edit
-        </Button>
-      </div>
-
-      <h1 className="text-3xl font-bold text-slate-900">{plan.name}</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white shadow rounded-lg p-6">
-        <div>
-          <p className="text-sm font-medium text-slate-500">Code</p>
-          <p className="text-lg font-semibold">{plan.code}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Status</p>
-          <p className="text-lg font-semibold">
-            {plan.is_active ? (
-              <span className="text-green-600">Active</span>
-            ) : (
-              <span className="text-gray-600">Inactive</span>
-            )}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Price Monthly</p>
-          <p className="text-lg font-semibold">
-            {new Intl.NumberFormat("id-ID", {
-              style: "currency",
-              currency: plan.currency || "IDR",
-            }).format(plan.price_monthly)}
-          </p>
-        </div>
-        {plan.price_yearly && (
-          <div>
-            <p className="text-sm font-medium text-slate-500">Price Yearly</p>
-            <p className="text-lg font-semibold">
-              {new Intl.NumberFormat("id-ID", {
-                style: "currency",
-                currency: plan.currency || "IDR",
-              }).format(plan.price_yearly)}
-            </p>
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center text-sm text-slate-500 mb-2">
+            <span
+              className="cursor-pointer hover:text-slate-900 transition-colors"
+              onClick={() => router.push("/superadmin/plans")}
+            >
+              Plans
+            </span>
+            <span className="mx-2">/</span>
+            <span className="font-medium text-slate-900 truncate max-w-[200px] md:max-w-xs">{plan.name}</span>
           </div>
-        )}
-        <div>
-          <p className="text-sm font-medium text-slate-500">Is Public</p>
-          <p className="text-lg">{plan.is_public ? "Yes" : "No"}</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{plan.name}</h1>
+            <Badge variant={plan.is_active ? "success" : "secondary"} className="h-6">
+              {plan.is_active ? "Active" : "Inactive"}
+            </Badge>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Sort Order</p>
-          <p className="text-lg">{plan.sort_order}</p>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">Created At</p>
-          <p className="text-lg">{format(new Date(plan.created_at), "PPp")}</p>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => router.push("/superadmin/plans")}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Back
+          </Button>
+          <Button onClick={() => router.push(`/superadmin/plans/${plan.id}/edit`)}>
+            <Pencil className="h-4 w-4 mr-2" /> Edit Plan
+          </Button>
         </div>
       </div>
 
-      {plan.description && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Description</h2>
-          <p className="text-slate-700">{plan.description}</p>
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column - Main Details */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Description Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-xl">
+                <Tag className="h-5 w-5 mr-2 text-slate-500" />
+                Description
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-600 leading-relaxed">
+                {plan.description || <span className="text-slate-400 italic">No description provided for this plan.</span>}
+              </p>
+            </CardContent>
+          </Card>
 
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Limits</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Object.entries(plan.limits)
-            .filter(([key]) => {
-              // Only show rbac_client_reseller limit if the feature is enabled
-              if (key === "rbac_client_reseller") {
-                const hasRbacClientReseller = plan.features?.includes("rbac_client_reseller") || plan.features?.includes("*");
-                return hasRbacClientReseller;
-              }
-              return true;
-            })
-            .map(([key, value]) => (
-              <div key={key}>
-                <p className="text-sm font-medium text-slate-500 capitalize">{key.replace(/_/g, " ")}</p>
-                <p className="text-lg font-semibold">{value}</p>
+          {/* Limits Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-xl">
+                <Activity className="h-5 w-5 mr-2 text-slate-500" />
+                Plan Limits
+              </CardTitle>
+              <CardDescription>Defined usage limits for tenants on this plan</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {Object.entries(plan.limits)
+                  .filter(([key]) => {
+                    if (key === "rbac_client_reseller") {
+                      const hasRbacClientReseller =
+                        plan.features?.includes("rbac_client_reseller") ||
+                        plan.features?.includes("*");
+                      return hasRbacClientReseller;
+                    }
+                    return true;
+                  })
+                  .map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
+                    >
+                      <span className="text-sm font-medium text-slate-600 capitalize">
+                        {key.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-lg font-bold text-slate-900">{value}</span>
+                    </div>
+                  ))}
               </div>
-            ))}
-        </div>
-      </div>
+            </CardContent>
+          </Card>
 
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">
-          Features ({displayFeatures ? displayFeatures.length : 0})
-        </h2>
-        {displayFeatures && displayFeatures.length > 0 ? (
-          <ul className="list-disc list-inside space-y-1">
-            {displayFeatures.map((feature, idx) => {
-              const displayName = getFeatureDisplayName(feature);
-              return (
-                <li key={idx} className="text-slate-700">
-                  {displayName}
-                  {featureMap.has(feature) && feature !== "*" && (
-                    <span className="ml-2 text-xs text-slate-500">({feature})</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <div>
-            <p className="text-slate-500">No features assigned to this plan.</p>
-            {!plan.features && (
-              <p className="text-xs text-red-600 mt-2">Warning: plan.features is undefined or null</p>
-            )}
-          </div>
-        )}
-        {/* Debug: Show raw features array - Always show for debugging */}
-        <details className="mt-4 text-xs text-slate-400">
-          <summary className="cursor-pointer hover:text-slate-600">
-            Debug: Raw features array (click to expand)
-          </summary>
-          <div className="mt-2 p-2 bg-slate-50 rounded overflow-auto">
-            <p className="font-semibold mb-1">plan.features:</p>
-            <pre className="text-xs">
-              {JSON.stringify(plan.features, null, 2)}
-            </pre>
-            <p className="font-semibold mb-1 mt-2">displayFeatures:</p>
-            <pre className="text-xs">
-              {JSON.stringify(displayFeatures, null, 2)}
-            </pre>
-            <p className="font-semibold mb-1 mt-2">featureCatalog codes:</p>
-            <pre className="text-xs">
-              {JSON.stringify(featureCatalog.map(f => f.code), null, 2)}
-            </pre>
-          </div>
-        </details>
+          {/* Features Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-xl">
+                <Layers className="h-5 w-5 mr-2 text-slate-500" />
+                Included Features
+                <Badge variant="secondary" className="ml-3 rounded-full text-xs font-normal">
+                  {displayFeatures ? displayFeatures.length : 0}
+                </Badge>
+              </CardTitle>
+              <CardDescription>Modules and capabilities enabled for this plan</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {displayFeatures && displayFeatures.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                  {displayFeatures.map((feature, idx) => {
+                    const displayName = getFeatureDisplayName(feature);
+                    return (
+                      <div key={idx} className="flex items-start">
+                        <div className="mt-1 mr-3 flex-shrink-0">
+                          {hasWildcardFeature ? (
+                            <ShieldCheck className="h-4 w-4 text-purple-600" />
+                          ) : (
+                            <Check className="h-4 w-4 text-green-600" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{displayName}</p>
+                          {featureMap.has(feature) && feature !== "*" && (
+                            <p className="text-xs text-slate-500 font-mono mt-0.5">{feature}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500 border-2 border-dashed rounded-lg">
+                  No features assigned to this plan.
+                </div>
+              )}
+
+              
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Summary & Meta */}
+        <div className="space-y-8">
+          {/* Pricing Card */}
+          <Card className="border-l-4 border-l-blue-600">
+            <CardHeader>
+              <CardTitle className="flex items-center text-xl">
+                <CreditCard className="h-5 w-5 mr-2 text-slate-500" />
+                Pricing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <p className="text-sm font-medium text-slate-500 mb-1">Monthly Billing</p>
+                <div className="flex items-baseline">
+                  <span className="text-3xl font-bold text-slate-900">
+                    {new Intl.NumberFormat("id-ID", {
+                      style: "currency",
+                      currency: plan.currency || "IDR",
+                    }).format(plan.price_monthly)}
+                  </span>
+                  <span className="ml-2 text-sm text-slate-500">/ mo</span>
+                </div>
+              </div>
+
+              {plan.price_yearly !== undefined && (
+                <div className="pt-4 border-t border-slate-100">
+                  <p className="text-sm font-medium text-slate-500 mb-1">Yearly Billing</p>
+                  <div className="flex items-baseline">
+                    <span className="text-2xl font-bold text-slate-900">
+                      {new Intl.NumberFormat("id-ID", {
+                        style: "currency",
+                        currency: plan.currency || "IDR",
+                      }).format(plan.price_yearly)}
+                    </span>
+                    <span className="ml-2 text-sm text-slate-500">/ yr</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Plan Meta Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg">Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center text-sm text-slate-600">
+                  <Hash className="h-4 w-4 mr-2" /> Code
+                </div>
+                <span className="font-mono text-sm font-medium bg-slate-100 px-2 py-1 rounded">
+                  {plan.code}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center text-sm text-slate-600">
+                  <Globe className="h-4 w-4 mr-2" /> Visibility
+                </div>
+                <Badge variant={plan.is_public ? "default" : "outline"}>
+                  {plan.is_public ? "Public" : "Private"}
+                </Badge>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center text-sm text-slate-600">
+                  <Layers className="h-4 w-4 mr-2" /> Sort Order
+                </div>
+                <span className="font-medium text-slate-900">{plan.sort_order}</span>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <div>
+                  <div className="flex items-center text-xs font-medium text-slate-500 mb-1">
+                    <Clock className="h-3 w-3 mr-1" /> Created At
+                  </div>
+                  <p className="text-sm text-slate-900">
+                    {format(new Date(plan.created_at), "PPP p")}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Debug Info (Collapsed by default) */}
+          <details className="text-xs text-slate-400 cursor-pointer">
+            <summary className="hover:text-slate-600 transition-colors">Debug Information</summary>
+            <div className="mt-2 p-3 bg-slate-50 rounded border border-slate-200 overflow-auto max-h-60">
+                <pre className="whitespace-pre-wrap font-mono">
+                    {JSON.stringify(plan, null, 2)}
+                </pre>
+            </div>
+          </details>
+        </div>
       </div>
     </div>
   );

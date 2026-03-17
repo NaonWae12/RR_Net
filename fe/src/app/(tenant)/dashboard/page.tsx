@@ -6,16 +6,19 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useDashboardStore } from '@/stores/dashboardStore';
 import { useRole } from '@/lib/hooks/useRole';
-import { MetricCard, PlanCard, LimitsCard, FeaturesCard, QuickActions } from '@/components/dashboard';
+import { MetricCard, LimitsCard, QuickActions } from '@/components/dashboard';
 import { LoadingSpinner } from '@/components/utilities/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { clearRoleContext } from '@/lib/utils/roleContext';
 
+import { useTechnicianStore } from '@/stores/technicianStore';
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isAuthenticated, tenant, ready: authReady } = useAuthStore();
-  const { data, loading, error, fetchDashboardData, lastUpdated } = useDashboardStore();
-  const { role, originalRole, switched, roleContext, isAdmin, isTechnician, isFinance, isHR } = useRole();
+  const { data, loading: dashboardLoading, error, fetchDashboardData, isFullData, lastUpdated } = useDashboardStore();
+  const { summary: techSummary, fetchTaskSummary, loading: techLoading } = useTechnicianStore();
+  const { role, originalRole, switched, roleContext, isAdmin, isTechnician, userId } = useRole();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -23,38 +26,35 @@ export default function DashboardPage() {
       return;
     }
 
-    // Wait for authStore.ready before fetching - consistent with Employees page pattern
-    // This ensures token is fully synced to apiClient before making requests
-    // Also check if data already exists or is loading to prevent duplicate calls
-    if (authReady) {
-      // Auth is ready, but only fetch if data doesn't exist and not already loading
-      // Layout.tsx also calls fetchDashboardData, so we need to coordinate
-      if (!data && !loading) {
+    // Fetch dashboard data for Admin/Owner
+    if (isAdmin && authReady) {
+      if (!isFullData && !dashboardLoading) {
         fetchDashboardData();
       }
-    } else {
-      // Wait for auth ready using subscribe pattern
+    } else if (isAdmin) {
       const unsubscribe = useAuthStore.subscribe((state) => {
-        // Only fetch if ready, not loading, and no data yet
-        if (state.ready && !loading && !data) {
+        if (state.ready && !dashboardLoading && !isFullData) {
           fetchDashboardData();
-          unsubscribe(); // Clean up after first ready signal
+          unsubscribe();
         }
       });
-      
-      // Cleanup on unmount
-      return () => {
-        unsubscribe();
-      };
+      return () => unsubscribe();
+    }
+
+    // Fetch technician summary if role is technician
+    if (isTechnician && authReady && userId) {
+      fetchTaskSummary(userId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, authReady, router, fetchDashboardData, data, loading]);
+  }, [isAuthenticated, authReady, router, isAdmin, isTechnician, userId, fetchDashboardData, fetchTaskSummary]);
+
+  const loading = dashboardLoading || (isTechnician && techLoading && !techSummary);
 
   if (!isAuthenticated) {
     return null;
   }
 
-  if (loading && !data) {
+  if (isAdmin && loading && !data) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <LoadingSpinner size={40} />
@@ -102,49 +102,48 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">
-            Welcome back, {user?.name || 'User'}!
-          </h1>
-          <p className="text-slate-500 mt-1">
-            {tenant?.name || 'Your ISP Dashboard'} Overview
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {lastUpdated && (
-            <span className="text-sm text-slate-400">
-              Last updated: {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-          <button
-            onClick={() => fetchDashboardData()}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? (
-              <LoadingSpinner size={16} />
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            )}
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          <p className="text-red-700">{error}</p>
-        </div>
-      )}
-
-      {/* Dashboard Content Based on Effective Role */}
+      {/* Conditional Content Based on Role */}
       {isAdmin ? (
         <>
           {/* Admin/Owner Full Dashboard */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">
+                Welcome back, {user?.name || 'User'}!
+              </h1>
+              <p className="text-slate-500 mt-1">
+                {tenant?.name || 'Your ISP Dashboard'} Overview
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {lastUpdated && (
+                <span className="text-sm text-slate-400">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={() => fetchDashboardData()}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {loading ? (
+                  <LoadingSpinner size={16} />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
+
           {/* Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
@@ -180,6 +179,7 @@ export default function DashboardPage() {
               value={data?.plan?.name || 'No Plan'}
               subtitle={data?.plan ? `${new Intl.NumberFormat('id-ID').format(data.plan.price_monthly)} ${data.plan.currency}/mo` : 'Contact admin'}
               variant="info"
+              href="/subscription"
               icon={
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -201,200 +201,19 @@ export default function DashboardPage() {
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - 2/3 */}
-            <div className="lg:col-span-2 space-y-6">
-              <PlanCard plan={data?.plan || null} />
-              <FeaturesCard features={data?.features || {}} />
-            </div>
-
-            {/* Right Column - 1/3 */}
-            <div className="space-y-6">
+            <div className="lg:col-span-2">
               <QuickActions />
+            </div>
+            <div>
               <LimitsCard
                 limits={data?.limits || {}}
                 clientStats={data?.clientStats}
+                resourceUsage={data?.resourceUsage}
               />
             </div>
           </div>
 
-          {/* Employee Features */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-900">Employee Features</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Link
-                href="/attendance"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Attendance</h3>
-                </div>
-                <p className="text-sm text-slate-600">Check in/out and view attendance history</p>
-              </Link>
-              <Link
-                href="/reimbursement"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Reimbursement</h3>
-                </div>
-                <p className="text-sm text-slate-600">Submit and track reimbursement requests</p>
-              </Link>
-              <Link
-                href="/time-off"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Time Off</h3>
-                </div>
-                <p className="text-sm text-slate-600">Request and manage time off</p>
-              </Link>
-              <Link
-                href="/payslip"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Payslip</h3>
-                </div>
-                <p className="text-sm text-slate-600">View and download your payslips</p>
-              </Link>
-            </div>
-          </div>
-        </>
-      ) : isTechnician ? (
-        <>
-          {/* Technician Dashboard - Simplified */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <MetricCard
-              title="My Tasks"
-              value="View Tasks"
-              subtitle="Manage your assigned tasks"
-              variant="info"
-              icon={
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              }
-            />
-            <MetricCard
-              title="Activities"
-              value="Log Activity"
-              subtitle="Record your field activities"
-              variant="default"
-              icon={
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
-          </div>
-
-          {/* Employee Features */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-900">Employee Features</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Link
-                href="/attendance"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Attendance</h3>
-                </div>
-                <p className="text-sm text-slate-600">Check in/out and view attendance history</p>
-              </Link>
-              <Link
-                href="/reimbursement"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Reimbursement</h3>
-                </div>
-                <p className="text-sm text-slate-600">Submit and track reimbursement requests</p>
-              </Link>
-              <Link
-                href="/time-off"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Time Off</h3>
-                </div>
-                <p className="text-sm text-slate-600">Request and manage time off</p>
-              </Link>
-              <Link
-                href="/payslip"
-                className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold text-slate-900">Payslip</h3>
-                </div>
-                <p className="text-sm text-slate-600">View and download your payslips</p>
-              </Link>
-            </div>
-          </div>
-
-          {/* Quick Links for Technician */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Link
-              href="/technician/tasks"
-              className="bg-white border border-slate-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-            >
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">My Tasks</h3>
-              <p className="text-sm text-slate-600">View and manage your assigned tasks</p>
-            </Link>
-          </div>
-        </>
-      ) : isFinance || isHR ? (
-        <>
-          {/* Finance/HR Dashboard - Limited Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <MetricCard
-              title="Plan"
-              value={data?.plan?.name || 'No Plan'}
-              subtitle={data?.plan ? `${new Intl.NumberFormat('id-ID').format(data.plan.price_monthly)} ${data.plan.currency}/mo` : 'Contact admin'}
-              variant="info"
-              icon={
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-              }
-            />
-            <MetricCard
-              title="Features"
-              value={Object.values(data?.features || {}).filter(Boolean).length}
-              subtitle="Active features"
-              variant="success"
-              icon={
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              }
-            />
-          </div>
-
-          {/* Employee Features */}
+          {/* Employee Features for Admin */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-slate-900">Employee Features</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -451,16 +270,134 @@ export default function DashboardPage() {
         </>
       ) : (
         <>
-          {/* Other Roles - Minimal Dashboard */}
-          <div className="bg-white border border-slate-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">Dashboard</h3>
-            <p className="text-sm text-slate-600">
-              Welcome to your dashboard. Use the navigation menu to access available features.
+          {/* My Workspace for Other Roles (HR, Finance, Technician, etc) */}
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-bold text-[#0f172a]">
+              Welcome back, {user?.name || 'User'}! 👋
+            </h1>
+            <p className="text-[#64748b] text-base">
+              {isTechnician 
+                ? "Here's your work summary and personal work tools." 
+                : "Your personal workspace for attendance, reimbursements, and more."}
             </p>
+          </div>
+
+          {isTechnician && techSummary && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-[#0f172a]">Task Overview</h2>
+                <Link href="/technician/tasks" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">View all tasks →</Link>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Tasks</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">{techSummary.total_tasks}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{techSummary.in_progress_tasks}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending</p>
+                  <p className="text-2xl font-bold text-amber-600 mt-1">{techSummary.pending_tasks}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Completed</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{techSummary.completed_tasks}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-[#0f172a]">Quick Access</h2>
+              <span className="text-sm text-[#94a3b8]">Manage your personal tasks</span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              <Link
+                href="/attendance"
+                className="group bg-[#ffffff] border border-[#e2e8f0] rounded-xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:border-[#4f46e5] transition-all duration-300"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 bg-[#eef2ff] rounded-lg group-hover:bg-[#4f46e5] transition-colors">
+                    <svg className="w-6 h-6 text-[#4f46e5] group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-[#0f172a] group-hover:text-[#4f46e5] transition-colors">Attendance</h3>
+                </div>
+                <p className="text-sm text-[#64748b]">Check in/out and view your attendance history</p>
+              </Link>
+
+              <Link
+                href="/reimbursement"
+                className="group bg-[#ffffff] border border-[#e2e8f0] rounded-xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:border-[#10b981] transition-all duration-300"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 bg-[#ecfdf5] rounded-lg group-hover:bg-[#10b981] transition-colors">
+                    <svg className="w-6 h-6 text-[#10b981] group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-[#0f172a] group-hover:text-[#10b981] transition-colors">Reimbursement</h3>
+                </div>
+                <p className="text-sm text-[#64748b]">Submit and track your reimbursement requests</p>
+              </Link>
+
+              <Link
+                href="/time-off"
+                className="group bg-[#ffffff] border border-[#e2e8f0] rounded-xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:border-[#f59e0b] transition-all duration-300"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 bg-[#fffbeb] rounded-lg group-hover:bg-[#f59e0b] transition-colors">
+                    <svg className="w-6 h-6 text-[#f59e0b] group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-[#0f172a] group-hover:text-[#f59e0b] transition-colors">Time Off</h3>
+                </div>
+                <p className="text-sm text-[#64748b]">Request and manage your leave applications</p>
+              </Link>
+
+              <Link
+                href="/payslip"
+                className="group bg-[#ffffff] border border-[#e2e8f0] rounded-xl p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:border-[#0f172a] transition-all duration-300"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 bg-[#f8fafc] rounded-lg group-hover:bg-[#0f172a] transition-colors">
+                    <svg className="w-6 h-6 text-[#0f172a] group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-[#0f172a] group-hover:text-[#0f172a] transition-colors">Payslip</h3>
+                </div>
+                <p className="text-sm text-[#64748b]">View and download your monthly payslips</p>
+              </Link>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-[#eef2ff] to-[#f8fafc] border border-[#e2e8f0] rounded-xl p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-[#4f46e5] rounded-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-[#0f172a] mb-1">Need Help?</h3>
+                <p className="text-sm text-[#64748b] mb-3">
+                  If you have questions about attendance, reimbursements, or payroll, please contact the HR department.
+                </p>
+                <Button className="bg-[#4f46e5] hover:bg-[#4338ca] text-white font-semibold">
+                  Contact HR
+                </Button>
+              </div>
+            </div>
           </div>
         </>
       )}
     </div>
   );
 }
-

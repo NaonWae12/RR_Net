@@ -20,33 +20,33 @@ func NewComplianceValidator(standards []string) *ComplianceValidator {
 
 // ComplianceResult represents the result of a compliance validation
 type ComplianceResult struct {
-	Standard      string
-	Status        string // "compliant", "non_compliant", "partial"
-	Score         float64 // 0-100
-	Issues        []ComplianceIssue
+	Standard        string
+	Status          string  // "compliant", "non_compliant", "partial"
+	Score           float64 // 0-100
+	Issues          []ComplianceIssue
 	Recommendations []string
-	ValidatedAt   time.Time
+	ValidatedAt     time.Time
 }
 
 // ComplianceIssue represents a compliance issue
 type ComplianceIssue struct {
-	Requirement   string
-	Status        string // "met", "not_met", "partial"
-	Severity      string // "low", "medium", "high", "critical"
-	Description   string
+	Requirement    string
+	Status         string // "met", "not_met", "partial"
+	Severity       string // "low", "medium", "high", "critical"
+	Description    string
 	Recommendation string
-	Timestamp     time.Time
+	Timestamp      time.Time
 }
 
 // ValidateGDPRCompliance validates GDPR compliance
 func (cv *ComplianceValidator) ValidateGDPRCompliance(ctx context.Context) (*ComplianceResult, error) {
 	result := &ComplianceResult{
-		Standard:    "GDPR",
-		Status:      "compliant", // Placeholder
-		Score:       100.0,      // Placeholder
-		Issues:      []ComplianceIssue{},
+		Standard:        "GDPR",
+		Status:          "compliant", // Placeholder
+		Score:           100.0,       // Placeholder
+		Issues:          []ComplianceIssue{},
 		Recommendations: []string{},
-		ValidatedAt: time.Now(),
+		ValidatedAt:     time.Now(),
 	}
 
 	// Note: In production, this would validate:
@@ -62,12 +62,12 @@ func (cv *ComplianceValidator) ValidateGDPRCompliance(ctx context.Context) (*Com
 // ValidateSOXCompliance validates SOX compliance
 func (cv *ComplianceValidator) ValidateSOXCompliance(ctx context.Context) (*ComplianceResult, error) {
 	result := &ComplianceResult{
-		Standard:    "SOX",
-		Status:      "compliant", // Placeholder
-		Score:       100.0,      // Placeholder
-		Issues:      []ComplianceIssue{},
+		Standard:        "SOX",
+		Status:          "compliant", // Placeholder
+		Score:           100.0,       // Placeholder
+		Issues:          []ComplianceIssue{},
 		Recommendations: []string{},
-		ValidatedAt: time.Now(),
+		ValidatedAt:     time.Now(),
 	}
 
 	// Note: In production, this would validate:
@@ -83,12 +83,12 @@ func (cv *ComplianceValidator) ValidateSOXCompliance(ctx context.Context) (*Comp
 // ValidateIndustryCompliance validates industry-specific compliance
 func (cv *ComplianceValidator) ValidateIndustryCompliance(ctx context.Context, standard string) (*ComplianceResult, error) {
 	result := &ComplianceResult{
-		Standard:    standard,
-		Status:      "compliant", // Placeholder
-		Score:       100.0,      // Placeholder
-		Issues:      []ComplianceIssue{},
+		Standard:        standard,
+		Status:          "compliant", // Placeholder
+		Score:           100.0,       // Placeholder
+		Issues:          []ComplianceIssue{},
 		Recommendations: []string{},
-		ValidatedAt: time.Now(),
+		ValidatedAt:     time.Now(),
 	}
 
 	// Note: In production, this would validate:
@@ -129,4 +129,3 @@ func (cv *ComplianceValidator) ValidateAllCompliance(ctx context.Context) (map[s
 
 	return results, nil
 }
-

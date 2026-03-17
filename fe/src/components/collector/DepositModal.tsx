@@ -6,8 +6,8 @@ import { useClientStore } from '@/stores/clientStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import servicePackageService, { ServicePackage } from '@/lib/api/servicePackageService';
 import { Client } from '@/lib/api/clientService';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface DepositModalProps {
   onClose: () => void;
@@ -19,43 +19,18 @@ export function DepositModal({ onClose }: DepositModalProps) {
     partialPayments, 
     payments,
     submitDeposit,
-    todayCollection 
+    todayCollection,
+    markedClients 
   } = useCollectorStore();
   const { clients } = useClientStore();
   const { showToast } = useNotificationStore();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [packages, setPackages] = useState<ServicePackage[]>([]);
 
-  // Load service packages for calculating total billing
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const packageList = await servicePackageService.list(undefined, false);
-        if (!alive) return;
-        setPackages(packageList);
-      } catch {
-        // ignore error
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
 
-  // Calculate total billing for a client (same logic as ClientTable)
+  // Calculate total billing for a client
   const calculateTotal = useCallback((client: Client): number => {
-    if (!client.service_package_id) return 0;
-    
-    const pkg = packages.find((p) => p.id === client.service_package_id);
-    if (!pkg) return 0;
-
-    let basePrice = 0;
-    if (pkg.pricing_model === 'per_device') {
-      basePrice = pkg.price_per_device * (client.device_count || 1);
-    } else {
-      basePrice = pkg.price_monthly;
-    }
+    const basePrice = client.monthly_fee || 0;
 
     // Apply discount if exists
     if (client.discount_type && client.discount_value) {
@@ -67,7 +42,7 @@ export function DepositModal({ onClose }: DepositModalProps) {
     }
 
     return basePrice;
-  }, [packages]);
+  }, []);
 
   // Calculate total amount to deposit
   const depositAmount = useMemo(() => {
@@ -75,7 +50,7 @@ export function DepositModal({ onClose }: DepositModalProps) {
     
     // Add from paid full clients - calculate from actual total tagihan
     paidFullClients.forEach((clientId) => {
-      const client = clients.find((c) => c.id === clientId);
+      const client = markedClients.get(clientId);
       if (client) {
         const clientTotal = calculateTotal(client);
         total += clientTotal;
@@ -90,15 +65,20 @@ export function DepositModal({ onClose }: DepositModalProps) {
     return total;
   }, [paidFullClients, partialPayments, clients, calculateTotal]);
 
-  const paidFullClientsList = useMemo(() => {
-    // Return array of clients that paid in full with their details
-    return Array.from(paidFullClients)
+  const includedClientsList = useMemo(() => {
+    // Return array of all clients that have any collection today (full or partial)
+    const allClientIds = new Set([
+      ...Array.from(paidFullClients),
+      ...Array.from(partialPayments.keys())
+    ]);
+    
+    return Array.from(allClientIds)
       .map((clientId) => {
-        const client = clients.find((c) => c.id === clientId);
+        const client = markedClients.get(clientId);
         return client ? client : null;
       })
       .filter((client): client is Client => client !== null);
-  }, [paidFullClients, clients]);
+  }, [paidFullClients, partialPayments, markedClients]);
 
   const handleSubmit = async () => {
     if (depositAmount === 0) {
@@ -112,13 +92,13 @@ export function DepositModal({ onClose }: DepositModalProps) {
 
     setIsSubmitting(true);
     try {
-      const clientIds = Array.from(paidFullClients);
+      const clientIds = includedClientsList.map(c => c.id);
       // Get payment IDs for the clients (from payments store)
       const paymentIds = payments
         .filter((p) => clientIds.includes(p.client_id))
         .map((p) => p.id);
       
-      await submitDeposit(depositAmount, clientIds, paymentIds);
+      await submitDeposit(depositAmount, clientIds, paymentIds, user?.id);
       showToast({
         title: 'Deposit submitted',
         description: `Successfully deposited ${new Intl.NumberFormat("id-ID", {
@@ -166,16 +146,17 @@ export function DepositModal({ onClose }: DepositModalProps) {
           </div>
 
           {/* Client List */}
-          {paidFullClientsList.length > 0 && (
+          {includedClientsList.length > 0 && (
             <div>
               <h3 className="text-sm font-medium text-slate-700 mb-2">
                 Clients Included:
               </h3>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {paidFullClientsList.map((client) => {
+                {includedClientsList.map((client) => {
                   const partialAmount = partialPayments.get(client.id) || 0;
                   const fullAmount = calculateTotal(client); // Calculate from actual total tagihan
-                  const amount = partialAmount > 0 ? partialAmount : fullAmount;
+                  const isPaidFull = paidFullClients.has(client.id);
+                  const amount = isPaidFull ? fullAmount : partialAmount;
                   
                   return (
                     <div
@@ -184,7 +165,12 @@ export function DepositModal({ onClose }: DepositModalProps) {
                     >
                       <div>
                         <p className="font-medium text-slate-900">{client.name}</p>
-                        <p className="text-sm text-slate-600">{client.phone || `ID: ${client.id}`}</p>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-slate-600">{client.phone || `ID: ${client.id}`}</span>
+                          <span className={`px-1.5 py-0.5 rounded ${isPaidFull ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {isPaidFull ? 'Full' : 'Partial'}
+                          </span>
+                        </div>
                       </div>
                       <span className="text-sm font-medium text-slate-900">
                         {new Intl.NumberFormat("id-ID", {

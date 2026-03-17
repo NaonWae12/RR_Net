@@ -6,7 +6,7 @@ const API_BASE_URL =
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 60000,
   withCredentials: true, // Enable sending cookies in cross-origin requests
 });
 
@@ -238,8 +238,8 @@ function getTokenExpiration(token: string): number | null {
   }
 }
 
-// Check if token is about to expire (less than 2 minutes remaining)
-function isTokenExpiringSoon(token: string): boolean {
+// Check if token needs refresh (expired or expiring in less than 2 minutes)
+function shouldRefreshToken(token: string): boolean {
   const expiration = getTokenExpiration(token);
   if (!expiration) return false;
   
@@ -247,7 +247,8 @@ function isTokenExpiringSoon(token: string): boolean {
   const timeUntilExpiry = expiration - now;
   const twoMinutes = 2 * 60 * 1000; // 2 minutes in milliseconds
   
-  return timeUntilExpiry > 0 && timeUntilExpiry < twoMinutes;
+  // Refresh if expired (negative) or expiring soon
+  return timeUntilExpiry < twoMinutes;
 }
 
 // Process refresh subscribers
@@ -261,6 +262,9 @@ apiClient.interceptors.request.use(
   if (!config.headers) {
     config.headers = new axios.AxiosHeaders();
   }
+
+  const url = (config.url ?? '').toString();
+  const isAuthPath = url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/logout');
   
   // CRITICAL: Wait for auth to be ready before sending requests
   // This prevents race conditions where requests are sent before token is synced
@@ -271,7 +275,10 @@ apiClient.interceptors.request.use(
       const state = authStore.getState();
       
       // If authenticated but not ready, wait for ready state
-      if (state.isAuthenticated && !state.ready) {
+      // EXEMPTION: Don't wait for auth-related paths (login, refresh, logout) 
+      // because they are the ones that actually make the state ready
+      if (state.isAuthenticated && !state.ready && !isAuthPath) {
+        // console.log(`[apiClient] Waiting for auth ready for: ${url}`);
         await new Promise<void>((resolve) => {
           const timeout = setTimeout(() => {
             // Timeout after 3 seconds - proceed anyway to avoid hanging
@@ -339,8 +346,9 @@ apiClient.interceptors.request.use(
     // Ignore - use existing accessToken
   }
     
-    // Check if token is about to expire and refresh if needed
-    if (currentToken && isTokenExpiringSoon(currentToken) && refreshTokenCallback && getRefreshTokenCallback) {
+    // Check if token needs refresh and refresh if needed
+    // EXEMPTION: Don't auto-refresh for auth-related paths to avoid deadlocks
+    if (currentToken && !isAuthPath && shouldRefreshToken(currentToken) && refreshTokenCallback && getRefreshTokenCallback) {
       const currentRefreshToken = getRefreshTokenCallback();
       
       if (currentRefreshToken && !isRefreshing) {
@@ -396,19 +404,19 @@ apiClient.interceptors.request.use(
   // Add auth token
   if (currentToken) {
     config.headers.Authorization = `Bearer ${currentToken}`;
-    // console.log('[AXIOS] Authorization header set in interceptor:', {
-    //   url: config.url,
-    //   method: config.method,
-    //   hasToken: true,
-    //   tokenPreview: currentToken.substring(0, 20) + '...',
-    // });
+    console.log('[AXIOS] Authorization header set in interceptor:', {
+      url: config.url,
+      method: config.method,
+      hasToken: true,
+      tokenPreview: currentToken.substring(0, 20) + '...',
+    });
   } else {
-    // console.log('[AXIOS] WARNING: No token available in interceptor:', {
-    //   url: config.url,
-    //   method: config.method,
-    //   accessToken: accessToken ? accessToken.substring(0, 20) + '...' : null,
-    //   currentToken: null,
-    // });
+    console.warn('[AXIOS] WARNING: No token available in interceptor:', {
+      url: config.url,
+      method: config.method,
+      accessToken: accessToken ? accessToken.substring(0, 20) + '...' : null,
+      currentToken: null,
+    });
   }
   
   // Add tenant slug (only if provided and not empty)
@@ -463,6 +471,12 @@ apiClient.interceptors.request.use(
   // Attach request id header for tracing
   if (!config.headers['x-request-id']) {
     config.headers['x-request-id'] = generateUUID();
+  }
+
+  // Auto-extend timeout for slow AI/migration endpoints (Ollama can take 30-60s on CPU)
+  const slowEndpoints = ['/migration/extract-image', '/migration/process'];
+  if (slowEndpoints.some((path) => (config.url ?? '').includes(path))) {
+    config.timeout = 6 * 60 * 1000; // 6 minutes — backend needs up to 5 min for Ollama on CPU
   }
   
   return config;
@@ -529,6 +543,10 @@ function getErrorMessage(error: AxiosError): string {
       return "Service temporarily unavailable. Please try again later.";
     case 504:
       return "Request timeout. Please try again.";
+    case 405:
+      return "Method not allowed. Please contact support.";
+    case 408:
+      return "Request timeout. Please try again.";
     default:
       if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
         return "Request timeout. Please check your connection and try again.";
@@ -553,17 +571,27 @@ function isRetryableError(error: AxiosError): boolean {
   const url = (error?.config?.url ?? "").toString();
   const method = error?.config?.method?.toUpperCase();
 
+  // Do NOT retry for ANY AI or migration endpoints - they are slow and can be expensive (API credits)
+  const isAIOrMigration = url.includes('/ai/') || url.includes('/migration/');
+  if (isAIOrMigration) {
+    return false;
+  }
+
   // Do NOT retry 429 (Too Many Requests) - this indicates rate limiting
   // Retrying will only make it worse
   if (status === 429) {
     return false;
   }
 
-  // Do NOT retry 500 errors for POST/PUT/PATCH/DELETE requests
-  // These are usually data validation or business logic errors that won't change with retry
-  // Only retry 500 for GET requests (which might be transient server issues)
-  if (status === 500 && method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    return false;
+  // Do NOT retry 500 errors or timeouts for POST/PUT/PATCH/DELETE requests
+  // These are usually data validation or business logic errors or slow operations 
+  // that might have succeeded in the background (e.g. creating data in DB).
+  // Retrying them can cause duplicate data.
+  // Only retry them for GET requests (which are idempotent).
+  if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    if (status === 500 || code === "ECONNABORTED" || code === "ETIMEDOUT") {
+      return false;
+    }
   }
 
   if (status && RETRYABLE_STATUSES.includes(status)) {
@@ -646,6 +674,7 @@ apiClient.interceptors.response.use(
       url.includes('/my/features') ||
       url.includes('/my/limits') ||
       url.includes('/dashboard/summary') ||
+      url.includes('/dashboard/bootstrap') ||
       url.includes('/tenant/me');
     
     const isCriticalAuthEndpoint = 

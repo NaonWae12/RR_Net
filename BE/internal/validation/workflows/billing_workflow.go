@@ -37,10 +37,10 @@ func NewBillingWorkflowValidator(
 
 // WorkflowValidationResult represents the result of a workflow validation
 type WorkflowValidationResult struct {
-	Valid       bool
-	Message     string
-	Steps       []WorkflowStep
-	Errors      []string
+	Valid   bool
+	Message string
+	Steps   []WorkflowStep
+	Errors  []string
 }
 
 // WorkflowStep represents a step in the workflow
@@ -162,4 +162,3 @@ func (v *BillingWorkflowValidator) ValidateCompleteBillingCycle(
 
 	return result, nil
 }
-

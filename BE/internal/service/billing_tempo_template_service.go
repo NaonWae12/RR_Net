@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	ErrTempoTemplateNameRequired = errors.New("tempo template name is required")
+	ErrTempoTemplateNameRequired  = errors.New("tempo template name is required")
 	ErrTempoTemplateDueDayInvalid = errors.New("tempo template due_day must be between 1 and 31")
 )
 
@@ -131,5 +131,3 @@ func toTempoTemplateDTO(t *billing.TempoTemplate) *TempoTemplateDTO {
 		UpdatedAt:   t.UpdatedAt,
 	}
 }
-
-

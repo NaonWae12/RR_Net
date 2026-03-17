@@ -60,7 +60,7 @@ export function Modal({
         {backdrop && (
           <DialogPrimitive.Overlay
             className={cn(
-              "fixed inset-0 z-50 bg-black/50",
+              "fixed inset-0 z-[10000] bg-black/50",
               animation.type === "fade" && "animate-in fade-in-0",
               animation.type === "slide" && "animate-in slide-in-from-bottom-4",
               animation.type === "scale" && "animate-in zoom-in-95"
@@ -70,7 +70,7 @@ export function Modal({
         )}
         <DialogPrimitive.Content
           className={cn(
-            "fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+            "fixed left-[50%] top-[50%] z-[10000] grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border border-[#e2e8f0] bg-[#ffffff] p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25)] duration-200 sm:rounded-2xl",
             sizeClasses[size],
             animation.type === "fade" && "animate-in fade-in-0 zoom-in-95",
             animation.type === "slide" && "animate-in slide-in-from-bottom-4",
@@ -82,22 +82,22 @@ export function Modal({
           onInteractOutside={closeOnBackdrop ? onClose : undefined}
         >
           {(title || subtitle) && (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pb-2">
               <div>
                 {title && (
-                  <DialogPrimitive.Title className="text-lg font-semibold leading-none tracking-tight">
+                  <DialogPrimitive.Title className="text-2xl font-bold leading-tight text-[#0f172a]">
                     {title}
                   </DialogPrimitive.Title>
                 )}
                 {subtitle && (
-                  <DialogPrimitive.Description className="mt-2 text-sm text-slate-600">
+                  <DialogPrimitive.Description className="mt-1.5 text-sm font-medium text-[#64748b]">
                     {subtitle}
                   </DialogPrimitive.Description>
                 )}
               </div>
               <DialogPrimitive.Close asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <X className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-[#f1f5f9] text-[#94a3b8] hover:text-[#0f172a] transition-all">
+                  <X className="h-5 w-5" />
                   <span className="sr-only">Close</span>
                 </Button>
               </DialogPrimitive.Close>
@@ -106,7 +106,7 @@ export function Modal({
 
           <div className="overflow-y-auto max-h-[calc(100vh-200px)]">{children}</div>
 
-          {footer && <div className="flex items-center justify-end gap-2 border-t pt-4">{footer}</div>}
+          {footer && <div className="flex items-center justify-end gap-3 border-t border-[#f1f5f9] pt-6 mt-2">{footer}</div>}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

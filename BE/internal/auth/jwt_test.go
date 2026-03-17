@@ -129,4 +129,3 @@ func TestJWTManager_TokenExpiration(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, ErrExpiredToken, err)
 }
-

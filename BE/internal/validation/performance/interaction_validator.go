@@ -22,13 +22,13 @@ func NewInteractionValidator(monitor *monitoring.PerformanceMonitor) *Interactio
 
 // InteractionValidationResult represents the result of an interaction validation
 type InteractionValidationResult struct {
-	Valid          bool
-	Message        string
-	Interaction    string
-	ResponseTime   time.Duration
-	Threshold      time.Duration
-	Errors         []string
-	ValidatedAt    time.Time
+	Valid        bool
+	Message      string
+	Interaction  string
+	ResponseTime time.Duration
+	Threshold    time.Duration
+	Errors       []string
+	ValidatedAt  time.Time
 }
 
 // ValidateModuleInteraction validates performance of a module interaction

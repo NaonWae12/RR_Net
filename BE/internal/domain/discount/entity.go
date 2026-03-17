@@ -16,17 +16,17 @@ const (
 
 // Discount represents a discount/promotion that can be applied to clients
 type Discount struct {
-	ID        uuid.UUID  `json:"id"`
-	TenantID  uuid.UUID  `json:"tenant_id"`
-	Name      string     `json:"name"`
-	Description *string  `json:"description,omitempty"`
-	Type      Type       `json:"type"`
-	Value     float64    `json:"value"` // Percentage (0-100) or nominal amount
-	ExpiresAt *time.Time `json:"expires_at,omitempty"` // NULL = never expires
-	IsActive  bool       `json:"is_active"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	ID          uuid.UUID  `json:"id"`
+	TenantID    uuid.UUID  `json:"tenant_id"`
+	Name        string     `json:"name"`
+	Description *string    `json:"description,omitempty"`
+	Type        Type       `json:"type"`
+	Value       float64    `json:"value"`                // Percentage (0-100) or nominal amount
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"` // NULL = never expires
+	IsActive    bool       `json:"is_active"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
 }
 
 // IsValid checks if discount is valid (active, not expired, not deleted)
@@ -64,4 +64,3 @@ func (d *Discount) ApplyDiscount(price float64) float64 {
 	}
 	return finalPrice
 }
-

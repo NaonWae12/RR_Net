@@ -70,11 +70,11 @@ export const PieChart = React.memo(function PieChart({
     innerRadius,
     outerRadius,
     percent,
-    name,
+    index,
   }: any) => {
-    if (!showPercentages) return null;
+    if (!showPercentages || percent < 0.01) return null;
 
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const radius = outerRadius * 1.2;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
@@ -82,22 +82,15 @@ export const PieChart = React.memo(function PieChart({
       <text
         x={x}
         y={y}
-        fill="white"
+        fill="#64748b"
         textAnchor={x > cx ? "start" : "end"}
         dominantBaseline="central"
-        fontSize={12}
+        fontSize={10}
         fontWeight="bold"
       >
-        {`${(percent * 100).toFixed(0)}%`}
+        {`${data[index].name} (${(percent * 100).toFixed(0)}%)`}
       </text>
     );
-  };
-
-  const renderCustomizedLabel = (entry: any, index: number) => {
-    if (explode.includes(index)) {
-      return { ...entry, outerRadius: entry.outerRadius * 1.1 };
-    }
-    return entry;
   };
 
   return (
@@ -116,10 +109,10 @@ export const PieChart = React.memo(function PieChart({
             data={data}
             cx="50%"
             cy="50%"
-            labelLine={false}
+            labelLine={true}
             label={renderLabel}
-            outerRadius={donut ? 80 : 100}
-            innerRadius={donut ? 40 : 0}
+            outerRadius={donut ? 70 : 80}
+            innerRadius={donut ? 50 : 0}
             fill="#8884d8"
             dataKey="value"
             animationBegin={0}
@@ -141,11 +134,14 @@ export const PieChart = React.memo(function PieChart({
           </Pie>
           {tooltip?.show && (
             <Tooltip
-              formatter={(value: any, name?: any) => {
-                const v = typeof value === "number" ? value : Number(value || 0);
-                const label = typeof name === "string" ? name : String(name ?? "");
-                return [`${v} (${total ? ((v / total) * 100).toFixed(1) : "0.0"}%)`, label];
-              }}
+              formatter={
+                tooltip.formatter ||
+                ((value: any, name?: any) => {
+                  const v = typeof value === "number" ? value : Number(value || 0);
+                  const label = typeof name === "string" ? name : String(name ?? "");
+                  return [`${v} (${total ? ((v / total) * 100).toFixed(1) : "0.0"}%)`, label];
+                })
+              }
             />
           )}
           {legend?.show && (

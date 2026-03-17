@@ -148,4 +148,3 @@ func (ir *IncidentResponder) RespondToIncident(ctx context.Context, incident Sec
 	_ = incident
 	return nil
 }
-

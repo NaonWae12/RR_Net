@@ -73,13 +73,16 @@ export default function EditPlanPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={handleCancel}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Plan Details
         </Button>
       </div>
-      <h1 className="text-2xl font-bold text-slate-900">Edit Plan: {plan.name}</h1>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Edit Plan: {plan.name}</h1>
+        <p className="text-slate-500">Update plan details, pricing, and limits.</p>
+      </div>
       <CreateEditPlanForm initialData={plan} onSubmit={handleSubmit} onCancel={handleCancel} isLoading={loading} />
     </div>
   );

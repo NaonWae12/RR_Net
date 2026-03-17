@@ -40,7 +40,7 @@ const COLUMNS_STORAGE_KEY = "invoices_table_columns_v1";
 
 export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
   const router = useRouter();
-  const { cancelInvoice } = useBillingStore();
+  const { cancelInvoice, invoiceFilters, setInvoiceFilters } = useBillingStore();
   const { showToast } = useNotificationStore();
 
   const [visibleColumns, setVisibleColumns] = React.useState<Record<ColumnKey, boolean>>({
@@ -115,25 +115,96 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-48">
+      <div className="flex justify-center items-center h-48 bg-white rounded-lg border border-slate-200">
         <LoadingSpinner size={40} />
-      </div>
-    );
-  }
-
-  if (!invoices || invoices.length === 0) {
-    return (
-      <div className="text-center py-8 text-slate-500">
-        No invoices found. Try adjusting your filters.
       </div>
     );
   }
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden border border-slate-200">
-      <div className="flex items-center justify-end px-4 py-3 border-b border-slate-200 bg-white">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
+        <div className="flex items-center gap-2">
+           <details className="relative group">
+              <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold border border-slate-200 rounded-lg bg-slate-50 hover:bg-white text-slate-700 transition-all">
+                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {(!invoiceFilters.start_date && !invoiceFilters.end_date) ? 'All Time' : 
+                 (invoiceFilters.start_date === invoiceFilters.end_date) ? `Date: ${invoiceFilters.start_date}` :
+                 'Custom Range'}
+                <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+              <div className="absolute left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-4 z-20 space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs"
+                    onClick={() => setInvoiceFilters({ start_date: undefined, end_date: undefined })}
+                  >
+                    All Time
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs"
+                    onClick={() => {
+                      const today = new Date().toISOString().split('T')[0];
+                      setInvoiceFilters({ start_date: today, end_date: today });
+                    }}
+                  >
+                    Today
+                  </Button>
+                </div>
+                
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Start Date / Per Day</label>
+                    <input 
+                      type="date" 
+                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                      value={invoiceFilters.start_date || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceFilters({ start_date: val || undefined });
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">End Date (Optional Range)</label>
+                    <input 
+                      type="date" 
+                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                      value={invoiceFilters.end_date || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceFilters({ end_date: val || undefined });
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button 
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-1"
+                    onClick={() => {
+                      // Trigger fetch via store effect
+                      const details = document.querySelector('details[open]');
+                      if (details) details.removeAttribute('open');
+                    }}
+                  >
+                    Apply Filter
+                  </Button>
+                </div>
+              </div>
+           </details>
+        </div>
+
         <details className="relative">
-          <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-900">
+          <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-900 bg-white">
             Columns
             <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -170,7 +241,25 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
         </details>
       </div>
 
-      <div className="overflow-x-auto">
+      {(!invoices || invoices.length === 0) ? (
+        <div className="text-center py-20 bg-slate-50/50">
+          <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
+             <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+             </svg>
+          </div>
+          <h3 className="text-lg font-bold text-slate-900">No invoices found</h3>
+          <p className="text-slate-500 text-sm mt-1 max-w-xs mx-auto">Try adjusting your time filters or searching for specific client details.</p>
+          <Button 
+            variant="link" 
+            className="mt-4 text-indigo-600 font-bold"
+            onClick={() => setInvoiceFilters({})}
+          >
+            Clear All Filters
+          </Button>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-200">
@@ -236,6 +325,7 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
           </TableBody>
         </Table>
       </div>
+      )}
     </div>
   );
 }

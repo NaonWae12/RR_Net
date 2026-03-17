@@ -39,23 +39,31 @@ const (
 )
 
 type Voucher struct {
-	ID             uuid.UUID     `json:"id"`
-	TenantID       uuid.UUID     `json:"tenant_id"`
-	PackageID      uuid.UUID     `json:"package_id"`
-	RouterID       *uuid.UUID    `json:"router_id,omitempty"`
-	Code           string        `json:"code"`
-	Password       string        `json:"password"`
-	Status         VoucherStatus `json:"status"`
-	Isolated       bool          `json:"isolated"` // Whether user is isolated (blocked from internet)
-	UsedAt         *time.Time    `json:"used_at,omitempty"`
-	ExpiresAt      *time.Time    `json:"expires_at,omitempty"`
-	FirstSessionID *uuid.UUID    `json:"first_session_id,omitempty"`
-	Notes          string        `json:"notes,omitempty"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	ID                 uuid.UUID     `json:"id"`
+	TenantID           uuid.UUID     `json:"tenant_id"`
+	PackageID          uuid.UUID     `json:"package_id"`
+	RouterID           *uuid.UUID    `json:"router_id,omitempty"`
+	Code               string        `json:"code"`
+	Password           string        `json:"password"`
+	Status             VoucherStatus `json:"status"`
+	Isolated           bool          `json:"isolated"` // Whether user is isolated (blocked from internet)
+	SharedUsers        int           `json:"shared_users"`
+	UsedAt             *time.Time    `json:"used_at,omitempty"`
+	ExpiresAt          *time.Time    `json:"expires_at,omitempty"`
+	FirstSessionID     *uuid.UUID    `json:"first_session_id,omitempty"`
+	Notes              string        `json:"notes,omitempty"`
+	ResellerPurchaseID *uuid.UUID    `json:"reseller_purchase_id,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+
+	// Uptime & Usage (populated from radius sessions)
+	UptimeSeconds  int   `json:"uptime_seconds"`
+	TotalBytesUsed int64 `json:"total_bytes_used"`
 
 	// Joined fields (optional, populated by repository)
-	PackageName *string `json:"package_name,omitempty"`
+	PackageName  *string  `json:"package_name,omitempty"`
+	PackagePrice *float64 `json:"package_price,omitempty"`
+	RouterName   *string  `json:"router_name,omitempty"`
 }
 
 type VoucherUsage struct {

@@ -100,5 +100,3 @@ func (r *ClientGroupRepository) NameExists(ctx context.Context, tenantID uuid.UU
 	}
 	return exists, nil
 }
-
-

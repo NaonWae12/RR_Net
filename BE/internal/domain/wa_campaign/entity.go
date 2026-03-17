@@ -25,17 +25,17 @@ const (
 )
 
 type Campaign struct {
-	ID        uuid.UUID `json:"id"`
-	TenantID  uuid.UUID `json:"tenant_id"`
+	ID        uuid.UUID  `json:"id"`
+	TenantID  uuid.UUID  `json:"tenant_id"`
 	GroupID   *uuid.UUID `json:"group_id,omitempty"`
-	Name      string    `json:"name"`
-	Message   string    `json:"message"`
-	Status    Status    `json:"status"`
-	Total     int       `json:"total"`
-	Sent      int       `json:"sent"`
-	Failed    int       `json:"failed"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name      string     `json:"name"`
+	Message   string     `json:"message"`
+	Status    Status     `json:"status"`
+	Total     int        `json:"total"`
+	Sent      int        `json:"sent"`
+	Failed    int        `json:"failed"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 type Recipient struct {
@@ -50,5 +50,3 @@ type Recipient struct {
 	SentAt     *time.Time      `json:"sent_at,omitempty"`
 	CreatedAt  time.Time       `json:"created_at"`
 }
-
-

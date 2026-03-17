@@ -22,4 +22,3 @@ func Get() Info {
 		BuildTime: BuildTime,
 	}
 }
-

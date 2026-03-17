@@ -4,12 +4,19 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Client } from '@/lib/api/clientService';
 import { ClientStatusBadge } from './ClientStatusBadge';
-import servicePackageService, { ServicePackage } from '@/lib/api/servicePackageService';
 import clientGroupService, { ClientGroup } from '@/lib/api/clientGroupService';
 import { CollectorActions } from './CollectorActions';
+import { useCollectorStore } from '@/stores/collectorStore';
+import { InvoiceStatusBadge } from '@/components/billing/InvoiceStatusBadge';
+import { InvoiceStatus } from '@/lib/api/types';
+import { format, isAfter, startOfDay } from 'date-fns';
+import { id } from 'date-fns/locale';
 
-type ColumnKey = 'client' | 'contact' | 'package' | 'group' | 'status' | 'total' | 'actions';
+type ColumnKey = 'client' | 'contact' | 'package' | 'group' | 'status' | 'payment_status' | 'due_date' | 'total' | 'actions';
 const COLUMNS_STORAGE_KEY = 'clients_table_columns_v1';
+
+import { ClientPaymentHistoryModal } from "./ClientPaymentHistoryModal";
+import { ClockIcon } from "@heroicons/react/24/outline";
 
 interface ClientTableProps {
   clients: Client[];
@@ -20,8 +27,10 @@ interface ClientTableProps {
   onFilterChange?: (filters: any) => void;
 }
 
+
 export function ClientTable({ clients, loading, onStatusChange, isCollectorMode = false, filters, onFilterChange }: ClientTableProps) {
-  const [packages, setPackages] = useState<ServicePackage[]>([]);
+  const { assignments, paidFullClients, loading: collectorLoading, partialPayments } = useCollectorStore();
+  const [selectedHistoryClient, setSelectedHistoryClient] = useState<{ id: string; name: string } | null>(null);
   const [groups, setGroups] = useState<ClientGroup[]>([]);
   const [auxLoading, setAuxLoading] = useState(false);
 
@@ -31,6 +40,8 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
     package: true,
     group: true,
     status: true,
+    payment_status: true,
+    due_date: true,
     total: true,
     actions: true,
   });
@@ -63,18 +74,14 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
     });
   };
 
-  // Fetch all service packages + groups to calculate totals and show group name
+  // Fetch all groups to show group name
   useEffect(() => {
     let alive = true;
     (async () => {
       setAuxLoading(true);
       try {
-        const [pkgList, groupList] = await Promise.all([
-          servicePackageService.list(undefined, false),
-          clientGroupService.list(),
-        ]);
+        const groupList = await clientGroupService.list();
         if (!alive) return;
-        setPackages(pkgList);
         setGroups(groupList);
       } catch {
         // ignore error
@@ -126,17 +133,8 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
 
   // Calculate total billing for a client
   const calculateTotal = (client: Client): number => {
-    if (!client.service_package_id) return 0;
-    
-    const pkg = packages.find((p) => p.id === client.service_package_id);
-    if (!pkg) return 0;
-
-    let basePrice = 0;
-    if (pkg.pricing_model === 'per_device') {
-      basePrice = pkg.price_per_device * (client.device_count || 1);
-    } else {
-      basePrice = pkg.price_monthly;
-    }
+    // Backend already provides monthly_fee as the base price (correctly calculated during creation/update)
+    const basePrice = client.monthly_fee || 0;
 
     // Apply discount if exists
     if (client.discount_type && client.discount_value) {
@@ -220,8 +218,8 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
+    <div className="bg-white rounded-xl border border-slate-200">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white rounded-t-xl">
         {/* Left side: Group filter for collector mode only */}
         {isCollectorMode && (
           <div className="flex items-center gap-2">
@@ -242,14 +240,14 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
         {/* Right side: Columns button (always on the right) */}
         <div className={isCollectorMode ? '' : 'ml-auto'}>
           <details className="relative">
-            <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50">
+            <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
               <span className="text-slate-700">Columns</span>
-              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </summary>
-            <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-lg p-3 z-10">
-              <div className="space-y-2 text-sm text-slate-900">
+            <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-xl p-3 z-50">
+              <div className="space-y-2.5 text-sm text-slate-900">
                 {(
                   [
                     ['client', 'Client'],
@@ -257,17 +255,19 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
                     ['package', 'Package'],
                     ['group', 'Group'],
                     ['status', 'Status'],
+                    ['payment_status', 'Payment Status'],
+                    ['due_date', 'Due Date'],
                     ['total', 'Total Tagihan'],
                   ] as Array<[ColumnKey, string]>
                 ).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 text-slate-900">
+                  <label key={key} className="flex items-center gap-3 cursor-pointer group/item text-slate-900">
                     <input
                       type="checkbox"
                       checked={!!visibleColumns[key]}
                       onChange={(e) => setColumn(key, e.target.checked)}
-                      className="text-indigo-600 border-slate-300"
+                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
                     />
-                    <span className="text-slate-900">{label}</span>
+                    <span className="text-slate-700 group-hover/item:text-slate-900 transition-colors">{label}</span>
                   </label>
                 ))}
               </div>
@@ -275,7 +275,7 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
           </details>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-b-xl">
         <table className="w-full">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
@@ -304,6 +304,16 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
                   Status
                 </th>
               )}
+              {visibleColumns.payment_status && (
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Payment Status
+                </th>
+              )}
+              {visibleColumns.due_date && (
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  Due Date
+                </th>
+              )}
               {visibleColumns.total && (
                 <th className="text-right px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
                   Total Tagihan
@@ -324,10 +334,15 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
               >
                 {visibleColumns.client && (
                   <td className="px-4 py-4">
-                    <Link href={`/clients/${client.id}`} className="block">
-                      <p className="font-medium text-slate-900 hover:text-indigo-600">
+                    <Link href={`/clients/${client.id}`} className="block group">
+                      <p
+                        className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors"
+                      >
                         {client.name}
                       </p>
+                      <div className="flex items-center gap-1 mt-1 text-xs text-slate-500">
+                        <span>{client.phone}</span>
+                      </div>
                       {client.pppoe_username && (
                         <p className="text-sm text-slate-500">
                           PPPoE: {client.pppoe_username}
@@ -362,24 +377,165 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
                     <ClientStatusBadge status={client.status} size="sm" />
                   </td>
                 )}
+                 {visibleColumns.payment_status && (
+                  <td className="px-4 py-4">
+                    {isCollectorMode ? (() => {
+                      const isPaidToday = paidFullClients.has(client.id);
+                      if (isPaidToday) return <InvoiceStatusBadge status="paid" />;
+
+                      const partialAmount = partialPayments.get(client.id) || 0;
+                      if (partialAmount > 0) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <InvoiceStatusBadge status="pending" />
+                            <span className="text-[10px] font-bold text-blue-600 uppercase">
+                              Partial: {new Intl.NumberFormat("id-ID", {
+                                style: "currency",
+                                currency: "IDR",
+                                minimumFractionDigits: 0,
+                              }).format(partialAmount)}
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      const assignment = assignments.find((a) => a.invoice.client_id === client.id);
+                      
+                      // If we found an actual assignment, use it
+                      if (assignment) {
+                        return <InvoiceStatusBadge status={assignment.invoice.status} />;
+                      }
+
+                      // If NOT found and we are still loading, show a subtle pulse instead of assuming "paid"
+                      if (collectorLoading) {
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-16 animate-pulse bg-slate-100 rounded border border-slate-200" />
+                          </div>
+                        );
+                      }
+                      
+                      // Final fallback: use client object status or default to paid
+                      const status = (client.payment_status as InvoiceStatus) || "paid";
+                      return <InvoiceStatusBadge status={status} />;
+                    })() : (
+                      client.payment_status ? (
+                        <InvoiceStatusBadge status={client.payment_status as InvoiceStatus} />
+                      ) : (
+                        <span className="text-slate-400 text-sm">-</span>
+                      )
+                    )}
+                  </td>
+                )}
+                {visibleColumns.due_date && (
+                  <td className="px-4 py-4 text-center sm:text-left">
+                    {(() => {
+                      const assignment = isCollectorMode ? assignments.find((a) => a.invoice.client_id === client.id) : null;
+                      const dueDate = assignment ? assignment.invoice.due_date : client.payment_due_date;
+                      const status = assignment ? assignment.invoice.status : client.payment_status;
+
+                      if (dueDate) {
+                        return (
+                          <div className="flex flex-col">
+                            <p className="text-sm font-medium text-slate-900">
+                              {format(new Date(dueDate), 'dd MMM yyyy', { locale: id })}
+                            </p>
+                            {isAfter(startOfDay(new Date()), startOfDay(new Date(dueDate))) && status !== 'paid' && (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center text-[10px] font-bold text-red-600 uppercase tracking-tight bg-red-50 px-1.5 py-0.5 rounded border border-red-100 italic whitespace-nowrap">
+                                  Terlambat
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return <span className="text-slate-400 text-sm">-</span>;
+                    })()}
+                  </td>
+                )}
                 {visibleColumns.total && (
                   <td className="px-4 py-4 text-right">
-                    <p className="text-sm font-medium text-slate-900">
-                      Rp {calculateTotal(client).toLocaleString('id-ID')}
-                    </p>
-                    {client.discount_type && client.discount_value && (
-                      <p className="text-xs text-slate-500">
-                        {client.discount_type === 'percent'
-                          ? `Disc: ${client.discount_value}%`
-                          : `Disc: Rp ${client.discount_value.toLocaleString('id-ID')}`}
-                      </p>
-                    )}
+                    <div className="flex flex-col items-end gap-1">
+                      {isCollectorMode ? (() => {
+                        const assignment = assignments.find((a) => a.invoice.client_id === client.id);
+                        const isPaidFullToday = paidFullClients.has(client.id);
+                        
+                        let total = 0;
+                        let remaining = 0;
+                        
+                        if (assignment) {
+                          total = assignment.invoice.total_amount;
+                          // invoice.paid_amount from backend already includes today's partial payment
+                          // (backend updates it immediately when payment is recorded).
+                          // Adding partialPaidToday on top would double-count it.
+                          const alreadyPaid = assignment.invoice.paid_amount;
+                          remaining = isPaidFullToday ? 0 : Math.max(0, total - alreadyPaid);
+                        } else {
+                          total = calculateTotal(client);
+                          remaining = isPaidFullToday ? 0 : total;
+                        }
+                        return (
+                          <>
+                            <p className="text-sm font-bold text-slate-900">
+                              {remaining === 0 ? (
+                                <span className="text-green-600">Lunas</span>
+                              ) : (
+                                `Rp ${remaining.toLocaleString('id-ID')}`
+                              )}
+                            </p>
+                            {remaining < total && remaining > 0 && (
+                              <span className="text-[10px] text-slate-500 italic">
+                                Sisa dari Rp {total.toLocaleString('id-ID')}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })() : (
+                        <>
+                          <p className="text-sm font-medium text-slate-900">
+                            Rp {calculateTotal(client).toLocaleString('id-ID')}
+                          </p>
+                          {client.discount_type && client.discount_value && (
+                            <p className="text-xs text-slate-500">
+                              {client.discount_type === 'percent'
+                                ? `Disc: ${client.discount_value}%`
+                                : `Disc: Rp ${client.discount_value.toLocaleString('id-ID')}`}
+                            </p>
+                          )}
+                        </>
+                      )}
+                      
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedHistoryClient({ id: client.id, name: client.name });
+                        }}
+                        className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-0.5 mt-0.5 px-1.5 py-0.5 bg-indigo-50 rounded"
+                      >
+                        <ClockIcon className="w-3.5 h-3.5" />
+                        Histori
+                      </button>
+                    </div>
                   </td>
                 )}
                 {visibleColumns.actions && (
                   <td className="px-4 py-4 text-right">
                   {isCollectorMode ? (
-                    <CollectorActions client={client} />
+                    <CollectorActions 
+                      client={client} 
+                      invoiceId={assignments.find(a => a.invoice.client_id === client.id)?.invoice.id}
+                      paymentStatus={(() => {
+                        if (paidFullClients.has(client.id)) return "paid";
+                        const assignment = assignments.find((a) => a.invoice.client_id === client.id);
+                        if (assignment) return assignment.invoice.status;
+                        
+                        // Treat as pending during loading to keep buttons enabled
+                        if (collectorLoading) return "pending";
+                        
+                        return client.payment_status || "paid";
+                      })()}
+                    />
                   ) : (
                     <div className="flex items-center justify-end gap-2">
                       <Link
@@ -401,6 +557,28 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </Link>
+                      {onStatusChange && client.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => onStatusChange(client, 'active')}
+                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+                            title="Accept (Activate)"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => onStatusChange(client, 'terminated')}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            title="Reject"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                       {onStatusChange && client.status === 'active' && (
                         <button
                           onClick={() => onStatusChange(client, 'isolir')}
@@ -431,6 +609,15 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
             ))}
           </tbody>
         </table>
+        {/* Modals */}
+        {selectedHistoryClient && (
+          <ClientPaymentHistoryModal
+            isOpen={!!selectedHistoryClient}
+            onClose={() => setSelectedHistoryClient(null)}
+            clientId={selectedHistoryClient.id}
+            clientName={selectedHistoryClient.name}
+          />
+        )}
       </div>
     </div>
   );

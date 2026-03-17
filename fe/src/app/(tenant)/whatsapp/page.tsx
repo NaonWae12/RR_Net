@@ -1,7 +1,7 @@
 "use client";
 
 import { TabLayout } from "@/components/layouts/TabLayout";
-import { CampaignsTab, ComingSoonPanel, DeviceTab, LogsTab, SingleTab, TemplatesTab } from "@/components/whatsapp";
+import { CampaignsTab, ReminderTab, DeviceTab, LogsTab, SingleTab, TemplatesTab } from "@/components/whatsapp";
 
 export default function WhatsAppGatewayPage() {
     const tabs = [
@@ -16,16 +16,9 @@ export default function WhatsAppGatewayPage() {
             content: <SingleTab />,
         },
         {
-            id: "broadcast",
-            label: "Broadcast",
-            disabled: true,
-            content: (
-                <ComingSoonPanel
-                    title="Broadcast"
-                    description="Kirim pesan yang sama ke banyak client sekaligus (bulk reminder)."
-                    hint="Next: campaign, queue, throttling, dan delivery logs."
-                />
-            ),
+            id: "reminder",
+            label: "Reminder",
+            content: <ReminderTab />,
         },
         {
             id: "campaigns",
@@ -50,7 +43,7 @@ export default function WhatsAppGatewayPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">WhatsApp</h1>
                     <p className="text-sm text-slate-600 mt-1">
-                        Modul WhatsApp untuk tenant: perangkat tertaut, single chat, broadcast, campaigns, logs, dan templates.
+                        Modul WhatsApp untuk tenant: perangkat tertaut, single chat, reminder, campaigns, logs, dan templates.
                     </p>
                 </div>
             </div>

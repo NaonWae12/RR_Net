@@ -10,6 +10,7 @@ import (
 	"rrnet/internal/auth"
 	"rrnet/internal/domain/tenant"
 	"rrnet/internal/domain/user"
+	"rrnet/internal/rbac"
 	"rrnet/internal/repository"
 )
 
@@ -23,17 +24,19 @@ var (
 
 // AuthService handles authentication operations
 type AuthService struct {
-	userRepo   *repository.UserRepository
-	tenantRepo *repository.TenantRepository
-	jwtManager *auth.JWTManager
+	userRepo     *repository.UserRepository
+	tenantRepo   *repository.TenantRepository
+	jwtManager   *auth.JWTManager
+	oauthManager *auth.OAuthManager
 }
 
 // NewAuthService creates a new auth service
-func NewAuthService(userRepo *repository.UserRepository, tenantRepo *repository.TenantRepository, jwtManager *auth.JWTManager) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, tenantRepo *repository.TenantRepository, jwtManager *auth.JWTManager, oauthManager *auth.OAuthManager) *AuthService {
 	return &AuthService{
-		userRepo:   userRepo,
-		tenantRepo: tenantRepo,
-		jwtManager: jwtManager,
+		userRepo:     userRepo,
+		tenantRepo:   tenantRepo,
+		jwtManager:   jwtManager,
+		oauthManager: oauthManager,
 	}
 }
 
@@ -54,13 +57,15 @@ type LoginResponse struct {
 
 // UserDTO represents user data for API responses
 type UserDTO struct {
-	ID        uuid.UUID  `json:"id"`
-	Email     string     `json:"email"`
-	Name      string     `json:"name"`
-	Phone     *string    `json:"phone,omitempty"`
-	AvatarURL *string    `json:"avatar_url,omitempty"`
-	Role      string     `json:"role"`
-	TenantID  *uuid.UUID `json:"tenant_id,omitempty"`
+	ID           uuid.UUID  `json:"id"`
+	Email        string     `json:"email"`
+	Name         string     `json:"name"`
+	Phone        *string    `json:"phone,omitempty"`
+	AvatarURL    *string    `json:"avatar_url,omitempty"`
+	Role         string     `json:"role"`
+	Capabilities []string   `json:"capabilities"`
+	TenantID     *uuid.UUID `json:"tenant_id,omitempty"`
+	BaseSalary   float64    `json:"base_salary"`
 }
 
 // TenantDTO represents tenant data for API responses
@@ -145,13 +150,15 @@ func (s *AuthService) Login(ctx context.Context, tenantID *uuid.UUID, req *Login
 		RefreshToken: refreshToken,
 		ExpiresIn:    int64(s.jwtManager.GetAccessTokenTTL().Seconds()),
 		User: &UserDTO{
-			ID:        u.ID,
-			Email:     u.Email,
-			Name:      u.Name,
-			Phone:     u.Phone,
-			AvatarURL: u.AvatarURL,
-			Role:      u.Role.Code,
-			TenantID:  u.TenantID,
+			ID:           u.ID,
+			Email:        u.Email,
+			Name:         u.Name,
+			Phone:        u.Phone,
+			AvatarURL:    u.AvatarURL,
+			Role:         u.Role.Code,
+			Capabilities: s.capabilitiesToStrings(rbac.GetCapabilitiesForRoleString(u.Role.Code)),
+			TenantID:     u.TenantID,
+			BaseSalary:   u.BaseSalary,
 		},
 	}
 
@@ -165,6 +172,80 @@ func (s *AuthService) Login(ctx context.Context, tenantID *uuid.UUID, req *Login
 	}
 
 	return response, nil
+}
+
+// OAuthLogin handles login via OAuth
+func (s *AuthService) OAuthLogin(ctx context.Context, oauthUser *auth.OAuthUser) (*LoginResponse, error) {
+	// Try to find user by email
+	u, err := s.userRepo.GetByEmailAnyTenant(ctx, oauthUser.Email)
+	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			// User not found, frontend should handle registration
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	// Check user status
+	if !u.CanLogin() {
+		return nil, ErrUserNotActive
+	}
+
+	// Check tenant status if user belongs to one
+	var t *tenant.Tenant
+	var tenantID uuid.UUID
+	if u.TenantID != nil {
+		tenantID = *u.TenantID
+		t, err = s.tenantRepo.GetByID(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		if !t.CanAccess() {
+			return nil, ErrTenantNotActive
+		}
+	}
+
+	// Generate tokens
+	accessToken, err := s.jwtManager.GenerateAccessToken(u.ID, tenantID, u.Role.Code, u.Email)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken, err := s.jwtManager.GenerateRefreshToken(u.ID, tenantID, u.Role.Code, u.Email)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update last login
+	_ = s.userRepo.UpdateLastLogin(ctx, u.ID)
+
+	res := &LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    int64(s.jwtManager.GetAccessTokenTTL().Seconds()),
+		User: &UserDTO{
+			ID:           u.ID,
+			Email:        u.Email,
+			Name:         u.Name,
+			Phone:        u.Phone,
+			AvatarURL:    u.AvatarURL,
+			Role:         u.Role.Code,
+			Capabilities: s.capabilitiesToStrings(rbac.GetCapabilitiesForRoleString(u.Role.Code)),
+			TenantID:     u.TenantID,
+			BaseSalary:   u.BaseSalary,
+		},
+	}
+
+	if t != nil {
+		res.Tenant = &TenantDTO{
+			ID:     t.ID,
+			Name:   t.Name,
+			Slug:   t.Slug,
+			Status: string(t.Status),
+		}
+	}
+
+	return res, nil
 }
 
 // RefreshTokenRequest represents refresh token request
@@ -206,23 +287,26 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *RefreshTokenRequest
 		RefreshToken: refreshToken,
 		ExpiresIn:    int64(s.jwtManager.GetAccessTokenTTL().Seconds()),
 		User: &UserDTO{
-			ID:        u.ID,
-			Email:     u.Email,
-			Name:      u.Name,
-			Phone:     u.Phone,
-			AvatarURL: u.AvatarURL,
-			Role:      u.Role.Code,
-			TenantID:  u.TenantID,
+			ID:           u.ID,
+			Email:        u.Email,
+			Name:         u.Name,
+			Phone:        u.Phone,
+			AvatarURL:    u.AvatarURL,
+			Role:         u.Role.Code,
+			Capabilities: s.capabilitiesToStrings(rbac.GetCapabilitiesForRoleString(u.Role.Code)),
+			TenantID:     u.TenantID,
+			BaseSalary:   u.BaseSalary,
 		},
 	}, nil
 }
 
 // RegisterRequest represents registration request
 type RegisterRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
-	Phone    string `json:"phone,omitempty"`
+	Email      string  `json:"email"`
+	Password   string  `json:"password"`
+	Name       string  `json:"name"`
+	Phone      string  `json:"phone,omitempty"`
+	BaseSalary float64 `json:"base_salary,omitempty"`
 }
 
 // Register creates a new user in a tenant
@@ -264,6 +348,7 @@ func (s *AuthService) Register(ctx context.Context, tenantID uuid.UUID, roleCode
 		Name:         req.Name,
 		Status:       user.StatusActive,
 		Metadata:     make(map[string]interface{}),
+		BaseSalary:   req.BaseSalary,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -277,31 +362,65 @@ func (s *AuthService) Register(ctx context.Context, tenantID uuid.UUID, roleCode
 	}
 
 	return &UserDTO{
-		ID:       u.ID,
-		Email:    u.Email,
-		Name:     u.Name,
-		Phone:    u.Phone,
-		Role:     roleCode,
-		TenantID: u.TenantID,
+		ID:           u.ID,
+		Email:        u.Email,
+		Name:         u.Name,
+		Phone:        u.Phone,
+		Role:         roleCode,
+		Capabilities: s.capabilitiesToStrings(rbac.GetCapabilitiesForRoleString(roleCode)),
+		TenantID:     u.TenantID,
+		BaseSalary:   u.BaseSalary,
 	}, nil
 }
 
+// ProfileResponse represents user profile data
+type ProfileResponse struct {
+	User   *UserDTO   `json:"user"`
+	Tenant *TenantDTO `json:"tenant,omitempty"`
+}
+
 // GetProfile retrieves user profile
-func (s *AuthService) GetProfile(ctx context.Context, userID uuid.UUID) (*UserDTO, error) {
+func (s *AuthService) GetProfile(ctx context.Context, userID uuid.UUID) (*ProfileResponse, error) {
 	u, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &UserDTO{
-		ID:        u.ID,
-		Email:     u.Email,
-		Name:      u.Name,
-		Phone:     u.Phone,
-		AvatarURL: u.AvatarURL,
-		Role:      u.Role.Code,
-		TenantID:  u.TenantID,
-	}, nil
+	res := &ProfileResponse{
+		User: &UserDTO{
+			ID:           u.ID,
+			Email:        u.Email,
+			Name:         u.Name,
+			Phone:        u.Phone,
+			AvatarURL:    u.AvatarURL,
+			Role:         u.Role.Code,
+			Capabilities: s.capabilitiesToStrings(rbac.GetCapabilitiesForRoleString(u.Role.Code)),
+			TenantID:     u.TenantID,
+			BaseSalary:   u.BaseSalary,
+		},
+	}
+
+	if u.TenantID != nil {
+		t, err := s.tenantRepo.GetByID(ctx, *u.TenantID)
+		if err == nil {
+			res.Tenant = &TenantDTO{
+				ID:     t.ID,
+				Name:   t.Name,
+				Slug:   t.Slug,
+				Status: string(t.Status),
+			}
+		}
+	}
+
+	return res, nil
+}
+
+func (s *AuthService) capabilitiesToStrings(caps []rbac.Capability) []string {
+	res := make([]string, len(caps))
+	for i, c := range caps {
+		res[i] = string(c)
+	}
+	return res
 }
 
 // ChangePasswordRequest represents change password request
@@ -337,24 +456,3 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, req 
 	// Update password
 	return s.userRepo.UpdatePassword(ctx, userID, passwordHash)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

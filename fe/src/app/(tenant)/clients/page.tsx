@@ -9,6 +9,7 @@ import { clientService, Client } from '@/lib/api/clientService';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useRole } from '@/lib/hooks/useRole';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { Sparkles } from 'lucide-react';
 
 export default function ClientsPage() {
   const {
@@ -84,21 +85,16 @@ export default function ClientsPage() {
     fetchClients(filtersToUse);
   }, [setFilters, fetchClients, isTechnician]);
 
-  // Sync collector store date with clients page and fetch payments when date changes
+  // Sync collector store data when technician is authenticated
+  const { user } = useAuth();
+  const selectedDate = useCollectorStore(state => state.selectedDate);
   useEffect(() => {
-    if (isTechnician) {
-      const { selectedDate, fetchPaymentsForDate } = useCollectorStore.getState();
+    if (isTechnician && isAuthenticated && user?.id) {
+      const { fetchPaymentsForDate, fetchAssignments } = useCollectorStore.getState();
       fetchPaymentsForDate(selectedDate);
+      fetchAssignments(selectedDate, user.id);
     }
-  }, [isTechnician]);
-
-  // Sync collector store date with clients page
-  useEffect(() => {
-    if (isTechnician) {
-      const { selectedDate, fetchPaymentsForDate } = useCollectorStore.getState();
-      fetchPaymentsForDate(selectedDate);
-    }
-  }, [isTechnician]);
+  }, [isTechnician, isAuthenticated, user?.id, selectedDate]);
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
@@ -137,17 +133,26 @@ export default function ClientsPage() {
               : "Manage your subscriber clients"}
           </p>
         </div>
-        {!isTechnician && (
+        <div className="flex items-center gap-3">
+          {!isTechnician && (
+            <Link
+              href="/clients/migration"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-black text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all shadow-sm hover:shadow-md"
+            >
+              <Sparkles className="w-4 h-4 fill-indigo-500" />
+              AI Migration
+            </Link>
+          )}
           <Link
             href="/clients/create"
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-md"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Add Client
           </Link>
-        )}
+        </div>
       </div>
 
       {/* Filters */}

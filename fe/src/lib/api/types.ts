@@ -9,6 +9,7 @@ export interface User {
   avatar_url?: string | null;
   role: Role;
   capabilities?: string[];
+  base_salary?: number;
 }
 
 export interface Tenant {
@@ -28,6 +29,11 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   expires_in: number;
+  user: User;
+  tenant?: Tenant;
+}
+
+export interface ProfileResponse {
   user: User;
   tenant?: Tenant;
 }
@@ -115,7 +121,9 @@ export interface Payment {
   method: PaymentMethod;
   reference?: string;
   collector_id?: string | null;
+  collector_name?: string | null;
   notes?: string;
+  status: 'pending' | 'verified' | 'rejected';
   received_at: string;
   created_at: string;
   created_by_user_id: string;
@@ -130,6 +138,30 @@ export interface BillingSummary {
   pending_amount: number;
   overdue_amount: number;
   collected_this_month: number;
+}
+
+export interface RevenueTrendItem {
+  date: string;
+  amount: number;
+}
+
+export interface RevenueByGroup {
+  group_id: string;
+  group_name: string;
+  amount: number;
+}
+
+export interface RevenueByConn {
+  connection_type: string;
+  amount: number;
+}
+
+export interface RevenueAnalytics {
+  trend: RevenueTrendItem[];
+  by_group: RevenueByGroup[];
+  by_connection_type: RevenueByConn[];
+  period_total: number;
+  previous_period_total: number;
 }
 
 export interface InvoiceListResponse {
@@ -200,6 +232,16 @@ export interface RecordPaymentRequest {
   received_at?: string;
 }
 
+export interface Settlement {
+  collector_id: string;
+  collector_name: string;
+  date: string;
+  amount: number;
+  count: number;
+  status: "pending" | "verified" | "rejected";
+  first_payment_at: string;
+}
+
 // ========== Network Types ==========
 
 export type RouterType = "mikrotik" | "cisco" | "ubiquiti" | "other";
@@ -229,6 +271,7 @@ export interface Router {
   vpn_username?: string;
   vpn_password?: string;
   vpn_script?: string;
+  dns_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -269,6 +312,7 @@ export interface CreateRouterRequest {
   is_default?: boolean;
   radius_enabled?: boolean;
   radius_secret?: string;
+  dns_name?: string;
   auto_create_vpn?: boolean;
   enable_remote_access?: boolean;
 }
@@ -288,6 +332,7 @@ export interface UpdateRouterRequest {
   is_default?: boolean;
   radius_enabled?: boolean;
   radius_secret?: string;
+  dns_name?: string;
   remote_access_enabled?: boolean;
 }
 
@@ -392,6 +437,9 @@ export interface ClientLocation {
   signal_info?: string;
   notes?: string;
   status: NodeStatus;
+  client_name?: string;
+  is_reseller: boolean;
+  reseller_radius: number;
   created_at: string;
   updated_at: string;
 }
@@ -472,6 +520,7 @@ export interface UpdateClientLocationRequest {
   connection_type?: ConnectionType;
   signal_info?: string;
   notes?: string;
+  reseller_radius?: number;
 }
 
 export interface ReportOutageRequest {
@@ -648,61 +697,18 @@ export interface AttendanceListResponse {
   total: number;
 }
 
-// ========== Payslip Types ==========
-
-export type PayslipStatus = "generated" | "paid";
-
-export interface Payslip {
-  id: string;
-  tenant_id: string;
-  user_id: string;
-  period: string; // YYYY-MM format
-  gross_salary: number;
-  deductions: number;
-  allowances: number;
-  net_salary: number;
-  status: PayslipStatus;
-  paid_at?: string;
-  pdf_url?: string;
-  breakdown?: PayslipBreakdown;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PayslipBreakdown {
-  basic_salary?: number;
-  overtime?: number;
-  bonuses?: number;
-  allowances?: PayslipAllowance[];
-  tax?: number;
-  insurance?: number;
-  other_deductions?: PayslipDeduction[];
-}
-
-export interface PayslipAllowance {
-  name: string;
-  amount: number;
-}
-
-export interface PayslipDeduction {
-  name: string;
-  amount: number;
-}
-
-export interface PayslipListResponse {
-  data: Payslip[];
-  total: number;
-}
+// ========== Reimbursement Types ==========
 
 // ========== Reimbursement Types ==========
 
-export type ReimbursementStatus = "submitted" | "approved" | "rejected";
-export type ReimbursementCategory = "transport" | "meal" | "accommodation" | "equipment" | "other";
+export type ReimbursementStatus = "submitted" | "approved" | "rejected" | "paid";
+export type ReimbursementCategory = "transport" | "meal" | "accommodation" | "equipment" | "other" | "medical" | "supplies";
 
 export interface Reimbursement {
   id: string;
   tenant_id: string;
   user_id: string;
+  user_name?: string;
   amount: number;
   category: ReimbursementCategory;
   description: string;
@@ -712,6 +718,9 @@ export interface Reimbursement {
   rejection_reason?: string;
   approved_by?: string;
   approved_at?: string;
+  paid_at?: string;
+  pay_with_payroll: boolean;
+  paid_with_payroll_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -800,6 +809,56 @@ export interface LocationSubmissionListResponse {
   total: number;
 }
 
+// ========== Payroll Types ==========
+
+export type PayrollStatus = "draft" | "processed" | "paid";
+export type PayslipStatus = "pending" | "paid";
+export type PayslipItemType = "allowance" | "deduction" | "reimbursement";
+
+export interface PayrollRun {
+  id: string;
+  tenant_id: string;
+  period: string;
+  total_amount: number;
+  status: PayrollStatus;
+  created_at: string;
+  updated_at: string;
+  processed_at?: string;
+  paid_at?: string;
+  payslips?: Payslip[];
+}
+
+export interface Payslip {
+  id: string;
+  payroll_run_id: string;
+  user_id: string;
+  base_salary: number;
+  total_allowances: number;
+  total_deductions: number;
+  total_reimbursements: number;
+  net_salary: number;
+  status: PayslipStatus;
+  created_at: string;
+  updated_at: string;
+  paid_at?: string;
+  user_name?: string;
+  period?: string;
+  items?: PayslipItem[];
+}
+
+export interface PayslipItem {
+  id: string;
+  payslip_id: string;
+  description: string;
+  type: PayslipItemType;
+  amount: number;
+  reference_id?: string;
+}
+
+export interface PayrollRunListResponse {
+  data: PayrollRun[];
+}
+
 // ========== Client Submission Types ==========
 
 export type ClientSubmissionStatus = "pending_admin_approval" | "approved" | "rejected";
@@ -847,6 +906,7 @@ export interface ClientSubmissionListResponse {
 export interface SuperAdminTenant {
   id: string;
   name: string;
+  company_name?: string;
   slug: string;
   domain?: string;
   status: "active" | "suspended" | "pending" | "deleted";
@@ -857,6 +917,12 @@ export interface SuperAdminTenant {
   created_at: string;
   updated_at: string;
   deleted_at?: string;
+  owner_name?: string;
+  owner_email?: string;
+  owner_phone?: string;
+  plan_code?: string;
+  plan_name?: string;
+  plan_price?: number;
 }
 
 export interface Feature {
@@ -901,9 +967,18 @@ export interface Addon {
 
 export interface UpdateTenantRequest {
   name?: string;
+  company_name?: string;
   slug?: string;
   domain?: string;
   status?: string;
+}
+
+export interface CreateTenantRequest {
+  name: string;
+  company_name?: string;
+  slug: string;
+  domain?: string;
+  status?: "active" | "suspended" | "pending";
 }
 
 export interface CreatePlanRequest {
@@ -973,3 +1048,241 @@ export interface AddonListResponse {
   total: number;
 }
 
+
+// ========== Reseller Types ==========
+
+export type ResellerStatus = 'active' | 'suspended' | 'pending' | 'rejected';
+
+export interface Reseller {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  // Included from join
+  client_name?: string;
+  client_phone?: string;
+  client_email?: string;
+  // Reseller specific
+  status: ResellerStatus;
+  join_date: string;
+  notes?: string;
+  balance: number;
+  monthly_revenue?: number; // Calculated on FE or BE list response
+  total_purchases?: number; // Calculated on FE or BE list response
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResellerPrice {
+  id: string;
+  tenant_id: string;
+  reseller_id: string;
+  voucher_package_id: string;
+  voucher_package_name?: string; // Ideally returned by BE join
+  reseller_price: number;
+  retail_price: number;
+  margin: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ResellerDiscountType = 'fixed' | 'percentage';
+export type ResellerDiscountStatus = 'active' | 'inactive';
+
+export interface ResellerDiscount {
+  id: string;
+  tenant_id: string;
+  code: string;
+  rule_name: string;
+  discount_type: ResellerDiscountType;
+  discount_value: number;
+  status: ResellerDiscountStatus;
+  expires_at?: string;
+  discount_id?: string; // Base discount ID
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoucherPackage {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  download_speed: number;
+  upload_speed: number;
+  duration_hours?: number | null;
+  validity?: string;
+  quota_mb?: number | null;
+  price: number;
+  currency: string;
+  rate_limit_mode: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ResellerPurchaseStatus = 'success' | 'pending' | 'failed' | 'paylater' | 'verifying';
+
+export interface Voucher {
+  id: string;
+  tenant_id: string;
+  package_id: string;
+  router_id?: string | null;
+  code: string;
+  password?: string;
+  status: string;
+  isolated: boolean;
+  used_at?: string | null;
+  expires_at?: string | null;
+  first_session_id?: string | null;
+  notes?: string | null;
+  package_name?: string | null;
+  package_price?: number | null;
+  router_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  uptime_seconds?: number;
+  total_bytes_used?: number;
+}
+
+export interface ResellerPurchase {
+  id: string;
+  tenant_id: string;
+  reseller_id: string;
+  reseller_name?: string;
+  voucher_package_id: string;
+  voucher_package_name?: string;
+  router_id?: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  discount_id?: string;
+  discount_amount: number;
+  promo_code?: string;
+  total_amount: number;
+  margin: number;
+  payment_method: string;
+  status: ResellerPurchaseStatus;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  vouchers?: Voucher[];
+}
+
+export interface UpgradeClientRequest {
+  client_id: string;
+  notes?: string;
+}
+
+export interface SetResellerPriceRequest {
+  voucher_package_id: string;
+  reseller_price: number;
+  retail_price: number;
+}
+
+export interface CreateResellerPromoRequest {
+  code: string;
+  rule_name: string;
+  discount_type: ResellerDiscountType;
+  discount_value: number;
+  expires_at?: string; // YYYY-MM-DD
+  discount_id?: string;
+}
+
+export interface ProcessResellerPurchaseRequest {
+  voucher_package_id: string;
+  router_id?: string;
+  quantity: number;
+  payment_method: string;
+  promo_code?: string;
+}
+
+export interface ResellerListResponse {
+  data: Reseller[];
+  total: number;
+  page: number;
+}
+
+export interface ResellerPurchaseListResponse {
+  data: ResellerPurchase[];
+  total: number;
+  page: number;
+}
+
+export interface RevenueSummary {
+  today_revenue: number;
+  total_balance: number;
+  voucher_revenue: number;
+  reseller_revenue: number;
+  billing_revenue: number;
+}
+
+export interface Transaction {
+  id: string;
+  tenant_id: string;
+  type: 'income' | 'expense';
+  source: 'voucher_usage' | 'reseller_purchase' | 'billing_payment';
+  source_id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  created_at: string;
+}
+
+// ========== Payment Method System Types ==========
+
+export interface PaymentMethodAccount {
+  id: string;
+  tenant_id: string;
+  name: string;
+  category: "bank" | "cash" | "e-wallet" | "pay later";
+  provider?: string;
+  account_number?: string;
+  account_name?: string;
+  is_active: boolean;
+  metadata?: any;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePaymentMethodAccountRequest {
+  name: string;
+  category: "bank" | "cash" | "e-wallet" | "pay later";
+  provider?: string;
+  account_number?: string;
+  account_name?: string;
+}
+
+export interface UpdatePaymentMethodAccountRequest {
+  name?: string;
+  category?: "bank" | "cash" | "e-wallet" | "pay later";
+  provider?: string;
+  account_number?: string;
+  account_name?: string;
+  is_active?: boolean;
+}
+
+// ========== Site Setting Types ==========
+
+export interface LandingPageSEO {
+  title: string;
+  description: string;
+  keywords: string[];
+}
+
+export interface LandingPagePricing {
+  display_count: number;
+  show_monthly: boolean;
+  show_yearly: boolean;
+  plans: string[];
+  popular_plan_id: string;
+  yearly_discount: number;
+}
+
+export interface SiteSetting {
+  id: string;
+  key: string;
+  value: any;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}

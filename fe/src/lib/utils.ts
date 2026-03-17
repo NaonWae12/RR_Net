@@ -28,3 +28,29 @@ export function generateUUID(): string {
   });
 }
 
+export function formatCurrency(amount: number, compact = false, showDecimals = false): string {
+  const fractionDigits = showDecimals ? 2 : 0;
+  const formatter = new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+
+  if (compact) {
+    if (amount >= 1000000000) {
+      const val = (amount / 1000000000);
+      return `Rp ${val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}M`;
+    }
+    if (amount >= 1000000) {
+      const val = (amount / 1000000);
+      return `Rp ${val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}JT`;
+    }
+    if (amount >= 1000) {
+      const val = (amount / 1000);
+      return `Rp ${val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}K`;
+    }
+  }
+
+  return formatter.format(amount).replace("Rp", "Rp ");
+}

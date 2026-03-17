@@ -191,7 +191,7 @@ export function BillingTempoTemplates() {
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] bg-white border border-slate-200 shadow-xl">
           <DialogHeader>
             <DialogTitle>
               {editingTemplate ? 'Edit Template' : 'Tambah Template'}

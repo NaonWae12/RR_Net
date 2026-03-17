@@ -86,7 +86,7 @@ export default function TasksPage() {
   });
 
   return (
-    <RoleGuard allowedRoles={["owner", "admin", "technician"]} redirectTo="/dashboard">
+    <RoleGuard allowedRoles={["technician"]} redirectTo="/dashboard">
       <div className="p-6 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-slate-900">

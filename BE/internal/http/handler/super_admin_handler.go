@@ -2,23 +2,39 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/domain/addon"
 	"rrnet/internal/domain/tenant"
+	"rrnet/internal/infra/wa_gateway"
 	"rrnet/internal/repository"
 	"rrnet/internal/service"
 )
 
 type SuperAdminHandler struct {
-	tenantRepo   *repository.TenantRepository
-	planRepo     *repository.PlanRepository
-	addonRepo    *repository.AddonRepository
-	planService  *service.PlanService
-	addonService *service.AddonService
+	tenantRepo    *repository.TenantRepository
+	planRepo      *repository.PlanRepository
+	addonRepo     *repository.AddonRepository
+	planService   *service.PlanService
+	addonService  *service.AddonService
+	tenantService *service.TenantService
+	userRepo      *repository.UserRepository
+	waClient      *wa_gateway.Client
+}
+
+type TenantDetailResponse struct {
+	tenant.Tenant
+	OwnerName  string   `json:"owner_name"`
+	OwnerEmail string   `json:"owner_email"`
+	OwnerPhone string   `json:"owner_phone"`
+	PlanCode   *string  `json:"plan_code,omitempty"`
+	PlanName   *string  `json:"plan_name,omitempty"`
+	PlanPrice  *float64 `json:"plan_price,omitempty"`
 }
 
 func NewSuperAdminHandler(
@@ -27,14 +43,63 @@ func NewSuperAdminHandler(
 	addonRepo *repository.AddonRepository,
 	planService *service.PlanService,
 	addonService *service.AddonService,
+	tenantService *service.TenantService,
+	userRepo *repository.UserRepository,
+	waClient *wa_gateway.Client,
 ) *SuperAdminHandler {
 	return &SuperAdminHandler{
-		tenantRepo:   tenantRepo,
-		planRepo:     planRepo,
-		addonRepo:    addonRepo,
-		planService:  planService,
-		addonService: addonService,
+		tenantRepo:    tenantRepo,
+		planRepo:      planRepo,
+		addonRepo:     addonRepo,
+		planService:   planService,
+		addonService:  addonService,
+		tenantService: tenantService,
+		userRepo:      userRepo,
+		waClient:      waClient,
 	}
+}
+
+type CreateTenantRequest struct {
+	Name   string  `json:"name"`
+	Slug   string  `json:"slug"`
+	Domain *string `json:"domain"`
+	Status string  `json:"status"`
+}
+
+func (h *SuperAdminHandler) CreateTenant(w http.ResponseWriter, r *http.Request) {
+	var req CreateTenantRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" || req.Slug == "" {
+		http.Error(w, `{"error":"name and slug are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// For superadmin, we create a tenant without a specific owner for now,
+	// or we use a simplified version of RegisterTenant.
+	// Since TenantService.RegisterTenant requires owner details, let's create a basic tenant here.
+	now := time.Now()
+	t := &tenant.Tenant{
+		ID:        uuid.New(),
+		Name:      req.Name,
+		Slug:      req.Slug,
+		Domain:    req.Domain,
+		Status:    tenant.Status(req.Status),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := h.tenantRepo.Create(r.Context(), t); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(t)
 }
 
 // ========== Tenant Management ==========
@@ -68,21 +133,64 @@ func (h *SuperAdminHandler) GetTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenant, err := h.tenantRepo.GetByID(r.Context(), id)
+	t, err := h.tenantRepo.GetByID(r.Context(), id)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
 		return
 	}
 
+	// Fetch owner details
+	ownerName := "-"
+	ownerEmail := "-"
+	ownerPhone := "-"
+
+	// Get users for this tenant and find one with role 'owner'
+	users, err := h.userRepo.ListByTenant(r.Context(), t.ID)
+	if err == nil {
+		for _, u := range users {
+			if u.Role != nil && u.Role.Code == "owner" {
+				ownerName = u.Name
+				ownerEmail = u.Email
+				if u.Phone != nil {
+					ownerPhone = *u.Phone
+				}
+				break
+			}
+		}
+	}
+
+	// Fetch plan details if tenant has a plan assigned
+	var planCode, planName *string
+	var planPrice *float64
+	if t.PlanID != nil {
+		plan, err := h.planRepo.GetByID(r.Context(), *t.PlanID)
+		if err == nil {
+			planCode = &plan.Code
+			planName = &plan.Name
+			planPrice = &plan.PriceMonthly
+		}
+	}
+
+	resp := TenantDetailResponse{
+		Tenant:     *t,
+		OwnerName:  ownerName,
+		OwnerEmail: ownerEmail,
+		OwnerPhone: ownerPhone,
+		PlanCode:   planCode,
+		PlanName:   planName,
+		PlanPrice:  planPrice,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tenant)
+	json.NewEncoder(w).Encode(resp)
 }
 
 type UpdateTenantRequest struct {
-	Name   *string `json:"name,omitempty"`
-	Slug   *string `json:"slug,omitempty"`
-	Domain *string `json:"domain,omitempty"`
-	Status *string `json:"status,omitempty"`
+	Name       *string `json:"name,omitempty"`
+	Slug       *string `json:"slug,omitempty"`
+	Domain     *string `json:"domain,omitempty"`
+	Status     *string `json:"status,omitempty"`
+	OwnerPhone *string `json:"owner_phone,omitempty"`
 }
 
 func (h *SuperAdminHandler) UpdateTenant(w http.ResponseWriter, r *http.Request) {
@@ -124,8 +232,38 @@ func (h *SuperAdminHandler) UpdateTenant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Update owner phone if provided
+	if req.OwnerPhone != nil {
+		users, err := h.userRepo.ListByTenant(r.Context(), t.ID)
+		if err == nil {
+			for _, u := range users {
+				if u.Role != nil && u.Role.Code == "owner" {
+					u.Phone = req.OwnerPhone
+					h.userRepo.Update(r.Context(), u)
+					break
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(t)
+}
+
+func (h *SuperAdminHandler) DeleteTenant(w http.ResponseWriter, r *http.Request) {
+	idStr := getPathParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid tenant ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.tenantService.DeleteTenant(r.Context(), id); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *SuperAdminHandler) SuspendTenant(w http.ResponseWriter, r *http.Request) {
@@ -215,17 +353,17 @@ func (h *SuperAdminHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreatePlanRequest struct {
-	Code         string          `json:"code"`
-	Name         string          `json:"name"`
-	Description  string          `json:"description,omitempty"`
-	PriceMonthly float64         `json:"price_monthly"`
-	PriceYearly  *float64        `json:"price_yearly,omitempty"`
-	Currency     string          `json:"currency,omitempty"`
-	Limits       map[string]int  `json:"limits"`
-	Features     []string        `json:"features"`
-	IsActive     bool            `json:"is_active"`
-	IsPublic     bool            `json:"is_public"`
-	SortOrder    int             `json:"sort_order"`
+	Code         string         `json:"code"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description,omitempty"`
+	PriceMonthly float64        `json:"price_monthly"`
+	PriceYearly  *float64       `json:"price_yearly,omitempty"`
+	Currency     string         `json:"currency,omitempty"`
+	Limits       map[string]int `json:"limits"`
+	Features     []string       `json:"features"`
+	IsActive     bool           `json:"is_active"`
+	IsPublic     bool           `json:"is_public"`
+	SortOrder    int            `json:"sort_order"`
 }
 
 func (h *SuperAdminHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
@@ -264,16 +402,16 @@ func (h *SuperAdminHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdatePlanRequest struct {
-	Name         string          `json:"name"`
-	Description  string          `json:"description,omitempty"`
-	PriceMonthly float64         `json:"price_monthly"`
-	PriceYearly  *float64        `json:"price_yearly,omitempty"`
-	Currency     string          `json:"currency,omitempty"`
-	Limits       map[string]int  `json:"limits"`
-	Features     []string        `json:"features"`
-	IsActive     bool            `json:"is_active"`
-	IsPublic     bool            `json:"is_public"`
-	SortOrder    int             `json:"sort_order"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description,omitempty"`
+	PriceMonthly float64        `json:"price_monthly"`
+	PriceYearly  *float64       `json:"price_yearly,omitempty"`
+	Currency     string         `json:"currency,omitempty"`
+	Limits       map[string]int `json:"limits"`
+	Features     []string       `json:"features"`
+	IsActive     bool           `json:"is_active"`
+	IsPublic     bool           `json:"is_public"`
+	SortOrder    int            `json:"sort_order"`
 }
 
 func (h *SuperAdminHandler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
@@ -388,16 +526,16 @@ func (h *SuperAdminHandler) GetAddon(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateAddonRequest struct {
-	Code             string                 `json:"code"`
-	Name             string                 `json:"name"`
-	Description      string                 `json:"description,omitempty"`
-	Price            float64                `json:"price"`
-	BillingCycle     string                 `json:"billing_cycle"`
-	Currency         string                 `json:"currency,omitempty"`
-	AddonType        string                 `json:"addon_type"`
-	Value            map[string]interface{} `json:"value"`
-	IsActive         bool                   `json:"is_active"`
-	AvailableForPlans []string              `json:"available_for_plans"`
+	Code              string                 `json:"code"`
+	Name              string                 `json:"name"`
+	Description       string                 `json:"description,omitempty"`
+	Price             float64                `json:"price"`
+	BillingCycle      string                 `json:"billing_cycle"`
+	Currency          string                 `json:"currency,omitempty"`
+	AddonType         string                 `json:"addon_type"`
+	Value             map[string]interface{} `json:"value"`
+	IsActive          bool                   `json:"is_active"`
+	AvailableForPlans []string               `json:"available_for_plans"`
 }
 
 func (h *SuperAdminHandler) CreateAddon(w http.ResponseWriter, r *http.Request) {
@@ -413,15 +551,15 @@ func (h *SuperAdminHandler) CreateAddon(w http.ResponseWriter, r *http.Request) 
 	}
 
 	addon, err := h.addonService.Create(r.Context(), &service.CreateAddonRequest{
-		Code:             req.Code,
-		Name:             req.Name,
-		Description:      req.Description,
-		Price:            req.Price,
-		BillingCycle:     addon.BillingCycle(req.BillingCycle),
-		Currency:         req.Currency,
-		Type:             addon.AddonType(req.AddonType),
-		Value:            req.Value,
-		IsActive:         req.IsActive,
+		Code:              req.Code,
+		Name:              req.Name,
+		Description:       req.Description,
+		Price:             req.Price,
+		BillingCycle:      addon.BillingCycle(req.BillingCycle),
+		Currency:          req.Currency,
+		Type:              addon.AddonType(req.AddonType),
+		Value:             req.Value,
+		IsActive:          req.IsActive,
 		AvailableForPlans: req.AvailableForPlans,
 	})
 	if err != nil {
@@ -496,3 +634,80 @@ func (h *SuperAdminHandler) DeleteAddon(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ========== WhatsApp Management ==========
+
+const platformTenantID = "platform"
+
+func (h *SuperAdminHandler) GetWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msg("[SuperAdmin] GetWhatsAppStatus called")
+
+	if h.waClient == nil {
+		log.Error().Msg("[SuperAdmin] WhatsApp client is nil - gateway not configured")
+		http.Error(w, `{"error":"WhatsApp gateway not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	log.Info().Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Calling waClient.Status")
+	status, err := h.waClient.Status(r.Context(), platformTenantID)
+	if err != nil {
+		log.Warn().Err(err).Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Failed to get WA status, returning not_connected")
+		// If 404 from gateway, it means not connected
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "not_connected",
+		})
+		return
+	}
+
+	log.Info().Interface("status", status).Msg("[SuperAdmin] WA status retrieved successfully")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
+}
+
+func (h *SuperAdminHandler) ConnectWhatsApp(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msg("[SuperAdmin] ConnectWhatsApp called")
+
+	if h.waClient == nil {
+		log.Error().Msg("[SuperAdmin] WhatsApp client is nil - gateway not configured")
+		http.Error(w, `{"error":"WhatsApp gateway not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	log.Info().Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Calling waClient.Connect")
+	resp, err := h.waClient.Connect(r.Context(), platformTenantID)
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Failed to connect WhatsApp")
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().Interface("response", resp).Msg("[SuperAdmin] WhatsApp connect successful")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (h *SuperAdminHandler) GetWhatsAppQR(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msg("[SuperAdmin] GetWhatsAppQR called")
+
+	if h.waClient == nil {
+		log.Error().Msg("[SuperAdmin] WhatsApp client is nil - gateway not configured")
+		http.Error(w, `{"error":"WhatsApp gateway not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	log.Info().Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Calling waClient.QR")
+	qr, err := h.waClient.QR(r.Context(), platformTenantID)
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Failed to get QR code")
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	qrLen := "nil"
+	if qr.QR != nil {
+		qrLen = fmt.Sprintf("%d", len(*qr.QR))
+	}
+	log.Info().Str("qr_length", qrLen).Msg("[SuperAdmin] QR code retrieved successfully")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(qr)
+}

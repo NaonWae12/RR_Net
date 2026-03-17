@@ -9,20 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 interface PartialPaymentModalProps {
-  clientId: string;
-  clientName?: string;
+  client: any;
   totalAmount: number;
   invoiceId?: string; // Invoice ID for the payment
   onClose: () => void;
 }
 
 export function PartialPaymentModal({ 
-  clientId, 
-  clientName, 
+  client, 
   totalAmount,
   invoiceId,
   onClose 
 }: PartialPaymentModalProps) {
+  const clientId = client.id;
+  const clientName = client.name;
   const { addPartialPayment, getClientPartialAmount, selectedDate } = useCollectorStore();
   const { fetchClientPendingInvoices } = useBillingStore();
   const { user } = useAuth();
@@ -104,7 +104,7 @@ export function PartialPaymentModal({
     try {
       // Create payment record via API
       await addPartialPayment(
-        clientId,
+        client,
         activeInvoiceId,
         numAmount,
         user.id,

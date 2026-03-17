@@ -39,6 +39,7 @@ interface TechnicianActions {
 
   // Clear
   clearTask: () => void;
+  reset: () => void;
 }
 
 export const useTechnicianStore = create<TechnicianState & TechnicianActions>((set, get) => ({
@@ -238,5 +239,15 @@ export const useTechnicianStore = create<TechnicianState & TechnicianActions>((s
   },
 
   clearTask: () => set({ task: null }),
-}));
 
+  reset: () => {
+    set({
+      tasks: [],
+      task: null,
+      activityLogs: [],
+      summary: null,
+      loading: false,
+      error: null,
+    });
+  },
+}));

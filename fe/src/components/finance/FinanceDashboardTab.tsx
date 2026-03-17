@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
-import { format } from "date-fns";
+import { format, subMonths, startOfDay, endOfDay, addDays } from "date-fns";
 import { useBillingStore } from "@/stores/billingStore";
-import { LineChart } from "@/components/charts/LineChart";
+import { AreaChart } from "@/components/charts/AreaChart";
 import { BarChart } from "@/components/charts/BarChart";
 import { PieChart } from "@/components/charts/PieChart";
 import {
@@ -16,42 +17,24 @@ import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
   ChartBarIcon,
+  BanknotesIcon,
+  ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/20/solid";
-
-// Mock data untuk charts (akan diganti dengan API call)
-const mockRevenueTrend = [
-  { month: "Jan", revenue: 45000000 },
-  { month: "Feb", revenue: 52000000 },
-  { month: "Mar", revenue: 48000000 },
-  { month: "Apr", revenue: 61000000 },
-  { month: "May", revenue: 55000000 },
-  { month: "Jun", revenue: 67000000 },
-];
-
-const mockPaymentMethods = [
-  { name: "Cash", value: 45, color: "#10b981" },
-  { name: "Bank Transfer", value: 30, color: "#3b82f6" },
-  { name: "E-Wallet", value: 15, color: "#f59e0b" },
-  { name: "QRIS", value: 10, color: "#8b5cf6" },
-];
-
-const mockMonthlyComparison = [
-  { month: "Jan", paid: 45000000, pending: 12000000 },
-  { month: "Feb", paid: 52000000, pending: 15000000 },
-  { month: "Mar", paid: 48000000, pending: 18000000 },
-  { month: "Apr", paid: 61000000, pending: 14000000 },
-  { month: "May", paid: 55000000, pending: 16000000 },
-  { month: "Jun", paid: 67000000, pending: 13000000 },
-];
+import { billingService } from "@/lib/api/billingService";
+import { RevenueAnalytics } from "@/lib/api/types";
 
 export function FinanceDashboardTab() {
   const router = useRouter();
   const { summary, loading, fetchBillingSummary, invoices, payments, fetchInvoices, fetchPayments } = useBillingStore();
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [revenueAnalytics, setRevenueAnalytics] = useState<RevenueAnalytics | null>(null);
+  const [revenueInterval, setRevenueInterval] = useState<"daily" | "weekly" | "monthly" | "yearly">("monthly");
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
       setDashboardLoading(true);
+      
       try {
         await Promise.all([
           fetchBillingSummary(),
@@ -66,6 +49,25 @@ export function FinanceDashboardTab() {
     };
     loadData();
   }, [fetchBillingSummary, fetchInvoices, fetchPayments]);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      setLoadingAnalytics(true);
+      try {
+        const data = await billingService.getRevenueAnalytics({
+          interval: revenueInterval,
+          start_date: format(subMonths(new Date(), 6), "yyyy-MM-dd"),
+          end_date: format(new Date(), "yyyy-MM-dd"),
+        });
+        setRevenueAnalytics(data);
+      } catch (error) {
+        console.error("Failed to fetch revenue analytics:", error);
+      } finally {
+        setLoadingAnalytics(false);
+      }
+    };
+    fetchAnalytics();
+  }, [revenueInterval]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("id-ID", {
@@ -89,7 +91,7 @@ export function FinanceDashboardTab() {
               <div className="text-2xl font-bold text-green-600 mt-1">
                 {summary ? formatCurrency(summary.total_revenue) : formatCurrency(0)}
               </div>
-              <div className="text-xs text-slate-500 mt-1">This month</div>
+              <div className="text-xs text-slate-500 mt-1">This year</div>
             </div>
             <CurrencyDollarIcon className="w-10 h-10 text-green-400" />
           </div>
@@ -139,90 +141,179 @@ export function FinanceDashboardTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue Trend */}
         <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Revenue Trend</h2>
-          <LineChart
-            data={mockRevenueTrend}
-            xAxis={{ dataKey: "month", label: "Month" }}
-            yAxis={{
-              dataKey: "revenue",
-              label: "Revenue (IDR)",
-              tickFormatter: (value) => formatCurrency(value),
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-900">Revenue Trend</h2>
+            <div className="flex items-center gap-2">
+              <div className="flex bg-slate-100 p-1 rounded-md">
+                {(["daily", "weekly", "monthly", "yearly"] as const).map((inv) => (
+                  <button
+                    key={inv}
+                    onClick={() => setRevenueInterval(inv)}
+                    className={cn(
+                      "px-2 py-1 text-xs font-medium rounded capitalize",
+                      revenueInterval === inv
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    )}
+                  >
+                    {inv.charAt(0)}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-indigo-600 hover:text-indigo-700 text-xs gap-1"
+                onClick={() => router.push("/finance/reports/revenue-analytics")}
+              >
+                Details
+                <ArrowTopRightOnSquareIcon className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+          <AreaChart
+            data={revenueAnalytics?.trend || []}
+            loading={loadingAnalytics}
+            xAxis={{ 
+              dataKey: "date", 
+              tickFormatter: (val) => {
+                try {
+                  const d = new Date(val);
+                  if (revenueInterval === "daily") return format(d, "d MMM");
+                  if (revenueInterval === "weekly") return format(d, "d MMM"); // Show start date of week
+                  if (revenueInterval === "monthly") return format(d, "MMM");
+                  if (revenueInterval === "yearly") return format(d, "yyyy");
+                  return format(d, "MMM");
+                } catch (e) {
+                  return val;
+                }
+              }
             }}
-            lines={[
+            yAxis={{
+              dataKey: "amount",
+              tickFormatter: (value) => {
+                if (value >= 1000000000000) return `${(value / 1000000000000).toFixed(1)} T`;
+                if (value >= 1000000000) return `${(value / 1000000000).toFixed(1)} M`;
+                if (value >= 1000000) return `${(value / 1000000).toFixed(1)} jt`;
+                if (value >= 1000) return `${(value / 1000).toFixed(0)} k`;
+                return value.toString();
+              },
+            }}
+            areas={[
               {
-                dataKey: "revenue",
+                dataKey: "amount",
                 name: "Revenue",
-                stroke: "#10b981",
-                strokeWidth: 2,
+                color: "#10b981",
+                strokeWidth: 3,
               },
             ]}
+            tooltip={{
+              show: true,
+              formatter: (value: any) => [formatCurrency(value), "Revenue"],
+              labelFormatter: (label: any) => {
+                try {
+                  const d = new Date(label);
+                  if (revenueInterval === "daily") return format(d, "EEEE, d MMMM yyyy");
+                  if (revenueInterval === "weekly") {
+                    const end = addDays(d, 6);
+                    return `Minggu ${format(d, "w")}: ${format(d, "d MMM")} - ${format(end, "d MMM yyyy")}`;
+                  }
+                  if (revenueInterval === "monthly") return format(d, "MMMM yyyy");
+                  if (revenueInterval === "yearly") return format(d, "yyyy");
+                  return format(d, "d MMMM yyyy");
+                } catch (e) {
+                  return label;
+                }
+              }
+            }}
             height={300}
           />
         </div>
 
-        {/* Payment Methods Distribution */}
+        {/* Connection Type Distribution */}
         <div className="bg-white border border-slate-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Payment Methods Distribution</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Connection Type Revenue</h2>
           <PieChart
-            data={mockPaymentMethods}
+            data={revenueAnalytics?.by_connection_type?.map(c => ({
+              name: c.connection_type.toUpperCase(),
+              value: c.amount,
+              color: c.connection_type === 'pppoe' ? '#3b82f6' : '#f59e0b'
+            })) || []}
             donut={true}
-            showPercentages={true}
+            loading={loadingAnalytics}
             height={300}
-            legend={{ show: true, position: "right" }}
+            subtitle="Berdasarkan periode waktu yang dipilih"
+            legend={{ show: true, position: "bottom" }}
+            tooltip={{
+              show: true,
+              formatter: (value: any) => [formatCurrency(value as number), "Revenue"],
+            }}
           />
         </div>
       </div>
 
-      {/* Monthly Comparison */}
+      {/* Revenue by Client Group */}
       <div className="bg-white border border-slate-200 rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Monthly Comparison</h2>
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Revenue by Client Group</h2>
         <BarChart
-          data={mockMonthlyComparison}
-          xAxisKey="month"
+          data={revenueAnalytics?.by_group?.map(g => ({ name: g.group_name, revenue: g.amount })) || []}
+          xAxisKey="name"
+          loading={loadingAnalytics}
+          subtitle="Berdasarkan periode waktu yang dipilih"
           bars={[
-            { dataKey: "paid", name: "Paid", fill: "#10b981" },
-            { dataKey: "pending", name: "Pending", fill: "#f59e0b" },
+            { dataKey: "revenue", name: "Revenue", fill: "#10b981" },
           ]}
-          grouped={true}
           height={300}
+          tooltip={{
+            show: true,
+            formatter: (value: any) => [formatCurrency(value as number), "Revenue"],
+          }}
         />
       </div>
 
       {/* Quick Actions */}
       <div className="bg-white border border-slate-200 rounded-lg p-4">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <Button
             variant="outline"
             onClick={() => router.push("/finance/invoices")}
-            className="justify-start"
+            className="justify-start border-slate-200 hover:bg-slate-50"
           >
-            <DocumentTextIcon className="w-5 h-5 mr-2" />
-            Manage Invoices
+            <DocumentTextIcon className="w-5 h-5 mr-2 text-indigo-500" />
+            Invoices
           </Button>
           <Button
             variant="outline"
             onClick={() => router.push("/finance/payments")}
-            className="justify-start"
+            className="justify-start border-slate-200 hover:bg-slate-50"
           >
-            <CurrencyDollarIcon className="w-5 h-5 mr-2" />
-            View Payments
+            <CurrencyDollarIcon className="w-5 h-5 mr-2 text-emerald-500" />
+            Payments
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/finance/expenses")}
+            className="justify-start border-slate-200 hover:bg-slate-50"
+          >
+            <BanknotesIcon className="w-5 h-5 mr-2 text-red-500" />
+            Expenses
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/finance/inventory")}
+            className="justify-start border-slate-200 hover:bg-slate-50"
+          >
+            <ChartBarIcon className="w-5 h-5 mr-2 text-amber-500" />
+            Inventory
           </Button>
           <Button
             variant="outline"
             onClick={() => router.push("/finance/reports")}
-            className="justify-start"
+            className="justify-start border-slate-200 hover:bg-slate-50"
           >
-            <ChartBarIcon className="w-5 h-5 mr-2" />
-            Generate Report
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => router.push("/settlement")}
-            className="justify-start"
-          >
-            <CheckCircleIcon className="w-5 h-5 mr-2" />
-            View Settlement
+            <ChartBarIcon className="w-5 h-5 mr-2 text-blue-500" />
+            Reports
           </Button>
         </div>
       </div>

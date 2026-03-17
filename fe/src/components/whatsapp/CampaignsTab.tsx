@@ -8,6 +8,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import clientGroupService, { type ClientGroup } from "@/lib/api/clientGroupService";
 import waCampaignService, { type WACampaign, type WACampaignRecipient } from "@/lib/api/waCampaignService";
 import waTemplateService, { type WATemplate } from "@/lib/api/waTemplateService";
+import { MessageVariableHelper } from "./MessageVariableHelper";
 
 function statusPill(status: string) {
   switch (status) {
@@ -261,7 +262,7 @@ export function CampaignsTab() {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Tulis pesan broadcast..."
           />
-          <p className="text-xs text-slate-500">Catatan: untuk MVP ini belum ada template variable.</p>
+          <MessageVariableHelper />
         </div>
       </div>
 

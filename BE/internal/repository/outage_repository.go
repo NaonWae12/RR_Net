@@ -113,4 +113,3 @@ func (r *OutageRepository) Resolve(ctx context.Context, id uuid.UUID, resolvedBy
 	_, err := r.db.Exec(ctx, query, id, resolvedBy)
 	return err
 }
-

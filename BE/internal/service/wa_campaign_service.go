@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
-	asynqInfra "rrnet/internal/infra/asynq"
 	"rrnet/internal/domain/wa_campaign"
+	asynqInfra "rrnet/internal/infra/asynq"
 	"rrnet/internal/repository"
 )
 
@@ -92,19 +92,21 @@ func (s *WACampaignService) CreateAndEnqueue(ctx context.Context, tenantID uuid.
 		return nil, err
 	}
 
-	// Enqueue tasks
+	// Enqueue tasks with human-like staggered delays.
+	// Each recipient gets a cumulative offset of 1.5–3.5s to avoid spam detection.
+	// Result: ~100 msg in ~5 min, ~1000 msg in ~42 min.
+	var cumulativeDelay time.Duration
 	for _, r := range recs {
 		task, err := NewWACampaignSendTask(tenantID, camp.ID, r.ID, r.Phone, message)
 		if err != nil {
 			return nil, err
 		}
 
-		// Spread execution slightly to avoid immediate bursts even with concurrency.
-		delay := time.Duration(300+rand.Intn(400)) * time.Millisecond
+		cumulativeDelay += time.Duration(1500+rand.Intn(2000)) * time.Millisecond
 		_, err = s.asynqClient.Enqueue(
 			task,
-			asynq.Queue(asynqInfra.QueueNotification), // reuse notification queue for now
-			asynq.ProcessIn(delay),
+			asynq.Queue(asynqInfra.QueueNotification),
+			asynq.ProcessIn(cumulativeDelay),
 			asynq.MaxRetry(3),
 			asynq.Timeout(30*time.Second),
 		)
@@ -151,18 +153,18 @@ func (s *WACampaignService) RetryFailed(ctx context.Context, tenantID, campaignI
 		return 0, err
 	}
 
+	var cumulativeDelay time.Duration
 	for _, r := range failedRecs {
 		task, err := NewWACampaignSendTask(tenantID, campaignID, r.ID, r.Phone, camp.Message)
 		if err != nil {
 			return 0, err
 		}
-		delay := time.Duration(300+rand.Intn(400)) * time.Millisecond
-		_, err = s.asynqClient.Enqueue(task, asynq.Queue(asynqInfra.QueueNotification), asynq.ProcessIn(delay), asynq.MaxRetry(3), asynq.Timeout(30*time.Second))
+		// Same human-like pacing for retries
+		cumulativeDelay += time.Duration(1500+rand.Intn(2000)) * time.Millisecond
+		_, err = s.asynqClient.Enqueue(task, asynq.Queue(asynqInfra.QueueNotification), asynq.ProcessIn(cumulativeDelay), asynq.MaxRetry(3), asynq.Timeout(30*time.Second))
 		if err != nil {
 			return 0, err
 		}
 	}
 	return n, nil
 }
-
-

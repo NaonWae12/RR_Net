@@ -85,4 +85,3 @@ func (v *OutageWorkflowValidator) ValidateOutageWorkflow(
 
 	return result, nil
 }
-

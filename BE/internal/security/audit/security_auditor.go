@@ -26,12 +26,12 @@ type SecurityCheck interface {
 
 // SecurityCheckResult represents the result of a security check
 type SecurityCheckResult struct {
-	CheckName    string
-	Status       string // "passed", "failed", "warning"
-	Message      string
-	Severity     string // "low", "medium", "high", "critical"
+	CheckName       string
+	Status          string // "passed", "failed", "warning"
+	Message         string
+	Severity        string // "low", "medium", "high", "critical"
 	Recommendations []string
-	Timestamp    time.Time
+	Timestamp       time.Time
 }
 
 // AuditResult represents the result of a security audit
@@ -93,13 +93,13 @@ type VulnerabilityScannerType interface {
 
 // Vulnerability represents a detected vulnerability
 type Vulnerability struct {
-	ID            string
-	Type          string
-	Severity      string // "low", "medium", "high", "critical"
-	Description   string
-	Location      string
+	ID             string
+	Type           string
+	Severity       string // "low", "medium", "high", "critical"
+	Description    string
+	Location       string
 	Recommendation string
-	Timestamp     time.Time
+	Timestamp      time.Time
 }
 
 // ScanVulnerabilities scans for vulnerabilities
@@ -137,12 +137,12 @@ type ConfigurationReviewerType interface {
 
 // ConfigurationIssue represents a configuration security issue
 type ConfigurationIssue struct {
-	Type          string
-	Severity      string
-	Description   string
-	Location      string
+	Type           string
+	Severity       string
+	Description    string
+	Location       string
 	Recommendation string
-	Timestamp     time.Time
+	Timestamp      time.Time
 }
 
 // ReviewConfigurations reviews security configurations
@@ -159,4 +159,3 @@ func (cr *ConfigurationReviewer) ReviewConfigurations(ctx context.Context) ([]Co
 
 	return allIssues, nil
 }
-

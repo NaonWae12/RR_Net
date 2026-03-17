@@ -53,8 +53,9 @@ func (w *WACampaignWorker) handleSend(ctx context.Context, t *asynq.Task) error 
 	release := w.limiter.acquire(tenantID.String())
 	defer release()
 
-	// Jitter between sends (per task)
-	time.Sleep(time.Duration(300+rand.Intn(400)) * time.Millisecond)
+	// Human-like pacing: sleep 1–2.5s before sending as extra jitter (safety net on top of enqueue delay).
+	// At this rate: ~24–40 messages/minute, safe for known ISP-customer numbers.
+	time.Sleep(time.Duration(1000+rand.Intn(1500)) * time.Millisecond)
 
 	var logID *uuid.UUID
 	if w.logSvc != nil {
@@ -100,5 +101,3 @@ func (w *WACampaignWorker) handleSend(ctx context.Context, t *asynq.Task) error 
 	log.Info().Str("tenant_id", tenantID.String()).Str("recipient_id", recipientID.String()).Msg("wa campaign send ok")
 	return nil
 }
-
-

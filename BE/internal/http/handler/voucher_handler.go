@@ -204,7 +204,10 @@ func (h *VoucherHandler) ListVouchers(w http.ResponseWriter, r *http.Request) {
 	}
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 
-	vouchers, total, err := h.voucherService.ListVouchers(r.Context(), tenantID, limit, offset)
+	status := r.URL.Query().Get("status")
+	search := r.URL.Query().Get("search")
+
+	vouchers, total, err := h.voucherService.ListVouchers(r.Context(), tenantID, limit, offset, status, search)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
@@ -253,6 +256,37 @@ func (h *VoucherHandler) ToggleIsolate(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(voucher)
+}
+
+func (h *VoucherHandler) UpdateVoucher(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	idStr := getParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid voucher ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req service.UpdateVoucherRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	req.ID = id // Ensure ID from URL is used
+
+	v, err := h.voucherService.UpdateVoucher(r.Context(), tenantID, req)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
 }
 
 func (h *VoucherHandler) DeleteVoucher(w http.ResponseWriter, r *http.Request) {

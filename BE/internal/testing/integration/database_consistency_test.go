@@ -25,8 +25,9 @@ func TestDatabaseConsistency_InvoicePayment(t *testing.T) {
 	invoiceRepo := repository.NewInvoiceRepository(tc.DB)
 	paymentRepo := repository.NewPaymentRepository(tc.DB)
 	servicePackageRepo := repository.NewServicePackageRepository(tc.DB)
+	discountRepo := repository.NewDiscountRepository(tc.DB)
 
-	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo)
+	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 
 	// Setup
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")
@@ -171,6 +172,7 @@ func TestDatabaseConsistency_ReferentialIntegrity(t *testing.T) {
 	clientRepo := repository.NewClientRepository(tc.DB)
 	invoiceRepo := repository.NewInvoiceRepository(tc.DB)
 	servicePackageRepo := repository.NewServicePackageRepository(tc.DB)
+	discountRepo := repository.NewDiscountRepository(tc.DB)
 
 	// Setup
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")
@@ -197,7 +199,7 @@ func TestDatabaseConsistency_ReferentialIntegrity(t *testing.T) {
 		},
 	}
 
-	billingService := service.NewBillingService(invoiceRepo, nil, clientRepo, servicePackageRepo)
+	billingService := service.NewBillingService(invoiceRepo, nil, clientRepo, servicePackageRepo, discountRepo)
 	invoice, err := billingService.CreateInvoice(tc.Ctx, tenant.ID, createInvoiceReq)
 	require.NoError(t, err)
 
@@ -210,4 +212,3 @@ func TestDatabaseConsistency_ReferentialIntegrity(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, client.ID, retrievedInvoice.ClientID)
 }
-

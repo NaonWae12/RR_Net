@@ -37,33 +37,33 @@ func NewAddonService(addonRepo *repository.AddonRepository, planRepo *repository
 
 // CreateAddonRequest represents request to create an addon
 type CreateAddonRequest struct {
-	Code             string              `json:"code"`
-	Name             string              `json:"name"`
-	Description      string              `json:"description,omitempty"`
-	Price            float64             `json:"price"`
-	BillingCycle     addon.BillingCycle  `json:"billing_cycle"`
-	Currency         string              `json:"currency,omitempty"`
-	Type             addon.AddonType     `json:"addon_type"`
-	Value            map[string]interface{} `json:"value"`
-	IsActive         bool                `json:"is_active"`
-	AvailableForPlans []string           `json:"available_for_plans"`
+	Code              string                 `json:"code"`
+	Name              string                 `json:"name"`
+	Description       string                 `json:"description,omitempty"`
+	Price             float64                `json:"price"`
+	BillingCycle      addon.BillingCycle     `json:"billing_cycle"`
+	Currency          string                 `json:"currency,omitempty"`
+	Type              addon.AddonType        `json:"addon_type"`
+	Value             map[string]interface{} `json:"value"`
+	IsActive          bool                   `json:"is_active"`
+	AvailableForPlans []string               `json:"available_for_plans"`
 }
 
 // AddonDTO represents addon data for API responses
 type AddonDTO struct {
-	ID                uuid.UUID             `json:"id"`
-	Code              string                `json:"code"`
-	Name              string                `json:"name"`
-	Description       *string               `json:"description,omitempty"`
-	Price             float64               `json:"price"`
-	BillingCycle      addon.BillingCycle    `json:"billing_cycle"`
-	Currency          string                `json:"currency"`
-	Type              addon.AddonType       `json:"addon_type"`
+	ID                uuid.UUID              `json:"id"`
+	Code              string                 `json:"code"`
+	Name              string                 `json:"name"`
+	Description       *string                `json:"description,omitempty"`
+	Price             float64                `json:"price"`
+	BillingCycle      addon.BillingCycle     `json:"billing_cycle"`
+	Currency          string                 `json:"currency"`
+	Type              addon.AddonType        `json:"addon_type"`
 	Value             map[string]interface{} `json:"value"`
-	IsActive          bool                  `json:"is_active"`
-	AvailableForPlans []string              `json:"available_for_plans"`
-	CreatedAt         time.Time             `json:"created_at"`
-	UpdatedAt         time.Time             `json:"updated_at"`
+	IsActive          bool                   `json:"is_active"`
+	AvailableForPlans []string               `json:"available_for_plans"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
 }
 
 // Create creates a new addon
@@ -223,12 +223,12 @@ func (s *AddonService) Delete(ctx context.Context, id uuid.UUID) error {
 
 // TenantAddonDTO represents tenant addon data for API responses
 type TenantAddonDTO struct {
-	ID        uuid.UUID   `json:"id"`
-	TenantID  uuid.UUID   `json:"tenant_id"`
-	AddonID   uuid.UUID   `json:"addon_id"`
-	Addon     *AddonDTO   `json:"addon,omitempty"`
-	StartedAt time.Time   `json:"started_at"`
-	ExpiresAt *time.Time  `json:"expires_at,omitempty"`
+	ID        uuid.UUID  `json:"id"`
+	TenantID  uuid.UUID  `json:"tenant_id"`
+	AddonID   uuid.UUID  `json:"addon_id"`
+	Addon     *AddonDTO  `json:"addon,omitempty"`
+	StartedAt time.Time  `json:"started_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // AssignToTenant assigns an addon to a tenant
@@ -306,5 +306,3 @@ func (s *AddonService) toDTO(a *addon.Addon) *AddonDTO {
 		UpdatedAt:         a.UpdatedAt,
 	}
 }
-
-

@@ -18,4 +18,3 @@ func MustGetEnv(key string) string {
 	}
 	return value
 }
-

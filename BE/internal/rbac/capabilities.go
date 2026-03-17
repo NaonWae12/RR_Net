@@ -65,6 +65,10 @@ const (
 	CapReportHR   Capability = "report.hr"
 	CapReportBill Capability = "report.billing"
 
+	// Inventory capabilities
+	CapInventoryView   Capability = "inventory.view"
+	CapInventoryManage Capability = "inventory.manage"
+
 	// System capabilities
 	CapSystemSettings Capability = "system.settings"
 	CapSystemAll      Capability = "*"
@@ -74,33 +78,3 @@ const (
 func (c Capability) String() string {
 	return string(c)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

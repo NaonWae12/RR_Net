@@ -72,4 +72,3 @@ func RequestLogger(next http.Handler) http.Handler {
 			Msg("HTTP request")
 	})
 }
-

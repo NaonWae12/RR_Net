@@ -5,8 +5,9 @@ import { Alert } from "@/components/feedback";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Bell, CheckCircle2, XCircle, Info } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, XCircle, Info, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 
 export interface AlertItem {
   id: string;
@@ -47,18 +48,30 @@ const alertVariants = {
   success: "success" as const,
 };
 
+const StatItem = ({ label, count, colorClass }: { label: string; count: number; colorClass: string }) => (
+  <div className={cn("p-3 rounded-xl border border-transparent flex flex-col items-center justify-center transition-all", colorClass)}>
+    <span className="text-xl font-bold">{count}</span>
+    <span className="text-[10px] uppercase font-bold tracking-tight opacity-70">{label}</span>
+  </div>
+);
+
 export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
   ({ data, loading, className, onViewAll }) => {
     const router = useRouter();
 
     if (loading) {
       return (
-        <Card className={className}>
-          <CardHeader>
-            <div className="h-6 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+        <Card className={cn("overflow-hidden border-none shadow-sm", className)}>
+          <CardHeader className="pb-2">
+            <div className="h-6 bg-slate-100 animate-pulse rounded w-1/3"></div>
           </CardHeader>
           <CardContent>
-            <div className="h-32 bg-gray-200 rounded animate-pulse"></div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map(i => <div key={i} className="h-14 bg-slate-50 animate-pulse rounded-lg" />)}
+              </div>
+              <div className="h-40 bg-slate-50 animate-pulse rounded-xl"></div>
+            </div>
           </CardContent>
         </Card>
       );
@@ -66,10 +79,9 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
 
     if (!data) {
       return (
-        <Card className={className}>
-          <CardContent className="p-6">
-            <p className="text-sm text-slate-600">No alert data available</p>
-          </CardContent>
+        <Card className={cn("p-6 text-center border-dashed", className)}>
+          <Bell className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-sm text-slate-500">No alert data available</p>
         </Card>
       );
     }
@@ -83,82 +95,86 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
     };
 
     return (
-      <Card className={className}>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              Alert Summary
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={handleViewAll}>
-              View All
-            </Button>
-          </div>
+      <Card className={cn("overflow-hidden border-none shadow-sm h-full", className)}>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-lg font-bold flex items-center gap-2">
+            <div className="p-1.5 bg-red-50 text-red-600 rounded-lg">
+              <Bell className="h-4 w-4" />
+            </div>
+            Alert Summary
+          </CardTitle>
+          <button onClick={handleViewAll} className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
+            Resolve All
+          </button>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="text-center p-3 bg-red-50 rounded-lg">
-                <p className="text-2xl font-bold text-red-600">{data.critical}</p>
-                <p className="text-xs text-red-700 mt-1">Critical</p>
-              </div>
-              <div className="text-center p-3 bg-amber-50 rounded-lg">
-                <p className="text-2xl font-bold text-amber-600">{data.warning}</p>
-                <p className="text-xs text-amber-700 mt-1">Warning</p>
-              </div>
-              <div className="text-center p-3 bg-blue-50 rounded-lg">
-                <p className="text-2xl font-bold text-blue-600">{data.info}</p>
-                <p className="text-xs text-blue-700 mt-1">Info</p>
-              </div>
-              <div className="text-center p-3 bg-slate-100 rounded-lg">
-                <p className="text-2xl font-bold text-slate-900">{data.total}</p>
-                <p className="text-xs text-slate-600 mt-1">Total</p>
-              </div>
+        <CardContent className="pt-4">
+          <div className="space-y-6">
+            <div className="grid grid-cols-4 gap-2">
+              <StatItem label="Crit" count={data.critical} colorClass="bg-red-50 text-red-600 border-red-100" />
+              <StatItem label="Warn" count={data.warning} colorClass="bg-amber-50 text-amber-600 border-amber-100" />
+              <StatItem label="Info" count={data.info} colorClass="bg-blue-50 text-blue-600 border-blue-100" />
+              <StatItem label="Total" count={data.total} colorClass="bg-slate-50 text-slate-600 border-slate-100" />
             </div>
 
-            <div>
-              <h4 className="text-sm font-medium mb-2 text-slate-900">Recent Alerts</h4>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent Notifications</h4>
+              <div className="space-y-3 overflow-y-auto max-h-[300px] pr-1 custom-scrollbar">
                 {data.recent.length === 0 ? (
-                  <p className="text-sm text-slate-600 text-center py-4">No recent alerts</p>
+                  <div className="py-10 text-center bg-slate-50 rounded-xl">
+                    <CheckCircle2 className="mx-auto h-8 w-8 text-green-200 mb-2" />
+                    <p className="text-xs text-slate-500 font-medium">System is running smooth</p>
+                  </div>
                 ) : (
-                  data.recent.map((alert) => {
+                  data.recent.map((alert, index) => {
                     const Icon = alertIcons[alert.type];
                     return (
-                      <Alert
+                      <motion.div
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
                         key={alert.id}
-                        variant={alertVariants[alert.type]}
-                        title={alert.title}
-                        message={alert.message}
-                        icon={<Icon className="h-4 w-4" />}
-                        className="text-sm"
                       >
-                        <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
-                          <span>{alert.source || "System"}</span>
-                          <span>{new Date(alert.timestamp).toLocaleString()}</span>
-                        </div>
-                        {alert.actionUrl && (
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="mt-2 h-auto p-0 text-xs"
-                            onClick={() => router.push(alert.actionUrl!)}
-                          >
-                            View Details →
-                          </Button>
-                        )}
-                      </Alert>
+                        <Alert
+                          variant={alertVariants[alert.type]}
+                          title={alert.title}
+                          message={alert.message}
+                          icon={<Icon className="h-4 w-4" />}
+                          className="border border-transparent shadow-sm bg-white hover:bg-blue-50/50 hover:border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                        >
+                          <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 rounded-full bg-slate-200" /> {alert.source || "System"}
+                            </span>
+                            <span>{new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          {alert.actionUrl && (
+                            <button
+                              className="mt-2 text-[11px] font-bold text-blue-600 flex items-center gap-1 hover:underline"
+                              onClick={() => router.push(alert.actionUrl!)}
+                            >
+                              Take Action <ArrowRight size={12} />
+                            </button>
+                          )}
+                        </Alert>
+                      </motion.div>
                     );
                   })
                 )}
               </div>
             </div>
+            
+            <Button variant="outline" className="w-full text-xs font-bold py-5 bg-slate-50 border-slate-100 hover:bg-slate-100" onClick={handleViewAll}>
+              View All System Logs
+            </Button>
           </div>
         </CardContent>
       </Card>
     );
   }
 );
+
+AlertSummaryCard.displayName = "AlertSummaryCard";
+
 
 AlertSummaryCard.displayName = "AlertSummaryCard";
 

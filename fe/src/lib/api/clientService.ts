@@ -1,6 +1,6 @@
 import apiClient from './apiClient';
 
-export type ClientStatus = 'active' | 'isolir' | 'suspended' | 'terminated';
+export type ClientStatus = 'active' | 'pending' | 'isolir' | 'suspended' | 'terminated';
 export type ClientCategory = 'regular' | 'business' | 'enterprise' | 'lite';
 
 export interface Client {
@@ -22,7 +22,9 @@ export interface Client {
   discount_value?: number | null;
   device_count?: number | null;
   router_id?: string | null;
+  router_name?: string | null;
   pppoe_username?: string;
+  pppoe_password?: string;
   pppoe_local_address?: string | null;
   pppoe_remote_address?: string | null;
   pppoe_comment?: string | null;
@@ -36,8 +38,12 @@ export interface Client {
   payment_tempo_template_id?: string | null;
   // legacy/backward-compat display field from backend
   service_plan?: string | null;
+  is_reseller: boolean;
   created_at: string;
   updated_at: string;
+  payment_status?: string;
+  payment_due_date?: string;
+  created_by_name?: string | null;
 }
 
 export interface ClientListResponse {
@@ -62,7 +68,7 @@ export interface CreateClientRequest {
   address?: string;
   category: ClientCategory;
   connection_type?: 'pppoe' | 'hotspot';
-  service_package_id: string;
+  service_package_id?: string | null;
   group_id?: string;
   isolir_mode?: 'auto' | 'manual';
   device_count?: number;
@@ -80,11 +86,12 @@ export interface CreateClientRequest {
   payment_tempo_option?: 'default' | 'template' | 'manual';
   payment_due_day?: number;
   payment_tempo_template_id?: string;
+  auto_create_invoice?: boolean;
 }
 
 export interface UpdateClientRequest extends Partial<CreateClientRequest> {
   category: ClientCategory;
-  service_package_id: string;
+  service_package_id?: string | null;
 }
 
 export interface ClientFilters {
@@ -138,9 +145,9 @@ export const clientService = {
       phone: data.phone,
       address: data.address,
       category: data.category,
-      service_package_id: data.service_package_id,
-      group_id: data.group_id,
-      discount_id: data.discount_id,
+      service_package_id: data.service_package_id || undefined,
+      group_id: data.group_id || undefined,
+      discount_id: data.discount_id || undefined,
       isolir_mode: data.isolir_mode,
       connection_type: data.connection_type,
       device_count: data.device_count,
@@ -149,11 +156,12 @@ export const clientService = {
       payment_tempo_option: data.payment_tempo_option,
       payment_due_day: data.payment_due_day,
       payment_tempo_template_id: data.payment_tempo_template_id,
-      router_id: data.router_id,
+      router_id: data.router_id || undefined,
       pppoe_local_address: data.pppoe_local_address,
       pppoe_remote_address: data.pppoe_remote_address,
       pppoe_comment: data.pppoe_comment,
-      voucher_package_id: data.voucher_package_id,
+      voucher_package_id: data.voucher_package_id || undefined,
+      auto_create_invoice: data.auto_create_invoice,
     };
     const response = await apiClient.post('/clients', payload);
     return response.data;
@@ -166,9 +174,9 @@ export const clientService = {
       phone: data.phone,
       address: data.address,
       category: data.category,
-      service_package_id: data.service_package_id,
-      group_id: data.group_id,
-      discount_id: data.discount_id,
+      service_package_id: data.service_package_id || undefined,
+      group_id: data.group_id || undefined,
+      discount_id: data.discount_id || undefined,
       isolir_mode: data.isolir_mode,
       connection_type: data.connection_type,
       device_count: data.device_count,
@@ -177,11 +185,11 @@ export const clientService = {
       payment_tempo_option: data.payment_tempo_option,
       payment_due_day: data.payment_due_day,
       payment_tempo_template_id: data.payment_tempo_template_id,
-      router_id: data.router_id,
+      router_id: data.router_id || undefined,
       pppoe_local_address: data.pppoe_local_address,
       pppoe_remote_address: data.pppoe_remote_address,
       pppoe_comment: data.pppoe_comment,
-      voucher_package_id: data.voucher_package_id,
+      voucher_package_id: data.voucher_package_id || undefined,
     };
     const response = await apiClient.put(`/clients/${id}`, payload);
     return response.data;

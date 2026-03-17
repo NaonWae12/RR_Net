@@ -60,5 +60,3 @@ func DecryptStringAESGCM(key32 [32]byte, b64 string) (string, error) {
 	}
 	return string(plaintext), nil
 }
-
-

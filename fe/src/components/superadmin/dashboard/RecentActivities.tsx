@@ -2,11 +2,20 @@
 
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/utilities";
 import { cn } from "@/lib/utils";
-import { Clock, User, Activity } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { 
+  History, 
+  Users, 
+  Package, 
+  Settings, 
+  CheckCircle2, 
+  Clock, 
+  User,
+  ShieldCheck,
+  AlertCircle
+} from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { motion } from "framer-motion";
 
 export interface ActivityItem {
   id: string;
@@ -15,133 +24,136 @@ export interface ActivityItem {
   user: string;
   target?: string;
   timestamp: Date;
-  status?: "success" | "failed" | "pending";
-  details?: string;
+  status: "success" | "warning" | "error" | "info" | "failed" | "pending";
 }
 
 export interface RecentActivitiesProps {
-  activities?: ActivityItem[];
+  activities: ActivityItem[];
   loading?: boolean;
-  maxItems?: number;
   className?: string;
-  onViewAll?: () => void;
 }
 
-const activityIcons = {
-  tenant: "🏢",
-  plan: "📦",
-  addon: "➕",
-  system: "⚙️",
-  security: "🔒",
+const getActivityIcon = (type: ActivityItem["type"]) => {
+  switch (type) {
+    case "tenant": return <Users size={14} />;
+    case "plan": return <Package size={14} />;
+    case "system": return <Settings size={14} />;
+    case "security": return <ShieldCheck size={14} />;
+    default: return <History size={14} />;
+  }
 };
 
-const activityColors = {
-  tenant: "bg-blue-100 text-blue-700",
-  plan: "bg-purple-100 text-purple-700",
-  addon: "bg-green-100 text-green-700",
-  system: "bg-gray-100 text-gray-700",
-  security: "bg-red-100 text-red-700",
+const getActivityColor = (type: ActivityItem["type"]) => {
+  switch (type) {
+    case "tenant": return "bg-blue-50 text-blue-600";
+    case "plan": return "bg-purple-50 text-purple-600";
+    case "system": return "bg-orange-50 text-orange-600";
+    case "security": return "bg-indigo-50 text-indigo-600";
+    default: return "bg-slate-50 text-slate-600";
+  }
 };
 
 export const RecentActivities = React.memo<RecentActivitiesProps>(
-  ({ activities = [], loading, maxItems = 10, className, onViewAll }) => {
-    const router = useRouter();
-
+  ({ activities, loading, className }) => {
     if (loading) {
       return (
-        <Card className={className}>
-          <CardHeader>
-            <div className="h-6 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+        <Card className={cn("overflow-hidden border-none shadow-sm", className)}>
+          <CardHeader className="pb-2">
+            <div className="h-6 bg-slate-100 animate-pulse rounded w-1/3"></div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-200 rounded animate-pulse"></div>
-              ))}
-            </div>
+          <CardContent className="space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex gap-4 items-center">
+                <div className="w-10 h-10 bg-slate-50 animate-pulse rounded-full"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-slate-50 animate-pulse rounded w-3/4"></div>
+                  <div className="h-3 bg-slate-50 animate-pulse rounded w-1/4"></div>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
       );
     }
 
-    const displayActivities = activities.slice(0, maxItems);
-    const handleViewAll = () => {
-      if (onViewAll) {
-        onViewAll();
-      } else {
-        router.push("/superadmin/audit");
-      }
-    };
-
     return (
-      <Card className={className}>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Recent Activities
-            </CardTitle>
-            {activities.length > maxItems && (
-              <Button variant="outline" size="sm" onClick={handleViewAll}>
-                View All
-              </Button>
+      <Card className={cn("overflow-hidden border-none shadow-sm h-full", className)}>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-lg font-bold flex items-center gap-2">
+            <div className="p-1.5 bg-slate-50 text-slate-600 rounded-lg">
+              <History className="h-4 w-4" />
+            </div>
+            Recent Global Activities
+          </CardTitle>
+          <button className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
+            View Log
+          </button>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="relative space-y-4">
+            {/* Timeline Line */}
+            <div className="absolute left-[19px] top-2 bottom-2 w-[1px] bg-slate-100" />
+            
+            {activities && activities.length > 0 ? (
+              <div className="space-y-6">
+                {activities.map((activity, index) => (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    key={activity.id} 
+                    className="relative flex gap-4 group"
+                  >
+                    <div className={cn("relative z-10 w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-sm shrink-0 transition-transform group-hover:scale-110", 
+                      getActivityColor(activity.type)
+                    )}>
+                      {getActivityIcon(activity.type)}
+                    </div>
+                    
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">
+                            {activity.action}
+                            {activity.target && (
+                              <span className="text-slate-400 font-normal"> on </span>
+                            )}
+                            {activity.target && (
+                              <span className="text-blue-600 font-medium">{activity.target}</span>
+                            )}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                              <User size={10} /> {activity.user}
+                            </span>
+                            <span className="text-slate-200">|</span>
+                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                              <Clock size={10} /> {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+                            </span>
+                          </div>
+                        </div>
+                        {(activity.status === "success") && (
+                          <div className="p-1 rounded-full bg-green-50 text-green-500">
+                            <CheckCircle2 size={14} />
+                          </div>
+                        )}
+                        {(activity.status === "error" || activity.status === "failed") && (
+                          <div className="p-1 rounded-full bg-red-50 text-red-500">
+                            <AlertCircle size={14} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-10 text-center">
+                <Clock className="mx-auto h-8 w-8 text-slate-200 mb-2" />
+                <p className="text-sm text-slate-500">No recent activities found</p>
+              </div>
             )}
           </div>
-        </CardHeader>
-        <CardContent>
-          {displayActivities.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-slate-600">No recent activities</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {displayActivities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                >
-                  <div
-                    className={cn(
-                      "flex items-center justify-center w-10 h-10 rounded-full text-lg",
-                      activityColors[activity.type]
-                    )}
-                  >
-                    {activityIcons[activity.type]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-900">{activity.action}</p>
-                        {activity.target && (
-                          <p className="text-xs text-slate-600 mt-1">Target: {activity.target}</p>
-                        )}
-                        {activity.details && (
-                          <p className="text-xs text-slate-600 mt-1">{activity.details}</p>
-                        )}
-                      </div>
-                      {activity.status && (
-                        <StatusBadge
-                          status={activity.status}
-                          variant={activity.status === "success" ? "success" : activity.status === "failed" ? "error" : "warning"}
-                          size="sm"
-                        />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-2 text-xs text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <User className="h-3 w-3 text-slate-500" />
-                        <span>{activity.user}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3 text-slate-500" />
-                        <span>{new Date(activity.timestamp).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
     );
@@ -149,4 +161,3 @@ export const RecentActivities = React.memo<RecentActivitiesProps>(
 );
 
 RecentActivities.displayName = "RecentActivities";
-

@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, Pane } from "react-leaflet";
+import React, { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents, Pane, Tooltip, Circle } from "react-leaflet";
 import L from "leaflet";
 import { ODC, ODP, ClientLocation, TopologyLink, NodeStatus } from "@/lib/api/types";
 import { cn } from "@/lib/utils/styles";
 import { mapsService } from "@/lib/api/mapsService";
 import { getOsrmRoute, type LatLng as OsrmLatLng } from "@/lib/maps/osrmRouting";
 import { Button } from "@/components/ui/button";
-import { Maximize2, Layers, Satellite, Route } from "lucide-react";
+import { Maximize2, Layers, Satellite, Route, Expand, Shrink, Search, X, MapPin, Eye, EyeOff, Settings, Zap, Database, Move } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { useMapsStore, type LinkPreference, type LinkRoutingMode } from "@/stores/mapsStore";
+import { useNotificationStore } from "@/stores/notificationStore";
 
 // Fix for default marker icons in Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -22,11 +25,14 @@ interface NetworkMapProps {
   odcs: ODC[];
   odps: ODP[];
   clientLocations: ClientLocation[];
+  topologyLinks: TopologyLink[];
   onNodeClick?: (type: "odc" | "odp" | "client", id: string) => void;
+  onEditClient?: (client: ClientLocation) => void;
   className?: string;
   showTopologyLines?: boolean;
   showLegend?: boolean;
   userRole?: string; // For role-based visibility
+  onFullscreenChange?: (isFullscreen: boolean) => void;
 }
 
 type BaseMap = "osm" | "satellite";
@@ -52,32 +58,37 @@ function createCustomIcon(color: string, label: string) {
     html: `
       <div style="
         background-color: ${color};
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
         border: 2px solid white;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
-        font-size: 10px;
-        font-weight: bold;
-      ">${label}</div>
+        font-size: 11px;
+        font-weight: 800;
+      ">
+        <div style="transform: rotate(45deg);">${label}</div>
+      </div>
     `,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -28],
   });
 }
 
 // Leaflet sometimes renders blank when the container size changes (common with layouts + dynamic import).
 // This forces a reflow after mount and on window resize.
-function InvalidateSize() {
+function InvalidateSize({ isFullscreen }: { isFullscreen?: boolean }) {
   const map = useMap();
   useEffect(() => {
+    // We need a slight timeout to wait for the CSS transition to finish or for the DOM to update its size
     const t = window.setTimeout(() => {
       map.invalidateSize();
-    }, 0);
+    }, 300);
 
     const onResize = () => map.invalidateSize();
     window.addEventListener("resize", onResize);
@@ -85,7 +96,7 @@ function InvalidateSize() {
       window.clearTimeout(t);
       window.removeEventListener("resize", onResize);
     };
-  }, [map]);
+  }, [map, isFullscreen]);
   return null;
 }
 
@@ -190,57 +201,235 @@ function DevMapReadyBadge({ onReady }: { onReady?: () => void }) {
   return null;
 }
 
+// Right-click context menu handler
+function MapRightClickHandler({ onRightClick }: { 
+  onRightClick: (lat: number, lng: number, screenX: number, screenY: number) => void 
+}) {
+  useMapEvents({
+    contextmenu(e) {
+      e.originalEvent.preventDefault();
+      onRightClick(e.latlng.lat, e.latlng.lng, e.containerPoint.x, e.containerPoint.y);
+    },
+    click() {
+      // Clicks on the map dismiss context menu – handled via the parent
+    },
+  });
+  return null;
+}
+
+interface ContextMenuState {
+  lat: number;
+  lng: number;
+  screenX: number;
+  screenY: number;
+}
+
+
 export function NetworkMap({
   odcs,
   odps,
   clientLocations,
+  topologyLinks,
   onNodeClick,
+  onEditClient,
   className,
   showTopologyLines = true,
   showLegend = true,
+  onFullscreenChange,
 }: NetworkMapProps) {
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [center, setCenter] = useState<[number, number]>([-6.2088, 106.8456]); // Jakarta default
   const [zoom, setZoom] = useState(13);
-  const [topologyLinks, setTopologyLinks] = useState<TopologyLink[]>([]);
-  const [loadingTopology, setLoadingTopology] = useState(false);
   const [internalShowTopologyLines, setInternalShowTopologyLines] = useState(showTopologyLines);
   const [baseMap, setBaseMap] = useState<BaseMap>("osm");
   const [mapReady, setMapReady] = useState(false);
   const [roadRoutesEnabled, setRoadRoutesEnabled] = useState(true);
   const [roadRoutesByLink, setRoadRoutesByLink] = useState<Record<string, OsrmLatLng[]>>({});
   const [roadRoutesFailed, setRoadRoutesFailed] = useState<Record<string, true>>({});
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ id: string; name: string; type: "odc" | "odp" | "client"; lat: number; lng: number }[]>([]);
+  const [showInternalLegend, setShowInternalLegend] = useState(showLegend);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<{ type: string; id: string } | null>(null);
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [focusedNode, setFocusedNode] = useState<{ type: "odc" | "odp" | "client"; id: string } | null>(null);
+
+  const [draggableNodeId, setDraggableNodeId] = useState<string | null>(null);
+
+  const { linkPreferences, setLinkPreference, updateODC, updateODP, updateClientLocation } = useMapsStore();
+  const { showToast } = useNotificationStore();
+
+  const handleNodeRelocate = async (
+    type: "odc" | "odp" | "client",
+    id: string,
+    lat: number,
+    lng: number,
+    name: string
+  ) => {
+    try {
+      if (type === "odc") {
+        await updateODC(id, { latitude: lat, longitude: lng });
+      } else if (type === "odp") {
+        await updateODP(id, { latitude: lat, longitude: lng });
+      } else {
+        await updateClientLocation(id, { latitude: lat, longitude: lng });
+      }
+      showToast({
+        title: "Node Relocated",
+        description: `${name} moved to (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
+        variant: "success",
+      });
+    } catch (err: any) {
+      showToast({
+        title: "Relocation Failed",
+        description: err?.message || "Could not save new coordinates.",
+        variant: "error",
+      });
+    } finally {
+      setDraggableNodeId(null);
+    }
+  };
+
+  // Sync legend state with prop
+  useEffect(() => {
+    setShowInternalLegend(showLegend);
+  }, [showLegend]);
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullscreen]);
+
+  // Sync fullscreen state with parent
+  useEffect(() => {
+    onFullscreenChange?.(isFullscreen);
+  }, [isFullscreen, onFullscreenChange]);
+
+  // Internal map ref to use for panning
+  const mapRef = useRef<L.Map | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = () => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    if (!document.fullscreenElement) {
+      if (element.requestFullscreen) {
+        element.requestFullscreen().catch(() => {
+          setIsFullscreen(true);
+        });
+      } else {
+        setIsFullscreen(true);
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {
+          setIsFullscreen(false);
+        });
+      } else {
+        setIsFullscreen(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
 
   // Sync internal state with prop
   useEffect(() => {
     setInternalShowTopologyLines(showTopologyLines);
   }, [showTopologyLines]);
 
-  // Fetch topology links
+  // Handle Search
   useEffect(() => {
-    if (internalShowTopologyLines) {
-      setLoadingTopology(true);
-      mapsService
-        .getTopology()
-        .then((links) => {
-          setTopologyLinks(links || []); // Ensure it's always an array
-          setLoadingTopology(false);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch topology:", err);
-          setTopologyLinks([]); // Reset to empty array on error
-          setLoadingTopology(false);
-        });
-    } else {
-      // Reset topology links when disabled
-      setTopologyLinks([]);
+    if (searchQuery.length < 2) {
+      setSearchResults([]);
+      return;
     }
-  }, [internalShowTopologyLines]);
+
+    const query = searchQuery.toLowerCase();
+    const results: typeof searchResults = [];
+
+    // ODCs
+    odcs.forEach(n => {
+      if (n.name.toLowerCase().includes(query) || n.id.toLowerCase().includes(query)) {
+        results.push({ id: n.id, name: n.name, type: "odc", lat: n.latitude, lng: n.longitude });
+      }
+    });
+
+    // ODPs
+    odps.forEach(n => {
+      if (n.name.toLowerCase().includes(query) || n.id.toLowerCase().includes(query)) {
+        results.push({ id: n.id, name: n.name, type: "odp", lat: n.latitude, lng: n.longitude });
+      }
+    });
+
+    // Clients
+    clientLocations.forEach(n => {
+      const name = n.client_name || `Client ${n.client_id.slice(0, 8)}`;
+      if (
+        n.client_id.toLowerCase().includes(query) || 
+        n.id.toLowerCase().includes(query) ||
+        (n.client_name && n.client_name.toLowerCase().includes(query))
+      ) {
+        results.push({ id: n.id, name, type: "client", lat: n.latitude, lng: n.longitude });
+      }
+    });
+
+    setSearchResults(results.slice(0, 10));
+  }, [searchQuery, odcs, odps, clientLocations]);
+
+  const handleSearchResultClick = (res: typeof searchResults[0]) => {
+    if (mapRef.current) {
+      mapRef.current.setView([res.lat, res.lng], 18);
+    }
+    setSearchQuery("");
+    setSearchResults([]);
+    setFocusedNode({ type: res.type, id: res.id });
+    // Removed onNodeClick call to prevent redirect to detail page
+  };
+
+  const handleClearFocus = () => {
+    setFocusedNode(null);
+  };
+
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation([latitude, longitude]);
+        if (mapRef.current) {
+          mapRef.current.setView([latitude, longitude], 16);
+        }
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+      }
+    );
+  };
+
 
   // Fetch road-following routes from OSRM (best-effort; cached + throttled inside client).
   useEffect(() => {
     if (!internalShowTopologyLines) return;
     if (!roadRoutesEnabled) return;
-    if (loadingTopology) return;
     if (!topologyLinks || topologyLinks.length === 0) return;
 
     let cancelled = false;
@@ -282,7 +471,6 @@ export function NetworkMap({
   }, [
     internalShowTopologyLines,
     roadRoutesEnabled,
-    loadingTopology,
     topologyLinks,
     odcs,
     odps,
@@ -319,6 +507,31 @@ export function NetworkMap({
     }
   };
 
+  // Programmatically open popup for focused node
+  useEffect(() => {
+    if (!focusedNode || !mapRef.current) return;
+
+    const map = mapRef.current;
+    // We need to wait for the next tick to ensure the markers are rendered after filtering
+    const timeout = setTimeout(() => {
+      map.eachLayer((layer: any) => {
+        // Leaflet markers have options that we can use to identify them
+        if (layer instanceof L.Marker) {
+          const latLng = layer.getLatLng();
+          const targetCoords = getNodeCoordinates(focusedNode.type, focusedNode.id);
+          
+          if (targetCoords && 
+              Math.abs(latLng.lat - targetCoords[0]) < 0.0001 && 
+              Math.abs(latLng.lng - targetCoords[1]) < 0.0001) {
+            layer.openPopup();
+          }
+        }
+      });
+    }, 100);
+
+    return () => clearTimeout(timeout);
+  }, [focusedNode]);
+
   // Helper function to get node status
   const getNodeStatus = (nodeType: "odc" | "odp" | "client", nodeId: string): NodeStatus | null => {
     if (nodeType === "odc") {
@@ -333,19 +546,83 @@ export function NetworkMap({
     }
   };
 
+  // Calculate Isolation Sets
+  const isolation = (() => {
+    if (!focusedNode) return null;
+
+    const visibleNodeIds = new Set<string>([focusedNode.id]);
+    const visibleLinkIds = new Set<string>();
+
+    if (focusedNode.type === "client") {
+      // Trace up: Client -> ODP -> ODC
+      const odpLink = topologyLinks.find(l => l.to_id === focusedNode.id && l.to_type === "client");
+      if (odpLink) {
+        visibleLinkIds.add(odpLink.id);
+        visibleNodeIds.add(odpLink.from_id);
+        const odcLink = topologyLinks.find(l => l.to_id === odpLink.from_id && l.to_type === "odp");
+        if (odcLink) {
+          visibleLinkIds.add(odcLink.id);
+          visibleNodeIds.add(odcLink.from_id);
+        }
+      }
+    } else if (focusedNode.type === "odp") {
+      // Trace up to ODC
+      const odcLink = topologyLinks.find(l => l.to_id === focusedNode.id && l.to_type === "odp");
+      if (odcLink) {
+        visibleLinkIds.add(odcLink.id);
+        visibleNodeIds.add(odcLink.from_id);
+      }
+      // Trace down to Clients
+      topologyLinks.forEach(l => {
+        if (l.from_id === focusedNode.id && l.from_type === "odp") {
+          visibleLinkIds.add(l.id);
+          visibleNodeIds.add(l.to_id);
+        }
+      });
+    } else if (focusedNode.type === "odc") {
+      // Trace down to all ODPs and their Clients
+      const directOdpLinks = topologyLinks.filter(l => l.from_id === focusedNode.id && l.from_type === "odc");
+      directOdpLinks.forEach(odpL => {
+        visibleLinkIds.add(odpL.id);
+        visibleNodeIds.add(odpL.to_id);
+        topologyLinks.forEach(clientL => {
+          if (clientL.from_id === odpL.to_id && clientL.from_type === "odp") {
+            visibleLinkIds.add(clientL.id);
+            visibleNodeIds.add(clientL.to_id);
+          }
+        });
+      });
+    }
+
+    return { visibleNodeIds, visibleLinkIds };
+  })();
+
+  // Filter topology links based on isolation
+  const filteredLinks = isolation 
+    ? topologyLinks.filter(l => isolation.visibleLinkIds.has(l.id))
+    : topologyLinks;
+
   // Render topology lines
   const renderTopologyLines = () => {
-    if (!internalShowTopologyLines || loadingTopology) return null;
-    if (!topologyLinks || !Array.isArray(topologyLinks) || topologyLinks.length === 0) return null;
+    if (!internalShowTopologyLines) return null;
+    if (!filteredLinks || !Array.isArray(filteredLinks) || filteredLinks.length === 0) return null;
 
-    return topologyLinks.map((link) => {
+    return filteredLinks.map((link) => {
       const fromCoords = getNodeCoordinates(link.from_type, link.from_id);
       const toCoords = getNodeCoordinates(link.to_type, link.to_id);
 
       if (!fromCoords || !toCoords) return null;
 
-      const roadRoute = roadRoutesEnabled ? roadRoutesByLink[link.id] : undefined;
-      const positions = roadRoute && roadRoute.length >= 2 ? roadRoute : ([fromCoords, toCoords] as OsrmLatLng[]);
+      const pref = linkPreferences[link.id] || { routingMode: "smart" };
+      const isSmart = pref.routingMode === "smart";
+      
+      const roadRoute = (isSmart && roadRoutesEnabled) ? roadRoutesByLink[link.id] : undefined;
+      
+      // Smart Connect: Node -> Road -> Node
+      // If road route exists, we prepend and append node coords to ensure closure
+      const positions = roadRoute && roadRoute.length >= 2 
+        ? ([fromCoords, ...roadRoute, toCoords] as OsrmLatLng[])
+        : ([fromCoords, toCoords] as OsrmLatLng[]);
 
       // Determine line color and weight based on link type and status
       let color = "#3B82F6"; // Default blue for ODC→ODP
@@ -371,13 +648,30 @@ export function NetworkMap({
       }
 
       return (
-        <Polyline
-          key={`link-${link.id}`}
-          positions={positions}
-          color={color}
-          weight={weight}
-          opacity={opacity}
-        />
+        <React.Fragment key={`link-group-${link.id}`}>
+          {/* Base Cable Line */}
+          <Polyline
+            positions={positions}
+            color={color}
+            weight={weight}
+            opacity={opacity}
+          />
+          {/* Running Light Animation Overlay */}
+          {(fromStatus !== "outage" && toStatus !== "outage") && (
+            <Polyline
+              positions={positions}
+              pathOptions={{
+                color: "white",
+                weight: weight * 0.4,
+                opacity: 0.9,
+                className: cn(
+                  "topology-line-flow",
+                  link.from_type === "odc" ? "topology-line-odc-odp" : "topology-line-odp-client"
+                )
+              }}
+            />
+          )}
+        </React.Fragment>
       );
     });
   };
@@ -390,15 +684,26 @@ export function NetworkMap({
   ].length;
 
   return (
-    <div className={cn("w-full h-full min-h-[500px] rounded-lg overflow-hidden relative", className)}>
+    <div 
+      ref={containerRef}
+      className={cn(
+        "w-full min-h-[500px] rounded-lg overflow-hidden relative transition-all duration-300 bg-white", 
+        isFullscreen 
+          ? "fixed inset-0 z-[9999] rounded-none border-0 shadow-none m-0 p-0 w-screen h-screen" 
+          : cn("h-full", className),
+        "fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:w-screen fullscreen:h-screen fullscreen:m-0 fullscreen:p-0 fullscreen:rounded-none"
+      )}
+      onClick={() => contextMenu && setContextMenu(null)}
+    >
       <MapContainer
+        ref={mapRef}
         center={center}
         zoom={zoom}
         // IMPORTANT:
         // Leaflet needs a *definite* height. If a parent only has min-height (not height),
-        // `height: 100%` may resolve to "auto" and Leaflet ends up with 0px height.
+        // `height: 100%` resolve to "auto" and Leaflet ends up with 0px height.
         // Provide a minHeight fallback to prevent a blank (0px) map.
-        style={{ height: "100%", width: "100%", minHeight: 500 }}
+        style={{ height: isFullscreen ? "100vh" : "100%", width: "100%", minHeight: 500 }}
         scrollWheelZoom={true}
         // Allow slightly deeper zoom. Actual useful zoom depends on tile provider coverage.
         minZoom={3}
@@ -407,7 +712,12 @@ export function NetworkMap({
         className="h-full w-full"
       >
         {process.env.NODE_ENV === "development" && <DevMapReadyBadge onReady={() => setMapReady(true)} />}
-        <InvalidateSize />
+        <InvalidateSize isFullscreen={isFullscreen} />
+        <MapRightClickHandler
+          onRightClick={(lat, lng, screenX, screenY) => {
+            setContextMenu({ lat, lng, screenX, screenY });
+          }}
+        />
         {baseMap === "osm" ? (
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -450,73 +760,454 @@ export function NetworkMap({
         {renderTopologyLines()}
 
         {/* ODC Markers */}
-        {odcs.map((odc) => (
-          <Marker
-            key={`odc-${odc.id}`}
-            position={[odc.latitude, odc.longitude]}
-            icon={createCustomIcon(getStatusColor(odc.status), "O")}
-            eventHandlers={{
-              click: () => onNodeClick?.("odc", odc.id),
-            }}
-          >
-            <Popup>
-              <div className="p-2">
-                <h3 className="font-semibold">{odc.name}</h3>
-                <p className="text-sm text-slate-600">ODC</p>
-                <p className="text-xs text-slate-500">Status: {odc.status}</p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {odcs.filter(o => !isolation || isolation.visibleNodeIds.has(o.id)).map((odc) => {
+          const isDragging = draggableNodeId === odc.id;
+          return (
+            <Marker
+              key={`odc-${odc.id}`}
+              position={[odc.latitude, odc.longitude]}
+              icon={createCustomIcon(isDragging ? "#6366F1" : getStatusColor(odc.status), isDragging ? "↔" : "O")}
+              draggable={isDragging}
+              eventHandlers={{
+                click: () => {
+                  if (isDragging) setDraggableNodeId(null);
+                  else onNodeClick?.("odc", odc.id);
+                },
+                dblclick: () => setDraggableNodeId(isDragging ? null : odc.id),
+                dragend: (e: any) => {
+                  const { lat, lng } = e.target.getLatLng();
+                  handleNodeRelocate("odc", odc.id, lat, lng, odc.name);
+                },
+              }}
+            >
+              {!isDragging && (
+                <Popup minWidth={200} className="custom-popup" offset={[0, -10]}>
+                  <div className="p-1 min-w-[180px] bg-white animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-slate-900">{odc.name}</h3>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold uppercase">ODC</span>
+                    </div>
+                    <div className="space-y-1.5 mb-3">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Status:</span>
+                        <span className={cn("font-medium capitalize", odc.status === "ok" ? "text-green-600" : "text-amber-600")}>{odc.status}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        style={{ fontSize: 11, padding: '6px 8px', background: '#0f172a', border: 'none', borderRadius: 6, cursor: 'pointer', color: 'white', fontWeight: 700 }}
+                        onClick={() => onNodeClick?.("odc", odc.id)}
+                      >
+                        View Details
+                      </button>
+                      <button
+                        style={{ fontSize: 11, padding: '6px 8px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 6, cursor: 'pointer', color: '#4338ca', fontWeight: 700 }}
+                        onClick={() => setDraggableNodeId(odc.id)}
+                      >
+                        ✦ Move
+                      </button>
+                    </div>
+                  </div>
+                </Popup>
+              )}
+            </Marker>
+          );
+        })}
 
         {/* ODP Markers */}
-        {odps.map((odp) => (
-          <Marker
-            key={`odp-${odp.id}`}
-            position={[odp.latitude, odp.longitude]}
-            icon={createCustomIcon(getStatusColor(odp.status), "P")}
-            eventHandlers={{
-              click: () => onNodeClick?.("odp", odp.id),
-            }}
-          >
-            <Popup>
-              <div className="p-2">
-                <h3 className="font-semibold">{odp.name}</h3>
-                <p className="text-sm text-slate-600">ODP</p>
-                <p className="text-xs text-slate-500">
-                  Ports: {odp.used_ports}/{odp.port_count}
-                </p>
-                <p className="text-xs text-slate-500">Status: {odp.status}</p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {odps.filter(o => !isolation || isolation.visibleNodeIds.has(o.id)).map((odp) => {
+          // Find uplink for line editing
+          const uplink = topologyLinks.find(l => l.to_id === odp.id && l.from_type === "odc");
+          const isDragging = draggableNodeId === odp.id;
+
+          return (
+            <Marker
+              key={`odp-${odp.id}`}
+              position={[odp.latitude, odp.longitude]}
+              icon={createCustomIcon(isDragging ? "#6366F1" : getStatusColor(odp.status), isDragging ? "↔" : "P")}
+              draggable={isDragging}
+              eventHandlers={{
+                dblclick: () => setDraggableNodeId(isDragging ? null : odp.id),
+                dragend: (e: any) => {
+                  const { lat, lng } = e.target.getLatLng();
+                  handleNodeRelocate("odp", odp.id, lat, lng, odp.name);
+                },
+              }}
+            >
+              {!isDragging && (
+                <Popup minWidth={200} className="custom-popup" offset={[0, -10]}>
+                  <div className="p-1 min-w-[180px] bg-white animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-slate-900">{odp.name}</h3>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold uppercase">ODP</span>
+                    </div>
+                    <div className="space-y-1.5 mb-3">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Status:</span>
+                        <span className={cn("font-medium capitalize", odp.status === "ok" ? "text-green-600" : "text-amber-600")}>{odp.status}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Ports:</span>
+                        <span className="font-medium">{odp.used_ports}/{odp.port_count}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        style={{ fontSize: 10, padding: '4px 0', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', color: '#374151', fontWeight: 600 }}
+                        onClick={() => onNodeClick?.("odp", odp.id)}
+                      >
+                        Details
+                      </button>
+                      <button
+                        style={{ fontSize: 10, padding: '4px 0', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 6, cursor: 'pointer', color: '#4338ca', fontWeight: 600 }}
+                        onClick={() => setDraggableNodeId(odp.id)}
+                      >
+                        ✦ Move
+                      </button>
+                      {uplink ? (
+                        <button
+                          style={{ fontSize: 10, padding: '4px 0', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', color: '#1d4ed8', fontWeight: 600 }}
+                          onClick={() => setEditingLinkId(uplink.id)}
+                        >
+                          ⚙ Line
+                        </button>
+                      ) : <span />}
+                    </div>
+                  </div>
+                </Popup>
+              )}
+            </Marker>
+          );
+        })}
 
         {/* Client Location Markers */}
-        {clientLocations.map((client) => (
-          <Marker
-            key={`client-${client.id}`}
-            position={[client.latitude, client.longitude]}
-            icon={createCustomIcon(getStatusColor(client.status), "C")}
-            eventHandlers={{
-              click: () => onNodeClick?.("client", client.id),
-            }}
-          >
-            <Popup>
-              <div className="p-2">
-                <h3 className="font-semibold">Client</h3>
-                <p className="text-sm text-slate-600">ID: {client.client_id.slice(0, 8)}...</p>
-                <p className="text-xs text-slate-500">Type: {client.connection_type}</p>
-                <p className="text-xs text-slate-500">Status: {client.status}</p>
+        {clientLocations.filter(o => !isolation || isolation.visibleNodeIds.has(o.id)).map((client) => {
+          // Find uplink for line editing
+          const uplink = topologyLinks.find(l => l.to_id === client.id && l.from_type === "odp");
+          const isDragging = draggableNodeId === client.id;
+          const clientName = client.client_name || `Client ${client.client_id.slice(0,8)}`;
+
+          return (
+            <React.Fragment key={`client-group-${client.id}`}>
+              {client.is_reseller && client.reseller_radius > 0 && (
+                <Circle
+                  center={[client.latitude, client.longitude]}
+                  radius={client.reseller_radius}
+                  pathOptions={{
+                    fillColor: '#6366F1',
+                    fillOpacity: 0.1,
+                    color: '#6366F1',
+                    weight: 1,
+                    dashArray: '5, 5'
+                  }}
+                />
+              )}
+              <Marker
+                key={`client-${client.id}`}
+                position={[client.latitude, client.longitude]}
+                icon={createCustomIcon(
+                  isDragging ? "#6366F1" : getStatusColor(client.status), 
+                  isDragging ? "↔" : (client.is_reseller ? "R" : "C")
+                )}
+                draggable={isDragging}
+                eventHandlers={{
+                  dblclick: () => setDraggableNodeId(isDragging ? null : client.id),
+                  dragend: (e: any) => {
+                    const { lat, lng } = e.target.getLatLng();
+                    handleNodeRelocate("client", client.id, lat, lng, clientName);
+                  },
+                }}
+              >
+                {!isDragging && (
+                  <Popup minWidth={200} className="custom-popup" offset={[0, -10]}>
+                    <div className="p-1 min-w-[180px] bg-white animate-in fade-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex flex-col">
+                          <h3 className="font-bold text-slate-900 line-clamp-1">{clientName}</h3>
+                          {client.is_reseller && (
+                            <span className="text-[9px] text-indigo-600 font-bold">RESELLER ZONE ({client.reseller_radius}m)</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold uppercase">CLIENT</span>
+                      </div>
+                      <div className="space-y-1.5 mb-3">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Status:</span>
+                          <span className={cn("font-medium capitalize", client.status === "ok" ? "text-green-600" : "text-amber-600")}>{client.status}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Type:</span>
+                          <span className="font-medium">{client.connection_type}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          style={{ fontSize: 10, padding: '4px 0', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', color: '#374151', fontWeight: 600 }}
+                          onClick={() => onEditClient?.(client)}
+                        >
+                          ⚙ Edit
+                        </button>
+                        <button
+                          style={{ fontSize: 10, padding: '4px 0', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 6, cursor: 'pointer', color: '#4338ca', fontWeight: 600 }}
+                          onClick={() => setDraggableNodeId(client.id)}
+                        >
+                          ✦ Move
+                        </button>
+                        {uplink ? (
+                          <button
+                            style={{ fontSize: 10, padding: '4px 0', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', color: '#1d4ed8', fontWeight: 600 }}
+                            onClick={() => setEditingLinkId(uplink.id)}
+                          >
+                            ⚙ Line
+                          </button>
+                        ) : <span />}
+                      </div>
+                    </div>
+                  </Popup>
+                )}
+              </Marker>
+            </React.Fragment>
+          );
+        })}
+        {/* User Location Marker */}
+        {userLocation && (
+          <Marker position={userLocation} icon={L.divIcon({
+            className: "user-location-marker",
+            html: `
+              <div class="relative">
+                <div class="absolute -inset-2 bg-blue-500/30 rounded-full animate-ping"></div>
+                <div class="relative bg-blue-600 w-4 h-4 rounded-full border-2 border-white shadow-lg"></div>
               </div>
-            </Popup>
+            `,
+            iconSize: [16, 16],
+            iconAnchor: [8, 8],
+          })}>
+            <Popup>You are here</Popup>
           </Marker>
-        ))}
+        )}
       </MapContainer>
 
+      {/* Drag Mode Active Banner */}
+      {draggableNodeId && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[2000] animate-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-indigo-700 text-white px-5 py-2.5 rounded-full shadow-2xl shadow-indigo-500/40 flex items-center gap-3 border border-indigo-500">
+            <div className="w-2 h-2 bg-white rounded-full animate-ping" />
+            <Move className="h-4 w-4" />
+            <span className="text-sm font-bold tracking-wide">Drag Mode Active</span>
+            <span className="text-xs text-indigo-300 font-mono hidden sm:block">Drag the node · Drop to save</span>
+            <button
+              onClick={() => setDraggableNodeId(null)}
+              className="ml-2 p-1 hover:bg-indigo-600 rounded-full transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Search Box */}
+      <div className="absolute top-4 left-14 z-[1001] flex items-start gap-2">
+        <div className="w-64 group">
+          <div className="relative">
+            <Input
+              placeholder="Search nodes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-white/95 backdrop-blur-sm shadow-lg border-slate-200 pl-9 pr-8 h-10 focus:bg-white transition-all"
+            />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            {(searchQuery || focusedNode) && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchResults([]);
+                  if (focusedNode) handleClearFocus();
+                }}
+                className="absolute right-3 top-3 hover:text-slate-600"
+              >
+                <X className="h-4 w-4 text-slate-400" />
+              </button>
+            )}
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="mt-1 bg-white/95 backdrop-blur-sm rounded-md shadow-xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              {searchResults.map((res) => (
+                <button
+                  key={`${res.type}-${res.id}`}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors flex flex-col"
+                  onClick={() => handleSearchResultClick(res)}
+                >
+                  <span className="text-sm font-medium text-slate-800">{res.name}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                    {res.type}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {focusedNode && (
+          <Button 
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg h-10 gap-2 shrink-0 animate-in fade-in slide-in-from-left-2"
+            onClick={handleClearFocus}
+          >
+            <Eye className="h-4 w-4" />
+            <span className="text-xs">Show All Nodes</span>
+          </Button>
+        )}
+      </div>
+
+      {/* Right-Click Context Menu */}
+      {contextMenu && (
+        <div
+          className="absolute z-[2000] animate-in fade-in zoom-in-95 duration-150"
+          style={{
+            left: Math.min(contextMenu.screenX, (containerRef.current?.clientWidth || 600) - 220),
+            top: Math.min(contextMenu.screenY, (containerRef.current?.clientHeight || 400) - 200),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden w-52">
+            {/* Header */}
+            <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Physical Infrastructure</p>
+                <p className="text-[10px] text-indigo-300 font-mono mt-0.5 truncate">
+                  {contextMenu.lat.toFixed(6)}, {contextMenu.lng.toFixed(6)}
+                </p>
+              </div>
+              <button
+                onClick={() => setContextMenu(null)}
+                className="p-1 hover:bg-indigo-500/50 rounded-lg transition-colors text-indigo-200 hover:text-white"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Menu Items */}
+            <div className="p-2 space-y-1">
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-indigo-50 hover:text-indigo-700 transition-all group"
+                onClick={() => {
+                  const params = new URLSearchParams({ lat: contextMenu.lat.toFixed(7), lng: contextMenu.lng.toFixed(7) });
+                  window.location.href = `/maps/odcs/create?${params.toString()}`;
+                  setContextMenu(null);
+                }}
+              >
+                <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg group-hover:bg-blue-200 transition-colors">
+                  <Database className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800">Add ODC</p>
+                  <p className="text-[10px] text-slate-400">Root distribution cabinet</p>
+                </div>
+              </button>
+
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-emerald-50 hover:text-emerald-700 transition-all group"
+                onClick={() => {
+                  const params = new URLSearchParams({ lat: contextMenu.lat.toFixed(7), lng: contextMenu.lng.toFixed(7) });
+                  window.location.href = `/maps/odps/create?${params.toString()}`;
+                  setContextMenu(null);
+                }}
+              >
+                <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg group-hover:bg-emerald-200 transition-colors">
+                  <Zap className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800">Add ODP</p>
+                  <p className="text-[10px] text-slate-400">Distribution point node</p>
+                </div>
+              </button>
+
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-violet-50 hover:text-violet-700 transition-all group"
+                onClick={() => {
+                  const params = new URLSearchParams({ lat: contextMenu.lat.toFixed(7), lng: contextMenu.lng.toFixed(7) });
+                  window.location.href = `/maps/clients/create?${params.toString()}`;
+                  setContextMenu(null);
+                }}
+              >
+                <div className="p-1.5 bg-violet-100 text-violet-600 rounded-lg group-hover:bg-violet-200 transition-colors">
+                  <MapPin className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800">Add Client</p>
+                  <p className="text-[10px] text-slate-400">ONT subscriber endpoint</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Footer Hint */}
+            <div className="px-4 py-2 bg-slate-50 border-t border-slate-100">
+              <p className="text-[9px] text-slate-400 text-center">Coordinates auto-filled on selection</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Line Settings Overlay */}
+      {editingLinkId && (
+        <div className="absolute bottom-20 left-14 z-[1001] w-72 bg-white/95 backdrop-blur-sm rounded-lg shadow-2xl border border-blue-200 p-4 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-sm flex items-center gap-2">
+              <Settings className="h-4 w-4 text-blue-600" /> Line Settings
+            </h3>
+            <button 
+              onClick={() => setEditingLinkId(null)}
+              className="p-1 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <X className="h-4 w-4 text-slate-400" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                Routing Mode
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="sm"
+                  variant={linkPreferences[editingLinkId]?.routingMode !== "direct" ? "default" : "outline"}
+                  className="h-14 flex-col gap-1 text-[10px]"
+                  onClick={() => setLinkPreference(editingLinkId, { routingMode: "smart" })}
+                >
+                  <Route className="h-4 w-4" />
+                  <span>Road Route</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={linkPreferences[editingLinkId]?.routingMode === "direct" ? "default" : "outline"}
+                  className="h-14 flex-col gap-1 text-[10px]"
+                  onClick={() => setLinkPreference(editingLinkId, { routingMode: "direct" })}
+                >
+                  <Zap className="h-4 w-4" />
+                  <span>Direct Air</span>
+                </Button>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[10px] text-slate-400">Settings saved locally</span>
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-7 text-[10px] text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                onClick={() => setEditingLinkId(null)}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Legend & Status Panel */}
-      {showLegend && (
-        <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 z-1000 max-w-xs">
+      {showInternalLegend && (
+        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-xl p-4 z-[1000] max-w-xs border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
           <h3 className="font-semibold text-sm mb-3">Map Legend</h3>
 
           {/* Status Colors */}
@@ -606,7 +1297,40 @@ export function NetworkMap({
       )}
 
       {/* Toggle Topology Lines Button (outside MapContainer) */}
-      <div className="absolute bottom-4 right-16 z-1000 flex gap-2">
+      <div className="absolute bottom-4 right-16 z-[1001] flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowInternalLegend(!showInternalLegend)}
+          className={cn(
+            "bg-white shadow-md transition-colors",
+            !showInternalLegend && "text-slate-400"
+          )}
+          title={showInternalLegend ? "Hide Legend" : "Show Legend"}
+        >
+          {showInternalLegend ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLocateMe}
+          className="bg-white shadow-md text-blue-600 border-blue-100 hover:bg-blue-50"
+          title="Locate Me"
+        >
+          <MapPin className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleFullscreen}
+          className={cn(
+            "bg-white shadow-md transition-colors",
+            isFullscreen && "bg-slate-800 text-white hover:bg-slate-700 border-slate-700"
+          )}
+          title={isFullscreen ? "Exit Full View" : "Full View"}
+        >
+          {isFullscreen ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
+        </Button>
         <Button
           variant="outline"
           size="sm"

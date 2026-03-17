@@ -10,7 +10,7 @@ import { PaymentMethod, RecordPaymentRequest } from "@/lib/api/types";
 
 const paymentFormSchema = z.object({
   amount: z.coerce.number().min(1, "Amount must be greater than 0"),
-  method: z.enum(["cash", "bank_transfer", "e_wallet", "qris", "virtual_account", "collector"]),
+  method: z.enum(["cash", "bank_transfer", "e_wallet", "qris", "virtual_account"]),
   reference: z.string().optional(),
   collector_id: z.string().optional(),
   notes: z.string().optional(),
@@ -43,6 +43,25 @@ export function PaymentForm({ invoiceId, maxAmount, onSubmit, onCancel, isLoadin
   });
 
   const method = watch("method");
+  const amountValue = watch("amount") || 0;
+
+  const formatDisplayValue = (val: number) => {
+    if (!val) return "";
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Ambil cuma angka aja, hapus titik dan karakter lain
+    const rawValue = e.target.value.replace(/\D/g, "");
+    const numericValue = rawValue === "" ? 0 : parseInt(rawValue, 10);
+    
+    // Update ke form state sebagai number asli
+    setValue("amount", numericValue, { 
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true 
+    });
+  };
 
   const handleFormSubmit = async (data: PaymentFormValues) => {
     const paymentData: RecordPaymentRequest = {
@@ -52,7 +71,7 @@ export function PaymentForm({ invoiceId, maxAmount, onSubmit, onCancel, isLoadin
       reference: data.reference || undefined,
       collector_id: data.collector_id || undefined,
       notes: data.notes || undefined,
-      received_at: data.received_at || undefined,
+      received_at: data.received_at ? new Date(data.received_at).toISOString() : undefined,
     };
     await onSubmit(paymentData);
   };
@@ -62,9 +81,9 @@ export function PaymentForm({ invoiceId, maxAmount, onSubmit, onCancel, isLoadin
       <div>
         <label className="text-sm font-medium text-slate-700">Amount</label>
         <Input
-          type="number"
-          step="0.01"
-          {...register("amount")}
+          type="text"
+          value={formatDisplayValue(amountValue)}
+          onChange={handleAmountChange}
           error={errors.amount?.message}
           placeholder={maxAmount ? `Max: ${maxAmount.toLocaleString()}` : "Enter amount"}
         />
@@ -84,21 +103,11 @@ export function PaymentForm({ invoiceId, maxAmount, onSubmit, onCancel, isLoadin
           <option value="e_wallet">E-Wallet</option>
           <option value="qris">QRIS</option>
           <option value="virtual_account">Virtual Account</option>
-          <option value="collector">Collector</option>
         </SimpleSelect>
         {errors.method && <p className="text-xs text-red-500 mt-1">{errors.method.message}</p>}
       </div>
 
-      {method === "collector" && (
-        <div>
-          <label className="text-sm font-medium text-slate-700">Collector ID</label>
-          <Input
-            {...register("collector_id")}
-            error={errors.collector_id?.message}
-            placeholder="Enter collector user ID"
-          />
-        </div>
-      )}
+
 
       <div>
         <label className="text-sm font-medium text-slate-700">Reference Number (optional)</label>

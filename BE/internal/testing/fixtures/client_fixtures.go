@@ -29,4 +29,3 @@ func CreateSuspendedClient(tenantID uuid.UUID, name, phone string) *client.Clien
 	c.Status = client.StatusSuspended
 	return c
 }
-

@@ -58,7 +58,7 @@ INSERT INTO plans (code, name, description, price_monthly, limits, features, sor
     'Untuk ISP berkembang dengan kebutuhan lebih',
     400000,
     '{"max_routers": 5, "max_users": 1000, "max_vouchers": 35000, "max_odc": 0, "max_odp": 0, "max_clients": 1000, "max_client_maps": 0, "rbac_client_reseller": 70, "wa_quota_monthly": 500}',
-    '["radius_basic", "mikrotik_api_basic", "mikrotik_control_panel_advanced", "wa_gateway", "isolir_manual", "isolir_auto", "rbac_employee", "rbac_client_reseller", "payment_gateway", "api_integration_partial", "hcm_module", "payment_reporting_advanced", "dashboard_pendapatan", "addon_router", "addon_user_packs"]',
+    '["radius_basic", "mikrotik_api_basic", "mikrotik_control_panel_advanced", "wa_gateway", "isolir_manual", "isolir_auto", "rbac_employee", "rbac_client_reseller", "payment_gateway", "api_integration_partial", "hcm_module", "payment_reporting_advanced", "dashboard_pendapatan", "settlement", "addon_router", "addon_user_packs"]',
     2
 ),
 (
@@ -67,7 +67,7 @@ INSERT INTO plans (code, name, description, price_monthly, limits, features, sor
     'Untuk ISP menengah dengan tim lengkap',
     950000,
     '{"max_routers": 10, "max_users": 5000, "max_vouchers": -1, "max_odc": 100, "max_odp": 600, "max_clients": 5000, "max_client_maps": 600, "rbac_client_reseller": -1, "wa_quota_monthly": -1}',
-    '["radius_basic", "mikrotik_api_basic", "mikrotik_control_panel_advanced", "wa_gateway", "isolir_manual", "isolir_auto", "rbac_employee", "rbac_client_reseller", "odp_maps", "client_maps", "payment_gateway", "api_integration_full", "hcm_module", "payment_reporting_advanced", "dashboard_pendapatan", "custom_login_page", "custom_isolir_page", "ai_agent_client_wa", "addon_router", "addon_user_packs"]',
+    '["radius_basic", "mikrotik_api_basic", "mikrotik_control_panel_advanced", "wa_gateway", "isolir_manual", "isolir_auto", "rbac_employee", "rbac_client_reseller", "odp_maps", "client_maps", "payment_gateway", "api_integration_full", "hcm_module", "payment_reporting_advanced", "dashboard_pendapatan", "settlement", "custom_login_page", "custom_isolir_page", "ai_agent_client_wa", "addon_router", "addon_user_packs"]',
     3
 ),
 (

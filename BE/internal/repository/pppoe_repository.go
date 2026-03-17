@@ -266,3 +266,30 @@ func (r *PPPoERepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+func (r *PPPoERepository) CheckIPConflict(ctx context.Context, tenantID uuid.UUID, localIP, remoteIP string) (bool, string, error) {
+	if localIP != "" {
+		var exists bool
+		query := `SELECT EXISTS(SELECT 1 FROM pppoe_secrets WHERE tenant_id = $1 AND local_address = $2)`
+		err := r.db.QueryRow(ctx, query, tenantID, localIP).Scan(&exists)
+		if err != nil {
+			return false, "", err
+		}
+		if exists {
+			return true, fmt.Sprintf("Local IP %s is already used in PPPoE secrets", localIP), nil
+		}
+	}
+
+	if remoteIP != "" {
+		var exists bool
+		query := `SELECT EXISTS(SELECT 1 FROM pppoe_secrets WHERE tenant_id = $1 AND remote_address = $2)`
+		err := r.db.QueryRow(ctx, query, tenantID, remoteIP).Scan(&exists)
+		if err != nil {
+			return false, "", err
+		}
+		if exists {
+			return true, fmt.Sprintf("Remote IP %s is already used in PPPoE secrets", remoteIP), nil
+		}
+	}
+
+	return false, "", nil
+}

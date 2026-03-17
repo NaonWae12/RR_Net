@@ -313,4 +313,3 @@ func (h *PlanHandler) CheckLimit(w http.ResponseWriter, r *http.Request) {
 		"within_limit": h.limitResolver.IsWithinLimit(r.Context(), tenantID, limitName, currentUsage),
 	})
 }
-

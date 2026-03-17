@@ -11,8 +11,9 @@ import { SimpleSelect } from "@/components/ui/select";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { format } from "date-fns";
 import { PlusIcon } from "@heroicons/react/20/solid";
-import { SubscriptionTab } from "@/components/billing/SubscriptionTab";
 import { BillingTempoTemplates } from "@/components/billing/BillingTempoTemplates";
+import ManualInvoiceModal from '@/components/billing/ManualInvoiceModal';
+import { useState } from 'react';
 import { RoleGuard } from "@/components/guards/RoleGuard";
 import { useAuth } from "@/lib/hooks/useAuth";
 
@@ -22,7 +23,7 @@ export default function BillingPage() {
 
   const tabParam = searchParams.get("tab");
   const defaultTab =
-    tabParam === "payments" || tabParam === "subscription" || tabParam === "invoices" || tabParam === "settings"
+    tabParam === "payments" || tabParam === "invoices" || tabParam === "settings"
       ? tabParam
       : "invoices";
 
@@ -35,7 +36,6 @@ export default function BillingPage() {
         tabs={[
           { id: "invoices", label: "Client Invoices", content: <InvoicesTabContent /> },
           { id: "payments", label: "Payments", content: <PaymentsTabContent /> },
-          { id: "subscription", label: "Subscription", content: <SubscriptionTab /> },
           { id: "settings", label: "Settings", content: <SettingsTabContent /> },
         ]}
       />
@@ -47,6 +47,7 @@ export default function BillingPage() {
 function InvoicesTabContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isManualInvoiceOpen, setIsManualInvoiceOpen] = useState(false);
   const {
     invoices,
     summary,
@@ -89,7 +90,7 @@ function InvoicesTabContent() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-slate-900">Invoices</h1>
-        <Button onClick={() => router.push("/billing/invoices/create")}>
+        <Button onClick={() => setIsManualInvoiceOpen(true)}>
           <PlusIcon className="h-5 w-5 mr-2" /> Create Invoice
         </Button>
       </div>
@@ -112,7 +113,7 @@ function InvoicesTabContent() {
             Previous
           </Button>
           <span className="flex items-center px-4 text-sm text-slate-600">
-            Page {invoicePagination.page} of {Math.ceil(invoicePagination.total / invoicePagination.page_size) || 1}
+             Page {invoicePagination.page} of {Math.ceil(invoicePagination.total / invoicePagination.page_size) || 1}
           </span>
           <Button
             variant="outline"
@@ -123,6 +124,15 @@ function InvoicesTabContent() {
           </Button>
         </div>
       </div>
+
+      <ManualInvoiceModal 
+        isOpen={isManualInvoiceOpen} 
+        onClose={() => setIsManualInvoiceOpen(false)} 
+        onSuccess={() => {
+          fetchInvoices();
+          fetchBillingSummary();
+        }} 
+      />
     </div>
   );
 }

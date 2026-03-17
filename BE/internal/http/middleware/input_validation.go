@@ -38,7 +38,7 @@ func InputValidationMiddleware(limits *RequestSizeLimits) func(http.Handler) htt
 					Int64("content_length", r.ContentLength).
 					Int64("max_size", limits.MaxRequestSize).
 					Msg("Request body too large")
-				sendJSONError(w, http.StatusRequestEntityTooLarge, 
+				sendJSONError(w, http.StatusRequestEntityTooLarge,
 					fmt.Sprintf("Request body too large. Maximum size: %d bytes", limits.MaxRequestSize))
 				return
 			}
@@ -140,4 +140,3 @@ func sendJSONError(w http.ResponseWriter, statusCode int, message string) {
 		"error": message,
 	})
 }
-

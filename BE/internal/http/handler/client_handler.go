@@ -175,11 +175,21 @@ func (h *ClientHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	c, err := h.clientService.Update(r.Context(), tenantID, clientID, &req)
 	if err != nil {
-		if err == repository.ErrClientNotFound {
+		switch err {
+		case repository.ErrClientNotFound:
 			sendError(w, http.StatusNotFound, "Client not found")
-			return
+		case service.ErrClientNameRequired,
+			service.ErrServicePackageRequired,
+			service.ErrVoucherPackageRequired,
+			service.ErrServicePackageNotFound,
+			service.ErrCategoryMismatch,
+			service.ErrDeviceCountRequired,
+			service.ErrInvalidStatusChange:
+			sendError(w, http.StatusBadRequest, err.Error())
+		default:
+			log.Error().Err(err).Msg("Failed to update client")
+			sendError(w, http.StatusInternalServerError, "Failed to update client")
 		}
-		sendError(w, http.StatusInternalServerError, "Failed to update client")
 		return
 	}
 
@@ -276,5 +286,3 @@ func (h *ClientHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	sendJSON(w, http.StatusOK, stats)
 }
-
-

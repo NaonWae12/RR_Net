@@ -340,4 +340,3 @@ func (h *TechnicianHandler) GetTaskActivityLogs(w http.ResponseWriter, r *http.R
 		"total": len(logs),
 	})
 }
-

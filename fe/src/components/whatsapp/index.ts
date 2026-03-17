@@ -6,5 +6,5 @@ export * from "./SingleTab";
 export * from "./CampaignsTab";
 export * from "./TemplatesTab";
 export * from "./LogsTab";
-
-
+export * from "./ReminderTab";
+export * from "./MessageVariableHelper";

@@ -45,4 +45,3 @@ func CreateInactiveUser(tenantID *uuid.UUID, email, name, password string, roleI
 	u.Status = user.StatusInactive
 	return u, nil
 }
-

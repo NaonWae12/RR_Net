@@ -63,5 +63,3 @@ func RequireAnyFeature(checker FeatureChecker, featureCodes ...string) func(http
 		})
 	}
 }
-
-

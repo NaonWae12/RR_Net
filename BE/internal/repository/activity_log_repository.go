@@ -131,4 +131,3 @@ func (r *ActivityLogRepository) LogActivity(ctx context.Context, log *technician
 	}
 	return r.Create(ctx, log)
 }
-

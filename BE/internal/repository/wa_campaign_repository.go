@@ -240,5 +240,3 @@ func (r *WACampaignRepository) ResetFailedRecipients(ctx context.Context, tenant
 	}
 	return n, nil
 }
-
-

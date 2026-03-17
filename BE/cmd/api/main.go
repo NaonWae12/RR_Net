@@ -92,10 +92,11 @@ func main() {
 
 	// Step 4: Setup HTTP router with dependency injection
 	handler := router.New(router.Dependencies{
-		Config: cfg,
-		DB:     db,
-		Redis:  redisClient,
-		Asynq:  asynqClient,
+		Config:    cfg,
+		DB:        db,
+		Redis:     redisClient,
+		Asynq:     asynqClient,
+		WAGateway: waGatewayClient,
 	})
 
 	// Step 4b: Start lightweight daily invoice scheduler (H-1 before due date)
@@ -104,7 +105,8 @@ func main() {
 	invoiceRepo := repository.NewInvoiceRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
 	servicePackageRepo := repository.NewServicePackageRepository(db)
-	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo)
+	discountRepo := repository.NewDiscountRepository(db)
+	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 	invoiceScheduler := service.NewInvoiceScheduler(tenantRepo, clientRepo, invoiceRepo, billingService)
 	invoiceScheduler.StartDailyScheduler(context.Background())
 
@@ -116,6 +118,15 @@ func main() {
 		"00:10",     // runTime
 	)
 	cleanupScheduler.StartWeeklyScheduler(context.Background())
+
+	// Step 4d: Start daily voucher cleanup scheduler (hard delete after 60 days / 2 months)
+	voucherRepo := repository.NewVoucherRepository(db)
+	voucherCleanupScheduler := service.NewVoucherCleanupScheduler(
+		voucherRepo,
+		60,      // retentionDays (2 months)
+		"01:15", // runTime
+	)
+	voucherCleanupScheduler.StartDailyScheduler(context.Background())
 
 	// Step 5: Create and run HTTP server
 	srv := server.New(server.Config{

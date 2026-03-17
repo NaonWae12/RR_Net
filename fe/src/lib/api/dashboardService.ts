@@ -27,11 +27,26 @@ export interface LimitMap {
   [key: string]: number;
 }
 
-export interface DashboardData {
-  clientStats: ClientStats;
+export interface BootstrapData {
   plan: PlanInfo | null;
   features: FeatureMap;
   limits: LimitMap;
+}
+
+export interface ResourceUsage {
+  used: number;
+  limit: number;
+}
+
+export interface ResourceUsageStats {
+  routers: ResourceUsage;
+  vouchers: ResourceUsage;
+  clients: ResourceUsage;
+}
+
+export interface DashboardData extends BootstrapData {
+  clientStats: ClientStats;
+  resourceUsage: ResourceUsageStats;
 }
 
 export const dashboardService = {
@@ -128,6 +143,11 @@ export const dashboardService = {
 
   async getDashboardData(): Promise<DashboardData> {
     const response = await apiClient.get('/dashboard/summary');
+    return response.data;
+  },
+
+  async getBootstrapData(): Promise<BootstrapData> {
+    const response = await apiClient.get('/dashboard/bootstrap');
     return response.data;
   },
 };

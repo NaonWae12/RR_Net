@@ -245,5 +245,3 @@ func (r *WALogRepository) GetByID(ctx context.Context, tenantID, id uuid.UUID) (
 	m.Status = wa_log.Status(status)
 	return &m, nil
 }
-
-

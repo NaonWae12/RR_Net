@@ -207,5 +207,3 @@ func (r *FeatureRepository) UpsertTenantToggle(ctx context.Context, tenantID uui
 	_, err := r.db.Exec(ctx, query, uuid.New(), code, tenantID, enabled)
 	return err
 }
-
-

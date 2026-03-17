@@ -10,36 +10,8 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import { format } from "date-fns";
 import { CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 
-// Mock data - akan diganti dengan API call
-const mockSettlement = {
-  id: "1",
-  collectorName: "Budi Santoso",
-  collectorId: "collector-1",
-  settlementDate: new Date(),
-  submittedAmount: 500000,
-  verifiedAmount: null as number | null,
-  verifiedBy: undefined as string | undefined,
-  verifiedAt: undefined as Date | undefined,
-  rejectionReason: undefined as string | undefined,
-  rejectionNote: undefined as string | undefined,
-  invoiceCount: 3,
-  submittedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-  status: "pending",
-  qrToken: "SETTLEMENT-1234567890-collector-1",
-  invoices: [
-    { id: "inv-1", number: "INV-001", amount: 200000, clientName: "Client A" },
-    { id: "inv-2", number: "INV-002", amount: 200000, clientName: "Client B" },
-    { id: "inv-3", number: "INV-003", amount: 100000, clientName: "Client C" },
-  ],
-};
-
-const rejectionReasons = [
-  { value: "qr_expired", label: "QR Code Expired" },
-  { value: "qr_invalid", label: "QR Code Invalid" },
-  { value: "amount_mismatch", label: "Amount Mismatch" },
-  { value: "invoice_mismatch", label: "Invoice Mismatch" },
-  { value: "other", label: "Other" },
-];
+import { billingService } from "@/lib/api/billingService";
+import type { Payment } from "@/lib/api/types";
 
 interface VerifySettlementDialogProps {
   isOpen: boolean;
@@ -61,27 +33,58 @@ export function VerifySettlementDialog({
   const { showToast } = useNotificationStore();
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [settlement, setSettlement] = useState(mockSettlement);
+  // settlement state now holds Payment[] and summary info
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+
   const [action, setAction] = useState<"approve" | "reject" | "mismatch" | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>("");
   const [rejectionNote, setRejectionNote] = useState<string>("");
   const [mismatchAmount, setMismatchAmount] = useState<string>("");
 
   useEffect(() => {
-    if (isOpen) {
-      if (settlementData) {
-        // Use provided settlement data (for history view)
-        setSettlement(settlementData);
-        setLoading(false);
-      } else if (settlementId) {
-        // Load settlement detail - akan diganti dengan API call
+    if (isOpen && settlementId) {
+      const parts = settlementId.split("|");
+      const collectorId = parts[0];
+      const dateStr = parts[1];
+      const status = parts[2] as any;
+
+      if (collectorId && dateStr) {
         setLoading(true);
-        setTimeout(() => {
-          setLoading(false);
-        }, 500);
+        // Fetch detailed payments for this specific settlement status
+        billingService.getPayments({
+          collector_id: collectorId,
+          start_date: dateStr,
+          end_date: dateStr,
+          status: status, // Filter by the specific group status
+          page_size: 100
+        } as any).then((res: any) => {
+          setPayments(res.data || []);
+        }).catch((err) => {
+          console.error("Failed to fetch detailed payments", err);
+        });
+
+        // Fetch settlement list but narrow down to the specific one by using status + collector_id filter
+        billingService.getSettlements({ start_date: dateStr, end_date: dateStr, status: status, collector_id: collectorId } as any).then((res) => {
+             const s = res.find(i => i.collector_id === collectorId && i.status === status);
+             if (s) {
+                 setSummary({
+                     collectorName: s.collector_name,
+                     settlementDate: new Date(s.date),
+                     submittedAmount: s.amount,
+                     invoiceCount: s.count,
+                     submittedAt: new Date(s.first_payment_at),
+                     status: s.status,
+                     qrToken: `SETTLEMENT-${s.collector_id}-${s.date}`,
+                     collectorId: s.collector_id,
+                     date: s.date
+                 });
+             }
+             setLoading(false);
+         }).catch(() => setLoading(false));
       }
     }
-  }, [isOpen, settlementId, settlementData]);
+  }, [isOpen, settlementId]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("id-ID", {
@@ -92,18 +95,22 @@ export function VerifySettlementDialog({
   };
 
   const handleApprove = async () => {
+    if (!summary) return;
     setVerifying(true);
     try {
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await billingService.verifySettlement(summary.collectorId, summary.date);
+      
       showToast({
         title: "Settlement Approved",
         description: "Settlement has been verified and approved",
         variant: "success",
       });
-      setSettlement({ ...settlement, status: "verified" });
+      
+      // Update local state to reflect change immediately
+      setSummary({ ...summary, status: "verified" });
       setAction(null);
       onVerified?.();
+      
       // Auto close after 1 second
       setTimeout(() => {
         onClose();
@@ -138,7 +145,7 @@ export function VerifySettlementDialog({
         description: "Settlement has been rejected",
         variant: "success",
       });
-      setSettlement({ ...settlement, status: "rejected" });
+      setSummary({ ...summary, status: "rejected" });
       setAction(null);
       setRejectionReason("");
       setRejectionNote("");
@@ -177,8 +184,8 @@ export function VerifySettlementDialog({
         description: "Settlement verified with amount discrepancy",
         variant: "success",
       });
-      setSettlement({
-        ...settlement,
+      setSummary({
+        ...summary,
         status: "verified_with_discrepancy",
         verifiedAmount: Number(mismatchAmount),
       });
@@ -224,79 +231,81 @@ export function VerifySettlementDialog({
       ) : (
         <div className="space-y-6">
           {/* Settlement Info */}
+          {summary && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
               <div>
                 <div className="text-sm text-slate-500">Collector</div>
-                <div className="text-base font-medium text-slate-900">{settlement.collectorName}</div>
+                <div className="text-base font-medium text-slate-900">{summary.collectorName}</div>
               </div>
               <div>
                 <div className="text-sm text-slate-500">Settlement Date</div>
                 <div className="text-base font-medium text-slate-900">
-                  {format(settlement.settlementDate, "MMM d, yyyy")}
+                  {format(summary.settlementDate, "MMM d, yyyy")}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-slate-500">Submitted At</div>
+                <div className="text-sm text-slate-500">First Payment At</div>
                 <div className="text-base font-medium text-slate-900">
-                  {format(settlement.submittedAt, "MMM d, yyyy HH:mm")}
+                  {format(summary.submittedAt, "MMM d, yyyy HH:mm")}
                 </div>
               </div>
             </div>
 
             <div className="space-y-3">
               <div>
-                <div className="text-sm text-slate-500">Submitted Amount</div>
-                <div className="text-lg font-bold text-slate-900">{formatCurrency(settlement.submittedAmount)}</div>
+                <div className="text-sm text-slate-500">Total Amount</div>
+                <div className="text-lg font-bold text-slate-900">{formatCurrency(summary.submittedAmount)}</div>
               </div>
               <div>
-                <div className="text-sm text-slate-500">Number of Invoices</div>
-                <div className="text-base font-medium text-slate-900">{settlement.invoiceCount}</div>
-              </div>
-              <div>
-                <div className="text-sm text-slate-500">QR Token</div>
-                <div className="text-xs font-mono text-slate-600">{settlement.qrToken}</div>
+                <div className="text-sm text-slate-500">Number of Payments</div>
+                <div className="text-base font-medium text-slate-900">{summary.invoiceCount}</div>
               </div>
             </div>
           </div>
+          )}
 
-          {/* Invoices List */}
+          {/* Invoices List Placeholder - To actulaly list invoices we need another API call. 
+              For now we hide this or show a message */}
           <div>
-            <h3 className="text-base font-semibold text-slate-900 mb-3">Invoices</h3>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Invoice Number</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Client</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-slate-500 uppercase">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {settlement.invoices.map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td className="px-4 py-2 text-sm font-medium text-slate-900">{invoice.number}</td>
-                      <td className="px-4 py-2 text-sm text-slate-600">{invoice.clientName}</td>
-                      <td className="px-4 py-2 text-sm text-right font-medium text-slate-900">
-                        {formatCurrency(invoice.amount)}
-                      </td>
+            <h3 className="text-base font-semibold text-slate-900 mb-3">Payments Details</h3>
+            {payments.length > 0 ? (
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 text-slate-700 font-medium border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-2">Client</th>
+                      <th className="px-4 py-2">Amount</th>
+                      <th className="px-4 py-2 text-right">Time</th>
                     </tr>
-                  ))}
-                  <tr className="bg-slate-50 font-semibold">
-                    <td colSpan={2} className="px-4 py-2 text-sm text-slate-900">
-                      Total
-                    </td>
-                    <td className="px-4 py-2 text-sm text-right text-slate-900">
-                      {formatCurrency(settlement.submittedAmount)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {payments.map((p) => (
+                      <tr key={p.id}>
+                        <td className="px-4 py-2 font-medium text-slate-900">{p.client_name}</td>
+                        <td className="px-4 py-2 text-slate-700">{formatCurrency(p.amount)}</td>
+                        <td className="px-4 py-2 text-slate-500 text-right">
+                          {format(new Date(p.received_at), "HH:mm")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-slate-50 font-bold text-slate-900 border-t border-slate-200">
+                    <tr>
+                      <td className="px-4 py-2">Total</td>
+                      <td className="px-4 py-2">{formatCurrency(payments.reduce((sum, p) => sum + p.amount, 0))}</td>
+                      <td className="px-4 py-2 text-right">{payments.length} items</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500 italic">No individual payment records found.</p>
+            )}
           </div>
 
-          {/* Action Buttons - Only show if not read-only and status is pending */}
-          {!readOnly && settlement.status === "pending" && !action && (
+          {/* Action Buttons */}
+          {!readOnly && summary && summary.status === "pending" && !action && (
             <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
               <Button
                 variant="outline"
@@ -306,116 +315,20 @@ export function VerifySettlementDialog({
                 <CheckCircleIcon className="w-5 h-5 mr-2" />
                 Approve
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setAction("reject")}
-                className="flex-1"
-              >
-                <XCircleIcon className="w-5 h-5 mr-2" />
-                Reject
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setAction("mismatch")}
-                className="flex-1"
-              >
-                <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
-                Mark Mismatch
-              </Button>
             </div>
           )}
 
           {/* Approval Info (for read-only/history view) */}
-          {readOnly && settlement.status !== "pending" && (
+          {readOnly && summary && summary.status !== "pending" && (
             <div className="border-t border-slate-200 pt-4 space-y-4">
               <h3 className="text-base font-semibold text-slate-900">Verification Details</h3>
 
-              {settlement.status === "verified" && (
+              {summary.status === "verified" && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-start">
                     <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2 mt-0.5" />
                     <div className="flex-1">
                       <div className="font-medium text-green-900">Settlement Verified</div>
-                      <div className="text-sm text-green-700 mt-1">
-                        Verified by: {settlement.verifiedBy || "Admin"}
-                      </div>
-                      {settlement.verifiedAt && (
-                        <div className="text-sm text-green-700">
-                          Verified at: {format(settlement.verifiedAt, "MMM d, yyyy HH:mm")}
-                        </div>
-                      )}
-                      {settlement.verifiedAmount && (
-                        <div className="text-sm text-green-700 mt-1">
-                          Verified Amount: {formatCurrency(settlement.verifiedAmount)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {settlement.status === "verified_with_discrepancy" && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-start">
-                    <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600 mr-2 mt-0.5" />
-                    <div className="flex-1">
-                      <div className="font-medium text-yellow-900">Settlement Verified with Discrepancy</div>
-                      <div className="text-sm text-yellow-700 mt-1">
-                        Verified by: {settlement.verifiedBy || "Admin"}
-                      </div>
-                      {settlement.verifiedAt && (
-                        <div className="text-sm text-yellow-700">
-                          Verified at: {format(settlement.verifiedAt, "MMM d, yyyy HH:mm")}
-                        </div>
-                      )}
-                      <div className="mt-2 space-y-1">
-                        <div className="text-sm text-yellow-700">
-                          <span className="font-medium">Submitted Amount:</span> {formatCurrency(settlement.submittedAmount)}
-                        </div>
-                        {settlement.verifiedAmount && (
-                          <div className="text-sm text-yellow-700">
-                            <span className="font-medium">Verified Amount:</span> {formatCurrency(settlement.verifiedAmount)}
-                          </div>
-                        )}
-                        {settlement.verifiedAmount && (
-                          <div className="text-sm text-yellow-800 font-medium">
-                            <span className="font-medium">Difference:</span> {formatCurrency(settlement.verifiedAmount - settlement.submittedAmount)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {settlement.status === "rejected" && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-start">
-                    <XCircleIcon className="w-5 h-5 text-red-600 mr-2 mt-0.5" />
-                    <div className="flex-1">
-                      <div className="font-medium text-red-900">Settlement Rejected</div>
-                      <div className="text-sm text-red-700 mt-1">
-                        Rejected by: {settlement.verifiedBy || "Admin"}
-                      </div>
-                      {settlement.verifiedAt && (
-                        <div className="text-sm text-red-700">
-                          Rejected at: {format(settlement.verifiedAt, "MMM d, yyyy HH:mm")}
-                        </div>
-                      )}
-                      {settlement.rejectionReason && (
-                        <div className="mt-2">
-                          <div className="text-sm font-medium text-red-900">Rejection Reason:</div>
-                          <div className="text-sm text-red-700 mt-1">
-                            {rejectionReasons.find((r) => r.value === settlement.rejectionReason)?.label || settlement.rejectionReason}
-                          </div>
-                        </div>
-                      )}
-                      {settlement.rejectionNote && (
-                        <div className="mt-2">
-                          <div className="text-sm font-medium text-red-900">Additional Notes:</div>
-                          <div className="text-sm text-red-700 mt-1">{settlement.rejectionNote}</div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -519,7 +432,7 @@ export function VerifySettlementDialog({
                   <label className="block text-sm font-medium text-slate-700 mb-1">Submitted Amount</label>
                   <Input
                     type="text"
-                    value={formatCurrency(settlement.submittedAmount)}
+                    value={formatCurrency(summary.submittedAmount)}
                     disabled
                     className="bg-slate-50"
                   />
@@ -533,7 +446,7 @@ export function VerifySettlementDialog({
                     placeholder="Enter actual amount"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    Difference: {mismatchAmount ? formatCurrency(Number(mismatchAmount) - settlement.submittedAmount) : "-"}
+                    Difference: {mismatchAmount ? formatCurrency(Number(mismatchAmount) - summary.submittedAmount) : "-"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -550,24 +463,24 @@ export function VerifySettlementDialog({
           )}
 
           {/* Status Display - Only show if not read-only (read-only uses Approval Info section above) */}
-          {!readOnly && settlement.status !== "pending" && (
+          {!readOnly && summary && summary.status !== "pending" && (
             <div className="border-t border-slate-200 pt-4">
               <div
-                className={`rounded-lg p-4 ${settlement.status === "verified"
+                className={`rounded-lg p-4 ${summary.status === "verified"
                   ? "bg-green-50 border border-green-200"
-                  : settlement.status === "rejected"
+                  : summary.status === "rejected"
                     ? "bg-red-50 border border-red-200"
                     : "bg-yellow-50 border border-yellow-200"
                   }`}
               >
                 <div className="font-medium">
-                  {settlement.status === "verified" && "Settlement Verified"}
-                  {settlement.status === "rejected" && "Settlement Rejected"}
-                  {settlement.status === "verified_with_discrepancy" && "Settlement Verified with Discrepancy"}
+                  {summary.status === "verified" && "Settlement Verified"}
+                  {summary.status === "rejected" && "Settlement Rejected"}
+                  {summary.status === "verified_with_discrepancy" && "Settlement Verified with Discrepancy"}
                 </div>
-                {settlement.verifiedAmount && (
+                {summary.verifiedAmount && (
                   <div className="text-sm mt-1">
-                    Verified Amount: {formatCurrency(settlement.verifiedAmount)}
+                    Verified Amount: {formatCurrency(summary.verifiedAmount)}
                   </div>
                 )}
               </div>
@@ -578,4 +491,10 @@ export function VerifySettlementDialog({
     </Modal>
   );
 }
-
+const rejectionReasons = [
+  { value: "mismatch_amount", label: "Amount Mismatch" },
+  { value: "invalid_proof", label: "Invalid Proof of Deposit" },
+  { value: "missing_invoices", label: "Missing Invoices" },
+  { value: "qr_expired", label: "Expired QR Code" },
+  { value: "other", label: "Other" },
+];

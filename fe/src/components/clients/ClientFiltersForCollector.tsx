@@ -13,13 +13,12 @@ interface ClientFiltersForCollectorProps {
 export function ClientFiltersForCollector({ filters, onFilterChange }: ClientFiltersForCollectorProps) {
   const { selectedDate, setSelectedDate, fetchPaymentsForDate } = useCollectorStore();
 
-  // Sync selectedDate with collector store and fetch payments when date changes
-  useEffect(() => {
-    fetchPaymentsForDate(selectedDate);
-  }, [selectedDate, fetchPaymentsForDate]);
+  // API syncing is handled centrally in clients/page.tsx
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = new Date(e.target.value);
+    if (!e.target.value) return;
+    const [year, month] = e.target.value.split('-');
+    const newDate = new Date(parseInt(year), parseInt(month) - 1, 1);
     setSelectedDate(newDate);
   };
 
@@ -49,11 +48,11 @@ export function ClientFiltersForCollector({ filters, onFilterChange }: ClientFil
         />
       </div>
 
-      {/* Date Picker */}
+      {/* Month Picker */}
       <div className="flex items-center gap-2">
         <input
-          type="date"
-          value={format(selectedDate, 'yyyy-MM-dd')}
+          type="month"
+          value={format(selectedDate, 'yyyy-MM')}
           onChange={handleDateChange}
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
@@ -61,12 +60,11 @@ export function ClientFiltersForCollector({ filters, onFilterChange }: ClientFil
         {/* Quick date buttons */}
         <button
           onClick={() => {
-            const prevDate = new Date(selectedDate);
-            prevDate.setDate(prevDate.getDate() - 1);
+            const prevDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
             setSelectedDate(prevDate);
           }}
           className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-          title="Previous day"
+          title="Previous month"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -76,19 +74,18 @@ export function ClientFiltersForCollector({ filters, onFilterChange }: ClientFil
         <button
           onClick={() => setSelectedDate(new Date())}
           className="px-3 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-          title="Today"
+          title="This Month"
         >
-          Today
+          This Month
         </button>
         
         <button
           onClick={() => {
-            const nextDate = new Date(selectedDate);
-            nextDate.setDate(nextDate.getDate() + 1);
+            const nextDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
             setSelectedDate(nextDate);
           }}
           className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-          title="Next day"
+          title="Next month"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

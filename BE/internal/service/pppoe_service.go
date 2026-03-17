@@ -18,11 +18,11 @@ import (
 )
 
 type PPPoEService struct {
-	pppoeRepo    *repository.PPPoERepository
-	routerRepo   *repository.RouterRepository
-	profileRepo  *repository.NetworkProfileRepository
-	clientRepo   *repository.ClientRepository
-	encKey32     [32]byte
+	pppoeRepo   *repository.PPPoERepository
+	routerRepo  *repository.RouterRepository
+	profileRepo *repository.NetworkProfileRepository
+	clientRepo  *repository.ClientRepository
+	encKey32    [32]byte
 }
 
 func NewPPPoEService(
@@ -36,7 +36,7 @@ func NewPPPoEService(
 		pppoeRepo:   pppoeRepo,
 		routerRepo:  routerRepo,
 		profileRepo: profileRepo,
-		clientRepo: clientRepo,
+		clientRepo:  clientRepo,
 		encKey32:    utils.DeriveKey32(encryptionSecret),
 	}
 }
@@ -565,17 +565,17 @@ func (s *PPPoEService) ListActiveConnections(ctx context.Context, tenantID uuid.
 		connectedAt := time.Now() // Default to now, could parse uptime if needed
 
 		result = append(result, network.ActiveConnection{
-			ID:         conn.ID,
-			Username:   conn.Username,
-			Service:    conn.Service,
-			CallerID:   conn.CallerID,
-			Address:    conn.Address,
-			Uptime:     conn.Uptime,
-			BytesIn:    conn.BytesIn,
-			BytesOut:   conn.BytesOut,
-			PacketsIn:  conn.PacketsIn,
-			PacketsOut: conn.PacketsOut,
-			Status:     network.ConnectionStatusConnected,
+			ID:          conn.ID,
+			Username:    conn.Username,
+			Service:     conn.Service,
+			CallerID:    conn.CallerID,
+			Address:     conn.Address,
+			Uptime:      conn.Uptime,
+			BytesIn:     conn.BytesIn,
+			BytesOut:    conn.BytesOut,
+			PacketsIn:   conn.PacketsIn,
+			PacketsOut:  conn.PacketsOut,
+			Status:      network.ConnectionStatusConnected,
 			ConnectedAt: connectedAt,
 		})
 	}
@@ -716,4 +716,3 @@ func (s *PPPoEService) removeSecretFromRouter(ctx context.Context, router *netwo
 	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 	return mikrotik.RemovePPPoESecret(ctx, addr, router.APIUseTLS, router.Username, router.Password, username)
 }
-

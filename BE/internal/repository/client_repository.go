@@ -29,6 +29,8 @@ func NewClientRepository(db *pgxpool.Pool) *ClientRepository {
 	return &ClientRepository{db: db}
 }
 
+// CheckIPConflict checks for IP collisions
+
 // Create creates a new client
 func (r *ClientRepository) Create(ctx context.Context, c *client.Client) error {
 	query := `
@@ -39,10 +41,10 @@ func (r *ClientRepository) Create(ctx context.Context, c *client.Client) error {
 			service_package_id, voucher_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
 			service_plan, speed_profile, monthly_fee, billing_date,
 			payment_tempo_option, payment_due_day, payment_tempo_template_id,
-			status, ip_address, mac_address, metadata,
+			status, ip_address, mac_address, metadata, created_by_id,
 			created_at, updated_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
 	`
 	_, err := r.db.Exec(ctx, query,
 		c.ID, c.TenantID, c.UserID, c.ClientCode, c.Name, c.Email, c.Phone, c.Address,
@@ -51,7 +53,7 @@ func (r *ClientRepository) Create(ctx context.Context, c *client.Client) error {
 		c.ServicePackageID, c.VoucherPackageID, c.DeviceCount, c.PPPoEPasswordEnc, c.PPPoEPasswordUpdatedAt,
 		c.ServicePlan, c.SpeedProfile, c.MonthlyFee, c.BillingDate,
 		c.PaymentTempoOption, c.PaymentDueDay, c.PaymentTempoTemplateID,
-		c.Status, c.IPAddress, c.MACAddress, c.Metadata,
+		c.Status, c.IPAddress, c.MACAddress, c.Metadata, c.CreatedByID,
 		c.CreatedAt, c.UpdatedAt,
 	)
 	return err
@@ -67,7 +69,8 @@ func (r *ClientRepository) GetByID(ctx context.Context, tenantID, clientID uuid.
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
 			   status, isolir_reason, isolir_at,
-			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
+			   ip_address, mac_address, metadata, created_by_id, created_at, updated_at, deleted_at,
+			   (SELECT id FROM resellers WHERE client_id = clients.id) IS NOT NULL as is_reseller
 		FROM clients
 		WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
 	`
@@ -84,11 +87,30 @@ func (r *ClientRepository) GetByCode(ctx context.Context, tenantID uuid.UUID, cl
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
 			   status, isolir_reason, isolir_at,
-			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
+			   ip_address, mac_address, metadata, created_by_id, created_at, updated_at, deleted_at,
+			   (SELECT id FROM resellers WHERE client_id = clients.id) IS NOT NULL as is_reseller
 		FROM clients
 		WHERE client_code = $1 AND tenant_id = $2 AND deleted_at IS NULL
 	`
 	return r.scanClient(r.db.QueryRow(ctx, query, clientCode, tenantID))
+}
+
+// GetByUserID retrieves a client by their linked UserID
+func (r *ClientRepository) GetByUserID(ctx context.Context, tenantID, userID uuid.UUID) (*client.Client, error) {
+	query := `
+		SELECT id, tenant_id, user_id, client_code, name, email, phone, address,
+			   latitude, longitude, odp_id, group_id, discount_id,
+			   category, connection_type, router_id, pppoe_username, pppoe_local_address, pppoe_remote_address, pppoe_comment,
+			   service_package_id, voucher_package_id, device_count, pppoe_password_enc, pppoe_password_updated_at,
+			   service_plan, speed_profile, monthly_fee, billing_date,
+			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
+			   status, isolir_reason, isolir_at,
+			   ip_address, mac_address, metadata, created_by_id, created_at, updated_at, deleted_at,
+			   (SELECT id FROM resellers WHERE client_id = clients.id) IS NOT NULL as is_reseller
+		FROM clients
+		WHERE user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+	`
+	return r.scanClient(r.db.QueryRow(ctx, query, userID, tenantID))
 }
 
 // List retrieves clients with filters (tenant-scoped)
@@ -146,7 +168,8 @@ func (r *ClientRepository) List(ctx context.Context, tenantID uuid.UUID, filter 
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
 			   status, isolir_reason, isolir_at,
-			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
+			   ip_address, mac_address, metadata, created_by_id, created_at, updated_at, deleted_at,
+			   (SELECT id FROM resellers WHERE client_id = clients.id) IS NOT NULL as is_reseller
 		` + baseQuery + fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, argNum, argNum+1)
 	args = append(args, pageSize, offset)
 
@@ -179,7 +202,8 @@ func (r *ClientRepository) ListByGroupID(ctx context.Context, tenantID, groupID 
 			   service_plan, speed_profile, monthly_fee, billing_date,
 			   payment_tempo_option, payment_due_day, payment_tempo_template_id,
 			   status, isolir_reason, isolir_at,
-			   ip_address, mac_address, metadata, created_at, updated_at, deleted_at
+			   ip_address, mac_address, metadata, created_by_id, created_at, updated_at, deleted_at,
+			   (SELECT id FROM resellers WHERE client_id = clients.id) IS NOT NULL as is_reseller
 		FROM clients
 		WHERE tenant_id = $1 AND group_id = $2 AND deleted_at IS NULL
 		ORDER BY created_at DESC
@@ -308,6 +332,35 @@ func (r *ClientRepository) ClientCodeExists(ctx context.Context, tenantID uuid.U
 	return exists, err
 }
 
+// CheckIPConflict checks if local or remote IP is already used by another client in the same tenant
+func (r *ClientRepository) CheckIPConflict(ctx context.Context, tenantID uuid.UUID, localIP, remoteIP string) (bool, string, error) {
+	if localIP != "" {
+		var exists bool
+		query := `SELECT EXISTS(SELECT 1 FROM clients WHERE tenant_id = $1 AND pppoe_local_address = $2 AND deleted_at IS NULL)`
+		err := r.db.QueryRow(ctx, query, tenantID, localIP).Scan(&exists)
+		if err != nil {
+			return false, "", err
+		}
+		if exists {
+			return true, fmt.Sprintf("Local IP %s is already used", localIP), nil
+		}
+	}
+
+	if remoteIP != "" {
+		var exists bool
+		query := `SELECT EXISTS(SELECT 1 FROM clients WHERE tenant_id = $1 AND pppoe_remote_address = $2 AND deleted_at IS NULL)`
+		err := r.db.QueryRow(ctx, query, tenantID, remoteIP).Scan(&exists)
+		if err != nil {
+			return false, "", err
+		}
+		if exists {
+			return true, fmt.Sprintf("Remote IP %s is already used", remoteIP), nil
+		}
+	}
+
+	return false, "", nil
+}
+
 // CountByTenant counts total clients for a tenant
 func (r *ClientRepository) CountByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
 	query := `SELECT COUNT(*) FROM clients WHERE tenant_id = $1 AND deleted_at IS NULL`
@@ -329,7 +382,8 @@ func (r *ClientRepository) scanClient(row pgx.Row) (*client.Client, error) {
 		&c.ServicePlan, &c.SpeedProfile, &c.MonthlyFee, &c.BillingDate,
 		&c.PaymentTempoOption, &c.PaymentDueDay, &c.PaymentTempoTemplateID,
 		&c.Status, &c.IsolirReason, &c.IsolirAt,
-		&ipAddress, &macAddress, &c.Metadata, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
+		&ipAddress, &macAddress, &c.Metadata, &c.CreatedByID, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
+		&c.IsReseller,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -361,7 +415,8 @@ func (r *ClientRepository) scanClientFromRows(rows pgx.Rows) (*client.Client, er
 		&c.ServicePlan, &c.SpeedProfile, &c.MonthlyFee, &c.BillingDate,
 		&c.PaymentTempoOption, &c.PaymentDueDay, &c.PaymentTempoTemplateID,
 		&c.Status, &c.IsolirReason, &c.IsolirAt,
-		&ipAddress, &macAddress, &c.Metadata, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
+		&ipAddress, &macAddress, &c.Metadata, &c.CreatedByID, &c.CreatedAt, &c.UpdatedAt, &c.DeletedAt,
+		&c.IsReseller,
 	)
 	if err != nil {
 		return nil, err

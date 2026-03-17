@@ -201,4 +201,3 @@ func (r *TaskRepository) GetSummary(ctx context.Context, tenantID uuid.UUID, tec
 	)
 	return &summary, err
 }
-

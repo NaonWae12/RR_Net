@@ -170,5 +170,3 @@ func (r *ServicePackageRepository) NameExists(ctx context.Context, tenantID uuid
 	}
 	return exists, nil
 }
-
-

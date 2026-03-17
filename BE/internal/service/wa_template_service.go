@@ -55,5 +55,3 @@ func (s *WATemplateService) Update(ctx context.Context, tenantID, id uuid.UUID, 
 func (s *WATemplateService) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
 	return s.repo.Delete(ctx, tenantID, id)
 }
-
-

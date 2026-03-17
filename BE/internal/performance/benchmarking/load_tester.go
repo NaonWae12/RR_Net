@@ -23,14 +23,14 @@ func NewLoadTester(concurrency int, duration time.Duration) *LoadTester {
 
 // LoadTestResult represents the result of a load test
 type LoadTestResult struct {
-	TotalRequests    int64
+	TotalRequests      int64
 	SuccessfulRequests int64
-	FailedRequests   int64
-	AverageLatency   time.Duration
-	P95Latency       time.Duration
-	P99Latency       time.Duration
-	Throughput       float64 // requests per second
-	Errors           []string
+	FailedRequests     int64
+	AverageLatency     time.Duration
+	P95Latency         time.Duration
+	P99Latency         time.Duration
+	Throughput         float64 // requests per second
+	Errors             []string
 }
 
 // RequestMetrics tracks metrics for a single request
@@ -125,4 +125,3 @@ func calculatePercentile(metrics []RequestMetrics, percentile int) time.Duration
 	}
 	return total / time.Duration(len(metrics))
 }
-

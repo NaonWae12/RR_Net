@@ -25,29 +25,29 @@ func NewRegressionDetector(collector *monitoring.MetricsCollector) *RegressionDe
 
 // Baseline represents a performance baseline
 type Baseline struct {
-	MetricName    string
-	AverageValue  float64
-	P95Value      float64
-	P99Value      float64
-	Threshold     float64 // Percentage threshold for regression detection
-	CreatedAt     time.Time
-	Version       string
-	Environment   string
+	MetricName   string
+	AverageValue float64
+	P95Value     float64
+	P99Value     float64
+	Threshold    float64 // Percentage threshold for regression detection
+	CreatedAt    time.Time
+	Version      string
+	Environment  string
 }
 
 // Regression represents a detected performance regression
 type Regression struct {
-	MetricName      string
-	BaselineVersion string
-	CurrentVersion  string
-	RegressionType  string // "response_time", "throughput", "error_rate", "resource_usage"
-	Severity        string // "critical", "high", "medium", "low"
-	BaselineValue   float64
-	CurrentValue    float64
+	MetricName        string
+	BaselineVersion   string
+	CurrentVersion    string
+	RegressionType    string // "response_time", "throughput", "error_rate", "resource_usage"
+	Severity          string // "critical", "high", "medium", "low"
+	BaselineValue     float64
+	CurrentValue      float64
 	RegressionPercent float64
-	Impact          string
-	Recommendation  string
-	DetectedAt      time.Time
+	Impact            string
+	Recommendation    string
+	DetectedAt        time.Time
 }
 
 // CreateBaseline creates a performance baseline
@@ -149,17 +149,17 @@ func (rd *RegressionDetector) DetectRegression(
 	}
 
 	regression := &Regression{
-		MetricName:       metricName,
-		BaselineVersion:  baseline.Version,
-		CurrentVersion:   currentVersion,
-		RegressionType:   regressionType,
-		Severity:         severity,
-		BaselineValue:    baseline.AverageValue,
-		CurrentValue:     currentAvg,
+		MetricName:        metricName,
+		BaselineVersion:   baseline.Version,
+		CurrentVersion:    currentVersion,
+		RegressionType:    regressionType,
+		Severity:          severity,
+		BaselineValue:     baseline.AverageValue,
+		CurrentValue:      currentAvg,
 		RegressionPercent: regressionPercent,
-		Impact:           fmt.Sprintf("Performance degraded by %.2f%%", regressionPercent),
-		Recommendation:   fmt.Sprintf("Investigate %s regression. Baseline: %.2f, Current: %.2f", metricName, baseline.AverageValue, currentAvg),
-		DetectedAt:       time.Now(),
+		Impact:            fmt.Sprintf("Performance degraded by %.2f%%", regressionPercent),
+		Recommendation:    fmt.Sprintf("Investigate %s regression. Baseline: %.2f, Current: %.2f", metricName, baseline.AverageValue, currentAvg),
+		DetectedAt:        time.Now(),
 	}
 
 	return regression, nil
@@ -177,7 +177,6 @@ func calculatePercentile(values []float64, percentile int) float64 {
 	return values[index]
 }
 
-
 // contains checks if string contains substring
 func contains(s string, substrings ...string) bool {
 	for _, substr := range substrings {
@@ -191,4 +190,3 @@ func contains(s string, substrings ...string) bool {
 	}
 	return false
 }
-

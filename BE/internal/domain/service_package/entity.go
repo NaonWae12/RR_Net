@@ -27,9 +27,9 @@ const (
 // - PPPoE: flat_monthly (price_monthly)
 // - Lite: per_device (price_per_device)
 type ServicePackage struct {
-	ID              uuid.UUID       `json:"id"`
-	TenantID         uuid.UUID       `json:"tenant_id"`
-	Name             string          `json:"name"`
+	ID                uuid.UUID       `json:"id"`
+	TenantID          uuid.UUID       `json:"tenant_id"`
+	Name              string          `json:"name"`
 	Category          Category        `json:"category"`
 	PricingModel      PricingModel    `json:"pricing_model"`
 	PriceMonthly      float64         `json:"price_monthly"`
@@ -42,5 +42,3 @@ type ServicePackage struct {
 	UpdatedAt         time.Time       `json:"updated_at"`
 	DeletedAt         *time.Time      `json:"deleted_at,omitempty"`
 }
-
-

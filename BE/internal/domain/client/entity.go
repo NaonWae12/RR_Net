@@ -29,6 +29,7 @@ type Status string
 
 const (
 	StatusActive     Status = "active"
+	StatusPending    Status = "pending"    // Needs approval
 	StatusIsolir     Status = "isolir"     // Suspended for payment
 	StatusSuspended  Status = "suspended"  // Admin action
 	StatusTerminated Status = "terminated" // Cancelled
@@ -80,6 +81,8 @@ type Client struct {
 	IPAddress          *net.IP         `json:"ip_address,omitempty"`
 	MACAddress         *string         `json:"mac_address,omitempty"`
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
+	IsReseller         bool            `json:"is_reseller"`
+	CreatedByID        *uuid.UUID      `json:"created_by_id,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 	DeletedAt          *time.Time      `json:"deleted_at,omitempty"`
@@ -97,11 +100,12 @@ func (c *Client) CanBeIsolated() bool {
 
 // CanBeReactivated checks if client can be reactivated
 func (c *Client) CanBeReactivated() bool {
-	return c.Status == StatusIsolir || c.Status == StatusSuspended
+	return c.Status == StatusIsolir || c.Status == StatusSuspended || c.Status == StatusPending
 }
 
 // ValidStatusTransitions defines allowed status transitions
 var ValidStatusTransitions = map[Status][]Status{
+	StatusPending:    {StatusActive, StatusTerminated, StatusSuspended},
 	StatusActive:     {StatusIsolir, StatusSuspended, StatusTerminated},
 	StatusIsolir:     {StatusActive, StatusTerminated},
 	StatusSuspended:  {StatusActive, StatusTerminated},

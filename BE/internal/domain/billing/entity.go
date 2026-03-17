@@ -29,31 +29,41 @@ const (
 	PaymentMethodCollector    PaymentMethod = "collector"
 )
 
+// PaymentStatus defines the verification status of a payment
+type PaymentStatus string
+
+const (
+	PaymentStatusPending  PaymentStatus = "pending"
+	PaymentStatusVerified PaymentStatus = "verified"
+	PaymentStatusRejected PaymentStatus = "rejected"
+)
+
 // Invoice represents a billing invoice
 type Invoice struct {
-	ID                uuid.UUID     `json:"id"`
-	TenantID          uuid.UUID     `json:"tenant_id"`
-	ClientID          uuid.UUID     `json:"client_id"`
-	ClientName        *string       `json:"client_name,omitempty"`
-	ClientPhone       *string       `json:"client_phone,omitempty"`
-	ClientAddress     *string       `json:"client_address,omitempty"`
-	ClientGroupName   *string       `json:"client_group_name,omitempty"`
-	InvoiceNumber     string        `json:"invoice_number"`
-	PeriodStart       time.Time     `json:"period_start"`
-	PeriodEnd         time.Time     `json:"period_end"`
-	DueDate           time.Time     `json:"due_date"`
-	Subtotal          int64         `json:"subtotal"`        // in cents/smallest unit
-	TaxAmount         int64         `json:"tax_amount"`
-	DiscountAmount    int64         `json:"discount_amount"`
-	TotalAmount       int64         `json:"total_amount"`
-	PaidAmount        int64         `json:"paid_amount"`
-	Currency          string        `json:"currency"`
-	Status            InvoiceStatus `json:"status"`
-	Notes             string        `json:"notes,omitempty"`
-	Items             []InvoiceItem `json:"items,omitempty"`
-	CreatedAt         time.Time     `json:"created_at"`
-	UpdatedAt         time.Time     `json:"updated_at"`
-	PaidAt            *time.Time    `json:"paid_at,omitempty"`
+	ID              uuid.UUID     `json:"id"`
+	TenantID        uuid.UUID     `json:"tenant_id"`
+	ClientID        uuid.UUID     `json:"client_id"`
+	ClientName      *string       `json:"client_name,omitempty"`
+	ClientPhone     *string       `json:"client_phone,omitempty"`
+	ClientAddress   *string       `json:"client_address,omitempty"`
+	ClientGroupName *string       `json:"client_group_name,omitempty"`
+	InvoiceNumber   string        `json:"invoice_number"`
+	PeriodStart     time.Time     `json:"period_start"`
+	PeriodEnd       time.Time     `json:"period_end"`
+	DueDate         time.Time     `json:"due_date"`
+	Subtotal        int64         `json:"subtotal"` // in cents/smallest unit
+	TaxAmount       int64         `json:"tax_amount"`
+	DiscountAmount  int64         `json:"discount_amount"`
+	TotalAmount     int64         `json:"total_amount"`
+	PaidAmount      int64         `json:"paid_amount"`
+	Currency        string        `json:"currency"`
+	Status          InvoiceStatus `json:"status"`
+	Notes           string        `json:"notes,omitempty"`
+	Items           []InvoiceItem `json:"items,omitempty"`
+	Payments        []Payment     `json:"payments,omitempty"`
+	CreatedAt       time.Time     `json:"created_at"`
+	UpdatedAt       time.Time     `json:"updated_at"`
+	PaidAt          *time.Time    `json:"paid_at,omitempty"`
 }
 
 // InvoiceItem represents a line item in an invoice
@@ -79,7 +89,9 @@ type Payment struct {
 	Method          PaymentMethod `json:"method"`
 	Reference       *string       `json:"reference,omitempty"`
 	CollectorID     *uuid.UUID    `json:"collector_id,omitempty"`
+	CollectorName   *string       `json:"collector_name,omitempty"`
 	Notes           *string       `json:"notes,omitempty"`
+	Status          PaymentStatus `json:"status"` // pending, verified, rejected
 	ReceivedAt      time.Time     `json:"received_at"`
 	CreatedAt       time.Time     `json:"created_at"`
 	CreatedByUserID uuid.UUID     `json:"created_by_user_id"`
@@ -89,17 +101,17 @@ type Payment struct {
 type IsolirStatus string
 
 const (
-	IsolirStatusPending   IsolirStatus = "pending"
-	IsolirStatusExecuted  IsolirStatus = "executed"
-	IsolirStatusFailed    IsolirStatus = "failed"
-	IsolirStatusReverted  IsolirStatus = "reverted"
+	IsolirStatusPending  IsolirStatus = "pending"
+	IsolirStatusExecuted IsolirStatus = "executed"
+	IsolirStatusFailed   IsolirStatus = "failed"
+	IsolirStatusReverted IsolirStatus = "reverted"
 )
 
 // IsolirAction defines isolir action types
 type IsolirAction string
 
 const (
-	IsolirActionIsolate   IsolirAction = "isolate"
+	IsolirActionIsolate    IsolirAction = "isolate"
 	IsolirActionReactivate IsolirAction = "reactivate"
 )
 
@@ -121,25 +133,50 @@ type IsolirLog struct {
 
 // BillingSummary provides billing summary for a tenant
 type BillingSummary struct {
-	TotalInvoices     int   `json:"total_invoices"`
-	PendingInvoices   int   `json:"pending_invoices"`
-	OverdueInvoices   int   `json:"overdue_invoices"`
-	PaidInvoices      int   `json:"paid_invoices"`
-	TotalRevenue      int64 `json:"total_revenue"`
-	PendingAmount     int64 `json:"pending_amount"`
-	OverdueAmount     int64 `json:"overdue_amount"`
+	TotalInvoices      int   `json:"total_invoices"`
+	PendingInvoices    int   `json:"pending_invoices"`
+	OverdueInvoices    int   `json:"overdue_invoices"`
+	PaidInvoices       int   `json:"paid_invoices"`
+	TotalRevenue       int64 `json:"total_revenue"`
+	PendingAmount      int64 `json:"pending_amount"`
+	OverdueAmount      int64 `json:"overdue_amount"`
 	CollectedThisMonth int64 `json:"collected_this_month"`
 }
 
 // ClientBillingSummary provides billing summary for a client
 type ClientBillingSummary struct {
-	ClientID        uuid.UUID `json:"client_id"`
-	TotalInvoices   int       `json:"total_invoices"`
-	PaidInvoices    int       `json:"paid_invoices"`
-	PendingAmount   int64     `json:"pending_amount"`
-	OverdueAmount   int64     `json:"overdue_amount"`
-	LastPaymentDate *time.Time `json:"last_payment_date,omitempty"`
-	LastPaymentAmount int64   `json:"last_payment_amount"`
+	ClientID          uuid.UUID  `json:"client_id"`
+	TotalInvoices     int        `json:"total_invoices"`
+	PaidInvoices      int        `json:"paid_invoices"`
+	PendingAmount     int64      `json:"pending_amount"`
+	OverdueAmount     int64      `json:"overdue_amount"`
+	LastPaymentDate   *time.Time `json:"last_payment_date,omitempty"`
+	LastPaymentAmount int64      `json:"last_payment_amount"`
+}
+
+// RevenueAnalytics represents aggregated revenue data
+type RevenueAnalytics struct {
+	Trend               []RevenueTrendItem `json:"trend"`
+	ByGroup             []RevenueByGroup   `json:"by_group"`
+	ByConnectionType    []RevenueByConn    `json:"by_connection_type"`
+	PeriodTotal         int64              `json:"period_total"`
+	PreviousPeriodTotal int64              `json:"previous_period_total"`
+}
+
+type RevenueTrendItem struct {
+	Date   string `json:"date"`
+	Amount int64  `json:"amount"`
+}
+
+type RevenueByGroup struct {
+	GroupID   uuid.UUID `json:"group_id"`
+	GroupName string    `json:"group_name"`
+	Amount    int64     `json:"amount"`
+}
+
+type RevenueByConn struct {
+	ConnectionType string `json:"connection_type"`
+	Amount         int64  `json:"amount"`
 }
 
 // IsDue checks if invoice is past due date
@@ -156,5 +193,3 @@ func (i *Invoice) RemainingAmount() int64 {
 func (i *Invoice) IsPaid() bool {
 	return i.PaidAmount >= i.TotalAmount
 }
-
-

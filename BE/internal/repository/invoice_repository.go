@@ -85,7 +85,7 @@ func (r *InvoiceRepository) GetByID(ctx context.Context, id uuid.UUID) (*billing
 	query := `
 		SELECT id, tenant_id, client_id, invoice_number, period_start, period_end,
 			due_date, subtotal, tax_amount, discount_amount, total_amount,
-			paid_amount, currency, status, notes, created_at, updated_at, paid_at
+			paid_amount, currency, status, COALESCE(notes, ''), created_at, updated_at, paid_at
 		FROM invoices
 		WHERE id = $1
 	`
@@ -253,7 +253,7 @@ func (r *InvoiceRepository) List(ctx context.Context, filter InvoiceFilter) ([]*
 			g.name as client_group_name,
 			i.invoice_number, i.period_start, i.period_end,
 			i.due_date, i.subtotal, i.tax_amount, i.discount_amount, i.total_amount,
-			i.paid_amount, i.currency, i.status, i.notes, i.created_at, i.updated_at, i.paid_at
+			i.paid_amount, i.currency, i.status, COALESCE(i.notes, ''), i.created_at, i.updated_at, i.paid_at
 	` + baseQuery + fmt.Sprintf(" ORDER BY i.created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, filter.PageSize, offset)
 
@@ -296,14 +296,24 @@ func (r *InvoiceRepository) UpdatePaidAmount(ctx context.Context, id uuid.UUID, 
 	return err
 }
 
+func (r *InvoiceRepository) MarkOverdueInvoices(ctx context.Context) (int64, error) {
+	query := `UPDATE invoices SET status = 'overdue', updated_at = NOW() WHERE status = 'pending' AND due_date < CURRENT_DATE`
+	result, err := r.db.Exec(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 func (r *InvoiceRepository) GetOverdueInvoices(ctx context.Context, tenantID uuid.UUID) ([]*billing.Invoice, error) {
 	query := `
-		SELECT id, tenant_id, client_id, invoice_number, period_start, period_end,
-			due_date, subtotal, tax_amount, discount_amount, total_amount,
-			paid_amount, currency, status, notes, created_at, updated_at, paid_at
-		FROM invoices
-		WHERE tenant_id = $1 AND status = 'pending' AND due_date < NOW()
-		ORDER BY due_date ASC
+		SELECT i.id, i.tenant_id, i.client_id, c.name as client_name, i.invoice_number, i.period_start, i.period_end,
+			i.due_date, i.subtotal, i.tax_amount, i.discount_amount, i.total_amount,
+			i.paid_amount, i.currency, i.status, COALESCE(i.notes, ''), i.created_at, i.updated_at, i.paid_at
+		FROM invoices i
+		INNER JOIN clients c ON c.id = i.client_id
+		WHERE i.tenant_id = $1 AND (i.status = 'overdue' OR (i.status = 'pending' AND i.due_date < CURRENT_DATE))
+		ORDER BY i.due_date ASC
 	`
 	rows, err := r.db.Query(ctx, query, tenantID)
 	if err != nil {
@@ -315,7 +325,7 @@ func (r *InvoiceRepository) GetOverdueInvoices(ctx context.Context, tenantID uui
 	for rows.Next() {
 		var inv billing.Invoice
 		err := rows.Scan(
-			&inv.ID, &inv.TenantID, &inv.ClientID, &inv.InvoiceNumber,
+			&inv.ID, &inv.TenantID, &inv.ClientID, &inv.ClientName, &inv.InvoiceNumber,
 			&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate,
 			&inv.Subtotal, &inv.TaxAmount, &inv.DiscountAmount, &inv.TotalAmount,
 			&inv.PaidAmount, &inv.Currency, &inv.Status, &inv.Notes,
@@ -332,12 +342,13 @@ func (r *InvoiceRepository) GetOverdueInvoices(ctx context.Context, tenantID uui
 
 func (r *InvoiceRepository) GetClientPendingInvoices(ctx context.Context, clientID uuid.UUID) ([]*billing.Invoice, error) {
 	query := `
-		SELECT id, tenant_id, client_id, invoice_number, period_start, period_end,
-			due_date, subtotal, tax_amount, discount_amount, total_amount,
-			paid_amount, currency, status, notes, created_at, updated_at, paid_at
-		FROM invoices
-		WHERE client_id = $1 AND status IN ('pending', 'overdue')
-		ORDER BY due_date ASC
+		SELECT i.id, i.tenant_id, i.client_id, c.name as client_name, i.invoice_number, i.period_start, i.period_end,
+			i.due_date, i.subtotal, i.tax_amount, i.discount_amount, i.total_amount,
+			i.paid_amount, i.currency, i.status, COALESCE(i.notes, ''), i.created_at, i.updated_at, i.paid_at
+		FROM invoices i
+		INNER JOIN clients c ON c.id = i.client_id
+		WHERE i.client_id = $1 AND i.status IN ('pending', 'overdue')
+		ORDER BY i.due_date ASC
 	`
 	rows, err := r.db.Query(ctx, query, clientID)
 	if err != nil {
@@ -349,7 +360,7 @@ func (r *InvoiceRepository) GetClientPendingInvoices(ctx context.Context, client
 	for rows.Next() {
 		var inv billing.Invoice
 		err := rows.Scan(
-			&inv.ID, &inv.TenantID, &inv.ClientID, &inv.InvoiceNumber,
+			&inv.ID, &inv.TenantID, &inv.ClientID, &inv.ClientName, &inv.InvoiceNumber,
 			&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate,
 			&inv.Subtotal, &inv.TaxAmount, &inv.DiscountAmount, &inv.TotalAmount,
 			&inv.PaidAmount, &inv.Currency, &inv.Status, &inv.Notes,
@@ -364,11 +375,38 @@ func (r *InvoiceRepository) GetClientPendingInvoices(ctx context.Context, client
 	return invoices, nil
 }
 
+func (r *InvoiceRepository) GetLatestPaidInvoice(ctx context.Context, clientID uuid.UUID) (*billing.Invoice, error) {
+	query := `
+		SELECT id, tenant_id, client_id, invoice_number, period_start, period_end,
+			due_date, subtotal, tax_amount, discount_amount, total_amount,
+			paid_amount, currency, status, COALESCE(notes, ''), created_at, updated_at, paid_at
+		FROM invoices
+		WHERE client_id = $1 AND status = 'paid'
+		ORDER BY period_start DESC, due_date DESC
+		LIMIT 1
+	`
+	var inv billing.Invoice
+	err := r.db.QueryRow(ctx, query, clientID).Scan(
+		&inv.ID, &inv.TenantID, &inv.ClientID, &inv.InvoiceNumber,
+		&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate,
+		&inv.Subtotal, &inv.TaxAmount, &inv.DiscountAmount, &inv.TotalAmount,
+		&inv.PaidAmount, &inv.Currency, &inv.Status, &inv.Notes,
+		&inv.CreatedAt, &inv.UpdatedAt, &inv.PaidAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil // Return nil if no paid invoices found
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &inv, nil
+}
+
 func (r *InvoiceRepository) GenerateInvoiceNumber(ctx context.Context, tenantID uuid.UUID) (string, error) {
 	// Format: INV-YYYYMM-XXXX
 	now := time.Now()
 	prefix := fmt.Sprintf("INV-%d%02d-", now.Year(), now.Month())
-	
+
 	query := `
 		SELECT COUNT(*) + 1 FROM invoices 
 		WHERE tenant_id = $1 AND invoice_number LIKE $2
@@ -378,8 +416,75 @@ func (r *InvoiceRepository) GenerateInvoiceNumber(ctx context.Context, tenantID 
 	if err != nil {
 		return "", err
 	}
-	
+
 	return fmt.Sprintf("%s%04d", prefix, seq), nil
 }
 
+// GetClientPaymentStatuses returns a map of clientID to their payment status (overdue, pending, paid)
+// Prioritizes: overdue > pending > paid
+// GetClientPaymentStatuses returns a map of clientID to their payment status (overdue, pending, paid)
+// Prioritizes: overdue > pending > paid
+func (r *InvoiceRepository) GetClientPaymentStatuses(ctx context.Context, tenantID uuid.UUID, clientIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	if len(clientIDs) == 0 {
+		return map[uuid.UUID]string{}, nil
+	}
 
+	query := `
+		SELECT client_id,
+			CASE
+				WHEN COUNT(*) FILTER (WHERE status = 'overdue') > 0 THEN 'overdue'
+				WHEN COUNT(*) FILTER (WHERE status = 'pending') > 0 THEN 'pending'
+				ELSE 'paid'
+			END as payment_status
+		FROM invoices
+		WHERE tenant_id = $1 AND client_id = ANY($2)
+		GROUP BY client_id
+	`
+
+	rows, err := r.db.Query(ctx, query, tenantID, clientIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[uuid.UUID]string)
+	for rows.Next() {
+		var clientID uuid.UUID
+		var status string
+		if err := rows.Scan(&clientID, &status); err != nil {
+			return nil, err
+		}
+		result[clientID] = status
+	}
+	return result, nil
+}
+
+func (r *InvoiceRepository) GetClientLatestDueDates(ctx context.Context, tenantID uuid.UUID, clientIDs []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	if len(clientIDs) == 0 {
+		return map[uuid.UUID]time.Time{}, nil
+	}
+
+	query := `
+		SELECT client_id, MIN(due_date) as due_date
+		FROM invoices
+		WHERE tenant_id = $1 AND client_id = ANY($2) AND status IN ('pending', 'overdue')
+		GROUP BY client_id
+	`
+
+	rows, err := r.db.Query(ctx, query, tenantID, clientIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[uuid.UUID]time.Time)
+	for rows.Next() {
+		var clientID uuid.UUID
+		var dueDate time.Time
+		if err := rows.Scan(&clientID, &dueDate); err != nil {
+			return nil, err
+		}
+		result[clientID] = dueDate
+	}
+	return result, nil
+}

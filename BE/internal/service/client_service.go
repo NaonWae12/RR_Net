@@ -13,16 +13,25 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"rrnet/internal/auth"
 	"rrnet/internal/domain/client"
+	"rrnet/internal/domain/discount"
+	"rrnet/internal/domain/service_package"
+	"rrnet/internal/domain/user"
 	"rrnet/internal/repository"
 	"rrnet/pkg/utils"
 )
 
 var (
-	ErrClientCodeRequired  = errors.New("client code is required")
-	ErrClientNameRequired  = errors.New("client name is required")
-	ErrClientLimitExceeded = errors.New("client limit exceeded for this plan")
-	ErrInvalidStatusChange = errors.New("invalid status change")
+	ErrClientCodeRequired     = errors.New("client code is required")
+	ErrClientNameRequired     = errors.New("client name is required")
+	ErrClientLimitExceeded    = errors.New("client limit exceeded for this plan")
+	ErrInvalidStatusChange    = errors.New("invalid status change")
+	ErrServicePackageRequired = errors.New("service_package_id is required")
+	ErrVoucherPackageRequired = errors.New("voucher_package_id is required for hotspot connection")
+	ErrServicePackageNotFound = errors.New("service package not found")
+	ErrCategoryMismatch       = errors.New("service package category mismatch")
+	ErrDeviceCountRequired    = errors.New("device_count is required for lite")
 )
 
 // ClientService handles client business logic
@@ -33,6 +42,10 @@ type ClientService struct {
 	voucherService     *VoucherService
 	featureResolver    *FeatureResolver
 	limitResolver      *LimitResolver
+	userRepo           *repository.UserRepository
+	routerRepo         *repository.RouterRepository
+	billingService     *BillingService
+	discountRepo       *repository.DiscountRepository
 	encKey32           [32]byte
 }
 
@@ -42,8 +55,12 @@ func NewClientService(
 	servicePackageRepo *repository.ServicePackageRepository,
 	pppoeService *PPPoEService,
 	voucherService *VoucherService,
+	billingService *BillingService,
 	featureResolver *FeatureResolver,
 	limitResolver *LimitResolver,
+	userRepo *repository.UserRepository,
+	routerRepo *repository.RouterRepository,
+	discountRepo *repository.DiscountRepository,
 	encryptionSecret string,
 ) *ClientService {
 	return &ClientService{
@@ -53,6 +70,10 @@ func NewClientService(
 		voucherService:     voucherService,
 		featureResolver:    featureResolver,
 		limitResolver:      limitResolver,
+		userRepo:           userRepo,
+		routerRepo:         routerRepo,
+		billingService:     billingService,
+		discountRepo:       discountRepo,
 		encKey32:           utils.DeriveKey32(encryptionSecret),
 	}
 }
@@ -67,6 +88,7 @@ type CreateClientRequest struct {
 	Latitude   *float64   `json:"latitude,omitempty"`
 	Longitude  *float64   `json:"longitude,omitempty"`
 	GroupID    *uuid.UUID `json:"group_id,omitempty"`
+	DiscountID *uuid.UUID `json:"discount_id,omitempty"`
 
 	// New service model
 	Category           client.Category       `json:"category"`
@@ -77,7 +99,7 @@ type CreateClientRequest struct {
 	PPPoELocalAddress  *string               `json:"pppoe_local_address,omitempty"`
 	PPPoERemoteAddress *string               `json:"pppoe_remote_address,omitempty"`
 	PPPoEComment       *string               `json:"pppoe_comment,omitempty"`
-	ServicePackageID   uuid.UUID             `json:"service_package_id"`
+	ServicePackageID   *uuid.UUID            `json:"service_package_id"`
 	VoucherPackageID   *uuid.UUID            `json:"voucher_package_id,omitempty"`
 	DeviceCount        *int                  `json:"device_count,omitempty"` // lite only
 
@@ -91,6 +113,9 @@ type CreateClientRequest struct {
 	PaymentTempoOption     *string    `json:"payment_tempo_option,omitempty"` // default|template|manual
 	PaymentDueDay          *int       `json:"payment_due_day,omitempty"`      // 1-31
 	PaymentTempoTemplateID *uuid.UUID `json:"payment_tempo_template_id,omitempty"`
+
+	// Toggle for auto-invoice creation
+	AutoCreateInvoice *bool `json:"auto_create_invoice,omitempty"`
 }
 
 // ClientDTO represents client data for API responses
@@ -105,11 +130,15 @@ type ClientDTO struct {
 	Latitude               *float64              `json:"latitude,omitempty"`
 	Longitude              *float64              `json:"longitude,omitempty"`
 	GroupID                *uuid.UUID            `json:"group_id,omitempty"`
+	DiscountID             *uuid.UUID            `json:"discount_id,omitempty"`
+	DiscountType           *string               `json:"discount_type,omitempty"`
+	DiscountValue          *float64              `json:"discount_value,omitempty"`
 	Category               client.Category       `json:"category"`
 	ConnectionType         client.ConnectionType `json:"connection_type"`
 	ServicePackageID       *uuid.UUID            `json:"service_package_id,omitempty"`
 	VoucherPackageID       *uuid.UUID            `json:"voucher_package_id,omitempty"`
 	DeviceCount            *int                  `json:"device_count,omitempty"`
+	PackageName            *string               `json:"package_name,omitempty"`
 	ServicePlan            *string               `json:"service_plan,omitempty"`
 	SpeedProfile           *string               `json:"speed_profile,omitempty"`
 	MonthlyFee             float64               `json:"monthly_fee"`
@@ -118,15 +147,20 @@ type ClientDTO struct {
 	PaymentDueDay          int                   `json:"payment_due_day"`
 	PaymentTempoTemplateID *uuid.UUID            `json:"payment_tempo_template_id,omitempty"`
 	Status                 client.Status         `json:"status"`
+	PaymentStatus          string                `json:"payment_status,omitempty"`
 	IsolirReason           *string               `json:"isolir_reason,omitempty"`
 	IsolirAt               *time.Time            `json:"isolir_at,omitempty"`
 	RouterID               *uuid.UUID            `json:"router_id,omitempty"`
+	RouterName             *string               `json:"router_name,omitempty"`
 	PPPoEUsername          *string               `json:"pppoe_username,omitempty"`
+	PPPoEPassword          *string               `json:"pppoe_password,omitempty"`
 	PPPoELocalAddress      *string               `json:"pppoe_local_address,omitempty"`
 	PPPoERemoteAddress     *string               `json:"pppoe_remote_address,omitempty"`
 	PPPoEComment           *string               `json:"pppoe_comment,omitempty"`
 	CreatedAt              time.Time             `json:"created_at"`
 	UpdatedAt              time.Time             `json:"updated_at"`
+	PaymentDueDate         *time.Time            `json:"payment_due_date,omitempty"`
+	CreatedByName          *string               `json:"created_by_name,omitempty"`
 }
 
 // Create creates a new client
@@ -157,20 +191,30 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 	if req.Name == "" {
 		return nil, ErrClientNameRequired
 	}
-	if req.ServicePackageID == (uuid.UUID{}) {
-		return nil, errors.New("service_package_id is required")
-	}
-
 	// Validate service model rules + load package
-	pkg, err := s.servicePackageRepo.GetByID(ctx, tenantID, req.ServicePackageID)
-	if err != nil {
-		if err == repository.ErrServicePackageNotFound {
-			return nil, errors.New("service package not found")
+	isHotspot := req.ConnectionType == client.ConnectionTypeHotspot
+	var pkg *service_package.ServicePackage
+
+	if isHotspot {
+		if req.VoucherPackageID == nil || *req.VoucherPackageID == uuid.Nil {
+			return nil, errors.New("voucher_package_id is required for hotspot connection")
 		}
-		return nil, err
-	}
-	if client.Category(pkg.Category) != req.Category {
-		return nil, errors.New("service package category mismatch")
+		// ServicePackageID is optional for hotspot
+	} else {
+		if req.ServicePackageID == nil || *req.ServicePackageID == uuid.Nil {
+			return nil, errors.New("service_package_id is required")
+		}
+		var err error
+		pkg, err = s.servicePackageRepo.GetByID(ctx, tenantID, *req.ServicePackageID)
+		if err != nil {
+			if err == repository.ErrServicePackageNotFound {
+				return nil, errors.New("service package not found")
+			}
+			return nil, err
+		}
+		if client.Category(pkg.Category) != req.Category {
+			return nil, errors.New("service package category mismatch")
+		}
 	}
 
 	var pppoePasswordEnc *string
@@ -216,8 +260,33 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 
 	// Keep legacy service_plan populated for UI/backward compatibility
 	servicePlan := req.ServicePlan
-	if servicePlan == nil || *servicePlan == "" {
-		servicePlan = &pkg.Name
+	monthlyFee := utils.Value(req.MonthlyFee)
+
+	if isHotspot {
+		vpkg, err := s.voucherService.GetPackage(ctx, *req.VoucherPackageID)
+		if err == nil {
+			if servicePlan == nil || *servicePlan == "" {
+				servicePlan = &vpkg.Name
+			}
+			if monthlyFee <= 0 {
+				deviceCount := 1
+				if req.DeviceCount != nil && *req.DeviceCount > 0 {
+					deviceCount = *req.DeviceCount
+				}
+				monthlyFee = vpkg.Price * float64(deviceCount)
+			}
+		}
+	} else if pkg != nil {
+		if servicePlan == nil || *servicePlan == "" {
+			servicePlan = &pkg.Name
+		}
+		if monthlyFee <= 0 {
+			if pkg.PricingModel == service_package.PricingModelFlatMonthly {
+				monthlyFee = pkg.PriceMonthly
+			} else if pkg.PricingModel == service_package.PricingModelPerDevice && req.DeviceCount != nil {
+				monthlyFee = pkg.PricePerDevice * float64(*req.DeviceCount)
+			}
+		}
 	}
 
 	// Payment tempo defaults/validation
@@ -255,81 +324,158 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 		}
 	}
 
+	initialStatus := client.StatusActive
+	var createdByID *uuid.UUID
+	if role, ok := auth.GetRole(ctx); ok && role == "technician" {
+		initialStatus = client.StatusPending
+	}
+	if uid, ok := auth.GetUserID(ctx); ok {
+		createdByID = &uid
+	}
+
 	c := &client.Client{
-		ID:                     uuid.New(),
-		TenantID:               tenantID,
-		ClientCode:             req.ClientCode,
-		Name:                   req.Name,
-		Email:                  req.Email,
-		Phone:                  req.Phone,
-		Address:                req.Address,
-		Latitude:               req.Latitude,
-		Longitude:              req.Longitude,
-		GroupID:                req.GroupID,
-		Category:               req.Category,
-		ConnectionType:         connType,
-		RouterID:               req.RouterID,
-		PPPoEUsername:          req.PPPoEUsername,
-		PPPoELocalAddress:      req.PPPoELocalAddress,
-		PPPoERemoteAddress:     req.PPPoERemoteAddress,
-		PPPoEComment:           req.PPPoEComment,
-		ServicePackageID:       &req.ServicePackageID,
+		ID:                 uuid.New(),
+		TenantID:           tenantID,
+		CreatedByID:        createdByID,
+		ClientCode:         req.ClientCode,
+		Name:               req.Name,
+		Email:              req.Email,
+		Phone:              req.Phone,
+		Address:            req.Address,
+		Latitude:           req.Latitude,
+		Longitude:          req.Longitude,
+		GroupID:            req.GroupID,
+		DiscountID:         req.DiscountID,
+		Category:           req.Category,
+		ConnectionType:     connType,
+		RouterID:           req.RouterID,
+		PPPoEUsername:      req.PPPoEUsername,
+		PPPoELocalAddress:  req.PPPoELocalAddress,
+		PPPoERemoteAddress: req.PPPoERemoteAddress,
+		PPPoEComment:       req.PPPoEComment,
+		ServicePackageID: func() *uuid.UUID {
+			if isHotspot {
+				return nil
+			}
+			return req.ServicePackageID
+		}(),
 		VoucherPackageID:       req.VoucherPackageID,
 		DeviceCount:            req.DeviceCount,
 		PPPoEPasswordEnc:       pppoePasswordEnc,
 		PPPoEPasswordUpdatedAt: pppoePasswordUpdatedAt,
 		ServicePlan:            servicePlan,
 		SpeedProfile:           req.SpeedProfile,
-		MonthlyFee:             utils.Value(req.MonthlyFee),
+		MonthlyFee:             monthlyFee,
 		BillingDate:            req.BillingDate,
 		PaymentTempoOption:     paymentOption,
 		PaymentDueDay:          paymentDueDay,
 		PaymentTempoTemplateID: paymentTemplateID,
-		Status:                 client.StatusActive,
+		Status:                 initialStatus,
 		Metadata:               metadata,
 		CreatedAt:              now,
 		UpdatedAt:              now,
+	}
+
+	// SECURITY: Auto-Create User account for Client Login (Fast DB operation, keep synchronous)
+	if req.Email != nil && *req.Email != "" {
+		// Check if user already exists
+		existingUser, _ := s.userRepo.GetByEmail(ctx, &tenantID, *req.Email)
+		if existingUser != nil {
+			c.UserID = &existingUser.ID
+		} else {
+			// Create new user record
+			role, err := s.userRepo.GetRoleByCode(ctx, "client")
+			if err == nil {
+				// Use "password" as default
+				hash, err := auth.HashPassword("password")
+				if err == nil {
+					newUserID := uuid.New()
+					u := &user.User{
+						ID:           newUserID,
+						TenantID:     &tenantID,
+						RoleID:       role.ID,
+						Email:        *req.Email,
+						PasswordHash: hash,
+						Name:         req.Name,
+						Phone:        req.Phone,
+						Status:       "active",
+						CreatedAt:    now,
+						UpdatedAt:    now,
+					}
+					if err := s.userRepo.Create(ctx, u); err == nil {
+						c.UserID = &newUserID
+					} else {
+						log.Error().Err(err).Msg("Failed to auto-create user for client")
+					}
+				}
+			}
+		}
 	}
 
 	if err := s.clientRepo.Create(ctx, c); err != nil {
 		return nil, err
 	}
 
-	// Create PPPoE secret if connection type is pppoe
-	if c.ConnectionType == client.ConnectionTypePPPoE && c.RouterID != nil && c.PPPoEUsername != nil && req.PPPoEPassword != nil && c.ServicePackageID != nil {
-		pkg, err := s.servicePackageRepo.GetByID(ctx, tenantID, *c.ServicePackageID)
-		if err == nil {
-			pppoeReq := CreatePPPoESecretRequest{
-				ClientID:      c.ID,
-				RouterID:      *c.RouterID,
-				ProfileID:     pkg.NetworkProfileID,
-				Username:      *c.PPPoEUsername,
-				Password:      *req.PPPoEPassword,
-				LocalAddress:  utils.Value(c.PPPoELocalAddress),
-				RemoteAddress: utils.Value(c.PPPoERemoteAddress),
-				Comment:       utils.Value(c.PPPoEComment),
-			}
-			_, pppoeErr := s.pppoeService.CreatePPPoESecret(ctx, tenantID, pppoeReq)
-			if pppoeErr != nil {
-				log.Error().Err(pppoeErr).Msg("Failed to auto-create PPPoE secret during client creation")
-			}
-		}
-	}
+	// PERFORM SLOW OPERATIONS IN BACKGROUND
+	// Moving MikroTik sync and Voucher creation to background to prevent frontend timeouts.
+	// These operations connect to external routers which can be slow or unreachable.
+	go func(cInternal *client.Client, reqInternal *CreateClientRequest, tID uuid.UUID) {
+		// Use background context with a generous timeout to ensure it finishes even if request context is cancelled
+		bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
 
-	// Create Hotspot voucher if connection type is hotspot
-	if c.ConnectionType == client.ConnectionTypeHotspot && c.VoucherPackageID != nil && c.PPPoEUsername != nil && req.PPPoEPassword != nil {
-		voucherReq := CreateVoucherRequest{
-			PackageID: *c.VoucherPackageID,
-			RouterID:  c.RouterID,
-			Code:      *c.PPPoEUsername,
-			Password:  *req.PPPoEPassword,
-			Notes:     fmt.Sprintf("Client: %s (%s)", c.Name, c.ClientCode),
+		// Do not auto-provision on router if client is pending approval
+		if cInternal.Status == client.StatusPending {
+			return
 		}
-		_, voucherErr := s.voucherService.CreateVoucher(ctx, tenantID, voucherReq)
-		if voucherErr != nil {
-			log.Error().Err(voucherErr).Msg("Failed to auto-create Hotspot voucher during client creation")
+
+		// Create PPPoE secret if connection type is pppoe
+		if cInternal.ConnectionType == client.ConnectionTypePPPoE && cInternal.RouterID != nil && cInternal.PPPoEUsername != nil && reqInternal.PPPoEPassword != nil && cInternal.ServicePackageID != nil {
+			pkg, err := s.servicePackageRepo.GetByID(bgCtx, tID, *cInternal.ServicePackageID)
+			if err == nil {
+				pppoeReq := CreatePPPoESecretRequest{
+					ClientID:      cInternal.ID,
+					RouterID:      *cInternal.RouterID,
+					ProfileID:     pkg.NetworkProfileID,
+					Username:      *cInternal.PPPoEUsername,
+					Password:      *reqInternal.PPPoEPassword,
+					LocalAddress:  utils.Value(cInternal.PPPoELocalAddress),
+					RemoteAddress: utils.Value(cInternal.PPPoERemoteAddress),
+					Comment:       utils.Value(cInternal.PPPoEComment),
+				}
+				_, pppoeErr := s.pppoeService.CreatePPPoESecret(bgCtx, tID, pppoeReq)
+				if pppoeErr != nil {
+					log.Error().Err(pppoeErr).Msg("Background Process: Failed to auto-create PPPoE secret during client creation")
+				}
+			}
 		}
-	}
+
+		// Create Hotspot voucher if connection type is hotspot
+		if cInternal.ConnectionType == client.ConnectionTypeHotspot && cInternal.VoucherPackageID != nil && cInternal.PPPoEUsername != nil && reqInternal.PPPoEPassword != nil {
+			voucherReq := CreateVoucherRequest{
+				PackageID:   *cInternal.VoucherPackageID,
+				RouterID:    cInternal.RouterID,
+				Code:        *cInternal.PPPoEUsername,
+				Password:    *reqInternal.PPPoEPassword,
+				Notes:       fmt.Sprintf("Client: %s (%s)", cInternal.Name, cInternal.ClientCode),
+				SharedUsers: utils.Value(cInternal.DeviceCount),
+			}
+			_, voucherErr := s.voucherService.CreateVoucher(bgCtx, tID, voucherReq)
+			if voucherErr != nil {
+				log.Error().Err(voucherErr).Msg("Background Process: Failed to auto-create Hotspot voucher during client creation")
+			}
+		}
+
+		// Auto-Generate First Invoice if requested
+		if reqInternal.AutoCreateInvoice != nil && *reqInternal.AutoCreateInvoice {
+			_, invErr := s.billingService.GenerateMonthlyInvoice(bgCtx, tID, cInternal.ID)
+			if invErr != nil {
+				log.Error().Err(invErr).Msg("Background Process: Failed to auto-generate first invoice during client creation")
+			} else {
+				log.Info().Str("client_id", cInternal.ID.String()).Msg("Background Process: Auto-generated first invoice for new client")
+			}
+		}
+	}(c, req, tenantID)
 
 	return s.toDTO(c), nil
 }
@@ -361,7 +507,63 @@ func (s *ClientService) GetByID(ctx context.Context, tenantID, clientID uuid.UUI
 	if err != nil {
 		return nil, err
 	}
-	return s.toDTO(c), nil
+	dto := s.toDTO(c)
+
+	// If Hotspot, fetch active voucher to populate username/password/device_count
+	if c.ConnectionType == client.ConnectionTypeHotspot && c.PPPoEUsername != nil {
+		v, err := s.voucherService.GetVoucherByCode(ctx, tenantID, *c.PPPoEUsername)
+		if err == nil && v != nil {
+			dto.PPPoEPassword = &v.Password
+			dto.DeviceCount = &v.SharedUsers
+			// If voucher has specific router, reflect it
+			if v.RouterID != nil {
+				dto.RouterID = v.RouterID
+			}
+		}
+	}
+	if c.RouterID != nil {
+		r, err := s.routerRepo.GetByID(ctx, *c.RouterID)
+		if err == nil {
+			dto.RouterName = &r.Name
+		}
+	}
+
+	// NEW: Fetch Discount Details if available
+	if c.DiscountID != nil {
+		d, err := s.discountRepo.GetByID(ctx, *c.DiscountID, tenantID)
+		if err == nil {
+			t := string(d.Type)
+			dto.DiscountType = &t
+			dto.DiscountValue = &d.Value
+		}
+	}
+
+	// Fetch Payment Status & Due Date
+	paymentStatuses, err := s.billingService.GetClientPaymentStatuses(ctx, tenantID, []uuid.UUID{clientID})
+	if err == nil {
+		if status, ok := paymentStatuses[clientID]; ok {
+			dto.PaymentStatus = status
+		} else {
+			dto.PaymentStatus = "paid"
+		}
+	}
+
+	dueDates, err := s.billingService.GetClientDueDates(ctx, tenantID, []uuid.UUID{clientID})
+	if err == nil {
+		if dueDate, ok := dueDates[clientID]; ok {
+			dto.PaymentDueDate = &dueDate
+		}
+	}
+
+	// Fetch Creator Name
+	if c.CreatedByID != nil {
+		u, err := s.userRepo.GetByID(ctx, *c.CreatedByID)
+		if err == nil {
+			dto.CreatedByName = &u.Name
+		}
+	}
+
+	return dto, nil
 }
 
 // List retrieves clients with filters
@@ -371,22 +573,70 @@ func (s *ClientService) List(ctx context.Context, tenantID uuid.UUID, filter *cl
 		return nil, 0, err
 	}
 
+	// Collect IDs for bulk fetching payment status
+	clientIDs := make([]uuid.UUID, len(clients))
+	for i, c := range clients {
+		clientIDs[i] = c.ID
+	}
+
+	paymentStatuses, err := s.billingService.GetClientPaymentStatuses(ctx, tenantID, clientIDs)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to fetch payment statuses")
+	}
+
+	dueDates, err := s.billingService.GetClientDueDates(ctx, tenantID, clientIDs)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to fetch payment due dates")
+	}
+
+	// Fetch all discounts for this tenant to populate DTOs efficiently
+	discounts, _ := s.discountRepo.List(ctx, tenantID, true)
+	discountMap := make(map[uuid.UUID]*discount.Discount)
+	for _, d := range discounts {
+		discountMap[d.ID] = d
+	}
+
 	dtos := make([]*ClientDTO, len(clients))
 	for i, c := range clients {
 		dtos[i] = s.toDTO(c)
+		// Populate discount details if client has a discount
+		if c.DiscountID != nil {
+			if d, ok := discountMap[*c.DiscountID]; ok {
+				t := string(d.Type)
+				dtos[i].DiscountType = &t
+				dtos[i].DiscountValue = &d.Value
+			}
+		}
+
+		// Populate payment status
+		if paymentStatuses != nil {
+			if status, ok := paymentStatuses[c.ID]; ok {
+				dtos[i].PaymentStatus = status
+			} else {
+				dtos[i].PaymentStatus = "paid"
+			}
+		}
+
+		// Populate due date
+		if dueDates != nil {
+			if dueDate, ok := dueDates[c.ID]; ok {
+				dtos[i].PaymentDueDate = &dueDate
+			}
+		}
 	}
 	return dtos, total, nil
 }
 
 // UpdateClientRequest represents request to update a client
 type UpdateClientRequest struct {
-	Name      string     `json:"name"`
-	Email     *string    `json:"email,omitempty"`
-	Phone     *string    `json:"phone,omitempty"`
-	Address   *string    `json:"address,omitempty"`
-	Latitude  *float64   `json:"latitude,omitempty"`
-	Longitude *float64   `json:"longitude,omitempty"`
-	GroupID   *uuid.UUID `json:"group_id,omitempty"`
+	Name       string     `json:"name"`
+	Email      *string    `json:"email,omitempty"`
+	Phone      *string    `json:"phone,omitempty"`
+	Address    *string    `json:"address,omitempty"`
+	Latitude   *float64   `json:"latitude,omitempty"`
+	Longitude  *float64   `json:"longitude,omitempty"`
+	GroupID    *uuid.UUID `json:"group_id,omitempty"`
+	DiscountID *uuid.UUID `json:"discount_id,omitempty"`
 
 	// New service model
 	Category           client.Category       `json:"category"`
@@ -397,13 +647,14 @@ type UpdateClientRequest struct {
 	PPPoELocalAddress  *string               `json:"pppoe_local_address,omitempty"`
 	PPPoERemoteAddress *string               `json:"pppoe_remote_address,omitempty"`
 	PPPoEComment       *string               `json:"pppoe_comment,omitempty"`
-	ServicePackageID   uuid.UUID             `json:"service_package_id"`
+	ServicePackageID   *uuid.UUID            `json:"service_package_id"`
 	VoucherPackageID   *uuid.UUID            `json:"voucher_package_id,omitempty"`
 	DeviceCount        *int                  `json:"device_count,omitempty"`
 
 	// Deprecated (kept only for compatibility; not used by new UI)
-	ServicePlan  *string `json:"service_plan,omitempty"`
-	SpeedProfile *string `json:"speed_profile,omitempty"`
+	ServicePlan  *string  `json:"service_plan,omitempty"`
+	SpeedProfile *string  `json:"speed_profile,omitempty"`
+	MonthlyFee   *float64 `json:"monthly_fee,omitempty"`
 
 	// Payment tempo (new)
 	PaymentTempoOption     *string    `json:"payment_tempo_option,omitempty"`
@@ -419,16 +670,39 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 		return nil, err
 	}
 
-	// Update fields
+	// Capture old values for transition handling
+	oldConnType := c.ConnectionType
+	oldUsername := ""
+	if c.PPPoEUsername != nil {
+		oldUsername = *c.PPPoEUsername
+	}
+	oldRouterID := c.RouterID
+
+	// Update fields - only if provided
 	if req.Name != "" {
 		c.Name = req.Name
 	}
-	c.Email = req.Email
-	c.Phone = req.Phone
-	c.Address = req.Address
-	c.Latitude = req.Latitude
-	c.Longitude = req.Longitude
-	c.GroupID = req.GroupID
+	if req.Email != nil {
+		c.Email = req.Email
+	}
+	if req.Phone != nil {
+		c.Phone = req.Phone
+	}
+	if req.Address != nil {
+		c.Address = req.Address
+	}
+	if req.Latitude != nil {
+		c.Latitude = req.Latitude
+	}
+	if req.Longitude != nil {
+		c.Longitude = req.Longitude
+	}
+	if req.GroupID != nil {
+		c.GroupID = req.GroupID
+	}
+	if req.DiscountID != nil {
+		c.DiscountID = req.DiscountID
+	}
 
 	// Payment tempo (optional update)
 	if req.PaymentTempoOption != nil && strings.TrimSpace(*req.PaymentTempoOption) != "" {
@@ -457,32 +731,105 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 		}
 	}
 
-	if req.ServicePackageID == (uuid.UUID{}) {
-		return nil, errors.New("service_package_id is required")
-	}
-	pkg, err := s.servicePackageRepo.GetByID(ctx, tenantID, req.ServicePackageID)
-	if err != nil {
-		if err == repository.ErrServicePackageNotFound {
-			return nil, errors.New("service package not found")
+	// Validate service model rules + load package
+	isHotspot := req.ConnectionType == client.ConnectionTypeHotspot
+	var pkg *service_package.ServicePackage
+
+	if isHotspot {
+		if req.VoucherPackageID == nil || *req.VoucherPackageID == uuid.Nil {
+			return nil, ErrVoucherPackageRequired
 		}
-		return nil, err
-	}
-	if client.Category(pkg.Category) != req.Category {
-		return nil, errors.New("service package category mismatch")
+	} else {
+		if req.ServicePackageID == nil || *req.ServicePackageID == uuid.Nil {
+			return nil, ErrServicePackageRequired
+		}
+		var err error
+		pkg, err = s.servicePackageRepo.GetByID(ctx, tenantID, *req.ServicePackageID)
+		if err != nil {
+			if err == repository.ErrServicePackageNotFound {
+				return nil, ErrServicePackageNotFound
+			}
+			return nil, err
+		}
+		if client.Category(pkg.Category) != req.Category {
+			return nil, ErrCategoryMismatch
+		}
 	}
 
-	c.Category = req.Category
+	if req.Category != "" {
+		c.Category = req.Category
+	}
 	if req.ConnectionType != "" {
 		c.ConnectionType = req.ConnectionType
 	}
-	c.RouterID = req.RouterID
-	c.PPPoELocalAddress = req.PPPoELocalAddress
-	c.PPPoERemoteAddress = req.PPPoERemoteAddress
-	c.PPPoEComment = req.PPPoEComment
-	c.ServicePackageID = &req.ServicePackageID
-	c.VoucherPackageID = req.VoucherPackageID
-	c.DeviceCount = req.DeviceCount
-	c.PPPoEUsername = req.PPPoEUsername
+	if req.RouterID != nil {
+		c.RouterID = req.RouterID
+	}
+	if req.PPPoELocalAddress != nil {
+		c.PPPoELocalAddress = req.PPPoELocalAddress
+	}
+	if req.PPPoERemoteAddress != nil {
+		c.PPPoERemoteAddress = req.PPPoERemoteAddress
+	}
+	if req.PPPoEComment != nil {
+		c.PPPoEComment = req.PPPoEComment
+	}
+	if isHotspot {
+		c.ServicePackageID = nil
+	} else if req.ServicePackageID != nil && *req.ServicePackageID != uuid.Nil {
+		c.ServicePackageID = req.ServicePackageID
+	}
+	if req.VoucherPackageID != nil {
+		c.VoucherPackageID = req.VoucherPackageID
+	}
+	if req.DeviceCount != nil {
+		c.DeviceCount = req.DeviceCount
+	}
+	if req.PPPoEUsername != nil {
+		c.PPPoEUsername = req.PPPoEUsername
+	}
+
+	// Sync MonthlyFee and ServicePlan from package if changed or missing
+	if isHotspot {
+		// Try to fetch package details if we have an ID
+		// Check both req and c for the ID, as req might only have one of them if partial update
+		vpID := req.VoucherPackageID
+		if vpID == nil || *vpID == uuid.Nil {
+			vpID = c.VoucherPackageID
+		}
+
+		if vpID != nil && *vpID != uuid.Nil {
+			vpkg, err := s.voucherService.GetPackage(ctx, *vpID)
+			if err == nil {
+				c.ServicePlan = &vpkg.Name
+				// Recalculate fee if not manually overridden OR if it was 0
+				if req.MonthlyFee == nil || *req.MonthlyFee <= 0 {
+					// Use DeviceCount (which maps to shared_users for Hotspot) for price calculation
+					deviceCount := 1
+					if c.DeviceCount != nil && *c.DeviceCount > 0 {
+						deviceCount = *c.DeviceCount
+					}
+					c.MonthlyFee = vpkg.Price * float64(deviceCount)
+				} else {
+					c.MonthlyFee = *req.MonthlyFee
+				}
+			}
+		}
+
+	} else if pkg != nil {
+		c.ServicePlan = &pkg.Name
+		if req.MonthlyFee == nil || *req.MonthlyFee <= 0 {
+			if pkg.PricingModel == service_package.PricingModelFlatMonthly {
+				c.MonthlyFee = pkg.PriceMonthly
+			} else if pkg.PricingModel == service_package.PricingModelPerDevice && c.DeviceCount != nil {
+				c.MonthlyFee = pkg.PricePerDevice * float64(*c.DeviceCount)
+			}
+		} else {
+			c.MonthlyFee = *req.MonthlyFee
+		}
+	} else if req.MonthlyFee != nil {
+		c.MonthlyFee = *req.MonthlyFee
+	}
 
 	if req.Category == client.CategoryLite {
 		if req.DeviceCount == nil || *req.DeviceCount < 1 {
@@ -511,14 +858,108 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	// Keep legacy service_plan populated for UI/backward compatibility
 	servicePlan := req.ServicePlan
 	if servicePlan == nil || *servicePlan == "" {
-		servicePlan = &pkg.Name
+		if pkg != nil {
+			servicePlan = &pkg.Name
+		} else if c.ServicePlan != nil {
+			servicePlan = c.ServicePlan
+		}
 	}
 	c.ServicePlan = servicePlan
 	c.SpeedProfile = req.SpeedProfile
 
+	// Capture plain password for sync
+	plainPassword := ""
+	if req.PPPoEPassword != nil && *req.PPPoEPassword != "" {
+		plainPassword = *req.PPPoEPassword
+	} else if c.PPPoEPasswordEnc != nil {
+		dec, _ := utils.DecryptStringAESGCM(s.encKey32, *c.PPPoEPasswordEnc)
+		plainPassword = dec
+	}
+
 	if err := s.clientRepo.Update(ctx, c); err != nil {
 		return nil, err
 	}
+
+	// PERFORM BACKGROUND SYNC / TRANSITION
+	go func(cInternal *client.Client, oldType client.ConnectionType, oldUser string, oldRid *uuid.UUID, pass string, tID uuid.UUID) {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		newUsername := ""
+		if cInternal.PPPoEUsername != nil {
+			newUsername = *cInternal.PPPoEUsername
+		}
+
+		typeChanged := oldType != cInternal.ConnectionType
+		userChanged := oldUser != newUsername && oldUser != ""
+		routerChanged := (oldRid == nil && cInternal.RouterID != nil) || (oldRid != nil && cInternal.RouterID == nil) || (oldRid != nil && cInternal.RouterID != nil && *oldRid != *cInternal.RouterID)
+
+		// 1. Cleanup old if changed
+		if typeChanged || userChanged || routerChanged {
+			log.Info().Str("clientID", cInternal.ID.String()).Msg("Connection transition detected, cleaning up old service")
+			if oldType == client.ConnectionTypePPPoE {
+				secrets, _ := s.pppoeService.pppoeRepo.GetByClientID(bgCtx, cInternal.ID)
+				for _, secret := range secrets {
+					_ = s.pppoeService.DeletePPPoESecret(bgCtx, tID, secret.ID)
+				}
+			} else if oldType == client.ConnectionTypeHotspot && oldUser != "" {
+				v, _ := s.voucherService.GetVoucherByCode(bgCtx, tID, oldUser)
+				if v != nil {
+					_ = s.voucherService.DeleteVoucher(bgCtx, v.ID)
+				}
+			}
+		}
+
+		// 2. Create/Sync new service
+		if cInternal.ConnectionType == client.ConnectionTypePPPoE && cInternal.RouterID != nil && cInternal.PPPoEUsername != nil && pass != "" && cInternal.ServicePackageID != nil {
+			pkg, err := s.servicePackageRepo.GetByID(bgCtx, tID, *cInternal.ServicePackageID)
+			if err == nil {
+				pppoeReq := CreatePPPoESecretRequest{
+					ClientID:      cInternal.ID,
+					RouterID:      *cInternal.RouterID,
+					ProfileID:     pkg.NetworkProfileID,
+					Username:      *cInternal.PPPoEUsername,
+					Password:      pass,
+					LocalAddress:  utils.Value(cInternal.PPPoELocalAddress),
+					RemoteAddress: utils.Value(cInternal.PPPoERemoteAddress),
+					Comment:       utils.Value(cInternal.PPPoEComment),
+				}
+				// We use Create because we cleaned up above, or it will update if exists
+				_, _ = s.pppoeService.CreatePPPoESecret(bgCtx, tID, pppoeReq)
+			}
+		} else if cInternal.ConnectionType == client.ConnectionTypeHotspot && cInternal.VoucherPackageID != nil && cInternal.PPPoEUsername != nil && pass != "" {
+			// Check if voucher with current username exists
+			v, err := s.voucherService.GetVoucherByCode(bgCtx, tID, *cInternal.PPPoEUsername)
+			if err == nil && v != nil {
+				// Update existing voucher
+				req := UpdateVoucherRequest{
+					ID:          v.ID,
+					PackageID:   *cInternal.VoucherPackageID,
+					Code:        *cInternal.PPPoEUsername,
+					Password:    pass,
+					SharedUsers: utils.Value(cInternal.DeviceCount),
+				}
+				_, err := s.voucherService.UpdateVoucher(bgCtx, tID, req)
+				if err != nil {
+					log.Error().Err(err).Str("client", cInternal.Name).Msg("Failed to update hotspot voucher")
+				}
+			} else {
+				// Create new voucher
+				voucherReq := CreateVoucherRequest{
+					PackageID:   *cInternal.VoucherPackageID,
+					RouterID:    cInternal.RouterID,
+					Code:        *cInternal.PPPoEUsername,
+					Password:    pass,
+					Notes:       fmt.Sprintf("Client: %s (%s)", cInternal.Name, cInternal.ClientCode),
+					SharedUsers: utils.Value(cInternal.DeviceCount),
+				}
+				_, err := s.voucherService.CreateVoucher(bgCtx, tID, voucherReq)
+				if err != nil {
+					log.Error().Err(err).Str("client", cInternal.Name).Msg("Failed to create hotspot voucher")
+				}
+			}
+		}
+	}(c, oldConnType, oldUsername, oldRouterID, plainPassword, tenantID)
 
 	return s.toDTO(c), nil
 }
@@ -576,7 +1017,7 @@ func (s *ClientService) GetStats(ctx context.Context, tenantID uuid.UUID) (map[s
 
 // toDTO converts client entity to DTO
 func (s *ClientService) toDTO(c *client.Client) *ClientDTO {
-	return &ClientDTO{
+	dto := &ClientDTO{
 		ID:                     c.ID,
 		TenantID:               c.TenantID,
 		ClientCode:             c.ClientCode,
@@ -587,11 +1028,13 @@ func (s *ClientService) toDTO(c *client.Client) *ClientDTO {
 		Latitude:               c.Latitude,
 		Longitude:              c.Longitude,
 		GroupID:                c.GroupID,
+		DiscountID:             c.DiscountID,
 		Category:               c.Category,
 		ConnectionType:         c.ConnectionType,
 		ServicePackageID:       c.ServicePackageID,
 		VoucherPackageID:       c.VoucherPackageID,
 		DeviceCount:            c.DeviceCount,
+		PackageName:            c.ServicePlan,
 		ServicePlan:            c.ServicePlan,
 		SpeedProfile:           c.SpeedProfile,
 		MonthlyFee:             c.MonthlyFee,
@@ -610,4 +1053,14 @@ func (s *ClientService) toDTO(c *client.Client) *ClientDTO {
 		CreatedAt:              c.CreatedAt,
 		UpdatedAt:              c.UpdatedAt,
 	}
+
+	// Decrypt password if present for management view
+	if c.PPPoEPasswordEnc != nil {
+		dec, err := utils.DecryptStringAESGCM(s.encKey32, *c.PPPoEPasswordEnc)
+		if err == nil {
+			dto.PPPoEPassword = &dec
+		}
+	}
+
+	return dto
 }

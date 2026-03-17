@@ -12,9 +12,7 @@ export function InvoiceFilters() {
   const [clientGroups, setClientGroups] = useState<ClientGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
 
-  useEffect(() => {
-    fetchInvoices();
-  }, [invoiceFilters, fetchInvoices]);
+  // Filters are handled by the parent InvoicesTab component
 
   useEffect(() => {
     const loadGroups = async () => {

@@ -29,6 +29,7 @@ const (
 type Tenant struct {
 	ID            uuid.UUID              `json:"id"`
 	Name          string                 `json:"name"`
+	CompanyName   *string                `json:"company_name,omitempty"`
 	Slug          string                 `json:"slug"`
 	Domain        *string                `json:"domain,omitempty"`
 	Status        Status                 `json:"status"`
@@ -50,33 +51,3 @@ func (t *Tenant) IsActive() bool {
 func (t *Tenant) CanAccess() bool {
 	return t.Status == StatusActive || t.Status == StatusPending
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

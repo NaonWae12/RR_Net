@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	redisclient "github.com/go-redis/redis/v8"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // DependencyValidator validates module dependencies
@@ -25,12 +25,12 @@ func NewDependencyValidator(db *pgxpool.Pool, redis *redisclient.Client) *Depend
 
 // DependencyValidationResult represents the result of a dependency validation
 type DependencyValidationResult struct {
-	Valid       bool
-	Message     string
-	Dependency  string
-	Status      string
-	Errors      []string
-	CheckedAt   time.Time
+	Valid      bool
+	Message    string
+	Dependency string
+	Status     string
+	Errors     []string
+	CheckedAt  time.Time
 }
 
 // ValidateDatabaseDependency validates database dependency
@@ -104,4 +104,3 @@ func (v *DependencyValidator) ValidateAllDependencies(ctx context.Context) (map[
 
 	return results, nil
 }
-

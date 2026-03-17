@@ -12,8 +12,17 @@ import {
   CreateClientLocationRequest,
   UpdateClientLocationRequest,
   ReportOutageRequest,
+  TopologyLink,
 } from "@/lib/api/types";
 import { toApiError } from "@/lib/utils/errors";
+
+export type LinkRoutingMode = "smart" | "direct";
+
+export interface LinkPreference {
+  routingMode: LinkRoutingMode;
+  color?: string;
+  weight?: number;
+}
 
 interface MapsState {
   // ODCs
@@ -28,9 +37,15 @@ interface MapsState {
   clientLocations: ClientLocation[];
   clientLocation: ClientLocation | null;
 
+  // Topology
+  topologyLinks: TopologyLink[];
+
   // Outages
   outages: OutageEvent[];
   outage: OutageEvent | null;
+
+  // Topology Line Preferences
+  linkPreferences: Record<string, LinkPreference>;
 
   // UI State
   loading: boolean;
@@ -66,6 +81,15 @@ interface MapsActions {
   reportOutage: (data: ReportOutageRequest) => Promise<OutageEvent>;
   resolveOutage: (outageId: string) => Promise<void>;
 
+  // Topology actions
+  fetchTopology: () => Promise<void>;
+
+  // Massive parallel fetch
+  fetchAllMapData: (options?: { canViewODC?: boolean; canViewODP?: boolean }) => Promise<void>;
+
+  // Link Preference actions
+  setLinkPreference: (linkId: string, pref: Partial<LinkPreference>) => void;
+
   // Clear
   clearODC: () => void;
   clearODP: () => void;
@@ -80,10 +104,30 @@ export const useMapsStore = create<MapsState & MapsActions>((set, get) => ({
   odp: null,
   clientLocations: [],
   clientLocation: null,
+  topologyLinks: [],
   outages: [],
   outage: null,
   loading: false,
   error: null,
+  linkPreferences: typeof window !== "undefined" 
+    ? JSON.parse(localStorage.getItem("rrnet_link_prefs") || "{}") 
+    : {},
+
+  setLinkPreference: (linkId, pref) => {
+    set((state) => {
+      const newPrefs = {
+        ...state.linkPreferences,
+        [linkId]: {
+          ...(state.linkPreferences[linkId] || { routingMode: "smart" }),
+          ...pref,
+        },
+      };
+      if (typeof window !== "undefined") {
+        localStorage.setItem("rrnet_link_prefs", JSON.stringify(newPrefs));
+      }
+      return { linkPreferences: newPrefs };
+    });
+  },
 
   fetchODCs: async () => {
     // Prevent concurrent calls
@@ -386,6 +430,40 @@ export const useMapsStore = create<MapsState & MapsActions>((set, get) => ({
     } catch (err) {
       set({ error: toApiError(err).message, loading: false });
       throw err;
+    }
+  },
+
+  fetchTopology: async () => {
+    set({ loading: true, error: null });
+    try {
+      const links = await mapsService.getTopology();
+      set({ topologyLinks: links || [], loading: false });
+    } catch (err) {
+      set({ error: toApiError(err).message, loading: false });
+    }
+  },
+
+  fetchAllMapData: async (options = { canViewODC: true, canViewODP: true }) => {
+    set({ loading: true, error: null });
+    try {
+      // Fetch all required data in parallel
+      const [odcsRes, odpsRes, clientsRes, topoRes] = await Promise.allSettled([
+        options.canViewODC ? mapsService.getODCs() : Promise.resolve([]),
+        options.canViewODP ? mapsService.getODPs() : Promise.resolve([]),
+        mapsService.getClientLocations(),
+        mapsService.getTopology(),
+      ]);
+
+      const newState: Partial<MapsState> = { loading: false };
+
+      if (odcsRes.status === "fulfilled") newState.odcs = odcsRes.value;
+      if (odpsRes.status === "fulfilled") newState.odps = odpsRes.value;
+      if (clientsRes.status === "fulfilled") newState.clientLocations = clientsRes.value;
+      if (topoRes.status === "fulfilled") newState.topologyLinks = topoRes.value;
+
+      set(newState);
+    } catch (err) {
+      set({ error: toApiError(err).message, loading: false });
     }
   },
 

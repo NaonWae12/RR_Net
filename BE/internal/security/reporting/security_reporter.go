@@ -12,9 +12,9 @@ import (
 
 // SecurityReporter generates security reports
 type SecurityReporter struct {
-	auditor      *audit.SecurityAuditor
-	scanner      *scanning.DependencyScanner
-	compliance   *compliance.ComplianceValidator
+	auditor    *audit.SecurityAuditor
+	scanner    *scanning.DependencyScanner
+	compliance *compliance.ComplianceValidator
 }
 
 // NewSecurityReporter creates a new security reporter
@@ -43,24 +43,24 @@ type SecurityReport struct {
 
 // SecuritySummary represents a summary of security status
 type SecuritySummary struct {
-	TotalVulnerabilities int
+	TotalVulnerabilities    int
 	CriticalVulnerabilities int
-	HighVulnerabilities   int
-	MediumVulnerabilities int
-	LowVulnerabilities    int
-	ComplianceScore      float64
-	OverallStatus        string // "secure", "at_risk", "critical"
+	HighVulnerabilities     int
+	MediumVulnerabilities   int
+	LowVulnerabilities      int
+	ComplianceScore         float64
+	OverallStatus           string // "secure", "at_risk", "critical"
 }
 
 // GenerateVulnerabilityReport generates a vulnerability report
 func (sr *SecurityReporter) GenerateVulnerabilityReport(ctx context.Context) (*SecurityReport, error) {
 	report := &SecurityReport{
-		ReportID:        fmt.Sprintf("VULN-%d", time.Now().Unix()),
-		ReportType:      "vulnerability",
-		GeneratedAt:     time.Now(),
-		Vulnerabilities: []audit.Vulnerability{},
+		ReportID:          fmt.Sprintf("VULN-%d", time.Now().Unix()),
+		ReportType:        "vulnerability",
+		GeneratedAt:       time.Now(),
+		Vulnerabilities:   []audit.Vulnerability{},
 		ComplianceResults: make(map[string]*compliance.ComplianceResult),
-		Recommendations: []string{},
+		Recommendations:   []string{},
 	}
 
 	// Run security audit
@@ -78,13 +78,13 @@ func (sr *SecurityReporter) GenerateVulnerabilityReport(ctx context.Context) (*S
 	// Convert dependency vulnerabilities to audit vulnerabilities
 	for _, depVuln := range dependencyVulns {
 		vuln := audit.Vulnerability{
-			ID:            depVuln.VulnerabilityID,
-			Type:          "dependency",
-			Severity:      depVuln.Severity,
-			Description:   depVuln.Description,
-			Location:      fmt.Sprintf("%s@%s", depVuln.PackageName, depVuln.Version),
+			ID:             depVuln.VulnerabilityID,
+			Type:           "dependency",
+			Severity:       depVuln.Severity,
+			Description:    depVuln.Description,
+			Location:       fmt.Sprintf("%s@%s", depVuln.PackageName, depVuln.Version),
 			Recommendation: depVuln.Recommendation,
-			Timestamp:     depVuln.Timestamp,
+			Timestamp:      depVuln.Timestamp,
 		}
 		report.Vulnerabilities = append(report.Vulnerabilities, vuln)
 	}
@@ -101,12 +101,12 @@ func (sr *SecurityReporter) GenerateVulnerabilityReport(ctx context.Context) (*S
 // GenerateComplianceReport generates a compliance report
 func (sr *SecurityReporter) GenerateComplianceReport(ctx context.Context) (*SecurityReport, error) {
 	report := &SecurityReport{
-		ReportID:        fmt.Sprintf("COMP-%d", time.Now().Unix()),
-		ReportType:      "compliance",
-		GeneratedAt:     time.Now(),
-		Vulnerabilities: []audit.Vulnerability{},
+		ReportID:          fmt.Sprintf("COMP-%d", time.Now().Unix()),
+		ReportType:        "compliance",
+		GeneratedAt:       time.Now(),
+		Vulnerabilities:   []audit.Vulnerability{},
 		ComplianceResults: make(map[string]*compliance.ComplianceResult),
-		Recommendations: []string{},
+		Recommendations:   []string{},
 	}
 
 	// Validate compliance
@@ -137,12 +137,12 @@ func (sr *SecurityReporter) GenerateComplianceReport(ctx context.Context) (*Secu
 // GenerateSecurityMetricsReport generates a security metrics report
 func (sr *SecurityReporter) GenerateSecurityMetricsReport(ctx context.Context) (*SecurityReport, error) {
 	report := &SecurityReport{
-		ReportID:        fmt.Sprintf("METRICS-%d", time.Now().Unix()),
-		ReportType:      "metrics",
-		GeneratedAt:     time.Now(),
-		Vulnerabilities: []audit.Vulnerability{},
+		ReportID:          fmt.Sprintf("METRICS-%d", time.Now().Unix()),
+		ReportType:        "metrics",
+		GeneratedAt:       time.Now(),
+		Vulnerabilities:   []audit.Vulnerability{},
 		ComplianceResults: make(map[string]*compliance.ComplianceResult),
-		Recommendations: []string{},
+		Recommendations:   []string{},
 	}
 
 	// Run security audit
@@ -247,4 +247,3 @@ func (sr *SecurityReporter) generateComplianceRecommendations(
 
 	return recommendations
 }
-

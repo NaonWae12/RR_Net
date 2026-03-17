@@ -58,6 +58,21 @@ func (h *BillingHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 		s := billing.InvoiceStatus(status)
 		filter.Status = &s
 	}
+	if startDateStr := r.URL.Query().Get("start_date"); startDateStr != "" {
+		if t, err := time.Parse(time.RFC3339, startDateStr); err == nil {
+			filter.StartDate = &t
+		} else if t, err := time.Parse("2006-01-02", startDateStr); err == nil {
+			filter.StartDate = &t
+		}
+	}
+	if endDateStr := r.URL.Query().Get("end_date"); endDateStr != "" {
+		if t, err := time.Parse(time.RFC3339, endDateStr); err == nil {
+			filter.EndDate = &t
+		} else if t, err := time.Parse("2006-01-02", endDateStr); err == nil {
+			filter.EndDate = &t
+		}
+	}
+
 	if page := r.URL.Query().Get("page"); page != "" {
 		if p, err := strconv.Atoi(page); err == nil {
 			filter.Page = p
@@ -252,6 +267,23 @@ func (h *BillingHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
 			filter.PageSize = ps
 		}
 	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		s := billing.PaymentStatus(status)
+		filter.Status = &s
+	}
+
+	if startDate := r.URL.Query().Get("start_date"); startDate != "" {
+		if t, err := time.Parse("2006-01-02", startDate); err == nil {
+			filter.StartDate = &t
+		}
+	}
+	if endDate := r.URL.Query().Get("end_date"); endDate != "" {
+		if t, err := time.Parse("2006-01-02", endDate); err == nil {
+			// Set to end of day to include all payments on that day
+			t = t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			filter.EndDate = &t
+		}
+	}
 
 	payments, total, err := h.billingService.ListPayments(r.Context(), filter)
 	if err != nil {
@@ -378,6 +410,28 @@ func (h *BillingHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(payment)
 }
 
+func (h *BillingHandler) DeletePayment(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	idStr := getPathParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid payment ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.billingService.DeletePayment(r.Context(), id, tenantID); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *BillingHandler) GetInvoicePayments(w http.ResponseWriter, r *http.Request) {
 	idStr := getPathParam(r, "invoice_id")
 	invoiceID, err := uuid.Parse(idStr)
@@ -418,3 +472,126 @@ func (h *BillingHandler) GetBillingSummary(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(summary)
 }
 
+func (h *BillingHandler) GetRevenueAnalytics(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Default to last 6 months if not specified
+	endDate := time.Now()
+	startDate := endDate.AddDate(0, -6, 0)
+	interval := "monthly"
+
+	if sd := r.URL.Query().Get("start_date"); sd != "" {
+		if t, err := time.Parse(time.RFC3339, sd); err == nil {
+			startDate = t
+		} else if t, err := time.Parse("2006-01-02", sd); err == nil {
+			startDate = t
+		}
+	}
+
+	if ed := r.URL.Query().Get("end_date"); ed != "" {
+		if t, err := time.Parse(time.RFC3339, ed); err == nil {
+			endDate = t
+		} else if t, err := time.Parse("2006-01-02", ed); err == nil {
+			endDate = t
+		}
+	}
+
+	if inv := r.URL.Query().Get("interval"); inv != "" {
+		interval = inv
+	}
+
+	analytics, err := h.billingService.GetRevenueAnalytics(r.Context(), tenantID, startDate, endDate, interval)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(analytics)
+}
+
+// ========== Settlement Handlers ==========
+
+func (h *BillingHandler) GetSettlements(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	startDate := time.Now().AddDate(0, 0, -30) // Default last 30 days
+	endDate := time.Now()
+
+	if sd := r.URL.Query().Get("start_date"); sd != "" {
+		if t, err := time.Parse("2006-01-02", sd); err == nil {
+			startDate = t
+		}
+	}
+	if ed := r.URL.Query().Get("end_date"); ed != "" {
+		if t, err := time.Parse("2006-01-02", ed); err == nil {
+			endDate = t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		}
+	}
+
+	// Filter by status if provided
+	var status *billing.PaymentStatus
+	if s := r.URL.Query().Get("status"); s != "" {
+		st := billing.PaymentStatus(s)
+		status = &st
+	}
+
+	// Filter by collector_id if provided (collector views their own history)
+	var collectorID *uuid.UUID
+	if cid := r.URL.Query().Get("collector_id"); cid != "" {
+		if id, err := uuid.Parse(cid); err == nil {
+			collectorID = &id
+		}
+	}
+
+	settlements, err := h.billingService.GetSettlements(r.Context(), tenantID, startDate, endDate, status, collectorID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": settlements,
+	})
+}
+
+func (h *BillingHandler) VerifySettlement(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		CollectorID uuid.UUID `json:"collector_id"`
+		Date        string    `json:"date"` // YYYY-MM-DD
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	date, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid date format"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.billingService.VerifySettlement(r.Context(), tenantID, req.CollectorID, date); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message":"Settlement verified"}`))
+}

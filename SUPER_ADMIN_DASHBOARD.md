@@ -8,6 +8,7 @@ Halaman ini menampilkan overview sistem secara keseluruhan untuk super admin.
 
 #### 1. **Quick Actions Cards** (4 cards di bagian atas)
 - **Manage Tenants**: Menampilkan jumlah total tenants, link ke `/superadmin/tenants`
+- **Manage Affiliates**: Menampilkan jumlah total affiliate partner, link ke `/superadmin/affiliates`
 - **Manage Plans**: Menampilkan jumlah total plans, link ke `/superadmin/plans`
 - **Manage Addons**: Menampilkan jumlah total addons, link ke `/superadmin/addons`
 - **System Monitoring**: Link ke `/superadmin/monitoring`

@@ -9,33 +9,3 @@ var (
 	// ErrInvalidRole is returned when role is not recognized
 	ErrInvalidRole = errors.New("invalid role")
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

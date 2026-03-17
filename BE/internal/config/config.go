@@ -10,11 +10,11 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	App      AppConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	Auth     AuthConfig
-	Server   ServerConfig
+	App       AppConfig
+	Database  DatabaseConfig
+	Redis     RedisConfig
+	Auth      AuthConfig
+	Server    ServerConfig
 	WAGateway WAGatewayConfig
 }
 
@@ -48,12 +48,12 @@ type AuthConfig struct {
 
 // ServerConfig holds HTTP server configuration
 type ServerConfig struct {
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	MaxRequestSize    int64 // Maximum request body size in bytes
-	MaxJSONSize       int64 // Maximum JSON body size in bytes
-	MaxMultipartSize  int64 // Maximum multipart form size in bytes
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
+	IdleTimeout      time.Duration
+	MaxRequestSize   int64 // Maximum request body size in bytes
+	MaxJSONSize      int64 // Maximum JSON body size in bytes
+	MaxMultipartSize int64 // Maximum multipart form size in bytes
 }
 
 // WAGatewayConfig holds WhatsApp gateway integration settings (optional).

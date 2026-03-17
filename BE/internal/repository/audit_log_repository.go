@@ -11,21 +11,21 @@ import (
 
 // AuditLog represents an audit log entry
 type AuditLog struct {
-	ID          uuid.UUID
-	TenantID    *uuid.UUID
-	UserID      *uuid.UUID
-	Action      string
-	Resource    string
-	ResourceID  *uuid.UUID
-	Method      string
-	Path        string
-	IPAddress   string
-	UserAgent   string
-	RequestID   string
-	Status      int
-	Duration    time.Duration
-	Metadata    map[string]interface{}
-	CreatedAt   time.Time
+	ID         uuid.UUID
+	TenantID   *uuid.UUID
+	UserID     *uuid.UUID
+	Action     string
+	Resource   string
+	ResourceID *uuid.UUID
+	Method     string
+	Path       string
+	IPAddress  string
+	UserAgent  string
+	RequestID  string
+	Status     int
+	Duration   time.Duration
+	Metadata   map[string]interface{}
+	CreatedAt  time.Time
 }
 
 // AuditLogRepository handles audit log operations
@@ -75,14 +75,14 @@ func (r *AuditLogRepository) Create(ctx context.Context, log *AuditLog) error {
 
 // List retrieves audit logs with filtering
 type AuditLogFilter struct {
-	TenantID   *uuid.UUID
-	UserID     *uuid.UUID
-	Action     *string
-	Resource   *string
-	StartDate  *time.Time
-	EndDate    *time.Time
-	Limit      int
-	Offset     int
+	TenantID  *uuid.UUID
+	UserID    *uuid.UUID
+	Action    *string
+	Resource  *string
+	StartDate *time.Time
+	EndDate   *time.Time
+	Limit     int
+	Offset    int
 }
 
 // List retrieves audit logs
@@ -197,4 +197,3 @@ func (r *AuditLogRepository) List(ctx context.Context, filter AuditLogFilter) ([
 
 	return logs, total, nil
 }
-

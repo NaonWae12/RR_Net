@@ -6,25 +6,38 @@ import { TenantGuard } from "@/components/auth/TenantGuard";
 import { AppLayout } from "@/components/layout";
 import { useDashboardStore } from "@/stores/dashboardStore";
 import { usePathname, useRouter } from "next/navigation";
+import { 
+  Clock, 
+  ShieldAlert, 
+  LogOut 
+} from "lucide-react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useAuthStore } from "@/stores/authStore";
+import { motion } from "framer-motion";
 
 function TenantFeatureBootstrap({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { data, loading, fetchDashboardData } = useDashboardStore();
+  const { data, loading, bootstrapLoading, fetchBootstrapData, error } = useDashboardStore();
   const { isAuthenticated } = useAuth();
+  const user = useAuthStore((state) => state.user);
 
   const ready = useAuthStore((state) => state.ready);
 
   useEffect(() => {
+    // SECURITY: Kick clients out of Admin Dashboard
+    if (ready && isAuthenticated && user?.role === 'client') {
+       router.replace('/portal/dashboard');
+       return;
+    }
+
     // Ensure we have plan/features/limits available for sidebar gating and route guards.
     // CRITICAL: Only fetch if auth is READY (not just authenticated)
     // This ensures token is fully synced to apiClient before making requests
-    if (ready && isAuthenticated && !data && !loading) {
-      fetchDashboardData();
+    if (ready && isAuthenticated && !data && !loading && !bootstrapLoading && !error) {
+      fetchBootstrapData();
     }
-  }, [data, loading, fetchDashboardData, isAuthenticated, ready]);
+  }, [ready, isAuthenticated, user?.role, fetchBootstrapData, data, loading, bootstrapLoading, error, router]);
 
   useEffect(() => {
     // Wait until we have tenant feature data
@@ -116,6 +129,16 @@ function TenantFeatureBootstrap({ children }: { children: React.ReactNode }) {
       }
     }
   }, [data, loading, pathname, router]);
+
+  useEffect(() => {
+    if (ready && isAuthenticated && user?.tenant_id && useAuthStore.getState().tenant?.status === 'pending' && pathname !== '/waiting-approval') {
+      router.replace('/waiting-approval');
+    }
+  }, [ready, isAuthenticated, user, pathname, router]);
+
+  if (ready && isAuthenticated && user?.tenant_id && useAuthStore.getState().tenant?.status === 'pending') {
+    return null;
+  }
 
   return <>{children}</>;
 }

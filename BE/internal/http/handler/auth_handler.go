@@ -3,12 +3,18 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 
 	"github.com/google/uuid"
 
 	"rrnet/internal/auth"
 	"rrnet/internal/service"
+
+	"github.com/rs/zerolog/log"
 )
 
 // AuthServiceInterface defines the interface for authentication service
@@ -16,18 +22,23 @@ type AuthServiceInterface interface {
 	Login(ctx context.Context, tenantID *uuid.UUID, req *service.LoginRequest) (*service.LoginResponse, error)
 	RefreshToken(ctx context.Context, req *service.RefreshTokenRequest) (*service.LoginResponse, error)
 	Register(ctx context.Context, tenantID uuid.UUID, roleCode string, req *service.RegisterRequest) (*service.UserDTO, error)
-	GetProfile(ctx context.Context, userID uuid.UUID) (*service.UserDTO, error)
+	GetProfile(ctx context.Context, userID uuid.UUID) (*service.ProfileResponse, error)
 	ChangePassword(ctx context.Context, userID uuid.UUID, req *service.ChangePasswordRequest) error
+	OAuthLogin(ctx context.Context, oauthUser *auth.OAuthUser) (*service.LoginResponse, error)
 }
 
 // AuthHandler handles authentication HTTP endpoints
 type AuthHandler struct {
-	authService AuthServiceInterface
+	authService  AuthServiceInterface
+	oauthManager *auth.OAuthManager
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(authService AuthServiceInterface) *AuthHandler {
-	return &AuthHandler{authService: authService}
+func NewAuthHandler(authService AuthServiceInterface, oauthManager *auth.OAuthManager) *AuthHandler {
+	return &AuthHandler{
+		authService:  authService,
+		oauthManager: oauthManager,
+	}
 }
 
 // Login handles POST /api/v1/auth/login
@@ -170,6 +181,86 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// OAuthRedirect handles GET /api/v1/auth/{provider}/login
+func (h *AuthHandler) OAuthRedirect(w http.ResponseWriter, r *http.Request) {
+	provider := auth.OAuthProvider(getPathParam(r, "provider"))
+	state := r.URL.Query().Get("state")
+
+	log.Info().Str("provider", string(provider)).Msg("Handling OAuth redirect")
+
+	url, err := h.oauthManager.GetAuthURL(provider, state)
+	if err != nil {
+		log.Error().Err(err).Str("provider", string(provider)).Msg("Failed to get auth URL")
+		sendError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	log.Info().Str("url", url).Msg("Redirecting to OAuth provider")
+	http.Redirect(w, r, url, http.StatusFound)
+}
+
+// OAuthCallback handles GET /api/v1/auth/{provider}/callback
+func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
+	provider := auth.OAuthProvider(getPathParam(r, "provider"))
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+
+	log.Info().Str("provider", string(provider)).Str("state", state).Msg("Handling OAuth callback")
+
+	config, err := h.oauthManager.GetConfig(provider)
+	if err != nil {
+		log.Error().Err(err).Str("provider", string(provider)).Msg("Failed to get config")
+		sendError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	token, err := config.Exchange(r.Context(), code)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to exchange token")
+		sendError(w, http.StatusBadRequest, "Failed to exchange token")
+		return
+	}
+
+	oauthUser, err := h.oauthManager.GetUserInfo(r.Context(), provider, token)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get user info")
+		sendError(w, http.StatusInternalServerError, "Failed to get user info")
+		return
+	}
+
+	log.Info().Str("email", oauthUser.Email).Msg("OAuth user info retrieved")
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000" // Fallback
+	}
+
+	response, err := h.authService.OAuthLogin(r.Context(), oauthUser)
+	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			// Redirect back to frontend for registration
+			target := fmt.Sprintf("%s/register?email=%s&name=%s&oauth_provider=%s&oauth_id=%s",
+				frontendURL, url.QueryEscape(oauthUser.Email), url.QueryEscape(oauthUser.Name), provider, oauthUser.ID)
+			
+			// If state is present (e.g. plan/billing info), append it
+			if state != "" {
+				target += "&" + state
+			}
+			
+			http.Redirect(w, r, target, http.StatusFound)
+			return
+		}
+		// Error page or redirect with error param
+		http.Redirect(w, r, frontendURL+"/login?error=auth_failed", http.StatusFound)
+		return
+	}
+
+	// Success: Redirect with tokens
+	target := fmt.Sprintf("%s/callback?access_token=%s&refresh_token=%s",
+		frontendURL, response.AccessToken, response.RefreshToken)
+	http.Redirect(w, r, target, http.StatusFound)
+}
+
 // Logout handles POST /api/v1/auth/logout
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Stateless JWT - client discards token
@@ -214,4 +305,3 @@ func getPathParam(r *http.Request, key string) string {
 	}
 	return params[key]
 }
-

@@ -9,6 +9,8 @@ import type {
   CreateInvoiceRequest,
   RecordPaymentRequest,
   TempoTemplate,
+  RevenueAnalytics,
+  Settlement,
 } from "./types";
 
 export const billingService = {
@@ -21,7 +23,9 @@ export const billingService = {
     clientName?: string,
     phone?: string,
     address?: string,
-    groupId?: string
+    groupId?: string,
+    startDate?: string,
+    endDate?: string
   ): Promise<InvoiceListResponse> {
     const params: any = { page, page_size: pageSize };
     if (clientId) params.client_id = clientId;
@@ -30,6 +34,8 @@ export const billingService = {
     if (phone) params.phone = phone;
     if (address) params.address = address;
     if (groupId) params.group_id = groupId;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
 
     const response = await apiClient.get<InvoiceListResponse>("/billing/invoices", { params });
     return response.data;
@@ -70,16 +76,15 @@ export const billingService = {
   },
 
   // ========== Payments ==========
-  async getPayments(
-    page: number = 1,
-    pageSize: number = 20,
-    clientId?: string,
-    method?: string
-  ): Promise<PaymentListResponse> {
-    const params: any = { page, page_size: pageSize };
-    if (clientId) params.client_id = clientId;
-    if (method) params.method = method;
-
+  async getPayments(params?: {
+    page?: number;
+    page_size?: number;
+    client_id?: string;
+    collector_id?: string;
+    method?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<PaymentListResponse> {
     const response = await apiClient.get<PaymentListResponse>("/billing/payments", { params });
     return response.data;
   },
@@ -110,6 +115,15 @@ export const billingService = {
     return response.data;
   },
 
+  async getRevenueAnalytics(params?: {
+    start_date?: string;
+    end_date?: string;
+    interval?: "daily" | "weekly" | "monthly" | "yearly";
+  }): Promise<RevenueAnalytics> {
+    const response = await apiClient.get<RevenueAnalytics>("/billing/revenue-analytics", { params });
+    return response.data;
+  },
+
   // ========== Tempo Templates ==========
   async getTempoTemplates(): Promise<TempoTemplate[]> {
     const response = await apiClient.get<{ data: TempoTemplate[] }>("/billing/tempo-templates");
@@ -129,5 +143,22 @@ export const billingService = {
   async deleteTempoTemplate(id: string): Promise<void> {
     await apiClient.delete(`/billing/tempo-templates/${id}`);
   },
-};
 
+  // ========== Settlements ==========
+  async getSettlements(params?: {
+    start_date?: string;
+    end_date?: string;
+    status?: "pending" | "verified" | "rejected";
+  }): Promise<Settlement[]> {
+    const response = await apiClient.get<{ data: Settlement[] }>("/billing/settlements", { params });
+    return response.data.data || [];
+  },
+
+  async verifySettlement(collectorId: string, date: string): Promise<void> {
+    await apiClient.post("/billing/settlements/verify", { collector_id: collectorId, date });
+  },
+
+  async deletePayment(paymentId: string): Promise<void> {
+    await apiClient.delete(`/billing/payments/${paymentId}`);
+  },
+};

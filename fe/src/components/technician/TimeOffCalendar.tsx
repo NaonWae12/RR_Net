@@ -27,17 +27,28 @@ export function TimeOffCalendar({
     });
   };
 
+  const isStartDate = (date: Date, timeOff: TimeOff): boolean => {
+    const start = parseISO(timeOff.start_date);
+    return isSameDay(date, start);
+  };
+
+  const isEndDate = (date: Date, timeOff: TimeOff): boolean => {
+    const end = parseISO(timeOff.end_date);
+    return isSameDay(date, end);
+  };
+
   const getStatusColor = (timeOff: TimeOff | undefined): string => {
-    if (!timeOff) return "bg-slate-100 border-slate-300";
+    if (!timeOff) return "";
+    
     switch (timeOff.status) {
       case "approved":
-        return "bg-green-100 border-green-300";
+        return "bg-green-200 border-green-400";
       case "rejected":
-        return "bg-red-100 border-red-300";
+        return "bg-red-200 border-red-400";
       case "pending_approval":
-        return "bg-yellow-100 border-yellow-300";
+        return "bg-yellow-200 border-yellow-400";
       default:
-        return "bg-slate-100 border-slate-300";
+        return "";
     }
   };
 
@@ -62,7 +73,7 @@ export function TimeOffCalendar({
       </h2>
 
       {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1">
         {/* Day Headers */}
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
           <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">
@@ -72,34 +83,52 @@ export function TimeOffCalendar({
 
         {/* Empty cells for days before month start */}
         {Array.from({ length: monthStart.getDay() }).map((_, idx) => (
-          <div key={`empty-${idx}`} className="h-10" />
+          <div key={`empty-${idx}`} className="h-12" />
         ))}
 
         {/* Days in month */}
         {daysInMonth.map((day) => {
           const timeOff = getTimeOffForDate(day);
           const isToday = isSameDay(day, new Date());
+          const isStart = timeOff ? isStartDate(day, timeOff) : false;
+          const isEnd = timeOff ? isEndDate(day, timeOff) : false;
           const colorClass = getStatusColor(timeOff);
           const typeLabel = getTypeLabel(timeOff);
 
+          // Determine border radius based on position in range
+          let roundedClass = "";
+          if (timeOff) {
+            if (isStart && isEnd) {
+              roundedClass = "rounded-lg"; // Single day
+            } else if (isStart) {
+              roundedClass = "rounded-l-lg"; // Start of range
+            } else if (isEnd) {
+              roundedClass = "rounded-r-lg"; // End of range
+            }
+            // Middle dates get no rounding
+          }
+
           return (
-            <button
-              key={day.toISOString()}
-              onClick={() => onDateClick?.(day)}
-              className={`
-                h-10 rounded-md border-2 text-sm font-medium
-                transition-colors hover:opacity-80
-                ${colorClass}
-                ${isToday ? "ring-2 ring-indigo-500 ring-offset-2" : ""}
-              `}
-            >
-              <div className="flex flex-col items-center justify-center h-full">
-                <span className="text-slate-900 font-medium">{format(day, "d")}</span>
-                {typeLabel && (
-                  <span className="text-xs mt-0.5 font-semibold text-slate-700">{typeLabel}</span>
-                )}
-              </div>
-            </button>
+            <div key={day.toISOString()} className="relative">
+              <button
+                onClick={() => onDateClick?.(day)}
+                className={`
+                  w-full h-12 text-sm font-medium relative z-10
+                  transition-all hover:scale-105
+                  ${timeOff ? `${colorClass} ${roundedClass} border-2` : "bg-slate-50 hover:bg-slate-100 rounded-md"}
+                  ${isToday ? "ring-2 ring-indigo-500 ring-offset-1" : ""}
+                `}
+              >
+                <div className="flex flex-col items-center justify-center h-full">
+                  <span className={`${timeOff ? "text-slate-900 font-semibold" : "text-slate-700"}`}>
+                    {format(day, "d")}
+                  </span>
+                  {typeLabel && (
+                    <span className="text-xs font-bold text-slate-800">{typeLabel}</span>
+                  )}
+                </div>
+              </button>
+            </div>
           );
         })}
       </div>
@@ -107,24 +136,23 @@ export function TimeOffCalendar({
       {/* Legend */}
       <div className="mt-6 flex flex-wrap gap-4 text-xs">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded border-2 bg-green-100 border-green-300" />
-          <span className="text-slate-700">Approved</span>
+          <div className="w-5 h-5 rounded border-2 bg-green-200 border-green-400" />
+          <span className="text-slate-700 font-medium">Approved</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded border-2 bg-yellow-100 border-yellow-300" />
-          <span className="text-slate-700">Pending</span>
+          <div className="w-5 h-5 rounded border-2 bg-yellow-200 border-yellow-400" />
+          <span className="text-slate-700 font-medium">Pending</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded border-2 bg-red-100 border-red-300" />
-          <span className="text-slate-700">Rejected</span>
+          <div className="w-5 h-5 rounded border-2 bg-red-200 border-red-400" />
+          <span className="text-slate-700 font-medium">Rejected</span>
         </div>
         <div className="flex items-center gap-2 ml-4">
-          <span className="font-medium text-slate-700">L</span> = <span className="text-slate-700">Leave <span className="text-xs text-slate-500">(Cuti)</span></span>, <span className="font-medium text-slate-700">S</span> = <span className="text-slate-700">Sick</span>,{" "}
-          <span className="font-medium text-slate-700">E</span> = <span className="text-slate-700">Emergency</span>
+          <span className="font-bold text-slate-700">L</span> = <span className="text-slate-700">Leave <span className="text-xs text-slate-500">(Cuti)</span></span>, 
+          <span className="font-bold text-slate-700 ml-2">S</span> = <span className="text-slate-700">Sick</span>,
+          <span className="font-bold text-slate-700 ml-2">E</span> = <span className="text-slate-700">Emergency</span>
         </div>
       </div>
     </div>
   );
 }
-
-

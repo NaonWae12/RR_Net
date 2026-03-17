@@ -12,11 +12,12 @@ import (
 )
 
 type MapsService struct {
-	odcRepo          *repository.ODCRepository
-	odpRepo          *repository.ODPRepository
-	clientLocRepo    *repository.ClientLocationRepository
-	outageRepo       *repository.OutageRepository
-	topologyRepo     *repository.TopologyRepository
+	odcRepo       *repository.ODCRepository
+	odpRepo       *repository.ODPRepository
+	clientLocRepo *repository.ClientLocationRepository
+	outageRepo    *repository.OutageRepository
+	topologyRepo  *repository.TopologyRepository
+	resellerRepo  *repository.ResellerRepository
 }
 
 func NewMapsService(
@@ -25,6 +26,7 @@ func NewMapsService(
 	clientLocRepo *repository.ClientLocationRepository,
 	outageRepo *repository.OutageRepository,
 	topologyRepo *repository.TopologyRepository,
+	resellerRepo *repository.ResellerRepository,
 ) *MapsService {
 	return &MapsService{
 		odcRepo:       odcRepo,
@@ -32,32 +34,33 @@ func NewMapsService(
 		clientLocRepo: clientLocRepo,
 		outageRepo:    outageRepo,
 		topologyRepo:  topologyRepo,
+		resellerRepo:  resellerRepo,
 	}
 }
 
 // ========== ODC Operations ==========
 
 type CreateODCRequest struct {
-	Name        string  `json:"name"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	CapacityInfo string `json:"capacity_info,omitempty"`
-	Notes       string  `json:"notes,omitempty"`
+	Name         string  `json:"name"`
+	Latitude     float64 `json:"latitude"`
+	Longitude    float64 `json:"longitude"`
+	CapacityInfo string  `json:"capacity_info,omitempty"`
+	Notes        string  `json:"notes,omitempty"`
 }
 
 func (s *MapsService) CreateODC(ctx context.Context, tenantID uuid.UUID, req CreateODCRequest) (*maps.ODC, error) {
 	now := time.Now()
 	odc := &maps.ODC{
-		ID:          uuid.New(),
-		TenantID:    tenantID,
-		Name:        req.Name,
-		Latitude:    req.Latitude,
-		Longitude:   req.Longitude,
+		ID:           uuid.New(),
+		TenantID:     tenantID,
+		Name:         req.Name,
+		Latitude:     req.Latitude,
+		Longitude:    req.Longitude,
 		CapacityInfo: req.CapacityInfo,
-		Notes:       req.Notes,
-		Status:      maps.NodeStatusOK,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Notes:        req.Notes,
+		Status:       maps.NodeStatusOK,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	if err := s.odcRepo.Create(ctx, odc); err != nil {
@@ -76,11 +79,11 @@ func (s *MapsService) ListODCs(ctx context.Context, tenantID uuid.UUID) ([]*maps
 }
 
 type UpdateODCRequest struct {
-	Name        *string  `json:"name,omitempty"`
-	Latitude    *float64 `json:"latitude,omitempty"`
-	Longitude   *float64 `json:"longitude,omitempty"`
-	CapacityInfo *string `json:"capacity_info,omitempty"`
-	Notes       *string  `json:"notes,omitempty"`
+	Name         *string  `json:"name,omitempty"`
+	Latitude     *float64 `json:"latitude,omitempty"`
+	Longitude    *float64 `json:"longitude,omitempty"`
+	CapacityInfo *string  `json:"capacity_info,omitempty"`
+	Notes        *string  `json:"notes,omitempty"`
 }
 
 func (s *MapsService) UpdateODC(ctx context.Context, id uuid.UUID, req UpdateODCRequest) (*maps.ODC, error) {
@@ -180,11 +183,11 @@ func (s *MapsService) ListODPsByODC(ctx context.Context, odcID uuid.UUID) ([]*ma
 }
 
 type UpdateODPRequest struct {
-	Name      *string    `json:"name,omitempty"`
-	Latitude  *float64   `json:"latitude,omitempty"`
-	Longitude *float64   `json:"longitude,omitempty"`
-	PortCount *int       `json:"port_count,omitempty"`
-	Notes     *string    `json:"notes,omitempty"`
+	Name      *string  `json:"name,omitempty"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
+	PortCount *int     `json:"port_count,omitempty"`
+	Notes     *string  `json:"notes,omitempty"`
 }
 
 func (s *MapsService) UpdateODP(ctx context.Context, id uuid.UUID, req UpdateODPRequest) (*maps.ODP, error) {
@@ -225,13 +228,13 @@ func (s *MapsService) DeleteODP(ctx context.Context, id uuid.UUID) error {
 // ========== Client Location Operations ==========
 
 type CreateClientLocationRequest struct {
-	ClientID       uuid.UUID            `json:"client_id"`
-	ODPID          uuid.UUID            `json:"odp_id"`
-	Latitude       float64              `json:"latitude"`
-	Longitude      float64              `json:"longitude"`
-	ConnectionType maps.ConnectionType  `json:"connection_type"`
-	SignalInfo     string               `json:"signal_info,omitempty"`
-	Notes          string                `json:"notes,omitempty"`
+	ClientID       uuid.UUID           `json:"client_id"`
+	ODPID          uuid.UUID           `json:"odp_id"`
+	Latitude       float64             `json:"latitude"`
+	Longitude      float64             `json:"longitude"`
+	ConnectionType maps.ConnectionType `json:"connection_type"`
+	SignalInfo     string              `json:"signal_info,omitempty"`
+	Notes          string              `json:"notes,omitempty"`
 }
 
 func (s *MapsService) CreateClientLocation(ctx context.Context, tenantID uuid.UUID, req CreateClientLocationRequest) (*maps.ClientLocation, error) {
@@ -303,7 +306,8 @@ type UpdateClientLocationRequest struct {
 	Longitude      *float64             `json:"longitude,omitempty"`
 	ConnectionType *maps.ConnectionType `json:"connection_type,omitempty"`
 	SignalInfo     *string              `json:"signal_info,omitempty"`
-	Notes          *string               `json:"notes,omitempty"`
+	Notes          *string              `json:"notes,omitempty"`
+	ResellerRadius *int                 `json:"reseller_radius,omitempty"`
 }
 
 func (s *MapsService) UpdateClientLocation(ctx context.Context, id uuid.UUID, req UpdateClientLocationRequest) (*maps.ClientLocation, error) {
@@ -336,6 +340,16 @@ func (s *MapsService) UpdateClientLocation(ctx context.Context, id uuid.UUID, re
 
 	if err := s.clientLocRepo.Update(ctx, loc); err != nil {
 		return nil, fmt.Errorf("failed to update client location: %w", err)
+	}
+
+	// Update reseller radius if requested
+	if req.ResellerRadius != nil {
+		res, err := s.resellerRepo.GetByClientID(ctx, loc.TenantID, loc.ClientID)
+		if err == nil {
+			res.ResellerRadius = *req.ResellerRadius
+			res.UpdatedAt = time.Now()
+			_ = s.resellerRepo.Update(ctx, res)
+		}
 	}
 
 	// Update ODP port counts if ODP changed
@@ -376,16 +390,16 @@ type ReportOutageRequest struct {
 func (s *MapsService) ReportOutage(ctx context.Context, tenantID, userID uuid.UUID, req ReportOutageRequest) (*maps.OutageEvent, error) {
 	now := time.Now()
 	outage := &maps.OutageEvent{
-		ID:          uuid.New(),
-		TenantID:    tenantID,
-		NodeType:    req.NodeType,
-		NodeID:      req.NodeID,
-		Reason:      req.Reason,
-		ReportedBy:  userID,
-		ReportedAt:  now,
-		IsResolved:  false,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:         uuid.New(),
+		TenantID:   tenantID,
+		NodeType:   req.NodeType,
+		NodeID:     req.NodeID,
+		Reason:     req.Reason,
+		ReportedBy: userID,
+		ReportedAt: now,
+		IsResolved: false,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 
 	// Update node status
@@ -535,4 +549,3 @@ func (s *MapsService) GetOutage(ctx context.Context, id uuid.UUID) (*maps.Outage
 func (s *MapsService) GetTopology(ctx context.Context, tenantID uuid.UUID) ([]*maps.TopologyLink, error) {
 	return s.topologyRepo.ListByTenant(ctx, tenantID)
 }
-

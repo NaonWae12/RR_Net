@@ -27,7 +27,9 @@ func TestCompleteBillingCycle(t *testing.T) {
 	servicePackageRepo := repository.NewServicePackageRepository(tc.DB)
 
 	// Create billing service
-	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo)
+	discountRepo := repository.NewDiscountRepository(tc.DB)
+
+	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 
 	// Step 1: Create tenant
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")
@@ -111,7 +113,9 @@ func TestIsolirWorkflow(t *testing.T) {
 	servicePackageRepo := repository.NewServicePackageRepository(tc.DB)
 
 	// Create billing service
-	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo)
+	discountRepo := repository.NewDiscountRepository(tc.DB)
+
+	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 
 	// Step 1: Create tenant with client
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")
@@ -186,7 +190,9 @@ func TestCollector3PhaseFlow(t *testing.T) {
 	servicePackageRepo := repository.NewServicePackageRepository(tc.DB)
 
 	// Create billing service
-	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo)
+	discountRepo := repository.NewDiscountRepository(tc.DB)
+
+	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 
 	// Step 1: Create tenant with cash clients
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")
@@ -304,4 +310,3 @@ func TestCollector3PhaseFlow(t *testing.T) {
 	assert.Len(t, paymentList2, 1)
 	assert.Equal(t, "collector", string(paymentList2[0].Method))
 }
-

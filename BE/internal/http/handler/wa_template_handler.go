@@ -142,5 +142,3 @@ func (h *WATemplateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	sendJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
-
-

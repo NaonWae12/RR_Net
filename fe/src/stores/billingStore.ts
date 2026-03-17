@@ -17,7 +17,11 @@ interface BillingState {
   summary: BillingSummary | null;
   
   // UI State
-  loading: boolean;
+  loadingInvoices: boolean;
+  loadingPayments: boolean;
+  loadingSummary: boolean;
+  loadingOverdue: boolean;
+  loading: boolean; // Legacy global flag, will be updated by individual flags
   error: string | null;
   
   // Pagination
@@ -40,6 +44,8 @@ interface BillingState {
     address?: string;
     group_id?: string;
     status?: string;
+    start_date?: string;
+    end_date?: string;
   };
   paymentFilters: {
     client_id?: string;
@@ -75,6 +81,7 @@ interface BillingActions {
   // Clear
   clearInvoice: () => void;
   clearPayment: () => void;
+  reset: () => void;
 }
 
 export const useBillingStore = create<BillingState & BillingActions>((set, get) => ({
@@ -84,6 +91,10 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   payments: [],
   payment: null,
   summary: null,
+  loadingInvoices: false,
+  loadingPayments: false,
+  loadingSummary: false,
+  loadingOverdue: false,
   loading: false,
   error: null,
   invoicePagination: {
@@ -98,40 +109,53 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   },
   invoiceFilters: {},
   paymentFilters: {},
-
+  
   fetchInvoices: async () => {
-    // Prevent concurrent calls
-    const state = get();
-    if (state.loading) {
-      return; // Already fetching, skip this call
-    }
+    if (get().loadingInvoices) return; // Prevention
     
-    set({ loading: true, error: null });
+    set({ loadingInvoices: true, loading: true, error: null });
+    
+    // Safety timeout
+    const timeoutId = setTimeout(() => {
+      set({ loadingInvoices: false, loading: get().loadingPayments || get().loadingSummary || get().loadingOverdue });
+    }, 15000);
+
     try {
       const { page, page_size } = get().invoicePagination;
-      const { client_id, client_name, phone, address, group_id, status } = get().invoiceFilters;
-      const response = await billingService.getInvoices(page, page_size, client_id, status, client_name, phone, address, group_id);
+      const { client_id, client_name, phone, address, group_id, status, start_date, end_date } = get().invoiceFilters;
+      const response = await billingService.getInvoices(page, page_size, client_id, status, client_name, phone, address, group_id, start_date, end_date);
       set({
         invoices: response.data || [],
         invoicePagination: { ...get().invoicePagination, total: response.total || 0 },
-        loading: false,
+        loadingInvoices: false,
+        loading: get().loadingPayments || get().loadingSummary || get().loadingOverdue,
       });
+      clearTimeout(timeoutId);
     } catch (err) {
+      clearTimeout(timeoutId);
       set({ 
         error: toApiError(err).message, 
-        loading: false,
-        invoices: [], // Ensure invoices is always an array
+        loadingInvoices: false,
+        loading: get().loadingPayments || get().loadingSummary || get().loadingOverdue,
+        invoices: [], 
       });
     }
   },
 
   fetchInvoice: async (id: string) => {
+    if (id === 'create') return; // Prevent fetching 'create' as ID
     set({ loading: true, error: null });
     try {
       const invoice = await billingService.getInvoice(id);
-      set({ invoice, loading: false });
+      set({ 
+        invoice, 
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingSummary || get().loadingOverdue 
+      });
     } catch (err) {
-      set({ error: toApiError(err).message, loading: false });
+      set({ 
+        error: toApiError(err).message, 
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingSummary || get().loadingOverdue 
+      });
       throw err;
     }
   },
@@ -169,14 +193,28 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   },
 
   fetchOverdueInvoices: async () => {
-    set({ loading: true, error: null });
+    if (get().loadingOverdue) return;
+    set({ loadingOverdue: true, loading: true, error: null });
+    
+    // Safety timeout
+    const timeoutId = setTimeout(() => {
+      set({ loadingOverdue: false, loading: get().loadingInvoices || get().loadingPayments || get().loadingSummary });
+    }, 15000);
+
     try {
       const invoices = await billingService.getOverdueInvoices();
-      set({ overdueInvoices: invoices || [], loading: false });
+      clearTimeout(timeoutId);
+      set({ 
+        overdueInvoices: invoices || [], 
+        loadingOverdue: false,
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingSummary,
+      });
     } catch (err) {
+      clearTimeout(timeoutId);
       set({ 
         error: toApiError(err).message, 
-        loading: false,
+        loadingOverdue: false,
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingSummary,
         overdueInvoices: [], // Ensure overdueInvoices is always an array
       });
     }
@@ -216,27 +254,38 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   },
 
   fetchPayments: async () => {
-    // Prevent concurrent calls
-    const state = get();
-    if (state.loading) {
-      return; // Already fetching, skip this call
-    }
+    if (get().loadingPayments) return; // Prevention
     
-    set({ loading: true, error: null });
+    set({ loadingPayments: true, loading: true, error: null });
+    
+    // Safety timeout
+    const timeoutId = setTimeout(() => {
+      set({ loadingPayments: false, loading: get().loadingInvoices || get().loadingSummary || get().loadingOverdue });
+    }, 15000);
+
     try {
       const { page, page_size } = get().paymentPagination;
       const { client_id, method } = get().paymentFilters;
-      const response = await billingService.getPayments(page, page_size, client_id, method);
+      const response = await billingService.getPayments({ 
+        page, 
+        page_size, 
+        client_id, 
+        method 
+      });
       set({
         payments: response.data || [],
         paymentPagination: { ...get().paymentPagination, total: response.total || 0 },
-        loading: false,
+        loadingPayments: false,
+        loading: get().loadingInvoices || get().loadingSummary || get().loadingOverdue,
       });
+      clearTimeout(timeoutId);
     } catch (err) {
+      clearTimeout(timeoutId);
       set({ 
         error: toApiError(err).message, 
-        loading: false,
-        payments: [], // Ensure payments is always an array
+        loadingPayments: false,
+        loading: get().loadingInvoices || get().loadingSummary || get().loadingOverdue,
+        payments: [],
       });
     }
   },
@@ -245,9 +294,15 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
     set({ loading: true, error: null });
     try {
       const payment = await billingService.getPayment(id);
-      set({ payment, loading: false });
+      set({ 
+        payment, 
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingSummary || get().loadingOverdue 
+      });
     } catch (err) {
-      set({ error: toApiError(err).message, loading: false });
+      set({ 
+        error: toApiError(err).message, 
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingSummary || get().loadingOverdue 
+      });
       throw err;
     }
   },
@@ -272,14 +327,29 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
   },
 
   fetchBillingSummary: async () => {
-    // Prevent concurrent calls - use separate loading flag check
-    // Since this can be called independently, we'll allow it even if other operations are loading
-    set({ error: null });
+    if (get().loadingSummary) return;
+    set({ loadingSummary: true, loading: true, error: null });
+    
+    // Safety timeout
+    const timeoutId = setTimeout(() => {
+      set({ loadingSummary: false, loading: get().loadingInvoices || get().loadingPayments || get().loadingOverdue });
+    }, 15000);
+
     try {
       const summary = await billingService.getBillingSummary();
-      set({ summary });
+      clearTimeout(timeoutId);
+      set({ 
+        summary, 
+        loadingSummary: false,
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingOverdue,
+      });
     } catch (err) {
-      set({ error: toApiError(err).message });
+      clearTimeout(timeoutId);
+      set({ 
+        error: toApiError(err).message,
+        loadingSummary: false,
+        loading: get().loadingInvoices || get().loadingPayments || get().loadingOverdue,
+      });
     }
   },
 
@@ -311,5 +381,24 @@ export const useBillingStore = create<BillingState & BillingActions>((set, get) 
 
   clearInvoice: () => set({ invoice: null }),
   clearPayment: () => set({ payment: null }),
+  reset: () => {
+    set({
+      invoices: [],
+      invoice: null,
+      overdueInvoices: [],
+      payments: [],
+      payment: null,
+      summary: null,
+      loadingInvoices: false,
+      loadingPayments: false,
+      loadingSummary: false,
+      loadingOverdue: false,
+      loading: false,
+      error: null,
+      invoiceFilters: {},
+      paymentFilters: {},
+      invoicePagination: { page: 1, page_size: 20, total: 0 },
+      paymentPagination: { page: 1, page_size: 20, total: 0 },
+    });
+  },
 }));
-

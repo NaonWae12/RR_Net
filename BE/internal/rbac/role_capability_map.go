@@ -42,6 +42,8 @@ var RoleCapabilityMap = map[Role][]Capability{
 		CapReportHR,
 		CapReportBill,
 		CapSystemSettings,
+		CapInventoryView,
+		CapInventoryManage,
 	},
 
 	RoleAdmin: {
@@ -58,11 +60,15 @@ var RoleCapabilityMap = map[Role][]Capability{
 		CapNetworkManage,
 		CapMapsView,
 		CapMapsUpdate,
+		CapHRView,
+		CapHRManage,
 		CapTechnicianView,
 		CapCollectorView,
 		CapWAView,
 		CapWASend,
 		CapReportView,
+		CapInventoryView,
+		CapInventoryManage,
 	},
 
 	RoleFinance: {
@@ -73,10 +79,13 @@ var RoleCapabilityMap = map[Role][]Capability{
 		CapCollectorView,
 		CapClientView,
 		CapReportBill,
+		CapHRView,
+		CapInventoryView,
 	},
 
 	RoleHR: {
 		CapUserCreate,
+		CapUserUpdate,
 		CapUserView,
 		CapHRView,
 		CapHRManage,
@@ -87,8 +96,11 @@ var RoleCapabilityMap = map[Role][]Capability{
 		CapNetworkView,
 		CapMapsView,
 		CapClientView,
+		CapClientCreate,
 		CapTechnicianView,
 		CapTechnicianManage,
+		CapInventoryView,
+		CapInventoryManage,
 	},
 
 	RoleCollector: {
@@ -118,33 +130,3 @@ func GetCapabilities(role Role) []Capability {
 func GetCapabilitiesForRoleString(roleStr string) []Capability {
 	return GetCapabilities(Role(roleStr))
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

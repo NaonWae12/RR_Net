@@ -26,6 +26,11 @@ export const employeeService = {
     const res = await apiClient.post("/employees", payload);
     return res.data;
   },
+
+  async update(id: string, payload: Partial<EmployeeUser> & { password?: string }): Promise<{ user: EmployeeUser }> {
+    const res = await apiClient.patch(`/employees/${id}`, payload);
+    return res.data;
+  },
 };
 
 

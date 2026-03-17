@@ -4,7 +4,8 @@ import * as React from "react";
 import { PieChart, LineChart } from "@/components/charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Users, TrendingUp, AlertCircle } from "lucide-react";
+import { Users, TrendingUp, AlertCircle, PieChart as PieIcon, BarChart3 } from "lucide-react";
+import { motion } from "framer-motion";
 
 export interface TenantMetricsData {
   total: number;
@@ -31,16 +32,36 @@ export interface TenantMetricsCardProps {
   className?: string;
 }
 
+const StatBox = ({ label, value, colorClass, icon: Icon }: { label: string; value: number; colorClass: string; icon: any }) => (
+  <motion.div 
+    whileHover={{ y: -2 }}
+    className={cn("flex flex-col p-4 rounded-xl border border-slate-100 bg-white shadow-sm transition-all", colorClass)}
+  >
+    <div className="flex items-center gap-2 mb-2 text-slate-500">
+      <Icon size={14} />
+      <span className="text-[10px] uppercase font-bold tracking-wider">{label}</span>
+    </div>
+    <div className="text-2xl font-bold tracking-tight">{value}</div>
+  </motion.div>
+);
+
 export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
   ({ data, loading, className }) => {
     if (loading) {
       return (
-        <Card className={className}>
-          <CardHeader>
-            <div className="h-6 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+        <Card className={cn("overflow-hidden border-none shadow-sm", className)}>
+          <CardHeader className="pb-2">
+            <div className="h-6 bg-slate-100 animate-pulse rounded w-1/3"></div>
           </CardHeader>
           <CardContent>
-            <div className="h-32 bg-gray-200 rounded animate-pulse"></div>
+            <div className="space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="h-20 bg-slate-50 animate-pulse rounded-xl"></div>
+                <div className="h-20 bg-slate-50 animate-pulse rounded-xl"></div>
+                <div className="h-20 bg-slate-50 animate-pulse rounded-xl"></div>
+              </div>
+              <div className="h-40 bg-slate-50 animate-pulse rounded-xl"></div>
+            </div>
           </CardContent>
         </Card>
       );
@@ -48,10 +69,9 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
 
     if (!data) {
       return (
-        <Card className={className}>
-          <CardContent className="p-6">
-            <p className="text-sm text-slate-600">No tenant data available</p>
-          </CardContent>
+        <Card className={cn("p-6 text-center border-dashed", className)}>
+          <Users className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-sm text-slate-500">No tenant data available</p>
         </Card>
       );
     }
@@ -59,81 +79,74 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
     const pieData = data.planDistribution.map((item, index) => ({
       name: item.planName,
       value: item.count,
-      fill: item.color || `hsl(${(index * 360) / data.planDistribution.length}, 70%, 50%)`,
+      fill: item.color || `hsl(${(index * 137.5) % 360}, 70%, 50%)`, // Better color distribution
     }));
 
     const lineData = data.growthTrend.map((item) => ({
-      date: new Date(item.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      date: new Date(item.date).toLocaleDateString("en-US", { month: "short" }),
       count: item.count,
     }));
 
     return (
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+      <Card className={cn("overflow-hidden border-none shadow-sm h-full", className)}>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-lg font-bold flex items-center gap-2">
+            <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg">
+              <Users className="h-4 w-4" />
+            </div>
             Tenant Metrics
           </CardTitle>
+          <div className={cn("flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full", 
+            data.growth.isPositive ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+          )}>
+            {data.growth.isPositive ? <TrendingUp size={12} /> : <AlertCircle size={12} />}
+            {data.growth.isPositive ? "+" : ""}{data.growth.value}%
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-slate-100 rounded-lg">
-                  <p className="text-2xl font-bold text-slate-900">{data.total}</p>
-                  <p className="text-xs text-slate-600 mt-1">Total</p>
-                </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{data.active}</p>
-                  <p className="text-xs text-green-700 mt-1">Active</p>
-                </div>
-                <div className="text-center p-4 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{data.suspended}</p>
-                  <p className="text-xs text-red-700 mt-1">Suspended</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 p-3 bg-slate-100 rounded-lg">
-                {data.growth.isPositive ? (
-                  <TrendingUp className="h-4 w-4 text-green-600" />
-                ) : (
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                )}
-                <span className="text-sm">
-                  <span className={cn("font-medium", data.growth.isPositive ? "text-green-600" : "text-red-600")}>
-                    {data.growth.isPositive ? "+" : ""}
-                    {data.growth.value}%
-                  </span>
-                  <span className="text-slate-600 ml-1">growth this month</span>
-                </span>
-              </div>
-
-              <div>
-                <h4 className="text-sm font-medium mb-2 text-slate-900">Plan Distribution</h4>
-                <PieChart
-                  data={pieData}
-                  height={200}
-                  donut
-                />
-              </div>
+        <CardContent className="pt-4">
+          <div className="space-y-8">
+            <div className="grid grid-cols-3 gap-3">
+              <StatBox label="Total" value={data.total} icon={Users} colorClass="hover:border-blue-200" />
+              <StatBox label="Active" value={data.active} icon={TrendingUp} colorClass="hover:border-green-200 text-green-600" />
+              <StatBox label="Hold" value={data.suspended} icon={AlertCircle} colorClass="hover:border-red-200 text-red-600" />
             </div>
 
-            <div>
-              <h4 className="text-sm font-medium mb-2 text-slate-900">Growth Trend</h4>
-              <LineChart
-                data={lineData}
-                xAxis={{ dataKey: "date", label: "Date" }}
-                yAxis={{ dataKey: "count", label: "Tenants" }}
-                lines={[
-                  {
-                    dataKey: "count",
-                    name: "Total Tenants",
-                    stroke: "#3b82f6",
-                    strokeWidth: 2,
-                  },
-                ]}
-                height={250}
-              />
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <PieIcon size={14} /> Plan Distribution
+                </h4>
+                <div className="bg-slate-50/50 rounded-xl p-6 min-h-[300px] flex items-center justify-center">
+                  <PieChart
+                    data={pieData}
+                    height={250}
+                    donut
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <BarChart3 size={14} /> Registration Trend
+                </h4>
+                <div className="bg-slate-50/50 rounded-xl p-4 min-h-[250px]">
+                  <LineChart
+                    data={lineData}
+                    xAxis={{ dataKey: "date" }}
+                    yAxis={{ dataKey: "count" }}
+                    margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                    lines={[
+                      {
+                        dataKey: "count",
+                        name: "Tenants",
+                        stroke: "#8b5cf6",
+                        strokeWidth: 3,
+                      },
+                    ]}
+                    height={220}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -141,6 +154,9 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
     );
   }
 );
+
+TenantMetricsCard.displayName = "TenantMetricsCard";
+
 
 TenantMetricsCard.displayName = "TenantMetricsCard";
 

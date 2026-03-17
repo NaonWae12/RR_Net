@@ -34,7 +34,7 @@ export const technicianService = {
   async getTasks(technicianId?: string): Promise<TechnicianTask[]> {
     const params = technicianId ? { technician_id: technicianId } : {};
     const response = await apiClient.get<TaskListResponse>("/technician/tasks", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async getTask(id: string): Promise<TechnicianTask> {
@@ -78,7 +78,7 @@ export const technicianService = {
 
   async getTaskActivityLogs(taskId: string): Promise<ActivityLog[]> {
     const response = await apiClient.get<ActivityLogListResponse>(`/technician/tasks/${taskId}/activities`);
-    return response.data.data;
+    return response.data.data || [];
   },
 
   // ========== Activity Logs ==========
@@ -87,7 +87,7 @@ export const technicianService = {
     if (technicianId) params.technician_id = technicianId;
     if (limit) params.limit = limit;
     const response = await apiClient.get<ActivityLogListResponse>("/technician/activities", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async logActivity(data: LogActivityRequest): Promise<ActivityLog> {
@@ -114,7 +114,7 @@ export const technicianService = {
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
     const response = await apiClient.get<AttendanceListResponse>("/technician/attendance", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async checkIn(data: CheckInRequest): Promise<Attendance> {
@@ -133,7 +133,7 @@ export const technicianService = {
     if (userId) params.user_id = userId;
     if (period) params.period = period;
     const response = await apiClient.get<PayslipListResponse>("/technician/payslips", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async getPayslip(id: string): Promise<Payslip> {
@@ -154,7 +154,7 @@ export const technicianService = {
     if (userId) params.user_id = userId;
     if (status) params.status = status;
     const response = await apiClient.get<ReimbursementListResponse>("/technician/reimbursements", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async getReimbursement(id: string): Promise<Reimbursement> {
@@ -187,7 +187,7 @@ export const technicianService = {
     if (userId) params.user_id = userId;
     if (status) params.status = status;
     const response = await apiClient.get<TimeOffListResponse>("/technician/time-off", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async getTimeOff(id: string): Promise<TimeOff> {
@@ -214,13 +214,17 @@ export const technicianService = {
     return response.data;
   },
 
+  async deleteTimeOff(id: string): Promise<void> {
+    await apiClient.delete(`/technician/time-off/${id}`);
+  },
+
   // ========== Location Submission ==========
   async getLocationSubmissions(userId?: string, status?: string): Promise<LocationSubmission[]> {
     const params: Record<string, any> = {};
     if (userId) params.user_id = userId;
     if (status) params.status = status;
     const response = await apiClient.get<LocationSubmissionListResponse>("/technician/location-submissions", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async createLocationSubmission(data: CreateLocationSubmissionRequest): Promise<LocationSubmission> {
@@ -249,7 +253,7 @@ export const technicianService = {
     if (userId) params.user_id = userId;
     if (status) params.status = status;
     const response = await apiClient.get<ClientSubmissionListResponse>("/technician/client-submissions", { params });
-    return response.data.data;
+    return response.data.data || [];
   },
 
   async getClientSubmission(id: string): Promise<ClientSubmission> {

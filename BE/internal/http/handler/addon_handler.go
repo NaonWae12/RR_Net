@@ -264,4 +264,3 @@ func (h *AddonHandler) GetTenantAddons(w http.ResponseWriter, r *http.Request) {
 		"total":  len(addons),
 	})
 }
-

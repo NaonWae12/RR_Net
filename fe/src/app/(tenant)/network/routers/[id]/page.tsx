@@ -55,6 +55,11 @@ export default function RouterDetailPage() {
         })
         .catch((err) => {
           console.error('[Isolir] Error fetching status:', err);
+          showToast({
+            title: "Network Error",
+            description: err?.message || "Failed to connect to router. Please check your router connectivity and try again.",
+            variant: "error"
+          });
         })
         .finally(() => {
           setStatusLoading(false);

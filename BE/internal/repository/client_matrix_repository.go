@@ -59,7 +59,3 @@ func (r *ClientRepository) ListMatrixClients(ctx context.Context, tenantID uuid.
 	}
 	return out, nil
 }
-
-
-
-

@@ -7,10 +7,11 @@ import (
 
 // HotspotUser represents a Hotspot user configuration for MikroTik
 type HotspotUser struct {
-	Name     string
-	Password string
-	Profile  string // Profile name to assign
-	Comment  string
+	Name        string
+	Password    string
+	Profile     string // Profile name to assign
+	Comment     string
+	SharedUsers int // Limit simultaneous users
 }
 
 // AddHotspotUser adds a Hotspot user to MikroTik router
@@ -35,6 +36,9 @@ func AddHotspotUser(ctx context.Context, addr string, useTLS bool, routerUsernam
 	}
 	if user.Comment != "" {
 		args = append(args, "=comment="+user.Comment)
+	}
+	if user.SharedUsers > 1 {
+		args = append(args, fmt.Sprintf("=limit-shared-users=%d", user.SharedUsers))
 	}
 
 	_, err = client.RunArgs(args)

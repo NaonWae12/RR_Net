@@ -2,6 +2,8 @@ export { ChartContainer } from "./ChartContainer";
 export type { ChartContainerProps, LegendConfig, TooltipConfig } from "./ChartContainer";
 export { LineChart } from "./LineChart";
 export type { LineChartProps, AxisConfig, LineConfig, Annotation } from "./LineChart";
+export { AreaChart } from "./AreaChart";
+export type { AreaChartProps, AreaConfig } from "./AreaChart";
 export { BarChart } from "./BarChart";
 export type { BarChartProps, ChartData } from "./BarChart";
 export { PieChart } from "./PieChart";

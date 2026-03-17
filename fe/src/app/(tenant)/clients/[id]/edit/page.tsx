@@ -24,6 +24,12 @@ export default function EditClientPage() {
     return () => clearSelectedClient();
   }, [id, fetchClient, clearSelectedClient]);
 
+  useEffect(() => {
+    if (client) {
+      // console.log('[DEBUG] EditClientPage - Fetched Client Data:', client);
+    }
+  }, [client]);
+
   const handleSubmit = async (data: UpdateClientRequest) => {
     try {
       const updated = await clientService.updateClient(id, data);

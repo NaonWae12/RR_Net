@@ -23,5 +23,3 @@ func (l *TenantLimiter) acquire(tenantID string) func() {
 	ch <- struct{}{}
 	return func() { <-ch }
 }
-
-

@@ -3,6 +3,7 @@ import path from "node:path";
 import { EventEmitter } from "node:events";
 import pino from "pino";
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
@@ -68,6 +69,7 @@ export class SessionManager {
     const sock = makeWASocket({
       version,
       auth: state,
+      browser: Browsers.macOS("Desktop"),
       printQRInTerminal: false,
       logger: this.log.child({ tenantId }),
       markOnlineOnConnect: false,

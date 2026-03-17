@@ -55,5 +55,3 @@ func getUUIDParam(r *http.Request, key string) (uuid.UUID, bool) {
 
 	return uuid.Nil, false
 }
-
-

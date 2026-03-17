@@ -24,17 +24,20 @@ import (
 )
 
 type NetworkService struct {
-	routerRepo  *repository.RouterRepository
-	profileRepo *repository.NetworkProfileRepository
+	routerRepo    *repository.RouterRepository
+	profileRepo   *repository.NetworkProfileRepository
+	limitResolver *LimitResolver
 }
 
 func NewNetworkService(
 	routerRepo *repository.RouterRepository,
 	profileRepo *repository.NetworkProfileRepository,
+	limitResolver *LimitResolver,
 ) *NetworkService {
 	return &NetworkService{
-		routerRepo:  routerRepo,
-		profileRepo: profileRepo,
+		routerRepo:    routerRepo,
+		profileRepo:   profileRepo,
+		limitResolver: limitResolver,
 	}
 }
 
@@ -86,11 +89,21 @@ type CreateRouterRequest struct {
 	VPNUsername        string                         `json:"vpn_username,omitempty"`
 	VPNPassword        string                         `json:"vpn_password,omitempty"`
 	VPNScript          string                         `json:"vpn_script,omitempty"`
+	DNSName            string                         `json:"dns_name,omitempty"`
 	RemoteAccessPort   int                            `json:"remote_access_port,omitempty"`
 	EnableRemoteAccess bool                           `json:"enable_remote_access"`
 }
 
 func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, req CreateRouterRequest) (*network.Router, error) {
+	// 0. Enforce Limit
+	currentCount, err := s.routerRepo.CountByTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.limitResolver.CanAdd(ctx, tenantID, "max_routers", currentCount, 1) {
+		return nil, fmt.Errorf("router limit reached for this plan")
+	}
+
 	now := time.Now()
 	newID := uuid.New()
 
@@ -126,6 +139,7 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		RadiusEnabled:    true, // default for MVP
 		RadiusSecret:     req.RadiusSecret,
 		NASIdentifier:    nasIdentifier,
+		DNSName:          req.DNSName,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -254,6 +268,15 @@ type ProvisionRouterResponse struct {
 }
 
 func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID, name string) (*ProvisionRouterResponse, error) {
+	// 0. Enforce Limit
+	currentCount, err := s.routerRepo.CountByTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.limitResolver.CanAdd(ctx, tenantID, "max_routers", currentCount, 1) {
+		return nil, fmt.Errorf("router limit reached for this plan")
+	}
+
 	// 1. Find all used ports and IPs across ALL tenants (important for resource uniqueness)
 	// For MVP, we list items in the system.
 	// In production, we should have a more efficient way or a global pool table.
@@ -415,6 +438,7 @@ type UpdateRouterRequest struct {
 	VPNUsername        string                         `json:"vpn_username,omitempty"`
 	VPNPassword        string                         `json:"vpn_password,omitempty"`
 	VPNScript          string                         `json:"vpn_script,omitempty"`
+	DNSName            string                         `json:"dns_name,omitempty"`
 	RemoteAccessPort   int                            `json:"remote_access_port,omitempty"`
 	EnableRemoteAccess *bool                          `json:"enable_remote_access,omitempty"`
 }
@@ -473,6 +497,9 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	if req.VPNScript != "" {
 		router.VPNScript = req.VPNScript
 	}
+	if req.DNSName != "" {
+		router.DNSName = req.DNSName
+	}
 	if req.RemoteAccessPort > 0 {
 		router.RemoteAccessPort = req.RemoteAccessPort
 	}
@@ -523,6 +550,21 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 	router, err := s.routerRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// 0. Cleanup Router Configuration (Best Effort)
+	// Try to remove RR-NET settings from the actual hardware if it's online
+	if router.Type == network.RouterTypeMikroTik && router.Host != "" && router.Username != "" {
+		addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+		cleanupCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		log.Info().Str("router_id", id.String()).Str("addr", addr).Msg("DeleteRouter: Attempting remote cleanup on MikroTik")
+		if err := mikrotik.UninstallSystemConfig(cleanupCtx, addr, router.APIUseTLS, router.Username, router.Password); err != nil {
+			log.Warn().Err(err).Str("router_id", id.String()).Msg("DeleteRouter: Remote cleanup failed or timed out (Best-effort)")
+		} else {
+			log.Info().Str("router_id", id.String()).Msg("DeleteRouter: Remote cleanup successful")
+		}
 	}
 
 	// 1. Cleanup OS Resources (IPTables)

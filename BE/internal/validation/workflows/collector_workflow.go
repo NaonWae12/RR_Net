@@ -129,4 +129,3 @@ func (v *CollectorWorkflowValidator) ValidateCollector3PhaseWorkflow(
 
 	return result, nil
 }
-

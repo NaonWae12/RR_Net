@@ -29,7 +29,7 @@ export function getEffectiveRole(originalRole?: Role): Role | undefined {
   }
 
   try {
-    const contextStr = localStorage.getItem(ROLE_CONTEXT_STORAGE_KEY);
+    const contextStr = sessionStorage.getItem(ROLE_CONTEXT_STORAGE_KEY);
     if (!contextStr) return originalRole;
 
     const context: RoleContext = JSON.parse(contextStr);
@@ -61,7 +61,7 @@ export function setActiveRole(originalRole: Role, targetRole: Role): void {
     switchedAt: new Date().toISOString(),
   };
 
-  localStorage.setItem(ROLE_CONTEXT_STORAGE_KEY, JSON.stringify(context));
+  sessionStorage.setItem(ROLE_CONTEXT_STORAGE_KEY, JSON.stringify(context));
   
   // Dispatch custom event to notify components of role context change
   if (typeof window !== "undefined") {
@@ -73,7 +73,7 @@ export function setActiveRole(originalRole: Role, targetRole: Role): void {
  * Clear role context (return to original role)
  */
 export function clearRoleContext(): void {
-  localStorage.removeItem(ROLE_CONTEXT_STORAGE_KEY);
+  sessionStorage.removeItem(ROLE_CONTEXT_STORAGE_KEY);
   
   // Dispatch custom event to notify components of role context change
   if (typeof window !== "undefined") {
@@ -86,7 +86,7 @@ export function clearRoleContext(): void {
  */
 export function getRoleContext(): RoleContext | null {
   try {
-    const contextStr = localStorage.getItem(ROLE_CONTEXT_STORAGE_KEY);
+    const contextStr = sessionStorage.getItem(ROLE_CONTEXT_STORAGE_KEY);
     if (!contextStr) return null;
 
     return JSON.parse(contextStr) as RoleContext;

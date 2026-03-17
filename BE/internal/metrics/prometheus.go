@@ -11,15 +11,15 @@ import (
 
 // Metrics holds all Prometheus metrics
 type Metrics struct {
-	HTTPRequestsTotal     *prometheus.CounterVec
-	HTTPRequestDuration   *prometheus.HistogramVec
-	HTTPRequestSize       *prometheus.HistogramVec
-	HTTPResponseSize      *prometheus.HistogramVec
-	ActiveConnections     prometheus.Gauge
-	DatabaseConnections   prometheus.Gauge
-	RedisConnections      prometheus.Gauge
-	RateLimitHits         *prometheus.CounterVec
-	CSRFProtectionHits    *prometheus.CounterVec
+	HTTPRequestsTotal   *prometheus.CounterVec
+	HTTPRequestDuration *prometheus.HistogramVec
+	HTTPRequestSize     *prometheus.HistogramVec
+	HTTPResponseSize    *prometheus.HistogramVec
+	ActiveConnections   prometheus.Gauge
+	DatabaseConnections prometheus.Gauge
+	RedisConnections    prometheus.Gauge
+	RateLimitHits       *prometheus.CounterVec
+	CSRFProtectionHits  *prometheus.CounterVec
 }
 
 var (
@@ -152,4 +152,3 @@ func (m *Metrics) SetRedisConnections(count float64) {
 func Handler() http.Handler {
 	return promhttp.Handler()
 }
-

@@ -21,6 +21,7 @@ export function InvoicesTab() {
     fetchOverdueInvoices,
     invoicePagination,
     setInvoicePagination,
+    invoiceFilters,
   } = useBillingStore();
   const { isAuthenticated } = useAuth();
 
@@ -29,7 +30,19 @@ export function InvoicesTab() {
     fetchInvoices();
     fetchBillingSummary();
     fetchOverdueInvoices();
-  }, [fetchInvoices, fetchBillingSummary, fetchOverdueInvoices, invoicePagination.page, invoicePagination.page_size, isAuthenticated]);
+  }, [
+    fetchInvoices,
+    fetchBillingSummary,
+    fetchOverdueInvoices,
+    invoicePagination.page,
+    invoicePagination.page_size,
+    invoiceFilters.client_name,
+    invoiceFilters.phone,
+    invoiceFilters.address,
+    invoiceFilters.group_id,
+    invoiceFilters.status,
+    isAuthenticated
+  ]);
 
   if (error) {
     return <div className="p-6 text-red-600 text-slate-900">Error loading invoices: {error}</div>;

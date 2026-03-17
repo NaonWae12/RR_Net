@@ -27,4 +27,3 @@ func NewClient(addr, password string, db int) *redis.Client {
 func Ping(ctx context.Context, client *redis.Client) error {
 	return client.Ping(ctx).Err()
 }
-

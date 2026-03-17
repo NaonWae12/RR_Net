@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	redisclient "github.com/go-redis/redis/v8"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"rrnet/internal/config"
 	"rrnet/internal/infra/postgres"
@@ -99,4 +99,3 @@ func (tc *TestConfig) TruncateTables(t *testing.T, tables ...string) {
 		}
 	}
 }
-

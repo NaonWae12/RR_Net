@@ -20,13 +20,13 @@ func NewPenetrationTester(testScenarios []string) *PenetrationTester {
 
 // PenetrationTestResult represents the result of a penetration test
 type PenetrationTestResult struct {
-	TestName      string
-	Status        string // "passed", "failed", "warning"
-	Severity      string // "low", "medium", "high", "critical"
-	Description   string
+	TestName        string
+	Status          string // "passed", "failed", "warning"
+	Severity        string // "low", "medium", "high", "critical"
+	Description     string
 	Vulnerabilities []Vulnerability
 	Recommendations []string
-	Timestamp     time.Time
+	Timestamp       time.Time
 }
 
 // RunExternalPenetrationTest runs external penetration tests
@@ -42,13 +42,13 @@ func (pt *PenetrationTester) RunExternalPenetrationTest(ctx context.Context) ([]
 
 	for _, scenario := range pt.testScenarios {
 		result := PenetrationTestResult{
-			TestName:      scenario,
-			Status:        "passed", // Placeholder
-			Severity:      "low",
-			Description:   fmt.Sprintf("Penetration test for %s", scenario),
+			TestName:        scenario,
+			Status:          "passed", // Placeholder
+			Severity:        "low",
+			Description:     fmt.Sprintf("Penetration test for %s", scenario),
 			Vulnerabilities: []Vulnerability{},
 			Recommendations: []string{},
-			Timestamp:     time.Now(),
+			Timestamp:       time.Now(),
 		}
 		results = append(results, result)
 	}
@@ -69,13 +69,13 @@ func (pt *PenetrationTester) RunInternalPenetrationTest(ctx context.Context) ([]
 
 	for _, scenario := range pt.testScenarios {
 		result := PenetrationTestResult{
-			TestName:      scenario,
-			Status:        "passed", // Placeholder
-			Severity:      "low",
-			Description:   fmt.Sprintf("Internal penetration test for %s", scenario),
+			TestName:        scenario,
+			Status:          "passed", // Placeholder
+			Severity:        "low",
+			Description:     fmt.Sprintf("Internal penetration test for %s", scenario),
 			Vulnerabilities: []Vulnerability{},
 			Recommendations: []string{},
-			Timestamp:     time.Now(),
+			Timestamp:       time.Now(),
 		}
 		results = append(results, result)
 	}
@@ -97,17 +97,16 @@ func (pt *PenetrationTester) RunAPIPenetrationTest(ctx context.Context) ([]Penet
 
 	for _, scenario := range pt.testScenarios {
 		result := PenetrationTestResult{
-			TestName:      scenario,
-			Status:        "passed", // Placeholder
-			Severity:      "low",
-			Description:   fmt.Sprintf("API penetration test for %s", scenario),
+			TestName:        scenario,
+			Status:          "passed", // Placeholder
+			Severity:        "low",
+			Description:     fmt.Sprintf("API penetration test for %s", scenario),
 			Vulnerabilities: []Vulnerability{},
 			Recommendations: []string{},
-			Timestamp:     time.Now(),
+			Timestamp:       time.Now(),
 		}
 		results = append(results, result)
 	}
 
 	return results, nil
 }
-

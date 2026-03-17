@@ -29,11 +29,11 @@ func NewTenantRepository(db *pgxpool.Pool) *TenantRepository {
 // Create creates a new tenant
 func (r *TenantRepository) Create(ctx context.Context, t *tenant.Tenant) error {
 	query := `
-		INSERT INTO tenants (id, name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO tenants (id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	_, err := r.db.Exec(ctx, query,
-		t.ID, t.Name, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings, t.CreatedAt, t.UpdatedAt,
+		t.ID, t.Name, t.CompanyName, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings, t.CreatedAt, t.UpdatedAt,
 	)
 	return err
 }
@@ -41,13 +41,13 @@ func (r *TenantRepository) Create(ctx context.Context, t *tenant.Tenant) error {
 // GetByID retrieves a tenant by ID
 func (r *TenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*tenant.Tenant, error) {
 	query := `
-		SELECT id, name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
+		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
 		FROM tenants
-		WHERE id = $1 AND deleted_at IS NULL
+		WHERE id = $1
 	`
 	var t tenant.Tenant
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&t.ID, &t.Name, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+		&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -61,13 +61,13 @@ func (r *TenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*tenant.T
 // GetBySlug retrieves a tenant by slug (subdomain)
 func (r *TenantRepository) GetBySlug(ctx context.Context, slug string) (*tenant.Tenant, error) {
 	query := `
-		SELECT id, name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
+		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
 		FROM tenants
 		WHERE slug = $1 AND deleted_at IS NULL
 	`
 	var t tenant.Tenant
 	err := r.db.QueryRow(ctx, query, slug).Scan(
-		&t.ID, &t.Name, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+		&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -82,11 +82,11 @@ func (r *TenantRepository) GetBySlug(ctx context.Context, slug string) (*tenant.
 func (r *TenantRepository) Update(ctx context.Context, t *tenant.Tenant) error {
 	query := `
 		UPDATE tenants
-		SET name = $2, slug = $3, domain = $4, status = $5, plan_id = $6, billing_status = $7, trial_ends_at = $8, settings = $9, updated_at = NOW()
-		WHERE id = $1 AND deleted_at IS NULL
+		SET name = $2, company_name = $3, slug = $4, domain = $5, status = $6, plan_id = $7, billing_status = $8, trial_ends_at = $9, settings = $10, updated_at = NOW()
+		WHERE id = $1
 	`
 	result, err := r.db.Exec(ctx, query,
-		t.ID, t.Name, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings,
+		t.ID, t.Name, t.CompanyName, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings,
 	)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (r *TenantRepository) UpdateSettings(ctx context.Context, tenantID uuid.UUI
 	query := `
 		UPDATE tenants
 		SET settings = $2, updated_at = NOW()
-		WHERE id = $1 AND deleted_at IS NULL
+		WHERE id = $1
 	`
 	res, err := r.db.Exec(ctx, query, tenantID, settings)
 	if err != nil {
@@ -117,7 +117,7 @@ func (r *TenantRepository) UpdateSettings(ctx context.Context, tenantID uuid.UUI
 // ListAll retrieves all tenants (for super admin)
 func (r *TenantRepository) ListAll(ctx context.Context) ([]*tenant.Tenant, error) {
 	query := `
-		SELECT id, name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
+		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
 		FROM tenants
 		WHERE deleted_at IS NULL
 		ORDER BY created_at DESC
@@ -132,7 +132,7 @@ func (r *TenantRepository) ListAll(ctx context.Context) ([]*tenant.Tenant, error
 	for rows.Next() {
 		var t tenant.Tenant
 		err := rows.Scan(
-			&t.ID, &t.Name, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+			&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -142,9 +142,15 @@ func (r *TenantRepository) ListAll(ctx context.Context) ([]*tenant.Tenant, error
 	return tenants, nil
 }
 
-// SoftDelete soft deletes a tenant
-func (r *TenantRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	query := `UPDATE tenants SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
+// Delete soft-deletes a tenant and mangles the slug to free it up
+func (r *TenantRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	// We mangle the slug by appending the timestamp so the original slug can be reused
+	query := `
+		UPDATE tenants 
+		SET deleted_at = NOW(), 
+		    status = 'deleted',
+		    slug = slug || '_del_' || EXTRACT(EPOCH FROM NOW())::TEXT
+		WHERE id = $1 AND deleted_at IS NULL`
 	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		return err
@@ -155,7 +161,6 @@ func (r *TenantRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// SlugExists checks if a slug is already taken
 func (r *TenantRepository) SlugExists(ctx context.Context, slug string, excludeID *uuid.UUID) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM tenants WHERE slug = $1 AND deleted_at IS NULL`
 	args := []interface{}{slug}
@@ -170,4 +175,3 @@ func (r *TenantRepository) SlugExists(ctx context.Context, slug string, excludeI
 	err := r.db.QueryRow(ctx, query, args...).Scan(&exists)
 	return exists, err
 }
-

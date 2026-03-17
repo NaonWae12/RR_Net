@@ -26,6 +26,15 @@ export const tenantService = {
     });
     return res.data;
   },
+  async getPendingInvoice(): Promise<any> {
+    const res = await apiClient.get("/tenants/pending-invoice");
+    return res.data;
+  },
+  async updatePlan(planCode: string, billingCycle: string = "monthly"): Promise<any> {
+    const res = await apiClient.patch("/tenants/update-plan", { 
+      plan_code: planCode,
+      billing_cycle: billingCycle 
+    });
+    return res.data;
+  },
 };
-
-

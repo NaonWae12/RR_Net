@@ -9,11 +9,11 @@ import (
 // CORSConfig holds CORS configuration
 type CORSConfig struct {
 	AllowedOrigins   []string
-	AllowedMethods  []string
-	AllowedHeaders  []string
-	ExposedHeaders  []string
+	AllowedMethods   []string
+	AllowedHeaders   []string
+	ExposedHeaders   []string
 	AllowCredentials bool
-	MaxAge          int
+	MaxAge           int
 }
 
 // DefaultCORSConfig returns a default CORS configuration
@@ -38,48 +38,47 @@ func DefaultCORSConfig() *CORSConfig {
 func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		
-		// Check if origin is allowed
-		allowed := false
-		var allowedOrigin string
-		if len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*" {
-			// Wildcard is only allowed when AllowCredentials is false
-			allowed = true
-			allowedOrigin = "*"
-		} else {
-			for _, ao := range config.AllowedOrigins {
-				if origin == ao {
-					allowed = true
-					allowedOrigin = origin
-					break
+			origin := r.Header.Get("Origin")
+
+			// Check if origin is allowed
+			allowed := false
+			var allowedOrigin string
+			if len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*" {
+				// Wildcard is only allowed when AllowCredentials is false
+				allowed = true
+				allowedOrigin = "*"
+			} else {
+				for _, ao := range config.AllowedOrigins {
+					if origin == ao {
+						allowed = true
+						allowedOrigin = origin
+						break
+					}
 				}
 			}
-		}
-		
-		// Only set CORS headers if origin is allowed
-		if allowed && allowedOrigin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-			
-			if config.AllowCredentials {
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+			// Only set CORS headers if origin is allowed
+			if allowed && allowedOrigin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+
+				if config.AllowCredentials {
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
+
+				// Expose headers so frontend can read them (including X-CSRF-Token)
+				w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposedHeaders, ", "))
+
+				// Handle preflight requests
+				if r.Method == http.MethodOptions {
+					w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
+					w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
+					w.Header().Set("Access-Control-Max-Age", strconv.Itoa(config.MaxAge))
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
 			}
-			
-			// Expose headers so frontend can read them (including X-CSRF-Token)
-			w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposedHeaders, ", "))
-			
-			// Handle preflight requests
-			if r.Method == http.MethodOptions {
-				w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
-				w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
-				w.Header().Set("Access-Control-Max-Age", strconv.Itoa(config.MaxAge))
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-		}
-		
-		next.ServeHTTP(w, r)
+
+			next.ServeHTTP(w, r)
 		})
 	}
 }
-

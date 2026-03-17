@@ -32,6 +32,7 @@ type User struct {
 	CreatedAt       time.Time              `json:"created_at"`
 	UpdatedAt       time.Time              `json:"updated_at"`
 	DeletedAt       *time.Time             `json:"deleted_at,omitempty"`
+	BaseSalary      float64                `json:"base_salary"`
 
 	// Joined fields (not in DB, populated from joins)
 	Role *Role `json:"role,omitempty"`
@@ -59,33 +60,3 @@ func (u *User) IsSuperAdmin() bool {
 func (u *User) CanLogin() bool {
 	return u.Status == StatusActive && u.DeletedAt == nil
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

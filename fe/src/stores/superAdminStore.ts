@@ -5,10 +5,13 @@ import {
   Plan,
   Addon,
   UpdateTenantRequest,
+  CreateTenantRequest,
   CreatePlanRequest,
   UpdatePlanRequest,
   CreateAddonRequest,
   UpdateAddonRequest,
+  LandingPageSEO,
+  LandingPagePricing,
 } from "@/lib/api/types";
 import { toApiError } from "@/lib/utils/errors";
 
@@ -26,17 +29,28 @@ interface SuperAdminState {
   addon: Addon | null;
 
   // UI State
-  loading: boolean;
+  loading: boolean; // Legacy global loading
+  tenantsLoading: boolean;
+  plansLoading: boolean;
+  addonsLoading: boolean;
   error: string | null;
+
+  // Site Settings
+  seo: LandingPageSEO | null;
+  pricingConfig: LandingPagePricing | null;
 }
 
 interface SuperAdminActions {
   // Tenant actions
   fetchTenants: () => Promise<void>;
   fetchTenant: (id: string) => Promise<void>;
+  createTenant: (data: CreateTenantRequest) => Promise<SuperAdminTenant>;
   updateTenant: (id: string, data: UpdateTenantRequest) => Promise<SuperAdminTenant>;
   suspendTenant: (id: string) => Promise<SuperAdminTenant>;
   unsuspendTenant: (id: string) => Promise<SuperAdminTenant>;
+  approveTenant: (id: string) => Promise<SuperAdminTenant>;
+  rejectTenant: (id: string, reason: string) => Promise<SuperAdminTenant>;
+  deleteTenant: (id: string) => Promise<void>;
 
   // Plan actions
   fetchPlans: () => Promise<void>;
@@ -53,6 +67,12 @@ interface SuperAdminActions {
   updateAddon: (id: string, data: UpdateAddonRequest) => Promise<Addon>;
   deleteAddon: (id: string) => Promise<void>;
 
+  // Site Setting actions
+  fetchSEO: () => Promise<void>;
+  updateSEO: (data: LandingPageSEO) => Promise<void>;
+  fetchPricingConfig: () => Promise<void>;
+  updatePricingConfig: (data: LandingPagePricing) => Promise<void>;
+
   // Clear
   clearTenant: () => void;
   clearPlan: () => void;
@@ -68,26 +88,26 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
     addons: [],
     addon: null,
     loading: false,
+    tenantsLoading: false,
+    plansLoading: false,
+    addonsLoading: false,
     error: null,
+    seo: null,
+    pricingConfig: null,
 
     fetchTenants: async () => {
-      // Prevent concurrent calls
       const state = get();
-      if (state.loading) {
-        return; // Already fetching, skip this call
-      }
+      if (state.tenantsLoading) return;
       
-      set({ loading: true, error: null });
+      set({ tenantsLoading: true, loading: true, error: null });
       try {
         console.log("[superAdminStore] Fetching tenants...");
         const tenants = await superAdminService.getTenants();
         console.log("[superAdminStore] Tenants fetched:", tenants);
-        set({ tenants, loading: false });
+        set({ tenants, tenantsLoading: false, loading: false });
       } catch (err) {
         console.error("[superAdminStore] Error fetching tenants:", err);
-        const apiError = toApiError(err);
-        console.error("[superAdminStore] API Error:", apiError);
-        set({ error: apiError.message, loading: false });
+        set({ error: toApiError(err).message, tenantsLoading: false, loading: false });
       }
     },
 
@@ -96,6 +116,21 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
       try {
         const tenant = await superAdminService.getTenant(id);
         set({ tenant, loading: false });
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+        throw err;
+      }
+    },
+
+    createTenant: async (data: CreateTenantRequest) => {
+      set({ loading: true, error: null });
+      try {
+        const tenant = await superAdminService.createTenant(data);
+        set((state) => ({
+          tenants: [tenant, ...state.tenants],
+          loading: false,
+        }));
+        return tenant;
       } catch (err) {
         set({ error: toApiError(err).message, loading: false });
         throw err;
@@ -150,19 +185,63 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
       }
     },
 
-    fetchPlans: async () => {
-      // Prevent concurrent calls
-      const state = get();
-      if (state.loading) {
-        return; // Already fetching, skip this call
-      }
-      
+    approveTenant: async (id: string) => {
       set({ loading: true, error: null });
       try {
-        const plans = await superAdminService.getPlans();
-        set({ plans, loading: false });
+        const tenant = await superAdminService.approveTenant(id);
+        set((state) => ({
+          tenants: state.tenants.map((t) => (t.id === id ? tenant : t)),
+          tenant: state.tenant?.id === id ? tenant : state.tenant,
+          loading: false,
+        }));
+        return tenant;
       } catch (err) {
         set({ error: toApiError(err).message, loading: false });
+        throw err;
+      }
+    },
+
+    rejectTenant: async (id: string, reason: string) => {
+      set({ loading: true, error: null });
+      try {
+        const tenant = await superAdminService.rejectTenant(id, reason);
+        set((state) => ({
+          tenants: state.tenants.map((t) => (t.id === id ? tenant : t)),
+          tenant: state.tenant?.id === id ? tenant : state.tenant,
+          loading: false,
+        }));
+        return tenant;
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+        throw err;
+      }
+    },
+
+    deleteTenant: async (id: string) => {
+      set({ loading: true, error: null });
+      try {
+        await superAdminService.deleteTenant(id);
+        set((state) => ({
+          tenants: state.tenants.filter((t) => t.id !== id),
+          tenant: state.tenant?.id === id ? null : state.tenant,
+          loading: false,
+        }));
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+        throw err;
+      }
+    },
+
+    fetchPlans: async () => {
+      const state = get();
+      if (state.plansLoading) return;
+      
+      set({ plansLoading: true, loading: true, error: null });
+      try {
+        const plans = await superAdminService.getPlans();
+        set({ plans, plansLoading: false, loading: false });
+      } catch (err) {
+        set({ error: toApiError(err).message, plansLoading: false, loading: false });
       }
     },
 
@@ -235,18 +314,15 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
     },
 
     fetchAddons: async () => {
-      // Prevent concurrent calls
       const state = get();
-      if (state.loading) {
-        return; // Already fetching, skip this call
-      }
+      if (state.addonsLoading) return;
       
-      set({ loading: true, error: null });
+      set({ addonsLoading: true, loading: true, error: null });
       try {
         const addons = await superAdminService.getAddons();
-        set({ addons, loading: false });
+        set({ addons, addonsLoading: false, loading: false });
       } catch (err) {
-        set({ error: toApiError(err).message, loading: false });
+        set({ error: toApiError(err).message, addonsLoading: false, loading: false });
       }
     },
 
@@ -310,5 +386,47 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
     clearTenant: () => set({ tenant: null }),
     clearPlan: () => set({ plan: null }),
     clearAddon: () => set({ addon: null }),
+
+    fetchSEO: async () => {
+      set({ loading: true, error: null });
+      try {
+        const seo = await superAdminService.getSEO();
+        set({ seo, loading: false });
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+      }
+    },
+
+    updateSEO: async (data: LandingPageSEO) => {
+      set({ loading: true, error: null });
+      try {
+        const seo = await superAdminService.updateSEO(data);
+        set({ seo, loading: false });
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+        throw err;
+      }
+    },
+
+    fetchPricingConfig: async () => {
+      set({ loading: true, error: null });
+      try {
+        const pricingConfig = await superAdminService.getPricingConfig();
+        set({ pricingConfig, loading: false });
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+      }
+    },
+
+    updatePricingConfig: async (data: LandingPagePricing) => {
+      set({ loading: true, error: null });
+      try {
+        const pricingConfig = await superAdminService.updatePricingConfig(data);
+        set({ pricingConfig, loading: false });
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+        throw err;
+      }
+    },
   })
 );

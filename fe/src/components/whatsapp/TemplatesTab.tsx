@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNotificationStore } from "@/stores/notificationStore";
 import waTemplateService, { type WATemplate } from "@/lib/api/waTemplateService";
+import { MessageVariableHelper } from "./MessageVariableHelper";
 
 export function TemplatesTab() {
   const { showToast } = useNotificationStore();
@@ -137,6 +138,7 @@ export function TemplatesTab() {
             onChange={(e) => setContent(e.target.value)}
             placeholder="Tulis isi template..."
           />
+          <MessageVariableHelper />
         </div>
       </div>
 

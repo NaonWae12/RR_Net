@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-
 )
 
 // APIValidator validates API contracts between modules
@@ -23,12 +22,12 @@ func NewAPIValidator(h http.Handler) *APIValidator {
 
 // APIValidationResult represents the result of an API validation
 type APIValidationResult struct {
-	Valid       bool
-	Message     string
-	Endpoint    string
-	Method      string
-	StatusCode  int
-	Errors      []string
+	Valid      bool
+	Message    string
+	Endpoint   string
+	Method     string
+	StatusCode int
+	Errors     []string
 }
 
 // ValidateEndpoint validates an API endpoint contract
@@ -109,4 +108,3 @@ func (v *APIValidator) ValidateAPIContract(
 
 	return results, nil
 }
-

@@ -31,11 +31,11 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 // Create creates a new user
 func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 	query := `
-		INSERT INTO users (id, tenant_id, role_id, email, password_hash, name, phone, avatar_url, status, email_verified_at, metadata, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		INSERT INTO users (id, tenant_id, role_id, email, password_hash, name, phone, avatar_url, status, email_verified_at, metadata, base_salary, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	_, err := r.db.Exec(ctx, query,
-		u.ID, u.TenantID, u.RoleID, u.Email, u.PasswordHash, u.Name, u.Phone, u.AvatarURL, u.Status, u.EmailVerifiedAt, u.Metadata, u.CreatedAt, u.UpdatedAt,
+		u.ID, u.TenantID, u.RoleID, u.Email, u.PasswordHash, u.Name, u.Phone, u.AvatarURL, u.Status, u.EmailVerifiedAt, u.Metadata, u.BaseSalary, u.CreatedAt, u.UpdatedAt,
 	)
 	return err
 }
@@ -44,17 +44,17 @@ func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.User, error) {
 	query := `
 		SELECT u.id, u.tenant_id, u.role_id, u.email, u.password_hash, u.name, u.phone, u.avatar_url, u.status, 
-		       u.email_verified_at, u.last_login_at, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+		       u.email_verified_at, u.last_login_at, u.metadata, u.base_salary, u.created_at, u.updated_at, u.deleted_at,
 		       r.id, r.code, r.name, r.description
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
-		WHERE u.id = $1 AND u.deleted_at IS NULL
+		WHERE u.id = $1
 	`
 	var u user.User
 	var role user.Role
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&u.ID, &u.TenantID, &u.RoleID, &u.Email, &u.PasswordHash, &u.Name, &u.Phone, &u.AvatarURL, &u.Status,
-		&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt,
+		&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.BaseSalary, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt,
 		&role.ID, &role.Code, &role.Name, &role.Description,
 	)
 	if err != nil {
@@ -71,11 +71,11 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.User,
 func (r *UserRepository) GetByEmail(ctx context.Context, tenantID *uuid.UUID, email string) (*user.User, error) {
 	query := `
 		SELECT u.id, u.tenant_id, u.role_id, u.email, u.password_hash, u.name, u.phone, u.avatar_url, u.status, 
-		       u.email_verified_at, u.last_login_at, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+		       u.email_verified_at, u.last_login_at, u.metadata, u.base_salary, u.created_at, u.updated_at, u.deleted_at,
 		       r.id, r.code, r.name, r.description
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
-		WHERE u.email = $1 AND u.deleted_at IS NULL
+		WHERE u.email = $1
 	`
 	args := []interface{}{email}
 
@@ -90,7 +90,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, tenantID *uuid.UUID, em
 	var role user.Role
 	err := r.db.QueryRow(ctx, query, args...).Scan(
 		&u.ID, &u.TenantID, &u.RoleID, &u.Email, &u.PasswordHash, &u.Name, &u.Phone, &u.AvatarURL, &u.Status,
-		&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt,
+		&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.BaseSalary, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt,
 		&role.ID, &role.Code, &role.Name, &role.Description,
 	)
 	if err != nil {
@@ -107,7 +107,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, tenantID *uuid.UUID, em
 func (r *UserRepository) GetByEmailAnyTenant(ctx context.Context, email string) (*user.User, error) {
 	query := `
 		SELECT u.id, u.tenant_id, u.role_id, u.email, u.password_hash, u.name, u.phone, u.avatar_url, u.status, 
-		       u.email_verified_at, u.last_login_at, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+		       u.email_verified_at, u.last_login_at, u.metadata, u.base_salary, u.created_at, u.updated_at, u.deleted_at,
 		       r.id, r.code, r.name, r.description
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
@@ -118,7 +118,7 @@ func (r *UserRepository) GetByEmailAnyTenant(ctx context.Context, email string) 
 	var role user.Role
 	err := r.db.QueryRow(ctx, query, email).Scan(
 		&u.ID, &u.TenantID, &u.RoleID, &u.Email, &u.PasswordHash, &u.Name, &u.Phone, &u.AvatarURL, &u.Status,
-		&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt,
+		&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.BaseSalary, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt,
 		&role.ID, &role.Code, &role.Name, &role.Description,
 	)
 	if err != nil {
@@ -131,15 +131,59 @@ func (r *UserRepository) GetByEmailAnyTenant(ctx context.Context, email string) 
 	return &u, nil
 }
 
+// GetByPhone retrieves a user by phone number from any tenant
+func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*user.User, error) {
+	query := `
+		SELECT u.id, u.tenant_id, u.role_id, u.email, u.password_hash, u.name, u.phone, u.avatar_url, u.status, 
+		       u.email_verified_at, u.last_login_at, u.metadata, u.base_salary, u.created_at, u.updated_at, u.deleted_at,
+		       r.id, r.code, r.name, r.description
+		FROM users u
+		JOIN roles r ON u.role_id = r.id
+		WHERE u.phone = $1
+		LIMIT 1
+	`
+	var u user.User
+	var role user.Role
+	err := r.db.QueryRow(ctx, query, phone).Scan(
+		&u.ID, &u.TenantID, &u.RoleID, &u.Email, &u.PasswordHash, &u.Name, &u.Phone, &u.AvatarURL, &u.Status,
+		&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.BaseSalary, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt,
+		&role.ID, &role.Code, &role.Name, &role.Description,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	u.Role = &role
+	return &u, nil
+}
+
+// CheckPhoneExists checks if a phone number is already registered
+func (r *UserRepository) CheckPhoneExists(ctx context.Context, phone string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)`
+	var exists bool
+	err := r.db.QueryRow(ctx, query, phone).Scan(&exists)
+	return exists, err
+}
+
+// CheckEmailExists checks if an email is already registered
+func (r *UserRepository) CheckEmailExists(ctx context.Context, email string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND deleted_at IS NULL)`
+	var exists bool
+	err := r.db.QueryRow(ctx, query, email).Scan(&exists)
+	return exists, err
+}
+
 // Update updates a user
 func (r *UserRepository) Update(ctx context.Context, u *user.User) error {
 	query := `
 		UPDATE users
-		SET role_id = $2, email = $3, name = $4, phone = $5, avatar_url = $6, status = $7, metadata = $8, updated_at = NOW()
-		WHERE id = $1 AND deleted_at IS NULL
+		SET role_id = $2, email = $3, name = $4, phone = $5, avatar_url = $6, status = $7, metadata = $8, base_salary = $9, updated_at = NOW()
+		WHERE id = $1
 	`
 	result, err := r.db.Exec(ctx, query,
-		u.ID, u.RoleID, u.Email, u.Name, u.Phone, u.AvatarURL, u.Status, u.Metadata,
+		u.ID, u.RoleID, u.Email, u.Name, u.Phone, u.AvatarURL, u.Status, u.Metadata, u.BaseSalary,
 	)
 	if err != nil {
 		return err
@@ -152,7 +196,7 @@ func (r *UserRepository) Update(ctx context.Context, u *user.User) error {
 
 // UpdatePassword updates user password
 func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
-	query := `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
+	query := `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`
 	result, err := r.db.Exec(ctx, query, id, passwordHash)
 	if err != nil {
 		return err
@@ -165,14 +209,19 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, id uuid.UUID, passw
 
 // UpdateLastLogin updates last login timestamp
 func (r *UserRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
-	query := `UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
+	query := `UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id)
 	return err
 }
 
-// SoftDelete soft deletes a user
-func (r *UserRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	query := `UPDATE users SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
+// Delete soft-deletes a user and mangles the email to free it up
+func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	query := `
+		UPDATE users 
+		SET deleted_at = NOW(), 
+		    status = 'inactive',
+		    email = email || '_del_' || EXTRACT(EPOCH FROM NOW())::TEXT
+		WHERE id = $1 AND deleted_at IS NULL`
 	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		return err
@@ -181,6 +230,18 @@ func (r *UserRepository) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		return ErrUserNotFound
 	}
 	return nil
+}
+
+// DeleteByTenant soft-deletes all users belonging to a tenant and mangles their emails
+func (r *UserRepository) DeleteByTenant(ctx context.Context, tenantID uuid.UUID) error {
+	query := `
+		UPDATE users 
+		SET deleted_at = NOW(), 
+		    status = 'inactive',
+		    email = email || '_del_' || EXTRACT(EPOCH FROM NOW())::TEXT
+		WHERE tenant_id = $1 AND deleted_at IS NULL`
+	_, err := r.db.Exec(ctx, query, tenantID)
+	return err
 }
 
 // EmailExists checks if email is taken within a tenant
@@ -224,11 +285,11 @@ func (r *UserRepository) GetRoleByCode(ctx context.Context, code string) (*user.
 func (r *UserRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]*user.User, error) {
 	query := `
 		SELECT u.id, u.tenant_id, u.role_id, u.email, u.password_hash, u.name, u.phone, u.avatar_url, u.status,
-		       u.email_verified_at, u.last_login_at, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+		       u.email_verified_at, u.last_login_at, u.metadata, u.base_salary, u.created_at, u.updated_at, u.deleted_at,
 		       r.id, r.code, r.name, r.description
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
-		WHERE u.tenant_id = $1 AND u.deleted_at IS NULL
+		WHERE u.tenant_id = $1
 		ORDER BY u.created_at DESC
 	`
 
@@ -245,7 +306,7 @@ func (r *UserRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) (
 		var deletedAt *time.Time
 		err := rows.Scan(
 			&u.ID, &u.TenantID, &u.RoleID, &u.Email, &u.PasswordHash, &u.Name, &u.Phone, &u.AvatarURL, &u.Status,
-			&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.CreatedAt, &u.UpdatedAt, &deletedAt,
+			&u.EmailVerifiedAt, &u.LastLoginAt, &u.Metadata, &u.BaseSalary, &u.CreatedAt, &u.UpdatedAt, &deletedAt,
 			&role.ID, &role.Code, &role.Name, &role.Description,
 		)
 		if err != nil {
@@ -260,15 +321,3 @@ func (r *UserRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) (
 	}
 	return out, nil
 }
-
-
-
-
-
-
-
-
-
-
-
-

@@ -543,4 +543,3 @@ func (h *MapsHandler) GetTopology(w http.ResponseWriter, r *http.Request) {
 		"total": len(links),
 	})
 }
-

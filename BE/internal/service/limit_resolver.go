@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 
 	"rrnet/internal/domain/addon"
+	"rrnet/internal/domain/feature"
+	"rrnet/internal/domain/plan"
 	"rrnet/internal/repository"
 )
 
@@ -21,6 +23,13 @@ type LimitResolver struct {
 	addonRepo *repository.AddonRepository
 }
 
+// ResolvedData contains pre-fetched data for a tenant request to avoid redundant DB queries
+type ResolvedData struct {
+	Plan    *plan.Plan
+	Addons  []*addon.TenantAddon
+	Toggles []*feature.Toggle
+}
+
 // NewLimitResolver creates a new limit resolver
 func NewLimitResolver(planRepo *repository.PlanRepository, addonRepo *repository.AddonRepository) *LimitResolver {
 	return &LimitResolver{
@@ -32,11 +41,24 @@ func NewLimitResolver(planRepo *repository.PlanRepository, addonRepo *repository
 // Get returns the effective limit for a tenant
 // Returns -1 for unlimited
 func (r *LimitResolver) Get(ctx context.Context, tenantID uuid.UUID, limitName string) int {
+	return r.GetWithData(ctx, tenantID, limitName, nil)
+}
+
+// GetWithData returns the effective limit using pre-fetched data if available
+func (r *LimitResolver) GetWithData(ctx context.Context, tenantID uuid.UUID, limitName string, data *ResolvedData) int {
 	// Get base limit from plan
 	baseLimit := 0
-	plan, err := r.planRepo.GetTenantPlan(ctx, tenantID)
-	if err == nil && plan != nil {
-		baseLimit = plan.GetLimit(limitName)
+	var p *plan.Plan
+	var err error
+
+	if data != nil && data.Plan != nil {
+		p = data.Plan
+	} else {
+		p, err = r.planRepo.GetTenantPlan(ctx, tenantID)
+	}
+
+	if err == nil && p != nil {
+		baseLimit = p.GetLimit(limitName)
 		// If plan has unlimited, return immediately
 		if baseLimit == Unlimited {
 			return Unlimited
@@ -44,7 +66,12 @@ func (r *LimitResolver) Get(ctx context.Context, tenantID uuid.UUID, limitName s
 	}
 
 	// Add boosts from addons
-	boosts := r.getAddonBoosts(ctx, tenantID, limitName)
+	boosts := 0
+	if data != nil && data.Addons != nil {
+		boosts = r.calculateAddonBoosts(data.Addons, limitName)
+	} else {
+		boosts = r.getAddonBoostsFromDB(ctx, tenantID, limitName)
+	}
 
 	return baseLimit + boosts
 }
@@ -87,10 +114,21 @@ func (r *LimitResolver) GetRemaining(ctx context.Context, tenantID uuid.UUID, li
 
 // GetAllLimits returns a map of all limits and their values for a tenant
 func (r *LimitResolver) GetAllLimits(ctx context.Context, tenantID uuid.UUID) map[string]int {
+	return r.GetAllLimitsWithData(ctx, tenantID, nil)
+}
+
+// GetAllLimitsWithData returns all limits using pre-fetched data
+func (r *LimitResolver) GetAllLimitsWithData(ctx context.Context, tenantID uuid.UUID, data *ResolvedData) map[string]int {
+	// Optimization: Pre-fetch data if not provided
+	if data == nil {
+		p, _ := r.planRepo.GetTenantPlan(ctx, tenantID)
+		a, _ := r.addonRepo.GetTenantAddons(ctx, tenantID)
+		data = &ResolvedData{Plan: p, Addons: a}
+	}
+
 	limits := make(map[string]int)
 	limitNames := []string{
 		"max_routers",
-		"max_users",
 		"max_vouchers",
 		"max_odc",
 		"max_odp",
@@ -99,21 +137,24 @@ func (r *LimitResolver) GetAllLimits(ctx context.Context, tenantID uuid.UUID) ma
 	}
 
 	for _, name := range limitNames {
-		limits[name] = r.Get(ctx, tenantID, name)
+		limits[name] = r.GetWithData(ctx, tenantID, name, data)
 	}
 
 	return limits
 }
 
-// getAddonBoosts calculates total limit boost from addons
-func (r *LimitResolver) getAddonBoosts(ctx context.Context, tenantID uuid.UUID, limitName string) int {
-	total := 0
-
+// getAddonBoostsFromDB calculates total limit boost from DB
+func (r *LimitResolver) getAddonBoostsFromDB(ctx context.Context, tenantID uuid.UUID, limitName string) int {
 	tenantAddons, err := r.addonRepo.GetTenantAddons(ctx, tenantID)
 	if err != nil {
 		return 0
 	}
+	return r.calculateAddonBoosts(tenantAddons, limitName)
+}
 
+// calculateAddonBoosts calculates total limit boost from a list of addons
+func (r *LimitResolver) calculateAddonBoosts(tenantAddons []*addon.TenantAddon, limitName string) int {
+	total := 0
 	for _, ta := range tenantAddons {
 		if ta.Addon == nil || ta.Addon.Type != addon.AddonTypeLimitBoost || ta.IsExpired() {
 			continue
@@ -127,8 +168,6 @@ func (r *LimitResolver) getAddonBoosts(ctx context.Context, tenantID uuid.UUID, 
 		switch limitName {
 		case "max_routers":
 			total += boostVal.AddRouters
-		case "max_users":
-			total += boostVal.AddUsers
 		case "max_clients":
 			total += boostVal.AddClients
 		case "max_vouchers":
@@ -148,7 +187,7 @@ func (r *LimitResolver) getAddonBoosts(ctx context.Context, tenantID uuid.UUID, 
 // LimitInfo represents limit information for a tenant
 type LimitInfo struct {
 	Name        string `json:"name"`
-	Limit       int    `json:"limit"`      // -1 = unlimited
+	Limit       int    `json:"limit"` // -1 = unlimited
 	IsUnlimited bool   `json:"unlimited"`
 }
 
@@ -161,5 +200,3 @@ func (r *LimitResolver) GetLimitInfo(ctx context.Context, tenantID uuid.UUID, li
 		IsUnlimited: limit == Unlimited,
 	}
 }
-
-

@@ -64,6 +64,7 @@ type Router struct {
 	VPNUsername         string                 `json:"vpn_username,omitempty"`
 	VPNPassword         string                 `json:"vpn_password,omitempty"`
 	VPNScript           string                 `json:"vpn_script,omitempty"`
+	DNSName             string                 `json:"dns_name,omitempty"`
 	CreatedAt           time.Time              `json:"created_at"`
 	UpdatedAt           time.Time              `json:"updated_at"`
 	DeletedAt           *time.Time             `json:"deleted_at,omitempty"`

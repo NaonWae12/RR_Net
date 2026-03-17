@@ -50,7 +50,7 @@ func (h *DiscountHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendJSON(w, http.StatusOK, map[string]interface{}{
-		"data": items,
+		"data":  items,
 		"total": len(items),
 	})
 }
@@ -209,4 +209,3 @@ func (h *DiscountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	sendJSON(w, http.StatusOK, map[string]string{"message": "Discount deleted successfully"})
 }
-

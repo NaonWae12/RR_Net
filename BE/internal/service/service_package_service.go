@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	ErrServicePackageNameRequired   = errors.New("service package name is required")
+	ErrServicePackageNameRequired    = errors.New("service package name is required")
 	ErrServicePackageInvalidCategory = errors.New("invalid service package category")
 	ErrServicePackageInvalidPricing  = errors.New("invalid pricing model for category")
 	ErrServicePackageProfileRequired = errors.New("network profile is required")
@@ -29,31 +29,31 @@ func NewServicePackageService(repo *repository.ServicePackageRepository) *Servic
 }
 
 type CreateServicePackageRequest struct {
-	Name              string                      `json:"name"`
+	Name              string                       `json:"name"`
 	Category          service_package.Category     `json:"category"`
 	PricingModel      service_package.PricingModel `json:"pricing_model"`
-	PriceMonthly      float64                     `json:"price_monthly,omitempty"`
-	PricePerDevice    float64                     `json:"price_per_device,omitempty"`
-	BillingDayDefault *int                        `json:"billing_day_default,omitempty"`
-	NetworkProfileID  uuid.UUID                   `json:"network_profile_id"`
-	IsActive          bool                        `json:"is_active"`
+	PriceMonthly      float64                      `json:"price_monthly,omitempty"`
+	PricePerDevice    float64                      `json:"price_per_device,omitempty"`
+	BillingDayDefault *int                         `json:"billing_day_default,omitempty"`
+	NetworkProfileID  uuid.UUID                    `json:"network_profile_id"`
+	IsActive          bool                         `json:"is_active"`
 	Metadata          map[string]interface{}       `json:"metadata,omitempty"`
 }
 
 type UpdateServicePackageRequest = CreateServicePackageRequest
 
 type ServicePackageDTO struct {
-	ID               uuid.UUID                   `json:"id"`
-	Name             string                      `json:"name"`
+	ID                uuid.UUID                    `json:"id"`
+	Name              string                       `json:"name"`
 	Category          service_package.Category     `json:"category"`
 	PricingModel      service_package.PricingModel `json:"pricing_model"`
-	PriceMonthly      float64                     `json:"price_monthly"`
-	PricePerDevice    float64                     `json:"price_per_device"`
-	BillingDayDefault *int                        `json:"billing_day_default,omitempty"`
-	NetworkProfileID  uuid.UUID                   `json:"network_profile_id"`
-	IsActive          bool                        `json:"is_active"`
-	CreatedAt         time.Time                   `json:"created_at"`
-	UpdatedAt         time.Time                   `json:"updated_at"`
+	PriceMonthly      float64                      `json:"price_monthly"`
+	PricePerDevice    float64                      `json:"price_per_device"`
+	BillingDayDefault *int                         `json:"billing_day_default,omitempty"`
+	NetworkProfileID  uuid.UUID                    `json:"network_profile_id"`
+	IsActive          bool                         `json:"is_active"`
+	CreatedAt         time.Time                    `json:"created_at"`
+	UpdatedAt         time.Time                    `json:"updated_at"`
 }
 
 func (s *ServicePackageService) Create(ctx context.Context, tenantID uuid.UUID, req *CreateServicePackageRequest) (*ServicePackageDTO, error) {
@@ -79,9 +79,9 @@ func (s *ServicePackageService) Create(ctx context.Context, tenantID uuid.UUID, 
 	metadataJSON, _ := json.Marshal(req.Metadata)
 
 	p := &service_package.ServicePackage{
-		ID:               uuid.New(),
+		ID:                uuid.New(),
 		TenantID:          tenantID,
-		Name:             req.Name,
+		Name:              req.Name,
 		Category:          req.Category,
 		PricingModel:      req.PricingModel,
 		PriceMonthly:      req.PriceMonthly,
@@ -142,9 +142,9 @@ func (s *ServicePackageService) Update(ctx context.Context, tenantID, id uuid.UU
 	metadataJSON, _ := json.Marshal(req.Metadata)
 
 	p := &service_package.ServicePackage{
-		ID:               id,
+		ID:                id,
 		TenantID:          tenantID,
-		Name:             req.Name,
+		Name:              req.Name,
 		Category:          req.Category,
 		PricingModel:      req.PricingModel,
 		PriceMonthly:      req.PriceMonthly,
@@ -168,8 +168,8 @@ func (s *ServicePackageService) Delete(ctx context.Context, tenantID, id uuid.UU
 
 func toServicePackageDTO(p *service_package.ServicePackage) *ServicePackageDTO {
 	return &ServicePackageDTO{
-		ID:               p.ID,
-		Name:             p.Name,
+		ID:                p.ID,
+		Name:              p.Name,
 		Category:          p.Category,
 		PricingModel:      p.PricingModel,
 		PriceMonthly:      p.PriceMonthly,
@@ -204,5 +204,3 @@ func validatePackageReq(category service_package.Category, pricing service_packa
 		return ErrServicePackageInvalidCategory
 	}
 }
-
-

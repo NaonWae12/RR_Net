@@ -187,5 +187,3 @@ func (h *ServicePackageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	sendJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
-
-

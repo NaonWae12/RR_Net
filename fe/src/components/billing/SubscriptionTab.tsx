@@ -24,10 +24,10 @@ export function SubscriptionTab() {
   const { data, loading, error, fetchDashboardData } = useDashboardStore();
 
   useEffect(() => {
-    if (!data && !loading) {
+    if (!data && !loading && !error) {
       fetchDashboardData();
     }
-  }, [data, loading, fetchDashboardData]);
+  }, [fetchDashboardData, data, loading, error]); // Keep dependencies but the condition will stop it
 
   const plan = data?.plan;
 

@@ -44,7 +44,7 @@ export default function CreateTaskPage() {
 
   // Allow technician to create task (submission-based)
   return (
-    <RoleGuard allowedRoles={["owner", "admin", "technician"]} redirectTo="/technician/tasks">
+    <RoleGuard allowedRoles={["technician"]} redirectTo="/dashboard">
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <Button variant="outline" onClick={handleCancel}>

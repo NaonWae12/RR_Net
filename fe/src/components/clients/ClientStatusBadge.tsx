@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-type ClientStatus = 'active' | 'isolir' | 'suspended' | 'terminated';
+type ClientStatus = 'active' | 'pending' | 'isolir' | 'suspended' | 'terminated';
 
 interface ClientStatusBadgeProps {
   status: ClientStatus;
@@ -13,6 +13,10 @@ const statusConfig: Record<ClientStatus, { label: string; className: string }> =
   active: {
     label: 'Active',
     className: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  },
+  pending: {
+    label: 'Pending',
+    className: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   },
   isolir: {
     label: 'Isolir',
@@ -44,6 +48,7 @@ export function ClientStatusBadge({ status, size = 'md' }: ClientStatusBadgeProp
           mr-1.5 rounded-full
           ${size === 'sm' ? 'h-1.5 w-1.5' : 'h-2 w-2'}
           ${status === 'active' ? 'bg-emerald-500' : ''}
+          ${status === 'pending' ? 'bg-indigo-500' : ''}
           ${status === 'isolir' ? 'bg-amber-500' : ''}
           ${status === 'suspended' ? 'bg-red-500' : ''}
           ${status === 'terminated' ? 'bg-slate-900' : ''}

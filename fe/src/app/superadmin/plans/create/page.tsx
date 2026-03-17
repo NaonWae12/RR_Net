@@ -36,13 +36,16 @@ export default function CreatePlanPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={handleCancel}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Plans
         </Button>
       </div>
-      <h1 className="text-2xl font-bold text-slate-900">Create New Plan</h1>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Create New Plan</h1>
+        <p className="text-slate-500">Define a new subscription plan for tenants.</p>
+      </div>
       <CreateEditPlanForm onSubmit={handleSubmit} onCancel={handleCancel} isLoading={loading} />
     </div>
   );

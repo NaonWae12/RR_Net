@@ -35,13 +35,13 @@ export function ClientFilters({ filters, onFilterChange }: ClientFiltersProps) {
         />
       </div>
 
-      {/* Status Filter */}
       <select
         value={filters.status || ''}
         onChange={(e) => onFilterChange({ ...filters, status: e.target.value || undefined })}
         className="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       >
         <option value="">All Status</option>
+        <option value="pending">Pending</option>
         <option value="active">Active</option>
         <option value="isolir">Isolir</option>
         <option value="suspended">Suspended</option>

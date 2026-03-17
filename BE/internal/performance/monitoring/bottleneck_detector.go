@@ -23,13 +23,13 @@ func NewBottleneckDetector(collector *MetricsCollector, threshold time.Duration)
 
 // Bottleneck represents a detected performance bottleneck
 type Bottleneck struct {
-	Type        string        // "database", "application", "network", "resource", "external"
-	Location    string        // Specific location of bottleneck
-	Severity    string        // "critical", "high", "medium", "low"
-	Impact      string        // Description of impact
-	ResponseTime time.Duration
-	Frequency   int           // How often it occurs
-	Recommendation string     // Optimization recommendation
+	Type           string // "database", "application", "network", "resource", "external"
+	Location       string // Specific location of bottleneck
+	Severity       string // "critical", "high", "medium", "low"
+	Impact         string // Description of impact
+	ResponseTime   time.Duration
+	Frequency      int    // How often it occurs
+	Recommendation string // Optimization recommendation
 }
 
 // DetectBottlenecks detects performance bottlenecks from metrics
@@ -111,12 +111,12 @@ func (bd *BottleneckDetector) analyzeMetricSeries(name string, series *MetricSer
 	recommendation := bd.generateRecommendation(bottleneckType, name, avgDuration)
 
 	return &Bottleneck{
-		Type:          bottleneckType,
-		Location:      name,
-		Severity:      severity,
-		Impact:        fmt.Sprintf("Average response time %v exceeds threshold %v", avgDuration, bd.threshold),
-		ResponseTime:  avgDuration,
-		Frequency:     frequency,
+		Type:           bottleneckType,
+		Location:       name,
+		Severity:       severity,
+		Impact:         fmt.Sprintf("Average response time %v exceeds threshold %v", avgDuration, bd.threshold),
+		ResponseTime:   avgDuration,
+		Frequency:      frequency,
 		Recommendation: recommendation,
 	}
 }
@@ -148,4 +148,3 @@ func contains(s string, substrings ...string) bool {
 	}
 	return false
 }
-

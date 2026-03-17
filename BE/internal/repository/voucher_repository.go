@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -117,12 +118,12 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 	query := `
 		INSERT INTO vouchers (
 			id, tenant_id, package_id, router_id, code, password, status,
-			used_at, expires_at, first_session_id, notes, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 	_, err := r.db.Exec(ctx, query,
 		v.ID, v.TenantID, v.PackageID, v.RouterID, v.Code, v.Password, v.Status,
-		v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.CreatedAt, v.UpdatedAt,
+		v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers, v.ResellerPurchaseID, v.CreatedAt, v.UpdatedAt,
 	)
 	return err
 }
@@ -130,7 +131,7 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	query := `
 		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
-			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
 			p.name as package_name
 		FROM vouchers v
 		JOIN voucher_packages p ON v.package_id = p.id
@@ -139,7 +140,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, tenantID, code).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
 		&v.PackageName,
 	)
 	if err == pgx.ErrNoRows {
@@ -148,20 +149,60 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 	return &v, err
 }
 
-func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*voucher.Voucher, error) {
+func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int, status string, search string) ([]*voucher.Voucher, int, error) {
+	var whereClauses []string
+	var args []interface{}
+	args = append(args, tenantID)
+	whereClauses = append(whereClauses, "v.tenant_id = $1")
+
+	if status != "" {
+		if status == "kadaluarsa" {
+			whereClauses = append(whereClauses, "v.status IN ('expired', 'revoked')")
+		} else {
+			args = append(args, status)
+			whereClauses = append(whereClauses, fmt.Sprintf("v.status = $%d", len(args)))
+		}
+	}
+
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		whereClauses = append(whereClauses, fmt.Sprintf("(v.code ILIKE $%d OR v.notes ILIKE $%d)", len(args), len(args)))
+	}
+
+	whereSQL := " WHERE " + strings.Join(whereClauses, " AND ")
+
+	// 1. Get total count with filters
+	countQuery := "SELECT COUNT(*) FROM vouchers v " + whereSQL
+	var total int
+	if err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	// 2. Get data
 	query := `
 		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
-			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
-			p.name as package_name
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
+			p.name as package_name,
+			COALESCE(rs.total_uptime, 0) as uptime_seconds,
+			COALESCE(rs.total_bytes, 0) as total_bytes_used
 		FROM vouchers v
 		JOIN voucher_packages p ON v.package_id = p.id
-		WHERE v.tenant_id = $1
+		LEFT JOIN (
+			SELECT voucher_id, 
+				   SUM(COALESCE(acct_session_time, 0)) as total_uptime,
+				   SUM(COALESCE(acct_input_octets, 0) + COALESCE(acct_output_octets, 0)) as total_bytes
+			FROM radius_sessions
+			GROUP BY voucher_id
+		) rs ON v.id = rs.voucher_id
+		` + whereSQL + `
 		ORDER BY v.created_at DESC
-		LIMIT $2 OFFSET $3
-	`
-	rows, err := r.db.Query(ctx, query, tenantID, limit, offset)
+		LIMIT $` + fmt.Sprintf("%d OFFSET $%d", len(args)+1, len(args)+2)
+	
+	args = append(args, limit, offset)
+	
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -170,15 +211,15 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 		var v voucher.Voucher
 		err := rows.Scan(
 			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
-			&v.PackageName,
+			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
+			&v.PackageName, &v.UptimeSeconds, &v.TotalBytesUsed,
 		)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		vouchers = append(vouchers, &v)
 	}
-	return vouchers, nil
+	return vouchers, total, nil
 }
 
 func (r *VoucherRepository) UpdateVoucherStatus(ctx context.Context, id uuid.UUID, status voucher.VoucherStatus) error {
@@ -194,17 +235,26 @@ func (r *VoucherRepository) UpdateVoucherStatus(ctx context.Context, id uuid.UUI
 func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*voucher.Voucher, error) {
 	query := `
 		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
-			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.created_at, v.updated_at,
-			p.name as package_name
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
+			p.name as package_name,
+			COALESCE(rs.total_uptime, 0) as uptime_seconds,
+			COALESCE(rs.total_bytes, 0) as total_bytes_used
 		FROM vouchers v
 		JOIN voucher_packages p ON v.package_id = p.id
+		LEFT JOIN (
+			SELECT voucher_id, 
+				   SUM(COALESCE(acct_session_time, 0)) as total_uptime,
+				   SUM(COALESCE(acct_input_octets, 0) + COALESCE(acct_output_octets, 0)) as total_bytes
+			FROM radius_sessions
+			GROUP BY voucher_id
+		) rs ON v.id = rs.voucher_id
 		WHERE v.id = $1
 	`
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
-		&v.PackageName,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
+		&v.PackageName, &v.UptimeSeconds, &v.TotalBytesUsed,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("voucher not found")
@@ -215,12 +265,15 @@ func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*
 func (r *VoucherRepository) UpdateVoucher(ctx context.Context, v *voucher.Voucher) error {
 	query := `
 		UPDATE vouchers SET
-			status = $2, used_at = $3, expires_at = $4, first_session_id = $5,
-			notes = $6, updated_at = $7
+			package_id = $2, code = $3, password = $4, shared_users = $5,
+			status = $6, used_at = $7, expires_at = $8, first_session_id = $9,
+			notes = $10, updated_at = $11
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
-		v.ID, v.Status, v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.UpdatedAt,
+		v.ID, v.PackageID, v.Code, v.Password, v.SharedUsers,
+		v.Status, v.UsedAt, v.ExpiresAt, v.FirstSessionID,
+		v.Notes, time.Now(),
 	)
 	return err
 }
@@ -242,6 +295,12 @@ func (r *VoucherRepository) CountVouchersByPackage(ctx context.Context, packageI
 func (r *VoucherRepository) DeleteVoucher(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM vouchers WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id)
+	return err
+}
+
+func (r *VoucherRepository) DeleteVouchersByPurchase(ctx context.Context, purchaseID uuid.UUID) error {
+	query := `DELETE FROM vouchers WHERE reseller_purchase_id = $1`
+	_, err := r.db.Exec(ctx, query, purchaseID)
 	return err
 }
 
@@ -274,7 +333,7 @@ func (r *VoucherRepository) ConsumeVoucherAtomic(
 			)
 		RETURNING
 			id, tenant_id, package_id, router_id, code, password, status, isolated,
-			used_at, expires_at, first_session_id, notes, created_at, updated_at
+			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, created_at, updated_at
 	`
 
 	var v voucher.Voucher
@@ -287,7 +346,7 @@ func (r *VoucherRepository) ConsumeVoucherAtomic(
 		expiresAt,
 	).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -304,13 +363,13 @@ func (r *VoucherRepository) ToggleIsolate(ctx context.Context, id uuid.UUID) (*v
 		SET isolated = NOT isolated, updated_at = NOW()
 		WHERE id = $1
 		RETURNING id, tenant_id, package_id, router_id, code, password, status, isolated,
-			used_at, expires_at, first_session_id, notes, created_at, updated_at
+			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, created_at, updated_at
 	`
 
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -318,4 +377,47 @@ func (r *VoucherRepository) ToggleIsolate(ctx context.Context, id uuid.UUID) (*v
 	}
 
 	return &v, err
+}
+
+func (r *VoucherRepository) ListVouchersByPurchase(ctx context.Context, purchaseID uuid.UUID) ([]*voucher.Voucher, error) {
+	query := `
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
+			p.name as package_name, p.price::float8 as package_price, COALESCE(r.name, 'All Routers') as router_name
+		FROM vouchers v
+		JOIN voucher_packages p ON v.package_id = p.id
+		LEFT JOIN routers r ON v.router_id = r.id
+		WHERE v.reseller_purchase_id = $1
+		ORDER BY v.created_at ASC
+	`
+	rows, err := r.db.Query(ctx, query, purchaseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vouchers []*voucher.Voucher
+	for rows.Next() {
+		var v voucher.Voucher
+		err := rows.Scan(
+			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
+			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
+			&v.PackageName, &v.PackagePrice, &v.RouterName,
+		)
+		if err != nil {
+			return nil, err
+		}
+		vouchers = append(vouchers, &v)
+	}
+	return vouchers, nil
+}
+
+// HardDeleteExpiredVouchers deletes vouchers that have been expired longer than the retention period
+func (r *VoucherRepository) HardDeleteExpiredVouchers(ctx context.Context, olderThan time.Time) (int64, error) {
+	query := `DELETE FROM vouchers WHERE status = 'expired' AND expires_at < $1`
+	result, err := r.db.Exec(ctx, query, olderThan)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

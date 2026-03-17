@@ -12,10 +12,11 @@ import (
 )
 
 type BillingService struct {
-	invoiceRepo *repository.InvoiceRepository
-	paymentRepo *repository.PaymentRepository
-	clientRepo  *repository.ClientRepository
+	invoiceRepo        *repository.InvoiceRepository
+	paymentRepo        *repository.PaymentRepository
+	clientRepo         *repository.ClientRepository
 	servicePackageRepo *repository.ServicePackageRepository
+	discountRepo       *repository.DiscountRepository
 }
 
 func NewBillingService(
@@ -23,12 +24,14 @@ func NewBillingService(
 	paymentRepo *repository.PaymentRepository,
 	clientRepo *repository.ClientRepository,
 	servicePackageRepo *repository.ServicePackageRepository,
+	discountRepo *repository.DiscountRepository,
 ) *BillingService {
 	return &BillingService{
-		invoiceRepo: invoiceRepo,
-		paymentRepo: paymentRepo,
-		clientRepo:  clientRepo,
+		invoiceRepo:        invoiceRepo,
+		paymentRepo:        paymentRepo,
+		clientRepo:         clientRepo,
 		servicePackageRepo: servicePackageRepo,
+		discountRepo:       discountRepo,
 	}
 }
 
@@ -127,8 +130,20 @@ func (s *BillingService) MarkInvoiceAsOverdue(ctx context.Context, id uuid.UUID)
 	return s.invoiceRepo.UpdateStatus(ctx, id, billing.InvoiceStatusOverdue)
 }
 
+func (s *BillingService) MarkOverdueInvoices(ctx context.Context) (int64, error) {
+	return s.invoiceRepo.MarkOverdueInvoices(ctx)
+}
+
 func (s *BillingService) CancelInvoice(ctx context.Context, id uuid.UUID) error {
 	return s.invoiceRepo.UpdateStatus(ctx, id, billing.InvoiceStatusCancelled)
+}
+
+func (s *BillingService) GetClientPaymentStatuses(ctx context.Context, tenantID uuid.UUID, clientIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	return s.invoiceRepo.GetClientPaymentStatuses(ctx, tenantID, clientIDs)
+}
+
+func (s *BillingService) GetClientDueDates(ctx context.Context, tenantID uuid.UUID, clientIDs []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	return s.invoiceRepo.GetClientLatestDueDates(ctx, tenantID, clientIDs)
 }
 
 // ========== Payment Operations ==========
@@ -157,7 +172,21 @@ func (s *BillingService) RecordPayment(ctx context.Context, tenantID, userID uui
 		return nil, fmt.Errorf("cannot pay cancelled invoice")
 	}
 
-	now := time.Now()
+	// Idempotency: Check if a similar pending payment already exists in the last minute
+	// This helps prevent double-submission from rapid UI clicks.
+	if req.Method == billing.PaymentMethodCollector && req.CollectorID != nil {
+		oneMinuteAgo := time.Now().Add(-1 * time.Minute)
+		if exists, err := s.paymentRepo.CheckDuplicatePending(ctx, req.InvoiceID, *req.CollectorID, req.Amount, oneMinuteAgo); err == nil && exists {
+			return nil, fmt.Errorf("duplicate payment detected; please wait a moment")
+		}
+	}
+
+	// Overpayment check
+	if invoice.PaidAmount+req.Amount > invoice.TotalAmount {
+		return nil, fmt.Errorf("payment amount exceeds remaining balance")
+	}
+
+	now := time.Now().UTC()
 	receivedAt := now
 	if req.ReceivedAt != nil {
 		receivedAt = *req.ReceivedAt
@@ -183,6 +212,13 @@ func (s *BillingService) RecordPayment(ctx context.Context, tenantID, userID uui
 		payment.Method = billing.PaymentMethodCash
 	}
 
+	// Set initial status
+	if payment.Method == billing.PaymentMethodCollector {
+		payment.Status = billing.PaymentStatusPending
+	} else {
+		payment.Status = billing.PaymentStatusVerified
+	}
+
 	if err := s.paymentRepo.Create(ctx, payment); err != nil {
 		return nil, fmt.Errorf("failed to record payment: %w", err)
 	}
@@ -196,8 +232,12 @@ func (s *BillingService) RecordPayment(ctx context.Context, tenantID, userID uui
 	var paidAt *time.Time
 	if totalPaid >= invoice.TotalAmount {
 		paidAt = &now
-		if err := s.invoiceRepo.UpdateStatus(ctx, req.InvoiceID, billing.InvoiceStatusPaid); err != nil {
-			return nil, err
+		// Only mark as Paid if the current payment is verified (e.g. non-collector payment)
+		// Collector payments are pending until settlement is verified.
+		if payment.Status == billing.PaymentStatusVerified {
+			if err := s.invoiceRepo.UpdateStatus(ctx, req.InvoiceID, billing.InvoiceStatusPaid); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -206,6 +246,41 @@ func (s *BillingService) RecordPayment(ctx context.Context, tenantID, userID uui
 	}
 
 	return payment, nil
+}
+
+func (s *BillingService) DeletePayment(ctx context.Context, id uuid.UUID, tenantID uuid.UUID) error {
+	// Get payment info before deleting to update invoice later
+	payment, err := s.paymentRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if payment.TenantID != tenantID {
+		return fmt.Errorf("payment not found")
+	}
+
+	invoiceID := payment.InvoiceID
+
+	// Delete payment
+	if err := s.paymentRepo.Delete(ctx, id, tenantID); err != nil {
+		return err
+	}
+
+	// Update invoice paid amount
+	totalPaid, err := s.paymentRepo.GetTotalByInvoice(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	// If we just deleted the payment that made it 'Paid', revert status to 'Pending'
+	invoice, err := s.invoiceRepo.GetByID(ctx, invoiceID)
+	if err == nil && invoice.Status == billing.InvoiceStatusPaid && totalPaid < invoice.TotalAmount {
+		if err := s.invoiceRepo.UpdateStatus(ctx, invoiceID, billing.InvoiceStatusPending); err != nil {
+			return err
+		}
+	}
+
+	return s.invoiceRepo.UpdatePaidAmount(ctx, invoiceID, totalPaid, nil)
 }
 
 func (s *BillingService) GetPayment(ctx context.Context, id uuid.UUID) (*billing.Payment, error) {
@@ -227,12 +302,64 @@ func (s *BillingService) GetBillingSummary(ctx context.Context, tenantID uuid.UU
 	now := time.Now()
 	startDate := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.Local)
 	endDate := time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, time.Local)
-	
+
 	return s.paymentRepo.GetSummary(ctx, tenantID, startDate, endDate)
 }
 
 func (s *BillingService) GetInvoiceYears(ctx context.Context, tenantID uuid.UUID) ([]int, error) {
 	return s.invoiceRepo.GetInvoiceYears(ctx, tenantID)
+}
+
+func (s *BillingService) GetRevenueAnalytics(ctx context.Context, tenantID uuid.UUID, startDate, endDate time.Time, interval string) (*billing.RevenueAnalytics, error) {
+	return s.paymentRepo.GetRevenueAnalytics(ctx, tenantID, startDate, endDate, interval)
+}
+
+// ========== Settlement Operations ==========
+
+func (s *BillingService) GetSettlements(ctx context.Context, tenantID uuid.UUID, startDate, endDate time.Time, status *billing.PaymentStatus, collectorID *uuid.UUID) ([]*repository.Settlement, error) {
+	return s.paymentRepo.GetSettlements(ctx, tenantID, startDate, endDate, status, collectorID)
+}
+
+func (s *BillingService) VerifySettlement(ctx context.Context, tenantID, collectorID uuid.UUID, date time.Time) error {
+	// 1. Update all pending payments for this collector/date to verified
+	if err := s.paymentRepo.UpdateStatus(ctx, tenantID, collectorID, date, billing.PaymentStatusVerified); err != nil {
+		return err
+	}
+
+	// 2. Identify and update invoices that should now be marked as 'Paid'
+	// Get all payments that were likely affected (method=collector, date matching)
+	payments, _, err := s.paymentRepo.List(ctx, repository.PaymentFilter{
+		TenantID:    tenantID,
+		CollectorID: &collectorID,
+		StartDate:   &date,
+		EndDate:     &date,
+		Status:      func() *billing.PaymentStatus { s := billing.PaymentStatusVerified; return &s }(),
+		Page:        1,
+		PageSize:    1000,
+	})
+	if err != nil {
+		return nil // Non-critical if invoice status update fails; but return nil to indicate success of status update
+	}
+
+	invoiceIDs := make(map[uuid.UUID]bool)
+	for _, p := range payments {
+		invoiceIDs[p.InvoiceID] = true
+	}
+
+	for invID := range invoiceIDs {
+		inv, err := s.invoiceRepo.GetByID(ctx, invID)
+		if err != nil {
+			continue
+		}
+		totalPaid, err := s.paymentRepo.GetTotalByInvoice(ctx, invID)
+		if err == nil && totalPaid >= inv.TotalAmount && inv.Status != billing.InvoiceStatusPaid {
+			now := time.Now()
+			s.invoiceRepo.UpdateStatus(ctx, invID, billing.InvoiceStatusPaid)
+			s.invoiceRepo.UpdatePaidAmount(ctx, invID, totalPaid, &now)
+		}
+	}
+
+	return nil
 }
 
 // ========== Auto-generate monthly invoice for client ==========
@@ -267,13 +394,13 @@ func (s *BillingService) GenerateMonthlyInvoice(ctx context.Context, tenantID, c
 			return nil, fmt.Errorf("client has no service package or monthly fee configured")
 		}
 		itemDesc = "Layanan Internet"
-		unitPrice = int64(client.MonthlyFee * 100) // legacy cents
+		unitPrice = int64(client.MonthlyFee)
 	}
 
 	now := time.Now()
 
 	// Compute due date from client tempo fields.
-	dueDate := computeClientDueDate(now, client.CreatedAt, client.PaymentTempoOption, client.PaymentDueDay)
+	dueDate := ComputeClientDueDate(now, client.CreatedAt, client.PaymentTempoOption, client.PaymentDueDay)
 	// Special rule: if option=template and first invoice, due date is client created date.
 	if client.PaymentTempoOption == "template" {
 		hasAny, err := s.invoiceRepo.HasAnyInvoiceForClient(ctx, tenantID, clientID)
@@ -297,12 +424,12 @@ func (s *BillingService) GenerateMonthlyInvoice(ctx context.Context, tenantID, c
 	if exists {
 		// Return existing invoice
 		invoices, _, err := s.invoiceRepo.List(ctx, repository.InvoiceFilter{
-			TenantID:   tenantID,
-			ClientID:   &clientID,
-			StartDate:  &periodStart,
-			EndDate:    &periodEnd,
-			Page:       1,
-			PageSize:   1,
+			TenantID:  tenantID,
+			ClientID:  &clientID,
+			StartDate: &periodStart,
+			EndDate:   &periodEnd,
+			Page:      1,
+			PageSize:  1,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get existing invoice: %w", err)
@@ -312,6 +439,17 @@ func (s *BillingService) GenerateMonthlyInvoice(ctx context.Context, tenantID, c
 		}
 		// Should not happen if ExistsForClientPeriod returned true, but handle gracefully
 		return nil, fmt.Errorf("invoice exists but could not be retrieved")
+	}
+
+	// Calculate Discount if applicable
+	var discountAmount int64
+	if client.DiscountID != nil {
+		d, err := s.discountRepo.GetByID(ctx, *client.DiscountID, tenantID)
+		if err == nil && d.IsValid() {
+			// unitPrice represents the monthly fee (subtotal for 1 item)
+			val := d.CalculateDiscount(float64(unitPrice))
+			discountAmount = int64(val)
+		}
 	}
 
 	req := CreateInvoiceRequest{
@@ -326,6 +464,7 @@ func (s *BillingService) GenerateMonthlyInvoice(ctx context.Context, tenantID, c
 				UnitPrice:   unitPrice,
 			},
 		},
+		DiscountAmount: discountAmount,
 	}
 
 	return s.CreateInvoice(ctx, tenantID, req)
@@ -336,7 +475,7 @@ func nowMonthYear() string {
 	return fmt.Sprintf("%s %d", now.Month().String(), now.Year())
 }
 
-func computeClientDueDate(now time.Time, clientCreatedAt time.Time, option string, dueDay int) time.Time {
+func ComputeClientDueDate(now time.Time, clientCreatedAt time.Time, option string, dueDay int) time.Time {
 	if dueDay < 1 {
 		dueDay = now.Day()
 	}
@@ -367,4 +506,3 @@ func computeClientDueDate(now time.Time, clientCreatedAt time.Time, option strin
 	_ = clientCreatedAt
 	return d
 }
-

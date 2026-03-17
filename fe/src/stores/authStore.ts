@@ -1,7 +1,10 @@
 import { create } from "zustand";
-import { authService } from "../lib/api/authService";
-import { setAccessToken, setTenantSlug as setApiTenantSlug, setRefreshTokenCallback } from "../lib/api/apiClient";
-import { clearRoleContext } from "../lib/utils/roleContext";
+import { authService } from "@/lib/api/authService";
+import { setAccessToken, setTenantSlug as setApiTenantSlug, setRefreshTokenCallback } from "@/lib/api/apiClient";
+import { clearRoleContext } from "@/lib/utils/roleContext";
+import { useDashboardStore } from "./dashboardStore";
+import { useBillingStore } from "./billingStore";
+import { useTechnicianStore } from "./technicianStore";
 import type { LoginRequest, LoginResponse, Tenant, User } from "../lib/api/types";
 
 type AuthState = {
@@ -22,6 +25,7 @@ type AuthActions = {
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setTenantSlug: (slug: string | null) => void;
+  setAuth: (user: User, tenant: Tenant | null, token: string, refreshToken: string) => void;
   hydrate: (data: Partial<AuthState>) => void;
 };
 
@@ -37,12 +41,12 @@ const persistState = (state: AuthState) => {
     user: state.user,
     isAuthenticated: state.isAuthenticated,
   };
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
 };
 
 const loadPersisted = (): Partial<AuthState> => {
   if (typeof window === "undefined") return {};
-  const raw = window.localStorage.getItem(STORAGE_KEY);
+  const raw = window.sessionStorage.getItem(STORAGE_KEY);
   if (!raw) return {};
   try {
     return JSON.parse(raw);
@@ -79,6 +83,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
   login: async (payload, tenantSlug) => {
     set({ isLoading: true, error: null });
+    
+    // Safety timeout
+    const timeoutId = setTimeout(() => {
+      set({ isLoading: false });
+    }, 15000);
     try {
       // Use provided tenantSlug directly, don't use cached value
       // For super admin, tenantSlug should be undefined/null
@@ -86,9 +95,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       const slug = tenantSlug ?? undefined;
       const res: LoginResponse = await authService.login(payload, slug);
       
-      // Update API client with token and tenant slug
+      const effectiveSlug = res.tenant?.slug ?? slug ?? null;
+
+      // Update API client with token and the actual tenant slug from response
       setAccessToken(res.access_token);
-      setApiTenantSlug(slug ?? null);
+      setApiTenantSlug(effectiveSlug);
       
       const newState = {
         user: res.user,
@@ -108,9 +119,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       // });
       set(newState);
       persistState(get());
-      const afterState = get();
-      // console.log('[AUTH] after login set - isAuthenticated:', afterState.isAuthenticated, 'token:', afterState.token ? `${afterState.token.substring(0, 20)}...` : null);
+      clearTimeout(timeoutId);
     } catch (err: any) {
+      clearTimeout(timeoutId);
       set({ error: err?.response?.data?.error ?? "Login failed", isLoading: false });
       throw err;
     }
@@ -123,6 +134,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       // ignore - logout even if API call fails
     }
     
+    // Clear other store states to prevent stale data between accounts
+    useDashboardStore.getState().reset();
+    useBillingStore.getState().reset();
+    useTechnicianStore.getState().reset();
+
     // Clear API client
     setAccessToken(null);
     setApiTenantSlug(null);
@@ -141,9 +157,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       ready: true, // After logout, auth state is "ready" (no auth, but state is clear)
     });
     
-    // Clear localStorage
+    // Clear sessionStorage
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.sessionStorage.removeItem(STORAGE_KEY);
       // Clear role context on logout
       clearRoleContext();
     }
@@ -158,6 +174,13 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       persistState(get());
       return;
     }
+    set({ isLoading: true });
+    
+    // Safety timeout
+    const timeoutId = setTimeout(() => {
+      set({ isLoading: false, ready: true });
+    }, 15000);
+
     try {
       const res = await authService.refresh(refreshToken);
       const newState = {
@@ -174,16 +197,39 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       set(newState);
       setAccessToken(res.access_token);
       persistState(get());
-      const afterState = get();
-      // console.log('[AUTH] after refresh - isAuthenticated:', !!afterState.token, 'token:', afterState.token ? `${afterState.token.substring(0, 20)}...` : null);
+      clearTimeout(timeoutId);
+      set({ isLoading: false });
     } catch (err) {
+      clearTimeout(timeoutId);
       // Refresh failed - clear auth state
-      set({ token: null, refreshToken: null, user: null, isAuthenticated: false, ready: true });
+      set({ token: null, refreshToken: null, user: null, isAuthenticated: false, ready: true, isLoading: false });
       setAccessToken(null);
       persistState(get());
       // Don't throw - let the app continue without auth
       console.warn("Token refresh failed:", err);
     }
+  },
+
+  setAuth: (user, tenant, token, refreshToken) => {
+    // Update API client with token and tenant slug
+    setAccessToken(token);
+    const slug = tenant?.slug || null;
+    setApiTenantSlug(slug);
+    
+    const newState = {
+      user,
+      tenant,
+      token,
+      refreshToken,
+      tenantSlug: slug,
+      isAuthenticated: true,
+      ready: true,
+      isLoading: false,
+      error: null,
+    };
+    
+    set(newState);
+    persistState(get());
   },
 }));
 
@@ -211,7 +257,7 @@ if (typeof window !== "undefined") {
 if (typeof window !== "undefined") {
   // console.log('[AUTH] Module load - starting hydration');
   const snapshot = loadPersisted();
-  // console.log('[AUTH] Loaded from localStorage:', {
+  // console.log('[AUTH] Loaded from sessionStorage:', {
   //   hasToken: !!snapshot.token,
   //   token: snapshot.token ? `${snapshot.token.substring(0, 20)}...` : null,
   //   isAuthenticated: snapshot.isAuthenticated,

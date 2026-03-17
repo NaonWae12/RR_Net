@@ -44,4 +44,3 @@ func Check(ctx context.Context, db *pgxpool.Pool, redis *redis.Client) Status {
 
 	return status
 }
-

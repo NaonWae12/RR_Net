@@ -132,4 +132,3 @@ func (v *IsolirWorkflowValidator) ValidateIsolirWorkflow(
 
 	return result, nil
 }
-

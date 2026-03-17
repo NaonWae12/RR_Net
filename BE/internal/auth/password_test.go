@@ -76,10 +76,10 @@ func TestValidatePassword_ValidPassword(t *testing.T) {
 
 func TestValidatePassword_InvalidPassword(t *testing.T) {
 	invalidPasswords := []string{
-		"short",           // Too short
-		"1234567",         // Too short
-		"",                // Empty
-		"abcdefgh",        // No numbers (but might be valid if only length matters)
+		"short",    // Too short
+		"1234567",  // Too short
+		"",         // Empty
+		"abcdefgh", // No numbers (but might be valid if only length matters)
 	}
 
 	for _, pwd := range invalidPasswords {
@@ -99,4 +99,3 @@ func TestValidatePassword_MinimumLength(t *testing.T) {
 	err = ValidatePassword("1234567")
 	assert.Error(t, err)
 }
-

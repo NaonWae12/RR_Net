@@ -132,5 +132,3 @@ func isUniqueConstraintViolation(err error, constraintName string) bool {
 	}
 	return strings.Contains(msg, constraintName)
 }
-
-

@@ -25,15 +25,15 @@ func NewStressTester(maxConcurrency int, rampUpDuration, testDuration time.Durat
 
 // StressTestResult represents the result of a stress test
 type StressTestResult struct {
-	BreakingPoint      int    // Concurrent users at breaking point
-	MaxThroughput       float64 // Maximum requests per second
-	FailurePoint        int    // Point where failures start
-	RecoveryTime        time.Duration
-	DataCorruption      bool
-	SystemStability     bool
-	ResourceExhaustion  string // "memory", "cpu", "database", "network", "none"
-	Errors              []string
-	TestDuration        time.Duration
+	BreakingPoint      int     // Concurrent users at breaking point
+	MaxThroughput      float64 // Maximum requests per second
+	FailurePoint       int     // Point where failures start
+	RecoveryTime       time.Duration
+	DataCorruption     bool
+	SystemStability    bool
+	ResourceExhaustion string // "memory", "cpu", "database", "network", "none"
+	Errors             []string
+	TestDuration       time.Duration
 }
 
 // RunStressTest runs a stress test with gradual ramp-up
@@ -131,4 +131,3 @@ func (st *StressTester) RunStressTest(
 
 	return result, nil
 }
-

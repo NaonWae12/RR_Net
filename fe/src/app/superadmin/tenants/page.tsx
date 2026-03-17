@@ -10,9 +10,75 @@ import { ConfirmModal } from "@/components/modals";
 import { toast } from "@/components/feedback";
 import { TenantStatusBadge } from "@/components/superadmin/TenantStatusBadge";
 import { StatusBadge } from "@/components/utilities";
-import { Plus, Eye, Ban, CheckCircle2 } from "lucide-react";
+import { 
+  Plus, 
+  Eye, 
+  Ban, 
+  CheckCircle2, 
+  Search, 
+  Filter, 
+  Download,
+  Users,
+  TrendingUp,
+  AlertCircle,
+  Clock,
+  Globe,
+  MoreVertical,
+  Activity
+} from "lucide-react";
 import { format } from "date-fns";
 import type { SuperAdminTenant } from "@/lib/api/types";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 }
+};
+
+interface SummaryCardProps {
+  title: string;
+  value: number;
+  icon: any;
+  color: "blue" | "emerald" | "amber" | "rose";
+  description: string;
+}
+
+function SummaryCard({ title, value, icon: Icon, color, description }: SummaryCardProps) {
+  const colors = {
+    blue: "bg-blue-50 text-blue-600 border-blue-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    amber: "bg-amber-50 text-amber-600 border-amber-100",
+    rose: "bg-rose-50 text-rose-600 border-rose-100",
+  };
+
+  return (
+    <motion.div variants={item} className={cn("p-5 rounded-2xl border bg-white shadow-sm flex items-start gap-4", colors[color])}>
+      <div className={cn("p-3 rounded-xl", colors[color])}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-[10px] uppercase font-bold tracking-widest opacity-70 mb-1">{title}</p>
+        <h3 className="text-2xl font-bold text-slate-900 leading-none mb-1">{value}</h3>
+        <p className="text-xs text-slate-500 font-medium">{description}</p>
+      </div>
+    </motion.div>
+  );
+}
 
 export default function TenantsPage() {
   const router = useRouter();
@@ -24,15 +90,12 @@ export default function TenantsPage() {
   const [unsuspendModalOpen, setUnsuspendModalOpen] = useState(false);
 
   useEffect(() => {
-    console.log("[TenantsPage] Component mounted, fetching tenants...");
-    console.log("[TenantsPage] Store state - loading:", store.loading, "error:", store.error, "tenants count:", store.tenants?.length);
     fetchTenants();
   }, [fetchTenants]);
-  
-  // Debug: Log state changes
-  useEffect(() => {
-    console.log("[TenantsPage] State changed - loading:", store.loading, "error:", store.error, "tenants:", store.tenants);
-  }, [store.loading, store.error, store.tenants]);
+
+  const activeCount = tenants.filter(t => t.status === "active").length;
+  const suspendedCount = tenants.filter(t => t.status === "suspended").length;
+  const pendingCount = tenants.filter(t => t.status === "pending").length;
 
   const handleSuspend = async () => {
     if (!selectedTenant) return;
@@ -77,43 +140,52 @@ export default function TenantsPage() {
   const columns: DataTableColumn<SuperAdminTenant>[] = [
     {
       key: "name",
-      title: "Name",
+      title: "Organization",
       sortable: true,
       filterable: true,
       render: (value, row) => (
-        <div className="font-medium text-slate-900">{value}</div>
-      ),
-    },
-    {
-      key: "slug",
-      title: "Slug",
-      sortable: true,
-      filterable: true,
-      render: (value) => (
-        <code className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-900">{value}</code>
+        <div className="flex items-center gap-3 py-1">
+          <div className="h-9 w-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold shrink-0">
+            {String(value).charAt(0)}
+          </div>
+          <div className="flex flex-col">
+            <span className="font-bold text-slate-800 leading-none mb-1">{value}</span>
+            <span className="text-[10px] font-medium text-slate-400 font-mono">ID: {row.id ? row.id.substring(0, 8) : "N/A"}...</span>
+          </div>
+        </div>
       ),
     },
     {
       key: "domain",
-      title: "Domain",
+      title: "System URL",
       filterable: true,
-      render: (value) => value || <span className="text-slate-400">-</span>,
+      render: (value, row) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+            <Globe size={12} className="text-slate-400" />
+            {value || "pending-dns.com"}
+          </div>
+          <code className="w-fit text-[10px] bg-slate-50 text-slate-400 px-1.5 py-0.5 rounded border border-slate-100">
+            /{row.slug}
+          </code>
+        </div>
+      ),
     },
     {
       key: "status",
       title: "Status",
       sortable: true,
       filterable: true,
-      render: (value, row) => <TenantStatusBadge status={row.status} />,
+      render: (value, row) => <TenantStatusBadge status={row.status} size="sm" />,
     },
     {
       key: "billing_status",
-      title: "Billing Status",
+      title: "Billing",
       sortable: true,
       filterable: true,
       render: (value) => (
         <StatusBadge
-          status={value || "unknown"}
+          status={value || "active"}
           variant={value === "active" ? "success" : value === "overdue" ? "error" : "info"}
           size="sm"
         />
@@ -121,50 +193,69 @@ export default function TenantsPage() {
     },
     {
       key: "created_at",
-      title: "Created At",
+      title: "Registered",
       sortable: true,
-      render: (value) => <span className="text-slate-900">{format(new Date(value), "PPp")}</span>,
+      render: (value) => (
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <Clock size={12} className="text-slate-400" />
+          {format(new Date(value), "MMM d, yyyy")}
+        </div>
+      ),
     },
     {
       key: "actions",
-      title: "Actions",
+      title: "",
       align: "right",
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/superadmin/tenants/${row.id}`)}
-          >
-            <Eye className="h-4 w-4 mr-1" />
-            View
-          </Button>
-          {row.status === "active" ? (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                setSelectedTenant(row);
-                setSuspendModalOpen(true);
-              }}
-            >
-              <Ban className="h-4 w-4 mr-1" />
-              Suspend
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100">
+              <MoreVertical size={16} className="text-slate-400" />
             </Button>
-          ) : row.status === "suspended" ? (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                setSelectedTenant(row);
-                setUnsuspendModalOpen(true);
-              }}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 p-1 rounded-xl shadow-xl border-slate-100">
+            <DropdownMenuItem 
+              className="flex items-center gap-2 py-2 px-3 rounded-lg focus:bg-slate-50 cursor-pointer"
+              onClick={() => router.push(`/superadmin/tenants/${row.id}`)}
             >
-              <CheckCircle2 className="h-4 w-4 mr-1" />
-              Unsuspend
-            </Button>
-          ) : null}
-        </div>
+              <Eye size={14} className="text-slate-400" />
+              <span className="text-xs font-semibold">View Operations</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="flex items-center gap-2 py-2 px-3 rounded-lg focus:bg-slate-50 cursor-pointer"
+              onClick={() => router.push(`/superadmin/tenants/${row.id}/edit`)}
+            >
+              <Plus size={14} className="text-slate-400" rotate={45} />
+              <span className="text-xs font-semibold text-slate-600">Modify Data</span>
+            </DropdownMenuItem>
+            
+            <div className="h-px bg-slate-100 my-1 mx-1" />
+            
+            {row.status === "active" ? (
+              <DropdownMenuItem 
+                className="flex items-center gap-2 py-2 px-3 rounded-lg focus:bg-red-50 text-red-600 cursor-pointer"
+                onClick={() => {
+                  setSelectedTenant(row);
+                  setSuspendModalOpen(true);
+                }}
+              >
+                <Ban size={14} />
+                <span className="text-xs font-bold">Suspend System</span>
+              </DropdownMenuItem>
+            ) : row.status === "suspended" ? (
+              <DropdownMenuItem 
+                className="flex items-center gap-2 py-2 px-3 rounded-lg focus:bg-green-50 text-green-600 cursor-pointer"
+                onClick={() => {
+                  setSelectedTenant(row);
+                  setUnsuspendModalOpen(true);
+                }}
+              >
+                <CheckCircle2 size={14} />
+                <span className="text-xs font-bold">Unsuspend Access</span>
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
   ];
@@ -173,37 +264,88 @@ export default function TenantsPage() {
     <>
       <PageLayout
         title="Tenant Management"
+        subtitle="Manage platform organizations, system access, and subscription statuses."
         breadcrumbs={[
           { label: "Super Admin", href: "/superadmin" },
           { label: "Tenants" },
         ]}
         actions={
-          <Button onClick={() => router.push("/superadmin/tenants/create")}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Tenant
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-2 font-bold bg-white">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+            <Button size="sm" className="flex items-center gap-2 font-bold shadow-sm" onClick={() => router.push("/superadmin/tenants/create")}>
+              <Plus className="h-4 w-4" />
+              New Organization
+            </Button>
+          </div>
         }
       >
-        {error ? (
-          <div className="p-6 text-red-600">
-            Error loading tenants: {error}
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="space-y-8"
+        >
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <SummaryCard 
+              title="Total Entities" 
+              value={tenants.length} 
+              icon={Users} 
+              color="blue" 
+              description="Registered organizations"
+            />
+            <SummaryCard 
+              title="Active Now" 
+              value={activeCount} 
+              icon={TrendingUp} 
+              color="emerald" 
+              description="Running systems"
+            />
+            <SummaryCard 
+              title="Pending" 
+              value={pendingCount} 
+              icon={Activity} 
+              color="amber" 
+              description="Awaiting verification"
+            />
+            <SummaryCard 
+              title="Suspended" 
+              value={suspendedCount} 
+              icon={AlertCircle} 
+              color="rose" 
+              description="Access restricted"
+            />
           </div>
-        ) : (
-          <DataTable
-            data={tenants}
-            columns={columns}
-            loading={loading}
-            pagination={{ pageSize: 10, pageSizeOptions: [10, 20, 50, 100] }}
-            searchable
-            filterable
-            onRowClick={(row) => router.push(`/superadmin/tenants/${row.id}`)}
-            onExport={(format) => {
-              // TODO: Implement export functionality
-              toast({ type: "info", title: "Export", message: `Exporting to ${format}...` });
-            }}
-            emptyMessage="No tenants found. Create your first tenant to get started."
-          />
-        )}
+
+          {/* Table Section */}
+          <motion.div variants={item} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            {error ? (
+              <div className="p-10 text-center">
+                <AlertCircle className="mx-auto h-10 w-10 text-red-500 mb-4" />
+                <h3 className="text-lg font-bold text-slate-800">Error loading tenants</h3>
+                <p className="text-slate-500 max-w-sm mx-auto mt-1">{error}</p>
+                <Button variant="outline" className="mt-6" onClick={() => fetchTenants()}>Retry Loading</Button>
+              </div>
+            ) : (
+              <div className="p-1">
+                <DataTable
+                  data={tenants}
+                  columns={columns}
+                  loading={loading}
+                  pagination={{ pageSize: 10, pageSizeOptions: [10, 20, 50, 100] }}
+                  searchable
+                  filterable
+                  onRowClick={(row) => router.push(`/superadmin/tenants/${row.id}`)}
+                  emptyMessage="No organizations found. Start by creating a new tenant entity."
+                  className="border-none shadow-none"
+                />
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
       </PageLayout>
 
       <ConfirmModal
@@ -213,10 +355,10 @@ export default function TenantsPage() {
           setSelectedTenant(null);
         }}
         onConfirm={handleSuspend}
-        title="Suspend Tenant"
-        message={`Are you sure you want to suspend tenant "${selectedTenant?.name}"? This will prevent all users from accessing the tenant's system.`}
+        title="Suspend Access"
+        message={`Are you sure you want to suspend access for "${selectedTenant?.name}"? All users under this organization will be locked out immediately.`}
         danger
-        confirmationText="SUSPEND"
+        confirmationText="BLOCK ACCESS"
       />
 
       <ConfirmModal
@@ -226,9 +368,9 @@ export default function TenantsPage() {
           setSelectedTenant(null);
         }}
         onConfirm={handleUnsuspend}
-        title="Unsuspend Tenant"
-        message={`Are you sure you want to unsuspend tenant "${selectedTenant?.name}"? This will restore access to the tenant's system.`}
-        confirmationText="UNSUSPEND"
+        title="Restore Access"
+        message={`Restore system access for "${selectedTenant?.name}"? users will be able to log in again immediately.`}
+        confirmationText="RESTORE ACCESS"
       />
     </>
   );

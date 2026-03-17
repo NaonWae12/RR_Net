@@ -14,8 +14,9 @@ interface PayslipCardProps {
 }
 
 export function PayslipCard({ payslip, onView, onDownload, loading = false }: PayslipCardProps) {
-  const periodDate = new Date(payslip.period + "-01");
-  const periodLabel = format(periodDate, "MMMM yyyy");
+  const periodLabel = payslip.period 
+    ? format(new Date(payslip.period + "-01"), "MMMM yyyy") 
+    : "Unknown Period";
 
   return (
     <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
@@ -53,7 +54,7 @@ export function PayslipCard({ payslip, onView, onDownload, loading = false }: Pa
               style: "currency",
               currency: "IDR",
               minimumFractionDigits: 0,
-            }).format(payslip.gross_salary)}
+            }).format(payslip.base_salary + payslip.total_allowances)}
           </p>
         </div>
         <div>
@@ -63,7 +64,7 @@ export function PayslipCard({ payslip, onView, onDownload, loading = false }: Pa
               style: "currency",
               currency: "IDR",
               minimumFractionDigits: 0,
-            }).format(payslip.deductions)}
+            }).format(payslip.total_deductions)}
           </p>
         </div>
       </div>

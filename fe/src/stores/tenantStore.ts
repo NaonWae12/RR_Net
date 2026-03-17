@@ -21,13 +21,13 @@ const STORAGE_KEY = "rrnet_tenant_slug";
 
 const loadSlug = (): string | null => {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(STORAGE_KEY);
+  return window.sessionStorage.getItem(STORAGE_KEY);
 };
 
 const persistSlug = (slug: string | null) => {
   if (typeof window === "undefined") return;
-  if (slug) window.localStorage.setItem(STORAGE_KEY, slug);
-  else window.localStorage.removeItem(STORAGE_KEY);
+  if (slug) window.sessionStorage.setItem(STORAGE_KEY, slug);
+  else window.sessionStorage.removeItem(STORAGE_KEY);
 };
 
 export const useTenantStore = create<TenantState & TenantActions>((set, get) => ({

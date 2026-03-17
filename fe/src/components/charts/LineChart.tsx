@@ -57,6 +57,7 @@ export interface LineChartProps {
   tooltip?: TooltipConfig;
   className?: string;
   height?: number;
+  margin?: { top: number; right: number; left: number; bottom: number };
 }
 
 export const LineChart = React.memo(function LineChart({
@@ -75,6 +76,7 @@ export const LineChart = React.memo(function LineChart({
   tooltip = { show: true },
   className,
   height = 300,
+  margin = { top: 20, right: 30, left: 40, bottom: 20 },
 }: LineChartProps) {
   const [zoomDomain, setZoomDomain] = React.useState<[number, number] | undefined>();
 
@@ -103,21 +105,25 @@ export const LineChart = React.memo(function LineChart({
       <ResponsiveContainer width="100%" height={height}>
         <RechartsLineChart
           data={data}
-          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+          margin={margin}
           onMouseMove={handleZoom}
         >
-          <CartesianGrid strokeDasharray="3 3" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
           <XAxis
             dataKey={xAxis.dataKey}
             type={xAxis.type}
-            label={xAxis.label ? { value: xAxis.label, position: "insideBottom", offset: -5 } : undefined}
+            label={xAxis.label ? { value: xAxis.label, position: "insideBottom", offset: -10 } : undefined}
             tickFormatter={xAxis.tickFormatter}
             domain={xAxis.domain as any}
+            tick={{ fill: '#64748b', fontSize: 12 }}
+            axisLine={{ stroke: '#cbd5e1' }}
           />
           <YAxis
-            label={yAxis.label ? { value: yAxis.label, angle: -90, position: "insideLeft" } : undefined}
+            label={yAxis.label ? { value: yAxis.label, angle: -90, position: "insideLeft", offset: -45, style: { textAnchor: 'middle', fill: '#64748b', fontWeight: 600 } } : undefined}
             tickFormatter={yAxis.tickFormatter}
             domain={yAxis.domain as any}
+            tick={{ fill: '#64748b', fontSize: 12 }}
+            axisLine={{ stroke: '#cbd5e1' }}
           />
           {tooltip?.show && (
             <Tooltip

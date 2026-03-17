@@ -1,0 +1,14 @@
+﻿
+  page.tsx:688:                                     
+<div className="space-y-3">
+  page.tsx:689:                                        
+<div className="flex justify-between items-center py-2 
+border-b border-indigo-400/30 font-bold">
+> page.tsx:690:                                        
+   <span>Bank Central Asia (BCA)</span>
+  page.tsx:691:                                        
+   <span>882-021-3311</span>
+  page.tsx:692:                                        
+</div>
+
+

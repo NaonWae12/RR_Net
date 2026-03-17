@@ -78,4 +78,3 @@ func (c *Cache) Exists(ctx context.Context, key string) (bool, error) {
 
 // ErrCacheMiss is returned when a cache key is not found
 var ErrCacheMiss = fmt.Errorf("cache miss")
-

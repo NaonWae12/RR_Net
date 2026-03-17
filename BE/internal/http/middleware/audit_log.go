@@ -45,20 +45,20 @@ func (al *AuditLogger) AuditLogMiddleware(next http.Handler) http.Handler {
 
 		// Create audit log entry
 		auditLog := &repository.AuditLog{
-			ID:         uuid.New(),
-			TenantID:   &tenantID,
-			UserID:     &userID,
-			Action:     r.Method,
-			Resource:   r.URL.Path,
-			Method:     r.Method,
-			Path:       r.URL.Path,
-			IPAddress:  r.RemoteAddr,
-			UserAgent:  r.UserAgent(),
-			RequestID:  requestID,
-			Status:     rw.statusCode,
-			Duration:   duration,
-			Metadata:   make(map[string]interface{}),
-			CreatedAt:  time.Now(),
+			ID:        uuid.New(),
+			TenantID:  &tenantID,
+			UserID:    &userID,
+			Action:    r.Method,
+			Resource:  r.URL.Path,
+			Method:    r.Method,
+			Path:      r.URL.Path,
+			IPAddress: r.RemoteAddr,
+			UserAgent: r.UserAgent(),
+			RequestID: requestID,
+			Status:    rw.statusCode,
+			Duration:  duration,
+			Metadata:  make(map[string]interface{}),
+			CreatedAt: time.Now(),
 		}
 
 		// Log to audit repository (async to avoid blocking)
@@ -69,4 +69,3 @@ func (al *AuditLogger) AuditLogMiddleware(next http.Handler) http.Handler {
 		}()
 	})
 }
-

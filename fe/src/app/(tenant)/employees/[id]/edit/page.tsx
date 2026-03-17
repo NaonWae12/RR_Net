@@ -29,6 +29,8 @@ export default function EditEmployeePage() {
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [role, setRole] = useState('');
+    const [baseSalary, setBaseSalary] = useState<number>(0);
+    const [password, setPassword] = useState('');
 
     useEffect(() => {
         if (id) {
@@ -39,18 +41,19 @@ export default function EditEmployeePage() {
     const loadEmployee = async () => {
         setLoading(true);
         try {
-            // Note: employeeService.get might not exist yet, using list and filter for now
-            // This is a placeholder - actual implementation should use proper API endpoint
+            // Fetch all and find (or use a dedicated get endpoint if available)
+            // Re-using list() for compatibility, but normally we'd have a get(id)
             const res = await employeeService.list();
             const found = res.data?.find((e) => e.id === id);
+            
             if (found) {
                 setEmployee(found);
                 setName(found.name);
                 setEmail(found.email);
                 setPhone(found.phone || '');
                 setRole(found.role);
-                // Check if employee is inactive (FE-only logic for now)
-                setIsInactive(false); // Default to active, can be extended with backend support
+                setBaseSalary(found.base_salary || 0);
+                setIsInactive(false); // Can be linked to status later
             } else {
                 showToast({ title: 'Error', description: 'Employee not found', variant: 'error' });
                 router.push('/employees');
@@ -72,11 +75,17 @@ export default function EditEmployeePage() {
 
         setUpdating(true);
         try {
-            // Note: employeeService.update might not exist yet
-            // This is a placeholder - actual implementation should use proper API endpoint
-            showToast({ title: 'Info', description: 'Update employee functionality will be implemented with backend API', variant: 'info' });
-            // await employeeService.update(id, { name, email, phone, role });
-            // await loadEmployee();
+            await employeeService.update(id, { 
+                name, 
+                email, 
+                phone: phone || undefined, 
+                role: role as any,
+                base_salary: Number(baseSalary),
+                password: password || undefined
+            });
+            showToast({ title: 'Berhasil', description: 'Employee berhasil diupdate', variant: 'success' });
+            setPassword('');
+            await loadEmployee();
         } catch (err: any) {
             const msg = err?.response?.data?.error ?? 'Failed to update employee';
             showToast({ title: 'Error', description: msg, variant: 'error' });
@@ -92,11 +101,11 @@ export default function EditEmployeePage() {
 
         setDeactivating(true);
         try {
-            // FE-only: Just set UI state
+            // FE-only toggle for now, can be linked to a status patch
             setIsInactive(true);
             showToast({
                 title: 'Employee deactivated',
-                description: 'This is a UI-only action. Backend implementation will be added later.',
+                description: 'UI status updated. Full deactivation will be linked to backend status soon.',
                 variant: 'success',
             });
         } catch (err: any) {
@@ -143,94 +152,111 @@ export default function EditEmployeePage() {
                         </Link>
                         <div>
                             <h1 className="text-2xl font-bold text-slate-900">Edit Employee</h1>
-                            <p className="text-slate-500 mt-1">Update employee information</p>
+                            <p className="text-slate-500 mt-1">Update employee information and salary</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Inactive Badge */}
-                {isInactive && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2">
-                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                {/* Form */}
+                <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-bold text-slate-900 border-b pb-2">Basic Information</h3>
                             <div>
-                                <p className="text-sm font-medium text-red-900">Inactive Employee</p>
-                                <p className="text-xs text-red-700 mt-0.5">This employee cannot access the system.</p>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Name</label>
+                                <Input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Full name"
+                                    disabled={isInactive}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                                <Input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="email@example.com"
+                                    disabled={isInactive}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Phone</label>
+                                <Input
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    placeholder="08xxxx"
+                                    disabled={isInactive}
+                                />
                             </div>
                         </div>
-                    </div>
-                )}
 
-                {/* Form */}
-                <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                            <Input
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="Full name"
-                                disabled={isInactive}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                            <Input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="email@example.com"
-                                disabled={isInactive}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Phone (optional)</label>
-                            <Input
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                placeholder="08xxxx"
-                                disabled={isInactive}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                            <select
-                                className="w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-500"
-                                value={role}
-                                onChange={(e) => setRole(e.target.value)}
-                                disabled={isInactive}
-                            >
-                                <option value="admin">Admin</option>
-                                <option value="hr">HR</option>
-                                <option value="finance">Finance</option>
-                                <option value="technician">Technician</option>
-                                <option value="collector">Collector</option>
-                                <option value="client">Client</option>
-                            </select>
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-bold text-slate-900 border-b pb-2">Employment & Salary</h3>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Role</label>
+                                <select
+                                    className="w-full h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-500"
+                                    value={role}
+                                    onChange={(e) => setRole(e.target.value)}
+                                    disabled={isInactive}
+                                >
+                                    <option value="admin">Admin</option>
+                                    <option value="hr">HR</option>
+                                    <option value="finance">Finance</option>
+                                    <option value="technician">Technician</option>
+                                    <option value="collector">Collector</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Base Salary (IDR)</label>
+                                <Input
+                                    type="number"
+                                    value={baseSalary}
+                                    onChange={(e) => setBaseSalary(Number(e.target.value))}
+                                    placeholder="5000000"
+                                    disabled={isInactive}
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1 italic">
+                                    Used for monthly payroll calculations.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Reset Password (optional)</label>
+                                <Input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Leave blank to keep current"
+                                    disabled={isInactive}
+                                />
+                            </div>
                         </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
+                    <div className="flex items-center gap-3 pt-6 border-t border-slate-200">
                         <Button
                             onClick={handleUpdate}
                             disabled={updating || isInactive}
-                            className="flex-1"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[200px]"
                         >
-                            {updating ? 'Updating...' : 'Update Employee'}
+                            {updating ? 'Updating...' : 'Save Changes'}
                         </Button>
                         {!isInactive && canSwitchRole && (
                             <Button
                                 variant="outline"
                                 onClick={handleDeactivate}
                                 disabled={deactivating}
-                                className="border-red-300 text-red-600 hover:bg-red-50"
+                                className="border-red-200 text-red-600 hover:bg-red-50"
                             >
-                                {deactivating ? 'Deactivating...' : 'Deactivate Employee'}
+                                {deactivating ? 'Deactivating...' : 'Deactivate'}
                             </Button>
                         )}
+                        <Link href="/employees">
+                            <Button variant="ghost">Cancel</Button>
+                        </Link>
                     </div>
                 </div>
             </div>

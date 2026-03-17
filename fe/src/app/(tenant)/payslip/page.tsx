@@ -7,7 +7,7 @@ import { RoleGuard } from "@/components/guards/RoleGuard";
 import { PayslipCard } from "@/components/technician/PayslipCard";
 import { PayslipDetail } from "@/components/technician/PayslipDetail";
 import { Modal } from "@/components/ui/modal";
-import { technicianService } from "@/lib/api/technicianService";
+import { hrService } from "@/lib/api/hrService";
 import { Payslip } from "@/lib/api/types";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
@@ -23,11 +23,10 @@ export default function PayslipPage() {
     const [error, setError] = useState<string | null>(null);
 
     const fetchPayslips = async () => {
-        if (!userId) return;
         try {
             setLoading(true);
             setError(null);
-            const data = await technicianService.getPayslips(userId);
+            const data = await hrService.getMyPayslips();
             setPayslips(data || []);
         } catch (err: any) {
             setError(err?.message || "Failed to load payslips");
@@ -39,25 +38,19 @@ export default function PayslipPage() {
 
     useEffect(() => {
         fetchPayslips();
-    }, [userId]);
+    }, []);
 
-    const handleView = async (id: string) => {
-        try {
-            const payslip = await technicianService.getPayslip(id);
+    const handleView = (id: string) => {
+        const payslip = payslips.find(p => p.id === id);
+        if (payslip) {
             setSelectedPayslip(payslip);
-        } catch (err: any) {
-            showToast({
-                title: "Failed to load payslip",
-                description: err?.message || "An unexpected error occurred.",
-                variant: "error",
-            });
         }
     };
 
     const handleDownload = async (id: string) => {
         try {
             setDownloading(id);
-            const blob = await technicianService.downloadPayslip(id);
+            const blob = await hrService.downloadPayslip(id);
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -84,7 +77,7 @@ export default function PayslipPage() {
 
     // Group payslips by year
     const groupedPayslips = (payslips || []).reduce((acc, payslip) => {
-        const year = payslip.period.split("-")[0];
+        const year = payslip.period ? payslip.period.split("-")[0] : "Other";
         if (!acc[year]) {
             acc[year] = [];
         }
@@ -92,7 +85,11 @@ export default function PayslipPage() {
         return acc;
     }, {} as Record<string, Payslip[]>);
 
-    const sortedYears = Object.keys(groupedPayslips).sort((a, b) => b.localeCompare(a));
+    const sortedYears = Object.keys(groupedPayslips).sort((a, b) => {
+        if (a === "Other") return 1;
+        if (b === "Other") return -1;
+        return b.localeCompare(a);
+    });
 
     if (error && payslips.length === 0) {
         return (

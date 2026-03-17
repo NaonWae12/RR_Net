@@ -63,5 +63,3 @@ func (s *WALogService) MarkSent(ctx context.Context, tenantID, id uuid.UUID, gat
 func (s *WALogService) MarkFailed(ctx context.Context, tenantID, id uuid.UUID, errMsg string) error {
 	return s.repo.MarkFailed(ctx, tenantID, id, errMsg)
 }
-
-

@@ -77,9 +77,12 @@ func TestBillingNetworkIntegration(t *testing.T) {
 	clientRepo := repository.NewClientRepository(tc.DB)
 	routerRepo := repository.NewRouterRepository(tc.DB)
 	profileRepo := repository.NewNetworkProfileRepository(tc.DB)
+	planRepo := repository.NewPlanRepository(tc.DB)
+	addonRepo := repository.NewAddonRepository(tc.DB)
 
 	// Create services
-	networkService := service.NewNetworkService(routerRepo, profileRepo)
+	limitResolver := service.NewLimitResolver(planRepo, addonRepo)
+	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver)
 
 	// Test: Create tenant with client
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")
@@ -107,8 +110,9 @@ func TestBillingCollectorIntegration(t *testing.T) {
 	invoiceRepo := repository.NewInvoiceRepository(tc.DB)
 	paymentRepo := repository.NewPaymentRepository(tc.DB)
 	servicePackageRepo := repository.NewServicePackageRepository(tc.DB)
+	discountRepo := repository.NewDiscountRepository(tc.DB)
 
-	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo)
+	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 
 	// Test: Create tenant with cash clients
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")
@@ -200,4 +204,3 @@ func TestMapsTechnicianIntegration(t *testing.T) {
 	// - Technician activity updates maps
 	// - Task completion clears outage
 }
-

@@ -20,16 +20,26 @@ import (
 )
 
 type VoucherService struct {
-	voucherRepo *repository.VoucherRepository
-	radiusRepo  *repository.RadiusRepository
-	routerRepo  *repository.RouterRepository
+	voucherRepo    *repository.VoucherRepository
+	radiusRepo     *repository.RadiusRepository
+	routerRepo     *repository.RouterRepository
+	financeService *FinanceService
+	limitResolver  *LimitResolver
 }
 
-func NewVoucherService(voucherRepo *repository.VoucherRepository, radiusRepo *repository.RadiusRepository, routerRepo *repository.RouterRepository) *VoucherService {
+func NewVoucherService(
+	voucherRepo *repository.VoucherRepository,
+	radiusRepo *repository.RadiusRepository,
+	routerRepo *repository.RouterRepository,
+	financeService *FinanceService,
+	limitResolver *LimitResolver,
+) *VoucherService {
 	return &VoucherService{
-		voucherRepo: voucherRepo,
-		radiusRepo:  radiusRepo,
-		routerRepo:  routerRepo,
+		voucherRepo:    voucherRepo,
+		radiusRepo:     radiusRepo,
+		routerRepo:     routerRepo,
+		financeService: financeService,
+		limitResolver:  limitResolver,
 	}
 }
 
@@ -253,13 +263,14 @@ func (s *VoucherService) DeletePackage(ctx context.Context, id uuid.UUID) error 
 // ========== Vouchers ==========
 
 type GenerateVouchersRequest struct {
-	PackageID     uuid.UUID  `json:"package_id"`
-	RouterID      *uuid.UUID `json:"router_id,omitempty"`
-	Quantity      int        `json:"quantity"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-	UserMode      string     `json:"user_mode,omitempty"`      // "up" (User & Pass), "vc" (User=Pass)
-	CharacterMode string     `json:"character_mode,omitempty"` // "abcd", "ABCD", "aBcD", etc.
-	CodeLength    int        `json:"code_length,omitempty"`    // total length
+	PackageID          uuid.UUID  `json:"package_id"`
+	RouterID           *uuid.UUID `json:"router_id,omitempty"`
+	Quantity           int        `json:"quantity"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	UserMode           string     `json:"user_mode,omitempty"`      // "up" (User & Pass), "vc" (User=Pass)
+	CharacterMode      string     `json:"character_mode,omitempty"` // "abcd", "ABCD", "aBcD", etc.
+	CodeLength         int        `json:"code_length,omitempty"`    // total length
+	ResellerPurchaseID *uuid.UUID `json:"reseller_purchase_id,omitempty"`
 }
 
 // buildCharsetFromMode deterministically builds a charset based on character_mode pattern.
@@ -331,15 +342,25 @@ func buildCharsetFromMode(mode string) (string, error) {
 }
 
 type CreateVoucherRequest struct {
-	PackageID uuid.UUID  `json:"package_id"`
-	RouterID  *uuid.UUID `json:"router_id,omitempty"`
-	Code      string     `json:"code"`
-	Password  string     `json:"password"`
-	Notes     string     `json:"notes,omitempty"`
+	PackageID   uuid.UUID  `json:"package_id"`
+	RouterID    *uuid.UUID `json:"router_id,omitempty"`
+	Code        string     `json:"code"`
+	Password    string     `json:"password"`
+	Notes       string     `json:"notes,omitempty"`
+	SharedUsers int        `json:"shared_users,omitempty"`
 }
 
 func (s *VoucherService) CreateVoucher(ctx context.Context, tenantID uuid.UUID, req CreateVoucherRequest) (*voucher.Voucher, error) {
-	// Validate package exists
+	// 0. Enforce Limit
+	currentCount, err := s.voucherRepo.CountVouchersByTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.limitResolver.CanAdd(ctx, tenantID, "max_vouchers", currentCount, 1) {
+		return nil, fmt.Errorf("voucher limit reached for this plan")
+	}
+
+	// 1. Validate package exists
 	pkg, err := s.voucherRepo.GetPackageByID(ctx, req.PackageID)
 	if err != nil {
 		return nil, fmt.Errorf("package not found: %w", err)
@@ -347,16 +368,17 @@ func (s *VoucherService) CreateVoucher(ctx context.Context, tenantID uuid.UUID, 
 
 	now := time.Now()
 	v := &voucher.Voucher{
-		ID:        uuid.New(),
-		TenantID:  tenantID,
-		PackageID: req.PackageID,
-		RouterID:  req.RouterID,
-		Code:      req.Code,
-		Password:  req.Password,
-		Status:    voucher.VoucherStatusActive,
-		Notes:     req.Notes,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          uuid.New(),
+		TenantID:    tenantID,
+		PackageID:   req.PackageID,
+		RouterID:    req.RouterID,
+		Code:        req.Code,
+		Password:    req.Password,
+		Status:      voucher.VoucherStatusActive,
+		Notes:       req.Notes,
+		SharedUsers: req.SharedUsers,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	if err := s.voucherRepo.CreateVoucher(ctx, v); err != nil {
@@ -371,10 +393,11 @@ func (s *VoucherService) CreateVoucher(ctx context.Context, tenantID uuid.UUID, 
 			if err == nil && router.Status == network.RouterStatusOnline {
 				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 				hotspotUser := mikrotik.HotspotUser{
-					Name:     v.Code,
-					Password: v.Password,
-					Profile:  pkg.Name,
-					Comment:  fmt.Sprintf("RRNET Voucher - Created %s", now.Format("2006-01-02 15:04:05")),
+					Name:        v.Code,
+					Password:    v.Password,
+					Profile:     pkg.Name,
+					Comment:     fmt.Sprintf("RRNET Voucher - Created %s", now.Format("2006-01-02 15:04:05")),
+					SharedUsers: v.SharedUsers,
 				}
 				userCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
@@ -410,7 +433,16 @@ func (s *VoucherService) CreateVoucher(ctx context.Context, tenantID uuid.UUID, 
 }
 
 func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUID, req GenerateVouchersRequest) ([]*voucher.Voucher, error) {
-	// Validate package exists and get package details
+	// 0. Enforce Limit
+	currentCount, err := s.voucherRepo.CountVouchersByTenant(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.limitResolver.CanAdd(ctx, tenantID, "max_vouchers", currentCount, req.Quantity) {
+		return nil, fmt.Errorf("voucher limit reached for this plan (cannot add %d more)", req.Quantity)
+	}
+
+	// 1. Validate package exists and get package details
 	pkg, err := s.voucherRepo.GetPackageByID(ctx, req.PackageID)
 	if err != nil {
 		return nil, fmt.Errorf("package not found: %w", err)
@@ -433,6 +465,12 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 
 	vouchers := make([]*voucher.Voucher, 0, req.Quantity)
 	now := time.Now()
+
+	// Generate batch notes (4-character random code) for grouping vouchers created together
+	batchNotes, err := generateRandomFromCharset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 4)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate batch notes: %w", err)
+	}
 
 	userMode := req.UserMode
 	if userMode == "" {
@@ -461,16 +499,18 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 		}
 
 		v := &voucher.Voucher{
-			ID:        uuid.New(),
-			TenantID:  tenantID,
-			PackageID: req.PackageID,
-			RouterID:  req.RouterID,
-			Code:      code,
-			Password:  password,
-			Status:    voucher.VoucherStatusActive,
-			ExpiresAt: req.ExpiresAt,
-			CreatedAt: now,
-			UpdatedAt: now,
+			ID:                 uuid.New(),
+			TenantID:           tenantID,
+			PackageID:          req.PackageID,
+			RouterID:           req.RouterID,
+			Code:               code,
+			Password:           password,
+			Notes:              batchNotes, // Assign batch notes for grouping
+			Status:             voucher.VoucherStatusActive,
+			ExpiresAt:          req.ExpiresAt,
+			ResellerPurchaseID: req.ResellerPurchaseID,
+			CreatedAt:          now,
+			UpdatedAt:          now,
 		}
 
 		if err := s.voucherRepo.CreateVoucher(ctx, v); err != nil {
@@ -490,46 +530,38 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 			Int("voucher_count", len(vouchers)).
 			Msg("Creating Hotspot users on routers for radius_auth_only mode")
 
-		// Get all active routers for this tenant
-		routers, err := s.routerRepo.ListByTenant(ctx, tenantID)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get routers for Hotspot user creation, vouchers created but users not synced to routers")
+		// Determine target routers: either a specific one or all routers
+		var targetRouters []*network.Router
+		if req.RouterID != nil {
+			target, err := s.routerRepo.GetByID(ctx, *req.RouterID)
+			if err == nil {
+				targetRouters = []*network.Router{target}
+			}
 		} else {
-			// Create Hotspot users on each router
-			for _, router := range routers {
-				if router.Status != network.RouterStatusOnline {
+			targetRouters, _ = s.routerRepo.ListByTenant(ctx, tenantID)
+		}
+
+		if len(targetRouters) > 0 {
+			for _, router := range targetRouters {
+				if router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
 					continue
 				}
 
 				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-
 				for _, v := range vouchers {
 					hotspotUser := mikrotik.HotspotUser{
 						Name:     v.Code,
 						Password: v.Password,
-						Profile:  pkg.Name, // Package name must match MikroTik profile name
+						Profile:  pkg.Name,
 						Comment:  fmt.Sprintf("RRNET Voucher - Generated %s", now.Format("2006-01-02 15:04:05")),
 					}
 
-					// Create timeout context for each user creation
 					userCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 					err := mikrotik.AddHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotUser)
 					cancel()
 
 					if err != nil {
-						log.Warn().
-							Err(err).
-							Str("router_id", router.ID.String()).
-							Str("router_name", router.Name).
-							Str("voucher_code", v.Code).
-							Msg("Failed to create Hotspot user on router (voucher still valid, user can be created manually)")
-					} else {
-						log.Info().
-							Str("router_id", router.ID.String()).
-							Str("router_name", router.Name).
-							Str("voucher_code", v.Code).
-							Str("profile", pkg.Name).
-							Msg("Successfully created Hotspot user on router")
+						log.Warn().Err(err).Str("router", router.Name).Str("code", v.Code).Msg("Failed to sync voucher to router")
 					}
 				}
 			}
@@ -539,18 +571,101 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 	return vouchers, nil
 }
 
-func (s *VoucherService) ListVouchers(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*voucher.Voucher, int, error) {
-	vouchers, err := s.voucherRepo.ListVouchersByTenant(ctx, tenantID, limit, offset)
+func (s *VoucherService) GetVouchersByPurchase(ctx context.Context, purchaseID uuid.UUID) ([]*voucher.Voucher, error) {
+	return s.voucherRepo.ListVouchersByPurchase(ctx, purchaseID)
+}
+
+func (s *VoucherService) DeleteVouchersByPurchase(ctx context.Context, tenantID, purchaseID uuid.UUID) error {
+	// 1. Get vouchers to clean up from MikroTik if needed
+	vouchers, err := s.voucherRepo.ListVouchersByPurchase(ctx, purchaseID)
 	if err != nil {
-		return nil, 0, err
+		return err
 	}
 
-	total, err := s.voucherRepo.CountVouchersByTenant(ctx, tenantID)
-	if err != nil {
-		return nil, 0, err
+	if len(vouchers) == 0 {
+		return nil
 	}
 
-	return vouchers, total, nil
+	// 2. Check if we need to cleanup MikroTik (based on the first voucher's package mode)
+	pkg, err := s.voucherRepo.GetPackageByID(ctx, vouchers[0].PackageID)
+	if err == nil && pkg.RateLimitMode == "radius_auth_only" {
+		// Group vouchers by RouterID for efficient cleanup
+		routerVouchers := make(map[uuid.UUID][]string)
+		var routersToCleanup []uuid.UUID
+
+		hasGlobalVouchers := false
+		for _, v := range vouchers {
+			if v.RouterID != nil {
+				routerVouchers[*v.RouterID] = append(routerVouchers[*v.RouterID], v.Code)
+				// Keep track of unique routers
+				found := false
+				for _, rid := range routersToCleanup {
+					if rid == *v.RouterID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					routersToCleanup = append(routersToCleanup, *v.RouterID)
+				}
+			} else {
+				hasGlobalVouchers = true
+			}
+		}
+
+		// 2a. Cleanup from specific routers detected in vouchers
+		for _, rid := range routersToCleanup {
+			router, err := s.routerRepo.GetByID(ctx, rid)
+			if err != nil || router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
+				continue
+			}
+			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+			for _, code := range routerVouchers[rid] {
+				userCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				_ = mikrotik.RemoveHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, code)
+				cancel()
+			}
+		}
+
+		// 2b. If there are any global vouchers, we MUST scan all OTHER routers as well
+		if hasGlobalVouchers {
+			routers, err := s.routerRepo.ListByTenant(ctx, tenantID)
+			if err == nil {
+				for _, router := range routers {
+					// Skip routers we already cleaned specifically
+					isSpecific := false
+					for _, rid := range routersToCleanup {
+						if rid == router.ID {
+							isSpecific = true
+							break
+						}
+					}
+					if isSpecific {
+						continue
+					}
+
+					if router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
+						continue
+					}
+					addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+					for _, v := range vouchers {
+						if v.RouterID == nil {
+							userCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+							_ = mikrotik.RemoveHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, v.Code)
+							cancel()
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Delete from DB
+	return s.voucherRepo.DeleteVouchersByPurchase(ctx, purchaseID)
+}
+
+func (s *VoucherService) ListVouchers(ctx context.Context, tenantID uuid.UUID, limit, offset int, status string, search string) ([]*voucher.Voucher, int, error) {
+	return s.voucherRepo.ListVouchersByTenant(ctx, tenantID, limit, offset, status, search)
 }
 
 func (s *VoucherService) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
@@ -836,6 +951,7 @@ func (s *VoucherService) ConsumeVoucherForAuth(
 		}
 	}
 
+	// Step 2: Calculate expiration if not already set
 	now := time.Now()
 	var expiresAt *time.Time
 
@@ -846,13 +962,36 @@ func (s *VoucherService) ConsumeVoucherForAuth(
 		}
 	}
 
-	return s.voucherRepo.ConsumeVoucherAtomic(
+	// Step 3: Check if it's FIRST usage (transitioning from active to used)
+	isFirstUse := v.Status == voucher.VoucherStatusActive
+
+	// Step 4: Consume voucher atomically
+	updatedV, err := s.voucherRepo.ConsumeVoucherAtomic(
 		ctx,
 		tenantID,
 		code,
 		now,
 		expiresAt,
 	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 5: Record revenue if it's the first use AND NOT a reseller voucher
+	// Reseller vouchers have revenue recorded upon purchase
+	if isFirstUse && updatedV.ResellerPurchaseID == nil {
+		if pkg, err := s.voucherRepo.GetPackageByID(ctx, updatedV.PackageID); err == nil {
+			// Record revenue asynchronously or just call it (since it's in a DB tx)
+			// Note: RecordVoucherRevenue handles its own DB tx, which might be risky
+			// if called inside another repo method, but here it's called after the previous DB operation.
+			if recErr := s.financeService.RecordVoucherRevenue(ctx, updatedV, pkg); recErr != nil {
+				log.Error().Err(recErr).Str("voucher_code", code).Msg("Failed to record voucher revenue")
+			}
+		}
+	}
+
+	return updatedV, nil
 }
 
 // generateRandomFromCharset creates a random string using the provided charset and length

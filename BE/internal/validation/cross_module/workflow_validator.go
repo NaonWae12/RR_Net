@@ -12,10 +12,10 @@ import (
 
 // WorkflowValidator validates workflows across modules
 type WorkflowValidator struct {
-	billingWorkflowValidator  *workflows.BillingWorkflowValidator
-	isolirWorkflowValidator   *workflows.IsolirWorkflowValidator
+	billingWorkflowValidator   *workflows.BillingWorkflowValidator
+	isolirWorkflowValidator    *workflows.IsolirWorkflowValidator
 	collectorWorkflowValidator *workflows.CollectorWorkflowValidator
-	outageWorkflowValidator   *workflows.OutageWorkflowValidator
+	outageWorkflowValidator    *workflows.OutageWorkflowValidator
 }
 
 // NewWorkflowValidator creates a new workflow validator
@@ -75,4 +75,3 @@ func (v *WorkflowValidator) ValidateAllWorkflows(
 
 	return results, nil
 }
-

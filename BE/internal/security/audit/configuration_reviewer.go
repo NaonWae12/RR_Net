@@ -102,4 +102,3 @@ func (spr *SecurityPolicyReviewer) Review(ctx context.Context) ([]ConfigurationI
 
 	return issues, nil
 }
-

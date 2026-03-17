@@ -36,4 +36,3 @@ func CreateSuspendedTenant(name, slug string) *tenant.Tenant {
 	t.Status = tenant.StatusSuspended
 	return t
 }
-

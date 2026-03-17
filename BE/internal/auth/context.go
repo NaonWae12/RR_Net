@@ -59,33 +59,3 @@ func GetClaims(ctx context.Context) (*Claims, bool) {
 	claims, ok := ctx.Value(claimsKey).(*Claims)
 	return claims, ok
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -140,5 +140,3 @@ func (h *BillingTempoTemplateHandler) Delete(w http.ResponseWriter, r *http.Requ
 	}
 	sendJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
-
-

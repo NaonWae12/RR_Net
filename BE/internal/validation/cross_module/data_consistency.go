@@ -218,4 +218,3 @@ func (v *DataConsistencyValidator) ValidateBillingDataIntegrity(ctx context.Cont
 
 	return result, nil
 }
-

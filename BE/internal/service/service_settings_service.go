@@ -8,7 +8,6 @@ import (
 	"rrnet/internal/repository"
 )
 
-
 type ServiceDiscountType string
 
 const (
@@ -17,9 +16,9 @@ const (
 )
 
 type ServiceDiscountSetting struct {
-	Enabled bool               `json:"enabled"`
+	Enabled bool                `json:"enabled"`
 	Type    ServiceDiscountType `json:"type"`
-	Value   float64            `json:"value"`
+	Value   float64             `json:"value"`
 }
 
 type ServiceSettingsDTO struct {
@@ -104,5 +103,3 @@ func readServiceDiscount(settings map[string]interface{}) ServiceDiscountSetting
 	}
 	return out
 }
-
-

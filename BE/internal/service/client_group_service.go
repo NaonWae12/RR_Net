@@ -120,5 +120,3 @@ func toClientGroupDTO(g *client_group.ClientGroup) *ClientGroupDTO {
 		UpdatedAt:   g.UpdatedAt,
 	}
 }
-
-

@@ -19,15 +19,15 @@ func NewDependencyScanner(scanTypes []string) *DependencyScanner {
 
 // DependencyVulnerability represents a vulnerability in a dependency
 type DependencyVulnerability struct {
-	PackageName    string
-	Version        string
+	PackageName     string
+	Version         string
 	VulnerabilityID string
-	Severity       string // "low", "medium", "high", "critical"
-	Description    string
-	CVSSScore      float64
-	FixedVersion   string
-	Recommendation string
-	Timestamp      time.Time
+	Severity        string // "low", "medium", "high", "critical"
+	Description     string
+	CVSSScore       float64
+	FixedVersion    string
+	Recommendation  string
+	Timestamp       time.Time
 }
 
 // ScanDependencies scans dependencies for vulnerabilities
@@ -75,12 +75,12 @@ func NewInfrastructureScanner(scanTypes []string) *InfrastructureScanner {
 
 // InfrastructureIssue represents a security issue in infrastructure
 type InfrastructureIssue struct {
-	Type          string
-	Severity      string
-	Description   string
-	Component     string
+	Type           string
+	Severity       string
+	Description    string
+	Component      string
 	Recommendation string
-	Timestamp     time.Time
+	Timestamp      time.Time
 }
 
 // ScanInfrastructure scans infrastructure for security issues
@@ -111,13 +111,13 @@ func NewCodeScanner(scanTypes []string) *CodeScanner {
 
 // CodeVulnerability represents a vulnerability in source code
 type CodeVulnerability struct {
-	File          string
-	Line          int
-	Type          string // "sql_injection", "xss", "auth_bypass", etc.
-	Severity      string
-	Description   string
+	File           string
+	Line           int
+	Type           string // "sql_injection", "xss", "auth_bypass", etc.
+	Severity       string
+	Description    string
 	Recommendation string
-	Timestamp     time.Time
+	Timestamp      time.Time
 }
 
 // ScanCode scans source code for vulnerabilities
@@ -132,4 +132,3 @@ func (cs *CodeScanner) ScanCode(ctx context.Context, paths []string) ([]CodeVuln
 
 	return vulnerabilities, nil
 }
-

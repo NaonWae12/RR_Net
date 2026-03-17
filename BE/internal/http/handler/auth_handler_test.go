@@ -47,12 +47,12 @@ func (m *MockAuthService) Register(ctx context.Context, tenantID uuid.UUID, role
 	return args.Get(0).(*service.UserDTO), args.Error(1)
 }
 
-func (m *MockAuthService) GetProfile(ctx context.Context, userID uuid.UUID) (*service.UserDTO, error) {
+func (m *MockAuthService) GetProfile(ctx context.Context, userID uuid.UUID) (*service.ProfileResponse, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*service.UserDTO), args.Error(1)
+	return args.Get(0).(*service.ProfileResponse), args.Error(1)
 }
 
 func (m *MockAuthService) ChangePassword(ctx context.Context, userID uuid.UUID, req *service.ChangePasswordRequest) error {
@@ -60,12 +60,20 @@ func (m *MockAuthService) ChangePassword(ctx context.Context, userID uuid.UUID, 
 	return args.Error(0)
 }
 
+func (m *MockAuthService) OAuthLogin(ctx context.Context, oauthUser *auth.OAuthUser) (*service.LoginResponse, error) {
+	args := m.Called(ctx, oauthUser)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.LoginResponse), args.Error(1)
+}
+
 // Ensure MockAuthService implements AuthServiceInterface
 var _ AuthServiceInterface = (*MockAuthService)(nil)
 
 func TestAuthHandler_Login_Success(t *testing.T) {
 	mockService := new(MockAuthService)
-	handler := NewAuthHandler(mockService)
+	handler := NewAuthHandler(mockService, nil) // nil oauthManager for tests
 
 	userID := uuid.New()
 	tenantID := uuid.New()
@@ -115,7 +123,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 
 func TestAuthHandler_Login_InvalidCredentials(t *testing.T) {
 	mockService := new(MockAuthService)
-	handler := NewAuthHandler(mockService)
+	handler := NewAuthHandler(mockService, nil)
 
 	// Test with user not found error
 	mockService.On("Login", mock.Anything, (*uuid.UUID)(nil), mock.Anything).
@@ -145,7 +153,7 @@ func TestAuthHandler_Login_InvalidCredentials(t *testing.T) {
 
 func TestAuthHandler_Login_InvalidJSON(t *testing.T) {
 	mockService := new(MockAuthService)
-	handler := NewAuthHandler(mockService)
+	handler := NewAuthHandler(mockService, nil)
 
 	req := httptest.NewRequest("POST", "/api/v1/auth/login", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -163,7 +171,7 @@ func TestAuthHandler_Login_InvalidJSON(t *testing.T) {
 
 func TestAuthHandler_RefreshToken_Success(t *testing.T) {
 	mockService := new(MockAuthService)
-	handler := NewAuthHandler(mockService)
+	handler := NewAuthHandler(mockService, nil)
 
 	userID := uuid.New()
 	tenantID := uuid.New()

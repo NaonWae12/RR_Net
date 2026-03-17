@@ -27,9 +27,9 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			remote_access_enabled, remote_access_port,
-			vpn_username, vpn_password, vpn_script,
+			vpn_username, vpn_password, vpn_script, dns_name,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
 	`
 	_, err := r.db.Exec(ctx, query,
 		router.ID, router.TenantID, router.Name, router.Description,
@@ -38,7 +38,7 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
 		router.RemoteAccessEnabled, router.RemoteAccessPort,
-		router.VPNUsername, router.VPNPassword, router.VPNScript,
+		router.VPNUsername, router.VPNPassword, router.VPNScript, router.DNSName,
 		router.CreatedAt, router.UpdatedAt,
 	)
 	return err
@@ -51,7 +51,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
-			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE id = $1
@@ -64,7 +64,7 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
-		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -80,7 +80,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
-			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -102,7 +102,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 			&router.ConnectivityMode, &router.APIUseTLS,
 			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
-			&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+			&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 			&router.CreatedAt, &router.UpdatedAt,
 		)
 		if err != nil {
@@ -120,7 +120,7 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
-			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			created_at, updated_at
 		FROM routers WHERE deleted_at IS NULL
 	`
@@ -140,7 +140,7 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 			&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 			&router.ConnectivityMode, &router.APIUseTLS,
 			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
-			&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+			&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 			&router.CreatedAt, &router.UpdatedAt,
 		)
 		if err != nil {
@@ -158,7 +158,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
-			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE tenant_id = $1 AND is_default = true AND deleted_at IS NULL
@@ -171,7 +171,7 @@ func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
-		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -188,8 +188,8 @@ func (r *RouterRepository) Update(ctx context.Context, router *network.Router) e
 			is_default = $13, radius_enabled = $14, radius_secret = $15,
 			connectivity_mode = $16, api_use_tls = $17,
 			remote_access_enabled = $18, remote_access_port = $19,
-			vpn_username = $20, vpn_password = $21, vpn_script = $22,
-			updated_at = $23
+			vpn_username = $20, vpn_password = $21, vpn_script = $22, dns_name = $23,
+			updated_at = $24
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
@@ -199,7 +199,7 @@ func (r *RouterRepository) Update(ctx context.Context, router *network.Router) e
 		router.RadiusEnabled, router.RadiusSecret,
 		router.ConnectivityMode, router.APIUseTLS,
 		router.RemoteAccessEnabled, router.RemoteAccessPort,
-		router.VPNUsername, router.VPNPassword, router.VPNScript,
+		router.VPNUsername, router.VPNPassword, router.VPNScript, router.DNSName,
 		router.UpdatedAt,
 	)
 	return err
@@ -268,7 +268,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
-			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			created_at, updated_at
 		FROM routers
 		WHERE nas_ip = $1 AND radius_enabled = true AND deleted_at IS NULL
@@ -282,7 +282,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
-		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 		&router.CreatedAt, &router.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -300,7 +300,7 @@ func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string)
 			radius_enabled, radius_secret,
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
-			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			created_at, updated_at, deleted_at
 		FROM routers
 		WHERE nas_identifier = $1
@@ -314,7 +314,7 @@ func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string)
 		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
 		&router.ConnectivityMode, &router.APIUseTLS,
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
-		&router.VPNUsername, &router.VPNPassword, &router.VPNScript,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 		&router.CreatedAt, &router.UpdatedAt, &router.DeletedAt,
 	)
 	if err == pgx.ErrNoRows {

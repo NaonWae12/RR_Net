@@ -1,17 +1,17 @@
 'use client';
 
 import React from 'react';
-import { LimitMap, ClientStats } from '@/lib/api/dashboardService';
+import { LimitMap, ClientStats, ResourceUsageStats } from '@/lib/api/dashboardService';
 
 interface LimitsCardProps {
   limits: LimitMap;
   clientStats?: ClientStats;
+  resourceUsage?: ResourceUsageStats;
   className?: string;
 }
 
 const limitLabels: Record<string, string> = {
   max_routers: 'Routers',
-  max_users: 'Users',
   max_vouchers: 'Vouchers',
   max_odc: 'ODC',
   max_odp: 'ODP',
@@ -19,10 +19,24 @@ const limitLabels: Record<string, string> = {
   wa_quota_monthly: 'WA Quota',
 };
 
-export function LimitsCard({ limits, clientStats, className = '' }: LimitsCardProps) {
-  const getLimitDisplay = (key: string, value: number, current?: number) => {
+export function LimitsCard({ limits, clientStats, resourceUsage, className = '' }: LimitsCardProps) {
+  const getLimitDisplay = (key: string, value: number) => {
+    let current: number | undefined;
+    
+    // 1. Try new resourceUsage first
+    if (resourceUsage) {
+      if (key === 'max_routers') current = resourceUsage.routers.used;
+      else if (key === 'max_vouchers') current = resourceUsage.vouchers.used;
+      else if (key === 'max_clients') current = resourceUsage.clients.used;
+    }
+    
+    // 2. Fallback to legacy clientStats for clients if resourceUsage is missing
+    if (current === undefined && key === 'max_clients' && clientStats) {
+      current = clientStats.total;
+    }
+
     const isUnlimited = value === -1;
-    const percentage = isUnlimited || current === undefined ? 100 : Math.min((current / value) * 100, 100);
+    const percentage = isUnlimited || current === undefined ? 0 : Math.min((current / value) * 100, 100);
     const isNearLimit = !isUnlimited && current !== undefined && percentage >= 80;
     const isOverLimit = !isUnlimited && current !== undefined && percentage >= 100;
 
@@ -32,6 +46,7 @@ export function LimitsCard({ limits, clientStats, className = '' }: LimitsCardPr
       isNearLimit,
       isOverLimit,
       isUnlimited,
+      current,
     };
   };
 
@@ -41,8 +56,12 @@ export function LimitsCard({ limits, clientStats, className = '' }: LimitsCardPr
       
       <div className="space-y-4">
         {Object.entries(limits).map(([key, value]) => {
-          const current = key === 'max_clients' && clientStats ? clientStats.total : undefined;
-          const { display, percentage, isNearLimit, isOverLimit, isUnlimited } = getLimitDisplay(key, value, current);
+          const { display, percentage, isNearLimit, isOverLimit, isUnlimited, current } = getLimitDisplay(key, value);
+
+          // Hide if both current usage and limit are 0
+          if (value === 0 && (current === 0 || current === undefined)) {
+            return null;
+          }
 
           return (
             <div key={key}>
@@ -60,7 +79,7 @@ export function LimitsCard({ limits, clientStats, className = '' }: LimitsCardPr
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${
+                  className={`h-full rounded-full transition-all duration-500 ${
                     isUnlimited ? 'bg-emerald-500' :
                     isOverLimit ? 'bg-red-500' :
                     isNearLimit ? 'bg-amber-500' :

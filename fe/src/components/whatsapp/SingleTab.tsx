@@ -8,6 +8,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import clientService, { type Client } from "@/lib/api/clientService";
 import waGatewayService from "@/lib/api/waGatewayService";
 import waTemplateService, { type WATemplate } from "@/lib/api/waTemplateService";
+import { MessageVariableHelper } from "./MessageVariableHelper";
 
 function digitsOnly(v: string) {
   return (v ?? "").replace(/[^\d]/g, "");
@@ -218,6 +219,7 @@ export function SingleTab() {
             onChange={(e) => setText(e.target.value)}
             placeholder="Tulis pesan di sini..."
           />
+          <MessageVariableHelper />
         </div>
 
         <div className="flex items-center justify-end gap-2">

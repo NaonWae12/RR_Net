@@ -13,6 +13,7 @@ interface MetricCardProps {
   };
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
   className?: string;
+  href?: string;
 }
 
 const variantStyles = {
@@ -31,6 +32,8 @@ const iconStyles = {
   info: 'bg-sky-100 text-sky-600',
 };
 
+import Link from 'next/link';
+
 export function MetricCard({
   title,
   value,
@@ -39,19 +42,21 @@ export function MetricCard({
   trend,
   variant = 'default',
   className = '',
+  href,
 }: MetricCardProps) {
-  return (
+  const CardContent = (
     <div
       className={`
-        rounded-xl border p-6 shadow-sm transition-all hover:shadow-md
+        rounded-xl border p-6 shadow-sm transition-all hover:shadow-md h-full
         ${variantStyles[variant]}
         ${className}
+        ${href ? 'hover:scale-[1.02] cursor-pointer' : ''}
       `}
     >
       <div className="flex items-start justify-between">
-        <div className="flex-1">
+        <div className="flex-1 text-left">
           <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+          <p className="mt-2 text-2xl lg:text-3xl font-bold text-slate-900">{value}</p>
           {subtitle && (
             <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
           )}
@@ -76,6 +81,16 @@ export function MetricCard({
       </div>
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block h-full">
+        {CardContent}
+      </Link>
+    );
+  }
+
+  return CardContent;
 }
 
 

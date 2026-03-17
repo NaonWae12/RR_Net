@@ -101,5 +101,3 @@ func (r *BillingTempoTemplateRepository) NameExists(ctx context.Context, tenantI
 	}
 	return exists, nil
 }
-
-

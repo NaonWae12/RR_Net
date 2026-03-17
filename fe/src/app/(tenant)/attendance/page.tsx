@@ -6,7 +6,7 @@ import { useRole } from "@/lib/hooks/useRole";
 import { RoleGuard } from "@/components/guards/RoleGuard";
 import { AttendanceCheckIn } from "@/components/technician/AttendanceCheckIn";
 import { AttendanceCalendar } from "@/components/technician/AttendanceCalendar";
-import { technicianService } from "@/lib/api/technicianService";
+import { attendanceService } from "@/lib/api/attendanceService";
 import { Attendance, CheckInRequest, CheckOutRequest } from "@/lib/api/types";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
@@ -17,7 +17,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function AttendancePage() {
     const router = useRouter();
-    const { userId } = useRole();
+    const { role } = useRole();
     const { showToast } = useNotificationStore();
     const { isAuthenticated } = useAuth();
     const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
@@ -27,11 +27,11 @@ export default function AttendancePage() {
     const [error, setError] = useState<string | null>(null);
 
     const fetchTodayAttendance = async () => {
-        if (!userId || !isAuthenticated) return;
+        if (!isAuthenticated) return;
         try {
             setLoading(true);
             setError(null);
-            const attendance = await technicianService.getTodayAttendance(userId);
+            const attendance = await attendanceService.getTodayAttendance();
             setTodayAttendance(attendance);
         } catch (err: any) {
             setError(err?.message || "Failed to load today's attendance");
@@ -41,11 +41,11 @@ export default function AttendancePage() {
     };
 
     const fetchMonthAttendances = async () => {
-        if (!userId || !isAuthenticated) return;
+        if (!isAuthenticated) return;
         try {
             const startDate = format(startOfMonth(currentMonth), "yyyy-MM-dd");
             const endDate = format(endOfMonth(currentMonth), "yyyy-MM-dd");
-            const data = await technicianService.getAttendanceList(userId, startDate, endDate);
+            const data = await attendanceService.getAttendanceList(startDate, endDate);
             setAttendances(data);
         } catch (err: any) {
             console.error("Failed to load attendances:", err);
@@ -54,15 +54,15 @@ export default function AttendancePage() {
 
     useEffect(() => {
         fetchTodayAttendance();
-    }, [userId, isAuthenticated]);
+    }, [isAuthenticated]);
 
     useEffect(() => {
         fetchMonthAttendances();
-    }, [userId, currentMonth, isAuthenticated]);
+    }, [currentMonth, isAuthenticated]);
 
     const handleCheckIn = async (data: CheckInRequest) => {
         try {
-            const attendance = await technicianService.checkIn(data);
+            const attendance = await attendanceService.checkIn(data);
             setTodayAttendance(attendance);
             await fetchMonthAttendances();
         } catch (err: any) {
@@ -72,7 +72,7 @@ export default function AttendancePage() {
 
     const handleCheckOut = async (data: CheckOutRequest) => {
         try {
-            const attendance = await technicianService.checkOut(data);
+            const attendance = await attendanceService.checkOut(data);
             setTodayAttendance(attendance);
             await fetchMonthAttendances();
         } catch (err: any) {
@@ -98,7 +98,7 @@ export default function AttendancePage() {
 
     if (error && !todayAttendance) {
         return (
-            <RoleGuard allowedRoles={["admin", "technician", "hr", "finance"]} redirectTo="/dashboard">
+                <RoleGuard allowedRoles={["owner", "admin", "hr", "finance", "technician"]} redirectTo="/dashboard">
                 <div className="p-6">
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                         {error}
@@ -109,7 +109,7 @@ export default function AttendancePage() {
     }
 
     return (
-        <RoleGuard allowedRoles={["admin", "technician", "hr", "finance"]} redirectTo="/dashboard">
+            <RoleGuard allowedRoles={["owner", "admin", "hr", "finance", "technician"]} redirectTo="/dashboard">
             <div className="p-6 space-y-6">
                 <div className="flex items-center gap-4">
                     <button

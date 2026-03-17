@@ -335,6 +335,51 @@ export default function TimeOffPage() {
                                     </a>
                                 </div>
                             )}
+
+                            {/* Edit/Delete Actions - Only for Pending Requests */}
+                            {selectedTimeOff.status === "pending_approval" && (
+                                <div className="pt-4 border-t border-slate-200 flex gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={async () => {
+                                            if (confirm("Are you sure you want to delete this time-off request?")) {
+                                                try {
+                                                    await technicianService.deleteTimeOff(selectedTimeOff.id);
+                                                    showToast({
+                                                        title: "Request deleted",
+                                                        description: "Your time-off request has been deleted.",
+                                                        variant: "success",
+                                                    });
+                                                    setSelectedTimeOff(null);
+                                                    await fetchTimeOffs();
+                                                } catch (err: any) {
+                                                    showToast({
+                                                        title: "Failed to delete request",
+                                                        description: err?.message || "An unexpected error occurred.",
+                                                        variant: "error",
+                                                    });
+                                                }
+                                            }
+                                        }}
+                                        className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+                                    >
+                                        Delete Request
+                                    </Button>
+                                    <Button
+                                        onClick={() => {
+                                            // TODO: Implement edit functionality
+                                            showToast({
+                                                title: "Edit feature coming soon",
+                                                description: "Edit functionality will be available in the next update.",
+                                                variant: "info",
+                                            });
+                                        }}
+                                        className="flex-1"
+                                    >
+                                        Edit Request
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </Modal>
                 )}

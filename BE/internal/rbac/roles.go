@@ -53,33 +53,3 @@ func IsTenantAdmin(role string) bool {
 func (r Role) String() string {
 	return string(r)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

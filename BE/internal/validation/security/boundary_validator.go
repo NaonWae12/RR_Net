@@ -32,10 +32,10 @@ func NewBoundaryValidator(
 
 // SecurityValidationResult represents the result of a security validation
 type SecurityValidationResult struct {
-	Valid       bool
-	Message     string
-	Errors      []string
-	Warnings    []string
+	Valid    bool
+	Message  string
+	Errors   []string
+	Warnings []string
 }
 
 // ValidateTenantIsolation validates tenant data isolation
@@ -161,4 +161,3 @@ func (v *PrivilegeValidator) ValidatePrivilegeEscalation(
 	result.Message = fmt.Sprintf("Privilege escalation validation completed for user %s", userID)
 	return result, nil
 }
-

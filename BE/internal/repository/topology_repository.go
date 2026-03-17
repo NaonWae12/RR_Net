@@ -139,4 +139,3 @@ func (r *TopologyRepository) ListByTenant(ctx context.Context, tenantID uuid.UUI
 	}
 	return links, nil
 }
-

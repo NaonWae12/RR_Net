@@ -144,33 +144,3 @@ func (j *JWTManager) GetAccessTokenTTL() time.Duration {
 func (j *JWTManager) GetRefreshTokenTTL() time.Duration {
 	return j.refreshTokenTTL
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -39,4 +39,3 @@ func Init(env string) {
 func Get() *zerolog.Logger {
 	return &log.Logger
 }
-

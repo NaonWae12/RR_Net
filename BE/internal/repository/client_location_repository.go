@@ -33,14 +33,19 @@ func (r *ClientLocationRepository) Create(ctx context.Context, loc *maps.ClientL
 
 func (r *ClientLocationRepository) GetByID(ctx context.Context, id uuid.UUID) (*maps.ClientLocation, error) {
 	query := `
-		SELECT id, tenant_id, client_id, odp_id, latitude, longitude, connection_type, signal_info, notes, status, created_at, updated_at
-		FROM client_locations
-		WHERE id = $1
+		SELECT cl.id, cl.tenant_id, cl.client_id, cl.odp_id, cl.latitude, cl.longitude, cl.connection_type, cl.signal_info, cl.notes, cl.status, cl.created_at, cl.updated_at, c.name,
+		       (r.id IS NOT NULL) as is_reseller,
+		       COALESCE(r.reseller_radius, 0) as reseller_radius
+		FROM client_locations cl
+		JOIN clients c ON cl.client_id = c.id
+		LEFT JOIN resellers r ON r.client_id = c.id
+		WHERE cl.id = $1
 	`
 	var loc maps.ClientLocation
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&loc.ID, &loc.TenantID, &loc.ClientID, &loc.ODPID, &loc.Latitude, &loc.Longitude,
-		&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt,
+		&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt, &loc.ClientName,
+		&loc.IsReseller, &loc.ResellerRadius,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("client location not found")
@@ -50,14 +55,19 @@ func (r *ClientLocationRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 
 func (r *ClientLocationRepository) GetByClientID(ctx context.Context, clientID uuid.UUID) (*maps.ClientLocation, error) {
 	query := `
-		SELECT id, tenant_id, client_id, odp_id, latitude, longitude, connection_type, signal_info, notes, status, created_at, updated_at
-		FROM client_locations
-		WHERE client_id = $1
+		SELECT cl.id, cl.tenant_id, cl.client_id, cl.odp_id, cl.latitude, cl.longitude, cl.connection_type, cl.signal_info, cl.notes, cl.status, cl.created_at, cl.updated_at, c.name,
+		       (r.id IS NOT NULL) as is_reseller,
+		       COALESCE(r.reseller_radius, 0) as reseller_radius
+		FROM client_locations cl
+		JOIN clients c ON cl.client_id = c.id
+		LEFT JOIN resellers r ON r.client_id = c.id
+		WHERE cl.client_id = $1
 	`
 	var loc maps.ClientLocation
 	err := r.db.QueryRow(ctx, query, clientID).Scan(
 		&loc.ID, &loc.TenantID, &loc.ClientID, &loc.ODPID, &loc.Latitude, &loc.Longitude,
-		&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt,
+		&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt, &loc.ClientName,
+		&loc.IsReseller, &loc.ResellerRadius,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("client location not found")
@@ -67,10 +77,14 @@ func (r *ClientLocationRepository) GetByClientID(ctx context.Context, clientID u
 
 func (r *ClientLocationRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]*maps.ClientLocation, error) {
 	query := `
-		SELECT id, tenant_id, client_id, odp_id, latitude, longitude, connection_type, signal_info, notes, status, created_at, updated_at
-		FROM client_locations
-		WHERE tenant_id = $1
-		ORDER BY created_at DESC
+		SELECT cl.id, cl.tenant_id, cl.client_id, cl.odp_id, cl.latitude, cl.longitude, cl.connection_type, cl.signal_info, cl.notes, cl.status, cl.created_at, cl.updated_at, c.name,
+		       (r.id IS NOT NULL) as is_reseller,
+		       COALESCE(r.reseller_radius, 0) as reseller_radius
+		FROM client_locations cl
+		JOIN clients c ON cl.client_id = c.id
+		LEFT JOIN resellers r ON r.client_id = c.id
+		WHERE cl.tenant_id = $1
+		ORDER BY cl.created_at DESC
 	`
 	rows, err := r.db.Query(ctx, query, tenantID)
 	if err != nil {
@@ -83,7 +97,8 @@ func (r *ClientLocationRepository) ListByTenant(ctx context.Context, tenantID uu
 		var loc maps.ClientLocation
 		err := rows.Scan(
 			&loc.ID, &loc.TenantID, &loc.ClientID, &loc.ODPID, &loc.Latitude, &loc.Longitude,
-			&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt,
+			&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt, &loc.ClientName,
+			&loc.IsReseller, &loc.ResellerRadius,
 		)
 		if err != nil {
 			return nil, err
@@ -95,10 +110,14 @@ func (r *ClientLocationRepository) ListByTenant(ctx context.Context, tenantID uu
 
 func (r *ClientLocationRepository) ListByODP(ctx context.Context, odpID uuid.UUID) ([]*maps.ClientLocation, error) {
 	query := `
-		SELECT id, tenant_id, client_id, odp_id, latitude, longitude, connection_type, signal_info, notes, status, created_at, updated_at
-		FROM client_locations
-		WHERE odp_id = $1
-		ORDER BY created_at DESC
+		SELECT cl.id, cl.tenant_id, cl.client_id, cl.odp_id, cl.latitude, cl.longitude, cl.connection_type, cl.signal_info, cl.notes, cl.status, cl.created_at, cl.updated_at, c.name,
+		       (r.id IS NOT NULL) as is_reseller,
+		       COALESCE(r.reseller_radius, 0) as reseller_radius
+		FROM client_locations cl
+		JOIN clients c ON cl.client_id = c.id
+		LEFT JOIN resellers r ON r.client_id = c.id
+		WHERE cl.odp_id = $1
+		ORDER BY cl.created_at DESC
 	`
 	rows, err := r.db.Query(ctx, query, odpID)
 	if err != nil {
@@ -111,7 +130,8 @@ func (r *ClientLocationRepository) ListByODP(ctx context.Context, odpID uuid.UUI
 		var loc maps.ClientLocation
 		err := rows.Scan(
 			&loc.ID, &loc.TenantID, &loc.ClientID, &loc.ODPID, &loc.Latitude, &loc.Longitude,
-			&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt,
+			&loc.ConnectionType, &loc.SignalInfo, &loc.Notes, &loc.Status, &loc.CreatedAt, &loc.UpdatedAt, &loc.ClientName,
+			&loc.IsReseller, &loc.ResellerRadius,
 		)
 		if err != nil {
 			return nil, err
@@ -177,4 +197,3 @@ func (r *ClientLocationRepository) FindNearestODP(ctx context.Context, tenantID 
 	}
 	return odpIDs, nil
 }
-

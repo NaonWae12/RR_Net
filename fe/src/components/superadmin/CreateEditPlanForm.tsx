@@ -2,12 +2,22 @@
 
 import { useEffect } from "react";
 import { z } from "zod";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Plan, CreatePlanRequest, UpdatePlanRequest } from "@/lib/api/types";
 import { FeatureSelector } from "./FeatureSelector";
+import { Activity, CreditCard, Layers, ShieldCheck, Tag, Info, Gauge } from "lucide-react";
 
 const planFormSchema = z.object({
     code: z.string().min(1, "Code is required"),
@@ -18,7 +28,6 @@ const planFormSchema = z.object({
     currency: z.string().default("IDR"),
     limits: z.object({
         max_routers: z.coerce.number().optional(),
-        max_users: z.coerce.number().optional(),
         max_vouchers: z.coerce.number().optional(),
         max_clients: z.coerce.number().optional(),
         max_odc: z.coerce.number().optional(),
@@ -49,6 +58,7 @@ export function CreateEditPlanForm({ initialData, onSubmit, onCancel, isLoading 
         reset,
         watch,
         setValue,
+        control,
         formState: { errors },
     } = useForm<PlanFormValues>({
         resolver: zodResolver(planFormSchema),
@@ -61,7 +71,6 @@ export function CreateEditPlanForm({ initialData, onSubmit, onCancel, isLoading 
             currency: "IDR",
             limits: {
                 max_routers: 0,
-                max_users: 0,
                 max_vouchers: 0,
                 max_clients: 0,
                 max_odc: 0,
@@ -88,7 +97,6 @@ export function CreateEditPlanForm({ initialData, onSubmit, onCancel, isLoading 
                 currency: initialData.currency,
                 limits: {
                     max_routers: initialData.limits?.max_routers ?? 0,
-                    max_users: initialData.limits?.max_users ?? 0,
                     max_vouchers: initialData.limits?.max_vouchers ?? 0,
                     max_clients: initialData.limits?.max_clients ?? 0,
                     max_odc: initialData.limits?.max_odc ?? 0,
@@ -111,7 +119,6 @@ export function CreateEditPlanForm({ initialData, onSubmit, onCancel, isLoading 
 
         // Map form limits to API limits format
         if (data.limits.max_routers !== undefined) limits.max_routers = data.limits.max_routers;
-        if (data.limits.max_users !== undefined) limits.max_users = data.limits.max_users;
         if (data.limits.max_vouchers !== undefined) limits.max_vouchers = data.limits.max_vouchers;
         if (data.limits.max_clients !== undefined) limits.max_clients = data.limits.max_clients;
         if (data.limits.max_odc !== undefined) limits.max_odc = data.limits.max_odc;
@@ -151,309 +158,338 @@ export function CreateEditPlanForm({ initialData, onSubmit, onCancel, isLoading 
     };
 
     return (
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Code</label>
-                    <Input {...register("code")} error={errors.code?.message} disabled={!!initialData} />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                    <Input {...register("name")} error={errors.name?.message} />
-                </div>
-            </div>
-
-            <div>
-                <label className="text-sm font-medium text-slate-700">Description</label>
-                <textarea
-                    {...register("description")}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
-                    rows={3}
-                />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Price Monthly</label>
-                    <Input
-                        type="number"
-                        step="0.01"
-                        {...register("price_monthly")}
-                        error={errors.price_monthly?.message}
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Price Yearly (optional)</label>
-                    <Input
-                        type="number"
-                        step="0.01"
-                        {...register("price_yearly")}
-                        error={errors.price_yearly?.message}
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
-                    <Input {...register("currency")} error={errors.currency?.message} />
-                </div>
-            </div>
-
-            {/* Limits Section */}
-            <div className="space-y-6 border-t pt-6">
-                <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-1">Plan Limits</h3>
-                    <p className="text-sm text-slate-600">Set limits for this plan. Use -1 for unlimited.</p>
-                </div>
-
-                {/* Network & Router Limits */}
-                <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Network & Router Limits</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Max Routers</label>
-                            <Input
-                                type="number"
-                                {...register("limits.max_routers", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.max_routers ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.max_routers?.message}
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-8 max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column: Main Info, Pricing, Limits */}
+                <div className="lg:col-span-2 space-y-8">
+                    {/* Basic Information */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center text-lg">
+                                <Tag className="h-5 w-5 mr-2 text-slate-500" />
+                                Basic Information
+                            </CardTitle>
+                            <CardDescription>
+                                General details about the plan.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Input
+                                    label="Code"
+                                    {...register("code")}
+                                    error={errors.code?.message}
+                                    disabled={!!initialData}
+                                    placeholder="e.g. BASIC_PLAN"
+                                />
+                                <Input
+                                    label="Name"
+                                    {...register("name")}
+                                    error={errors.name?.message}
+                                    placeholder="e.g. Basic Plan"
+                                />
+                            </div>
+                            <Textarea
+                                label="Description"
+                                {...register("description")}
+                                className="min-h-[100px]"
+                                placeholder="Describe the plan features and target audience..."
                             />
-                        </div>
-                    </div>
-                </div>
+                        </CardContent>
+                    </Card>
 
-                {/* User Limits */}
-                <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">User Limits</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Max Users</label>
-                            <Input
-                                type="number"
-                                {...register("limits.max_users", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.max_users ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.max_users?.message}
-                            />
-                        </div>
-                    </div>
-                </div>
+                    {/* Pricing */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center text-lg">
+                                <CreditCard className="h-5 w-5 mr-2 text-slate-500" />
+                                Pricing
+                            </CardTitle>
+                            <CardDescription>
+                                Set the monthly and yearly pricing for this plan.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <Input
+                                    label="Price Monthly"
+                                    type="number"
+                                    step="0.01"
+                                    {...register("price_monthly")}
+                                    error={errors.price_monthly?.message}
+                                    placeholder="0"
+                                />
+                                <Input
+                                    label="Price Yearly (Optional)"
+                                    type="number"
+                                    step="0.01"
+                                    {...register("price_yearly")}
+                                    error={errors.price_yearly?.message}
+                                    placeholder="Leave empty if not available"
+                                />
+                                <Input
+                                    label="Currency"
+                                    {...register("currency")}
+                                    error={errors.currency?.message}
+                                    placeholder="IDR"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                {/* Voucher Limits */}
-                <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Voucher Limits</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Voucher Limit</label>
-                            <Input
-                                type="number"
-                                {...register("limits.max_vouchers", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.max_vouchers ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.max_vouchers?.message}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Client Limits */}
-                <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Client Limits</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Max Clients</label>
-                            <Input
-                                type="number"
-                                {...register("limits.max_clients", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.max_clients ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.max_clients?.message}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Maps Limits */}
-                <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Maps Limits</h4>
-                    <p className="text-xs text-slate-500 mb-3">Limit jumlah node yang bisa ditambahkan di peta topologi jaringan</p>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">
-                                ODC Maps Limit
-                                <span className="ml-2 text-xs font-normal text-slate-500">(Optical Distribution Center)</span>
-                            </label>
-                            <Input
-                                type="number"
-                                {...register("limits.max_odc", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.max_odc ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.max_odc?.message}
-                            />
-                            <p className="text-xs text-slate-500 mt-1">Maksimal jumlah ODC yang bisa ditambahkan di peta</p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">
-                                ODP Maps Limit
-                                <span className="ml-2 text-xs font-normal text-slate-500">(Optical Distribution Point)</span>
-                            </label>
-                            <Input
-                                type="number"
-                                {...register("limits.max_odp", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.max_odp ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.max_odp?.message}
-                            />
-                            <p className="text-xs text-slate-500 mt-1">Maksimal jumlah ODP yang bisa ditambahkan di peta</p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">
-                                Client Maps Limit
-                                <span className="ml-2 text-xs font-normal text-slate-500">(Lokasi Pelanggan)</span>
-                            </label>
-                            <Input
-                                type="number"
-                                {...register("limits.max_client_maps", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.max_client_maps ?? initialData?.limits?.max_clients ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.max_client_maps?.message}
-                            />
-                            <p className="text-xs text-slate-500 mt-1">Maksimal jumlah lokasi pelanggan yang bisa ditambahkan di peta</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Communication Limits */}
-                <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Communication Limits</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">WA Quota Monthly</label>
-                            <Input
-                                type="number"
-                                {...register("limits.wa_quota_monthly", {
-                                    setValueAs: (v) => {
-                                        const num = parseInt(v, 10);
-                                        return isNaN(num) ? undefined : num;
-                                    },
-                                })}
-                                defaultValue={initialData?.limits?.wa_quota_monthly ?? 0}
-                                placeholder="0 or -1 for unlimited"
-                                error={errors.limits?.wa_quota_monthly?.message}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* RBAC Limits - Only show if rbac_client_reseller feature is selected */}
-                {(() => {
-                    const selectedFeatures = watch("features") || [];
-                    const hasRbacClientReseller = selectedFeatures.includes("rbac_client_reseller") || selectedFeatures.includes("*");
-                    
-                    if (!hasRbacClientReseller) return null;
-                    
-                    return (
-                        <div className="space-y-3">
-                            <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">RBAC Limits</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        RBAC Client / Reseller Limit
-                                    </label>
+                    {/* Limits Section */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center text-lg">
+                                <Gauge className="h-5 w-5 mr-2 text-slate-500" />
+                                Plan Limits
+                            </CardTitle>
+                            <CardDescription>
+                                Define usage constraints. Use -1 for unlimited.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {/* Network & Router Limits */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-semibold text-slate-900 border-b pb-2 flex items-center">
+                                    <Activity className="h-4 w-4 mr-2 text-slate-500" />
+                                    Network & Router Limits
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <Input
+                                        label="Max Routers"
                                         type="number"
-                                        {...register("limits.rbac_client_reseller", {
-                                            setValueAs: (v) => {
-                                                const num = parseInt(v, 10);
-                                                return isNaN(num) ? undefined : num;
-                                            },
+                                        {...register("limits.max_routers", {
+                                            setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
                                         })}
-                                        defaultValue={initialData?.limits?.rbac_client_reseller ?? 0}
-                                        placeholder="0 or -1 for unlimited"
-                                        error={errors.limits?.rbac_client_reseller?.message}
+                                        defaultValue={initialData?.limits?.max_routers ?? 0}
+                                        placeholder="0 or -1"
+                                        error={errors.limits?.max_routers?.message}
                                     />
-                                    <p className="text-xs text-slate-500 mt-1">Maksimal jumlah client/reseller yang bisa dibuat dengan role reseller</p>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })()}
-            </div>
 
-            <div>
-                <FeatureSelector
-                    value={watch("features") || []}
-                    onChange={(codes) => {
-                        setValue("features", codes, { shouldValidate: true });
-                    }}
-                    error={errors.features?.message}
-                />
-            </div>
+                            {/* Client & Voucher Limits */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-semibold text-slate-900 border-b pb-2 flex items-center">
+                                    <Activity className="h-4 w-4 mr-2 text-slate-500" />
+                                    Client & Voucher Limits
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Input
+                                        label="Max Clients"
+                                        type="number"
+                                        {...register("limits.max_clients", {
+                                            setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                                        })}
+                                        defaultValue={initialData?.limits?.max_clients ?? 0}
+                                        placeholder="0 or -1"
+                                        error={errors.limits?.max_clients?.message}
+                                    />
+                                    <Input
+                                        label="Voucher Limit"
+                                        type="number"
+                                        {...register("limits.max_vouchers", {
+                                            setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                                        })}
+                                        defaultValue={initialData?.limits?.max_vouchers ?? 0}
+                                        placeholder="0 or -1"
+                                        error={errors.limits?.max_vouchers?.message}
+                                    />
+                                </div>
+                            </div>
 
-            <div className="grid grid-cols-3 gap-4">
-                <div className="flex items-center space-x-2">
-                    <input type="checkbox" {...register("is_active")} className="rounded border-slate-300" />
-                    <label className="text-sm font-medium text-slate-700">Is Active</label>
-                </div>
-                <div className="flex items-center space-x-2">
-                    <input type="checkbox" {...register("is_public")} className="rounded border-slate-300" />
-                    <label className="text-sm font-medium text-slate-700">Is Public</label>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Sort Order</label>
-                    <Input
-                        type="number"
-                        {...register("sort_order")}
-                        error={errors.sort_order?.message}
-                    />
-                </div>
-            </div>
+                            {/* Maps Limits */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-semibold text-slate-900 border-b pb-2 flex items-center">
+                                    <Layers className="h-4 w-4 mr-2 text-slate-500" />
+                                    Maps & Infrastructure Limits
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <Input
+                                        label="ODC Maps Limit"
+                                        info="Optical Distribution Center"
+                                        type="number"
+                                        {...register("limits.max_odc", {
+                                            setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                                        })}
+                                        defaultValue={initialData?.limits?.max_odc ?? 0}
+                                        placeholder="0 or -1"
+                                        error={errors.limits?.max_odc?.message}
+                                    />
+                                    <Input
+                                        label="ODP Maps Limit"
+                                        info="Optical Distribution Point"
+                                        type="number"
+                                        {...register("limits.max_odp", {
+                                            setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                                        })}
+                                        defaultValue={initialData?.limits?.max_odp ?? 0}
+                                        placeholder="0 or -1"
+                                        error={errors.limits?.max_odp?.message}
+                                    />
+                                    <Input
+                                        label="Client Maps Limit"
+                                        info="Customer Locations"
+                                        type="number"
+                                        {...register("limits.max_client_maps", {
+                                            setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                                        })}
+                                        defaultValue={initialData?.limits?.max_client_maps ?? initialData?.limits?.max_clients ?? 0}
+                                        placeholder="0 or -1"
+                                        error={errors.limits?.max_client_maps?.message}
+                                    />
+                                </div>
+                            </div>
 
-            <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-                    Cancel
-                </Button>
-                <Button type="submit" disabled={isLoading}>
-                    {isLoading ? "Saving..." : initialData ? "Update Plan" : "Create Plan"}
-                </Button>
+                            {/* Communication Limits */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-semibold text-slate-900 border-b pb-2 flex items-center">
+                                    <Info className="h-4 w-4 mr-2 text-slate-500" />
+                                    Communication Limits
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Input
+                                        label="WA Quota Monthly"
+                                        type="number"
+                                        {...register("limits.wa_quota_monthly", {
+                                            setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                                        })}
+                                        defaultValue={initialData?.limits?.wa_quota_monthly ?? 0}
+                                        placeholder="0 or -1"
+                                        error={errors.limits?.wa_quota_monthly?.message}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* RBAC Limits */}
+                            {(() => {
+                                const selectedFeatures = watch("features") || [];
+                                const hasRbacClientReseller = selectedFeatures.includes("rbac_client_reseller") || selectedFeatures.includes("*");
+                                
+                                if (!hasRbacClientReseller) return null;
+                                
+                                return (
+                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <h4 className="text-sm font-semibold text-slate-900 border-b pb-2 flex items-center">
+                                            <ShieldCheck className="h-4 w-4 mr-2 text-purple-500" />
+                                            RBAC Limits
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input
+                                                label="RBAC Client / Reseller Limit"
+                                                info="Max reseller accounts allowed"
+                                                type="number"
+                                                {...register("limits.rbac_client_reseller", {
+                                                    setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                                                })}
+                                                defaultValue={initialData?.limits?.rbac_client_reseller ?? 0}
+                                                placeholder="0 or -1"
+                                                error={errors.limits?.rbac_client_reseller?.message}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right Column: Features, Status, Actions */}
+                <div className="space-y-8">
+                    {/* Status & Settings */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center text-lg">
+                                <Activity className="h-5 w-5 mr-2 text-slate-500" />
+                                Status & Settings
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                    <label className="text-sm font-medium text-slate-900">Active Status</label>
+                                    <p className="text-xs text-slate-500">Plan is available for use</p>
+                                </div>
+                                <Controller
+                                    control={control}
+                                    name="is_active"
+                                    render={({ field }) => (
+                                        <Switch
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                        />
+                                    )}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                    <label className="text-sm font-medium text-slate-900">Public Visibility</label>
+                                    <p className="text-xs text-slate-500">Show on public pricing page</p>
+                                </div>
+                                <Controller
+                                    control={control}
+                                    name="is_public"
+                                    render={({ field }) => (
+                                        <Switch
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                        />
+                                    )}
+                                />
+                            </div>
+                            <div className="pt-4 border-t border-slate-100">
+                                <Input
+                                    label="Sort Order"
+                                    type="number"
+                                    {...register("sort_order")}
+                                    error={errors.sort_order?.message}
+                                    placeholder="0"
+                                    info="Order in lists (lowest first)"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Features */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center text-lg">
+                                <Layers className="h-5 w-5 mr-2 text-slate-500" />
+                                Features
+                            </CardTitle>
+                            <CardDescription>
+                                Select available modules.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <FeatureSelector
+                                value={watch("features") || []}
+                                onChange={(codes) => {
+                                    setValue("features", codes, { shouldValidate: true });
+                                }}
+                                error={errors.features?.message}
+                            />
+                        </CardContent>
+                    </Card>
+
+                    {/* Actions */}
+                    <div className="flex flex-col gap-3 sticky top-6">
+                        <Button type="submit" disabled={isLoading} className="w-full" size="lg">
+                            {isLoading ? "Saving..." : initialData ? "Save Changes" : "Create Plan"}
+                        </Button>
+                        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading} className="w-full">
+                            Cancel
+                        </Button>
+                    </div>
+                </div>
             </div>
         </form>
     );
 }
 
+// Helper for parsing int safely
+const parseIntSafe = (v: string) => {
+    const num = parseInt(v, 10);
+    return isNaN(num) ? undefined : num;
+};

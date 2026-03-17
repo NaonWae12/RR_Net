@@ -24,6 +24,7 @@ interface ReimbursementFormProps {
   onSubmit: (data: CreateReimbursementRequest) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
+  initialData?: Reimbursement;
 }
 
 const categories: ReimbursementCategory[] = [
@@ -34,9 +35,9 @@ const categories: ReimbursementCategory[] = [
   "other",
 ];
 
-export function ReimbursementForm({ onSubmit, onCancel, isLoading }: ReimbursementFormProps) {
+export function ReimbursementForm({ onSubmit, onCancel, isLoading, initialData }: ReimbursementFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(initialData?.attachment_url || null);
 
   const {
     register,
@@ -47,10 +48,10 @@ export function ReimbursementForm({ onSubmit, onCancel, isLoading }: Reimburseme
   } = useForm<ReimbursementFormValues>({
     resolver: zodResolver(reimbursementFormSchema),
     defaultValues: {
-      amount: 0,
-      category: "transport",
-      description: "",
-      date: format(new Date(), "yyyy-MM-dd"),
+      amount: initialData?.amount || 0,
+      category: initialData?.category || "transport",
+      description: initialData?.description || "",
+      date: initialData?.date ? format(new Date(initialData.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
     },
   });
 
@@ -199,7 +200,11 @@ export function ReimbursementForm({ onSubmit, onCancel, isLoading }: Reimburseme
           Cancel
         </Button>
         <Button type="submit" disabled={isLoading} variant="default">
-          {isLoading ? "Submitting..." : "Submit Request"}
+          {isLoading ? (
+            initialData ? "Updating..." : "Submitting..."
+          ) : (
+            initialData ? "Update Request" : "Submit Request"
+          )}
         </Button>
       </div>
     </form>

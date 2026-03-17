@@ -35,17 +35,17 @@ func NewPlanService(planRepo *repository.PlanRepository, tenantRepo *repository.
 
 // CreatePlanRequest represents request to create a plan
 type CreatePlanRequest struct {
-	Code         string   `json:"code"`
-	Name         string   `json:"name"`
-	Description  string   `json:"description,omitempty"`
-	PriceMonthly float64  `json:"price_monthly"`
-	PriceYearly  *float64 `json:"price_yearly,omitempty"`
-	Currency     string   `json:"currency,omitempty"`
+	Code         string         `json:"code"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description,omitempty"`
+	PriceMonthly float64        `json:"price_monthly"`
+	PriceYearly  *float64       `json:"price_yearly,omitempty"`
+	Currency     string         `json:"currency,omitempty"`
 	Limits       map[string]int `json:"limits"`
-	Features     []string `json:"features"`
-	IsActive     bool     `json:"is_active"`
-	IsPublic     bool     `json:"is_public"`
-	SortOrder    int      `json:"sort_order"`
+	Features     []string       `json:"features"`
+	IsActive     bool           `json:"is_active"`
+	IsPublic     bool           `json:"is_public"`
+	SortOrder    int            `json:"sort_order"`
 }
 
 // PlanDTO represents plan data for API responses
@@ -171,16 +171,16 @@ func (s *PlanService) List(ctx context.Context, activeOnly, publicOnly bool) ([]
 
 // UpdatePlanRequest represents request to update a plan
 type UpdatePlanRequest struct {
-	Name         string   `json:"name"`
-	Description  string   `json:"description,omitempty"`
-	PriceMonthly float64  `json:"price_monthly"`
-	PriceYearly  *float64 `json:"price_yearly,omitempty"`
-	Currency     string   `json:"currency,omitempty"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description,omitempty"`
+	PriceMonthly float64        `json:"price_monthly"`
+	PriceYearly  *float64       `json:"price_yearly,omitempty"`
+	Currency     string         `json:"currency,omitempty"`
 	Limits       map[string]int `json:"limits"`
-	Features     []string `json:"features"`
-	IsActive     bool     `json:"is_active"`
-	IsPublic     bool     `json:"is_public"`
-	SortOrder    int      `json:"sort_order"`
+	Features     []string       `json:"features"`
+	IsActive     bool           `json:"is_active"`
+	IsPublic     bool           `json:"is_public"`
+	SortOrder    int            `json:"sort_order"`
 }
 
 // Update updates a plan
@@ -282,5 +282,3 @@ func (s *PlanService) toDTO(p *plan.Plan) *PlanDTO {
 		UpdatedAt:    p.UpdatedAt,
 	}
 }
-
-

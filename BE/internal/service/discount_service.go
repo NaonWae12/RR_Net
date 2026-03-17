@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	ErrDiscountNameRequired   = errors.New("discount name is required")
-	ErrDiscountTypeInvalid    = errors.New("invalid discount type")
-	ErrDiscountValueInvalid   = errors.New("invalid discount value")
-	ErrDiscountExpired        = errors.New("discount has expired")
+	ErrDiscountNameRequired = errors.New("discount name is required")
+	ErrDiscountTypeInvalid  = errors.New("invalid discount type")
+	ErrDiscountValueInvalid = errors.New("invalid discount value")
+	ErrDiscountExpired      = errors.New("discount has expired")
 )
 
 // DiscountService handles discount business logic
@@ -30,12 +30,12 @@ func NewDiscountService(repo *repository.DiscountRepository) *DiscountService {
 
 // CreateDiscountRequest represents request to create a discount
 type CreateDiscountRequest struct {
-	Name        string     `json:"name"`
-	Description *string    `json:"description,omitempty"`
+	Name        string        `json:"name"`
+	Description *string       `json:"description,omitempty"`
 	Type        discount.Type `json:"type"`
-	Value       float64    `json:"value"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	IsActive    bool       `json:"is_active"`
+	Value       float64       `json:"value"`
+	ExpiresAt   *time.Time    `json:"expires_at,omitempty"`
+	IsActive    bool          `json:"is_active"`
 }
 
 // UpdateDiscountRequest represents request to update a discount
@@ -43,17 +43,17 @@ type UpdateDiscountRequest = CreateDiscountRequest
 
 // DiscountDTO represents discount data for API responses
 type DiscountDTO struct {
-	ID          uuid.UUID   `json:"id"`
-	TenantID    uuid.UUID   `json:"tenant_id"`
-	Name        string      `json:"name"`
-	Description *string     `json:"description,omitempty"`
+	ID          uuid.UUID     `json:"id"`
+	TenantID    uuid.UUID     `json:"tenant_id"`
+	Name        string        `json:"name"`
+	Description *string       `json:"description,omitempty"`
 	Type        discount.Type `json:"type"`
-	Value       float64     `json:"value"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	IsActive    bool        `json:"is_active"`
-	IsValid     bool        `json:"is_valid"` // Computed: active, not expired, not deleted
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
+	Value       float64       `json:"value"`
+	ExpiresAt   *time.Time    `json:"expires_at,omitempty"`
+	IsActive    bool          `json:"is_active"`
+	IsValid     bool          `json:"is_valid"` // Computed: active, not expired, not deleted
+	CreatedAt   time.Time     `json:"created_at"`
+	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
 // Create creates a new discount
@@ -94,16 +94,16 @@ func (s *DiscountService) Create(ctx context.Context, tenantID uuid.UUID, req *C
 
 	now := time.Now()
 	d := &discount.Discount{
-		ID:        uuid.New(),
-		TenantID:  tenantID,
-		Name:      req.Name,
+		ID:          uuid.New(),
+		TenantID:    tenantID,
+		Name:        req.Name,
 		Description: req.Description,
-		Type:      req.Type,
-		Value:     req.Value,
-		ExpiresAt: req.ExpiresAt,
-		IsActive:  req.IsActive,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Type:        req.Type,
+		Value:       req.Value,
+		ExpiresAt:   req.ExpiresAt,
+		IsActive:    req.IsActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	if err := s.repo.Create(ctx, d); err != nil {
@@ -226,4 +226,3 @@ func toDiscountDTOs(discounts []*discount.Discount) []*DiscountDTO {
 	}
 	return dtos
 }
-

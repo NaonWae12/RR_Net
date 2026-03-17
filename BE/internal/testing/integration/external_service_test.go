@@ -162,4 +162,3 @@ func TestExternalServiceTimeout(t *testing.T) {
 		}
 	})
 }
-

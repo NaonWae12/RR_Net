@@ -37,4 +37,3 @@ func NewPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	log.Info().Msg("PostgreSQL connection pool established")
 	return pool, nil
 }
-

@@ -82,5 +82,3 @@ func (h *WALogHandler) List(w http.ResponseWriter, r *http.Request) {
 		"next_cursor": nextCursor,
 	})
 }
-
-

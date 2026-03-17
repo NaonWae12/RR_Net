@@ -32,7 +32,6 @@ const featureMapping: Record<
     type: "feature",
   },
   "Max Router": { limitKey: "max_routers", type: "limit" },
-  "Max User": { limitKey: "max_users", type: "limit" },
   "Active User": { type: "custom", customValue: () => "Unlimited" },
   "Voucher Limit": { limitKey: "max_vouchers", type: "limit" },
   "RBAC Employee": { featureKey: "rbac_employee", type: "feature" },
@@ -56,6 +55,7 @@ const featureMapping: Record<
   "WA Gateway": { featureKey: "wa_gateway", type: "feature" },
   "Manual Isolir": { featureKey: "isolir_manual", type: "feature" },
   "Auto Isolir": { featureKey: "isolir_auto", type: "feature" },
+  "Collector Settlement": { featureKey: "settlement", type: "feature" },
   "API Integration": {
     type: "custom",
     customValue: (plan) => {
@@ -65,6 +65,7 @@ const featureMapping: Record<
       return "Full + Custom";
     },
   },
+  "Settlement Page": { featureKey: "settlement", type: "feature" },
   "Multi-tenant SaaS (Super Admin)": {
     featureKey: "*",
     type: "feature",

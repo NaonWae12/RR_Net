@@ -139,5 +139,3 @@ func (h *WACampaignHandler) RetryFailed(w http.ResponseWriter, r *http.Request) 
 		"retried": n,
 	})
 }
-
-

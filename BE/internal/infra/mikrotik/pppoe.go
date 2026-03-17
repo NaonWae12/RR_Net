@@ -570,4 +570,3 @@ func GetPPPoEServerLocalAddress(ctx context.Context, addr string, useTLS bool, u
 
 	return "", fmt.Errorf("no local address found on router")
 }
-

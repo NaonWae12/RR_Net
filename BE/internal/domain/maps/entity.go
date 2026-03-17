@@ -29,23 +29,23 @@ const (
 type ConnectionType string
 
 const (
-	ConnectionTypePPPoE  ConnectionType = "pppoe"
+	ConnectionTypePPPoE   ConnectionType = "pppoe"
 	ConnectionTypeHotspot ConnectionType = "hotspot"
 	ConnectionTypeStatic  ConnectionType = "static"
 )
 
 // ODC represents an Optical Distribution Cabinet
 type ODC struct {
-	ID          uuid.UUID  `json:"id"`
-	TenantID    uuid.UUID  `json:"tenant_id"`
-	Name        string     `json:"name"`
-	Latitude    float64    `json:"latitude"`
-	Longitude   float64    `json:"longitude"`
-	CapacityInfo string    `json:"capacity_info,omitempty"`
-	Notes       string     `json:"notes,omitempty"`
-	Status      NodeStatus `json:"status"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID           uuid.UUID  `json:"id"`
+	TenantID     uuid.UUID  `json:"tenant_id"`
+	Name         string     `json:"name"`
+	Latitude     float64    `json:"latitude"`
+	Longitude    float64    `json:"longitude"`
+	CapacityInfo string     `json:"capacity_info,omitempty"`
+	Notes        string     `json:"notes,omitempty"`
+	Status       NodeStatus `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // ODP represents an Optical Distribution Point
@@ -66,46 +66,49 @@ type ODP struct {
 
 // ClientLocation represents a client's physical location on the map
 type ClientLocation struct {
-	ID             uuid.UUID     `json:"id"`
-	TenantID       uuid.UUID     `json:"tenant_id"`
-	ClientID       uuid.UUID     `json:"client_id"`
-	ODPID          uuid.UUID     `json:"odp_id"`
-	Latitude       float64       `json:"latitude"`
-	Longitude      float64       `json:"longitude"`
+	ID             uuid.UUID      `json:"id"`
+	TenantID       uuid.UUID      `json:"tenant_id"`
+	ClientID       uuid.UUID      `json:"client_id"`
+	ODPID          uuid.UUID      `json:"odp_id"`
+	Latitude       float64        `json:"latitude"`
+	Longitude      float64        `json:"longitude"`
 	ConnectionType ConnectionType `json:"connection_type"`
 	SignalInfo     string         `json:"signal_info,omitempty"`
 	Notes          string         `json:"notes,omitempty"`
 	Status         NodeStatus     `json:"status"`
+	ClientName     string         `json:"client_name,omitempty"` // Joined field
+	IsReseller     bool           `json:"is_reseller"`           // Joined field
+	ResellerRadius int            `json:"reseller_radius"`       // Joined field
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 // OutageEvent represents an outage event for any node
 type OutageEvent struct {
-	ID          uuid.UUID  `json:"id"`
-	TenantID    uuid.UUID  `json:"tenant_id"`
-	NodeType    NodeType   `json:"node_type"`
-	NodeID      uuid.UUID  `json:"node_id"`
-	Reason      string     `json:"reason"`
-	ReportedBy  uuid.UUID  `json:"reported_by"`
-	ReportedAt  time.Time  `json:"reported_at"`
-	ResolvedAt  *time.Time `json:"resolved_at,omitempty"`
-	ResolvedBy  *uuid.UUID `json:"resolved_by,omitempty"`
-	IsResolved  bool       `json:"is_resolved"`
+	ID            uuid.UUID   `json:"id"`
+	TenantID      uuid.UUID   `json:"tenant_id"`
+	NodeType      NodeType    `json:"node_type"`
+	NodeID        uuid.UUID   `json:"node_id"`
+	Reason        string      `json:"reason"`
+	ReportedBy    uuid.UUID   `json:"reported_by"`
+	ReportedAt    time.Time   `json:"reported_at"`
+	ResolvedAt    *time.Time  `json:"resolved_at,omitempty"`
+	ResolvedBy    *uuid.UUID  `json:"resolved_by,omitempty"`
+	IsResolved    bool        `json:"is_resolved"`
 	AffectedNodes []uuid.UUID `json:"affected_nodes,omitempty"` // Nodes affected by cascade
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
 }
 
 // TopologyLink represents a connection between nodes
 type TopologyLink struct {
-	ID         uuid.UUID `json:"id"`
-	TenantID   uuid.UUID `json:"tenant_id"`
-	FromType   NodeType  `json:"from_type"`
-	FromID     uuid.UUID `json:"from_id"`
-	ToType     NodeType  `json:"to_type"`
-	ToID       uuid.UUID `json:"to_id"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	TenantID  uuid.UUID `json:"tenant_id"`
+	FromType  NodeType  `json:"from_type"`
+	FromID    uuid.UUID `json:"from_id"`
+	ToType    NodeType  `json:"to_type"`
+	ToID      uuid.UUID `json:"to_id"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // GetCapacityPercentage returns the capacity percentage for ODP
@@ -131,4 +134,3 @@ func (o *ODP) UpdateStatus() {
 		o.Status = NodeStatusOK
 	}
 }
-

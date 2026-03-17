@@ -55,5 +55,3 @@ func (h *ServiceSettingsHandler) UpdateDiscount(w http.ResponseWriter, r *http.R
 	}
 	sendJSON(w, http.StatusOK, out)
 }
-
-

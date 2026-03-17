@@ -3,4 +3,7 @@ export { InvoicesTab } from "./InvoicesTab";
 export { PaymentsTab } from "./PaymentsTab";
 export { ReportsTab } from "./ReportsTab";
 export { DepositsTab } from "./DepositsTab";
+export { FinanceRevenueTab } from "./FinanceRevenueTab";
+export { RevenueAnalyticsPage } from "./RevenueAnalyticsPage";
+export { NewAssetModal } from "./NewAssetModal";
 

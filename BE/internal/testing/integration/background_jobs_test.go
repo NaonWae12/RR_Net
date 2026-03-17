@@ -153,4 +153,3 @@ func TestScheduledJobs(t *testing.T) {
 	// Cleanup
 	scheduler.Shutdown()
 }
-

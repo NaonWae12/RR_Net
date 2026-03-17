@@ -173,4 +173,3 @@ func TestRateLimiting(t *testing.T) {
 		assert.True(t, w.Code >= 200 && w.Code < 500)
 	})
 }
-

@@ -8,9 +8,10 @@ import { PhotoIcon } from "@heroicons/react/20/solid";
 interface ReimbursementCardProps {
   reimbursement: Reimbursement;
   onView?: (id: string) => void;
+  onEdit?: (reimbursement: Reimbursement) => void;
 }
 
-export function ReimbursementCard({ reimbursement, onView }: ReimbursementCardProps) {
+export function ReimbursementCard({ reimbursement, onView, onEdit }: ReimbursementCardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "approved":
@@ -70,13 +71,37 @@ export function ReimbursementCard({ reimbursement, onView }: ReimbursementCardPr
 
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span>{format(new Date(reimbursement.date), "PP")}</span>
-        {reimbursement.attachment_url && (
-          <div className="flex items-center gap-1 text-indigo-600">
-            <PhotoIcon className="h-4 w-4" />
-            <span>Has attachment</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {reimbursement.attachment_url && (
+            <div className="flex items-center gap-1 text-indigo-600">
+              <PhotoIcon className="h-4 w-4" />
+              <span>Receipt</span>
+            </div>
+          )}
+          {reimbursement.status === "submitted" && onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(reimbursement);
+              }}
+              className="text-indigo-600 hover:text-indigo-800 font-medium py-1 px-2 hover:bg-indigo-50 rounded transition-colors"
+            >
+              Edit
+            </button>
+          )}
+        </div>
       </div>
+
+      {reimbursement.status === "approved" && reimbursement.pay_with_payroll && (
+        <div className="mt-3 pt-3 border-t border-slate-200">
+          <p className="text-xs text-indigo-600 flex items-center gap-1.5">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-medium">Paid with next salary pulse</span>
+          </p>
+        </div>
+      )}
 
       {reimbursement.rejection_reason && reimbursement.status === "rejected" && (
         <div className="mt-3 pt-3 border-t border-slate-200">

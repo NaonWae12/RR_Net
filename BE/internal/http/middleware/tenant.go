@@ -37,6 +37,8 @@ func TenantContext(repo *repository.TenantRepository) func(http.Handler) http.Ha
 				"/api/v1/superadmin/",
 				"/api/v1/plans",
 				"/api/v1/addons",
+				"/api/v1/public/",
+				"/api/v1/validation/",
 			}
 			for _, path := range publicPaths {
 				if strings.HasPrefix(r.URL.Path, path) {
@@ -113,4 +115,3 @@ func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }
-

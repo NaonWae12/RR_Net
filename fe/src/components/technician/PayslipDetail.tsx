@@ -29,129 +29,142 @@ export function PayslipDetail({ payslip, onDownload, onClose, loading = false }:
         <p className="text-slate-600 mt-1">{periodLabel}</p>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-4 mb-6 print:mb-4">
-        <div className="bg-slate-50 rounded-lg p-4">
-          <p className="text-sm text-slate-600">Gross Salary</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">
-            {new Intl.NumberFormat("id-ID", {
-              style: "currency",
-              currency: "IDR",
-              minimumFractionDigits: 0,
-            }).format(payslip.gross_salary)}
-          </p>
-        </div>
-        <div className="bg-slate-50 rounded-lg p-4">
-          <p className="text-sm text-slate-600">Net Salary</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">
-            {new Intl.NumberFormat("id-ID", {
-              style: "currency",
-              currency: "IDR",
-              minimumFractionDigits: 0,
-            }).format(payslip.net_salary)}
-          </p>
-        </div>
-      </div>
 
       {/* Breakdown */}
-      {payslip.breakdown && (
-        <div className="space-y-4 mb-6 print:mb-4">
-          {/* Allowances */}
-          {payslip.breakdown.allowances && payslip.breakdown.allowances.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">Allowances</h3>
-              <div className="space-y-2">
-                {payslip.breakdown.allowances.map((allowance, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-slate-600">{allowance.name}</span>
-                    <span className="font-medium text-slate-900">
-                      {new Intl.NumberFormat("id-ID", {
-                        style: "currency",
-                        currency: "IDR",
-                        minimumFractionDigits: 0,
-                      }).format(allowance.amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Deductions */}
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Deductions</h3>
-            <div className="space-y-2">
-              {payslip.breakdown.tax && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Tax</span>
-                  <span className="font-medium text-slate-900">
-                    {new Intl.NumberFormat("id-ID", {
-                      style: "currency",
-                      currency: "IDR",
-                      minimumFractionDigits: 0,
-                    }).format(payslip.breakdown.tax)}
-                  </span>
-                </div>
-              )}
-              {payslip.breakdown.insurance && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Insurance</span>
-                  <span className="font-medium text-slate-900">
-                    {new Intl.NumberFormat("id-ID", {
-                      style: "currency",
-                      currency: "IDR",
-                      minimumFractionDigits: 0,
-                    }).format(payslip.breakdown.insurance)}
-                  </span>
-                </div>
-              )}
-              {payslip.breakdown.other_deductions &&
-                payslip.breakdown.other_deductions.map((deduction, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-slate-600">{deduction.name}</span>
-                    <span className="font-medium text-slate-900">
-                      {new Intl.NumberFormat("id-ID", {
-                        style: "currency",
-                        currency: "IDR",
-                        minimumFractionDigits: 0,
-                      }).format(deduction.amount)}
-                    </span>
-                  </div>
-                ))}
-            </div>
+      <div className="space-y-6 mb-6 print:mb-4">
+        {/* Base Salary */}
+        <div className="border-b border-slate-100 pb-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-600 font-medium">Base Salary</span>
+            <span className="font-bold text-slate-900">
+              {new Intl.NumberFormat("id-ID", {
+                style: "currency",
+                currency: "IDR",
+                minimumFractionDigits: 0,
+              }).format(payslip.base_salary)}
+            </span>
           </div>
         </div>
-      )}
 
-      {/* Total Deductions */}
-      <div className="border-t border-slate-200 pt-4 mb-6 print:mb-4">
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-600">Total Deductions</span>
-          <span className="font-semibold text-slate-900">
-            {new Intl.NumberFormat("id-ID", {
-              style: "currency",
-              currency: "IDR",
-              minimumFractionDigits: 0,
-            }).format(payslip.deductions)}
-          </span>
-        </div>
+        {/* Allowances */}
+        {payslip.items?.some(item => item.type === 'allowance') && (
+          <div>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Allowances</h3>
+            <div className="space-y-2">
+              {payslip.items.filter(item => item.type === 'allowance').map((item) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span className="text-slate-600">{item.description}</span>
+                  <span className="font-medium text-slate-900">
+                    {new Intl.NumberFormat("id-ID", {
+                      style: "currency",
+                      currency: "IDR",
+                      minimumFractionDigits: 0,
+                    }).format(item.amount)}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm pt-1 border-t border-slate-50">
+                <span className="font-semibold text-slate-900">Total Allowances</span>
+                <span className="font-bold text-indigo-600">
+                  {new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    minimumFractionDigits: 0,
+                  }).format(payslip.total_allowances)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reimbursements */}
+        {payslip.items?.some(item => item.type === 'reimbursement') && (
+          <div>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reimbursements</h3>
+            <div className="space-y-2">
+              {payslip.items.filter(item => item.type === 'reimbursement').map((item) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span className="text-slate-600">{item.description}</span>
+                  <span className="font-medium text-slate-900">
+                    {new Intl.NumberFormat("id-ID", {
+                      style: "currency",
+                      currency: "IDR",
+                      minimumFractionDigits: 0,
+                    }).format(item.amount)}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm pt-1 border-t border-slate-50">
+                <span className="font-semibold text-slate-900">Total Reimbursements</span>
+                <span className="font-bold text-emerald-600">
+                  {new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    minimumFractionDigits: 0,
+                  }).format(payslip.total_reimbursements)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Deductions */}
+        {payslip.items?.some(item => item.type === 'deduction') && (
+          <div>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Deductions</h3>
+            <div className="space-y-2">
+              {payslip.items.filter(item => item.type === 'deduction').map((item) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span className="text-slate-600">{item.description}</span>
+                  <span className="font-medium text-red-600">
+                    -{new Intl.NumberFormat("id-ID", {
+                      style: "currency",
+                      currency: "IDR",
+                      minimumFractionDigits: 0,
+                    }).format(item.amount)}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm pt-1 border-t border-slate-50">
+                <span className="font-semibold text-slate-900">Total Deductions</span>
+                <span className="font-bold text-red-700">
+                  -{new Intl.NumberFormat("id-ID", {
+                    style: "currency",
+                    currency: "IDR",
+                    minimumFractionDigits: 0,
+                  }).format(payslip.total_deductions)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Status */}
-      <div className="mb-6 print:mb-4">
-        <p className="text-sm text-slate-600">
-          Status:{" "}
-          <span
-            className={`font-medium ${
-              payslip.status === "paid" ? "text-green-600" : "text-amber-600"
-            }`}
-          >
-            {payslip.status === "paid" ? "Paid" : "Generated"}
-          </span>
-        </p>
+      {/* Summary Section */}
+      <div className="bg-slate-900 rounded-xl p-6 text-white mb-6 print:bg-slate-100 print:text-slate-900">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Net Take Home Pay</p>
+            <p className="text-3xl font-black">
+              {new Intl.NumberFormat("id-ID", {
+                style: "currency",
+                currency: "IDR",
+                minimumFractionDigits: 0,
+              }).format(payslip.net_salary)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Status</p>
+            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+              payslip.status === "paid" ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"
+            }`}>
+              {payslip.status === "paid" ? "Paid" : "Pending"}
+            </span>
+          </div>
+        </div>
         {payslip.paid_at && (
-          <p className="text-xs text-slate-500 mt-1">
-            Paid on: {format(new Date(payslip.paid_at), "PPp")}
+          <p className="text-[10px] text-slate-500 mt-4 text-center border-t border-slate-800 pt-3">
+            Payment confirmed on {format(new Date(payslip.paid_at), "PPP p")}
           </p>
         )}
       </div>

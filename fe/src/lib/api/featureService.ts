@@ -13,5 +13,19 @@ export const featureService = {
     const response = await apiClient.get<FeatureListResponse>("/features");
     return response.data.features || [];
   },
+
+  async createFeature(data: { code: string; name: string; description?: string; category?: string }): Promise<Feature> {
+    const response = await apiClient.post<Feature>("/features", data);
+    return response.data;
+  },
+
+  async updateFeature(id: string, data: { name?: string; description?: string }): Promise<Feature> {
+    const response = await apiClient.put<Feature>(`/features/${id}`, data);
+    return response.data;
+  },
+
+  async deleteFeature(id: string): Promise<void> {
+    await apiClient.delete(`/features/${id}`);
+  },
 };
 

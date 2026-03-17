@@ -27,7 +27,14 @@ export function PaymentsTab() {
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchPayments();
-  }, [fetchPayments, paymentPagination.page, paymentPagination.page_size, paymentFilters, isAuthenticated]);
+  }, [
+    fetchPayments,
+    paymentPagination.page,
+    paymentPagination.page_size,
+    paymentFilters.client_id,
+    paymentFilters.method,
+    isAuthenticated
+  ]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("id-ID", {

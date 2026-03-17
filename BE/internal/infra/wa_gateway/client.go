@@ -105,8 +105,8 @@ type BulkResult struct {
 }
 
 type BulkResponse struct {
-	OK     bool         `json:"ok"`
-	Total  int          `json:"total"`
+	OK      bool         `json:"ok"`
+	Total   int          `json:"total"`
 	Results []BulkResult `json:"results"`
 }
 
@@ -151,5 +151,3 @@ func (c *Client) SendBulk(ctx context.Context, tenantID string, to []string, tex
 	}
 	return &out, nil
 }
-
-

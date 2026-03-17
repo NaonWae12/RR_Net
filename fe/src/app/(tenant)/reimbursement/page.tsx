@@ -9,7 +9,7 @@ import { ReimbursementCard } from "@/components/technician/ReimbursementCard";
 import { ReimbursementForm } from "@/components/technician/ReimbursementForm";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { technicianService } from "@/lib/api/technicianService";
+import { reimbursementService } from "@/lib/api/reimbursementService";
 import { Reimbursement, CreateReimbursementRequest } from "@/lib/api/types";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
@@ -18,11 +18,12 @@ import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function ReimbursementPage() {
     const router = useRouter();
-    const { userId } = useRole();
+    const { role } = useRole();
     const { showToast } = useNotificationStore();
     const { isAuthenticated } = useAuth();
     const [reimbursements, setReimbursements] = useState<Reimbursement[]>([]);
     const [selectedReimbursement, setSelectedReimbursement] = useState<Reimbursement | null>(null);
+    const [editingReimbursement, setEditingReimbursement] = useState<Reimbursement | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [loading, setLoading] = useState(false);
@@ -30,12 +31,12 @@ export default function ReimbursementPage() {
     const [error, setError] = useState<string | null>(null);
 
     const fetchReimbursements = async () => {
-        if (!userId || !isAuthenticated) return;
+        if (!isAuthenticated) return;
         try {
             setLoading(true);
             setError(null);
             const status = statusFilter !== "all" ? statusFilter : undefined;
-            const data = await technicianService.getReimbursements(userId, status);
+            const data = await reimbursementService.getMyReimbursements(status);
             setReimbursements(data || []);
         } catch (err: any) {
             setError(err?.message || "Failed to load reimbursements");
@@ -47,22 +48,32 @@ export default function ReimbursementPage() {
 
     useEffect(() => {
         fetchReimbursements();
-    }, [userId, statusFilter, isAuthenticated]);
+    }, [statusFilter, isAuthenticated]);
 
     const handleSubmit = async (data: CreateReimbursementRequest) => {
         try {
             setSubmitting(true);
-            await technicianService.createReimbursement(data);
-            showToast({
-                title: "Reimbursement submitted",
-                description: "Your reimbursement request has been submitted and is waiting for approval.",
-                variant: "success",
-            });
+            if (editingReimbursement) {
+                await reimbursementService.updateRequest(editingReimbursement.id, data);
+                showToast({
+                    title: "Reimbursement updated",
+                    description: "Your reimbursement request has been updated successfully.",
+                    variant: "success",
+                });
+            } else {
+                await reimbursementService.submitRequest(data);
+                showToast({
+                    title: "Reimbursement submitted",
+                    description: "Your reimbursement request has been submitted and is waiting for approval.",
+                    variant: "success",
+                });
+            }
             setShowForm(false);
+            setEditingReimbursement(null);
             await fetchReimbursements();
         } catch (err: any) {
             showToast({
-                title: "Failed to submit reimbursement",
+                title: editingReimbursement ? "Failed to update" : "Failed to submit",
                 description: err?.message || "An unexpected error occurred.",
                 variant: "error",
             });
@@ -72,9 +83,14 @@ export default function ReimbursementPage() {
         }
     };
 
+    const handleEdit = (reimbursement: Reimbursement) => {
+        setEditingReimbursement(reimbursement);
+        setShowForm(true);
+    };
+
     const handleView = async (id: string) => {
         try {
-            const reimbursement = await technicianService.getReimbursement(id);
+            const reimbursement = await reimbursementService.getReimbursement(id);
             setSelectedReimbursement(reimbursement);
         } catch (err: any) {
             showToast({
@@ -91,9 +107,11 @@ export default function ReimbursementPage() {
             ? safeReimbursements
             : safeReimbursements.filter((r) => r.status === statusFilter);
 
+    const allowedRoles = ["owner", "admin", "hr", "finance", "technician"];
+
     if (error && safeReimbursements.length === 0) {
         return (
-            <RoleGuard allowedRoles={["admin", "technician", "hr", "finance"]} redirectTo="/dashboard">
+            <RoleGuard allowedRoles={allowedRoles as any} redirectTo="/dashboard">
                 <div className="p-6">
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                         <p className="text-red-700">{error}</p>
@@ -104,7 +122,7 @@ export default function ReimbursementPage() {
     }
 
     return (
-        <RoleGuard allowedRoles={["admin", "technician", "hr", "finance"]} redirectTo="/dashboard">
+        <RoleGuard allowedRoles={allowedRoles as any} redirectTo="/dashboard">
             <div className="p-6 space-y-6">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-4">
@@ -154,6 +172,13 @@ export default function ReimbursementPage() {
                     >
                         Rejected ({(reimbursements || []).filter((r) => r.status === "rejected").length})
                     </Button>
+                    <Button
+                        variant={statusFilter === "paid" ? "default" : "outline"}
+                        onClick={() => setStatusFilter("paid")}
+                        size="sm"
+                    >
+                        Paid ({(reimbursements || []).filter((r) => r.status === "paid").length})
+                    </Button>
                 </div>
 
                 {/* Reimbursements List */}
@@ -176,6 +201,7 @@ export default function ReimbursementPage() {
                                 key={reimbursement.id}
                                 reimbursement={reimbursement}
                                 onView={handleView}
+                                onEdit={handleEdit}
                             />
                         ))}
                     </div>
@@ -185,14 +211,21 @@ export default function ReimbursementPage() {
                 {showForm && (
                     <Modal
                         isOpen={showForm}
-                        onClose={() => setShowForm(false)}
-                        title="Submit Reimbursement Request"
+                        onClose={() => {
+                            setShowForm(false);
+                            setEditingReimbursement(null);
+                        }}
+                        title={editingReimbursement ? "Edit Reimbursement Request" : "Submit Reimbursement Request"}
                         className="bg-white"
                     >
                         <ReimbursementForm
                             onSubmit={handleSubmit}
-                            onCancel={() => setShowForm(false)}
+                            onCancel={() => {
+                                setShowForm(false);
+                                setEditingReimbursement(null);
+                            }}
                             isLoading={submitting}
+                            initialData={editingReimbursement || undefined}
                         />
                     </Modal>
                 )}
@@ -241,16 +274,33 @@ export default function ReimbursementPage() {
                                         ? "bg-green-100 text-green-800 border-green-200"
                                         : selectedReimbursement.status === "rejected"
                                             ? "bg-red-100 text-red-800 border-red-200"
-                                            : "bg-amber-100 text-amber-800 border-amber-200"
+                                            : selectedReimbursement.status === "paid"
+                                                ? "bg-blue-100 text-blue-800 border-blue-200" // Added style for 'paid'
+                                                : "bg-amber-100 text-amber-800 border-amber-200"
                                         }`}
                                 >
                                     {selectedReimbursement.status === "approved"
                                         ? "Approved"
                                         : selectedReimbursement.status === "rejected"
                                             ? "Rejected"
-                                            : "Pending Approval"}
+                                            : selectedReimbursement.status === "paid" // Added display text for 'paid'
+                                                ? "Paid"
+                                                : "Pending Approval"}
                                 </span>
                             </div>
+                            {selectedReimbursement.status === "approved" && selectedReimbursement.pay_with_payroll && (
+                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                                    <p className="text-sm font-semibold text-purple-800 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Payment Information
+                                    </p>
+                                    <p className="text-xs text-purple-700 mt-1">
+                                        This reimbursement will be paid together with your next monthly salary.
+                                    </p>
+                                </div>
+                            )}
                             {selectedReimbursement.rejection_reason && (
                                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                                     <p className="text-sm font-medium text-red-800">Rejection Reason</p>

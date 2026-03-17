@@ -23,9 +23,9 @@ const (
 )
 
 type MessageLog struct {
-	ID        uuid.UUID `json:"id"`
-	TenantID  uuid.UUID `json:"tenant_id"`
-	Source    Source    `json:"source"`
+	ID       uuid.UUID `json:"id"`
+	TenantID uuid.UUID `json:"tenant_id"`
+	Source   Source    `json:"source"`
 
 	CampaignID          *uuid.UUID `json:"campaign_id,omitempty"`
 	CampaignRecipientID *uuid.UUID `json:"campaign_recipient_id,omitempty"`
@@ -37,12 +37,10 @@ type MessageLog struct {
 	MessageText string     `json:"message_text"`
 	TemplateID  *uuid.UUID `json:"template_id,omitempty"`
 
-	Status          Status  `json:"status"`
+	Status           Status  `json:"status"`
 	GatewayMessageID *string `json:"gateway_message_id,omitempty"`
-	Error           *string `json:"error,omitempty"`
+	Error            *string `json:"error,omitempty"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	SentAt    *time.Time `json:"sent_at,omitempty"`
 }
-
-

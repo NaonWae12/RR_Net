@@ -113,14 +113,14 @@ export function GaugeChart({
             </Pie>
           </RechartsPieChart>
         </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-3xl font-bold">
+        <div className="absolute inset-x-0 bottom-[10%] flex flex-col items-center justify-center">
+          <div className="text-3xl font-bold tracking-tighter">
             {value.toFixed(1)}
-            {unit && <span className="text-lg ml-1">{unit}</span>}
+            {unit && <span className="text-lg ml-0.5">{unit}</span>}
           </div>
-          <div className="text-sm text-slate-600 mt-1">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 -mt-1">
             {min} - {max}
-          </div>
+          </p>
         </div>
       </div>
     </ChartContainer>
