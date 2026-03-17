@@ -61,7 +61,17 @@ export function SubmitLocationModal({
     // GPS requested on user action only (button click or form submit)
     // No auto-request on modal open
     const requestLocation = () => {
-        if (navigator.geolocation && !location && !gettingLocation) {
+        if (!navigator.geolocation) {
+            setLocationError("Geolocation is not supported by your browser. Please enter coordinates manually.");
+            return;
+        }
+        
+        if (window.isSecureContext === false) {
+            setLocationError("Browser blocks location access on non-HTTPS sites. Please enter manually.");
+            // We can still try, but it will likely fail.
+        }
+
+        if (!location && !gettingLocation) {
             setGettingLocation(true);
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -74,7 +84,7 @@ export function SubmitLocationModal({
                     setGettingLocation(false);
                 },
                 (error) => {
-                    setLocationError("Unable to get location. Please enter coordinates manually.");
+                    setLocationError(`Unable to get location: ${error.message}. Please enter manually.`);
                     setGettingLocation(false);
                 },
                 {
@@ -83,8 +93,6 @@ export function SubmitLocationModal({
                     maximumAge: 60000,
                 }
             );
-        } else if (!navigator.geolocation) {
-            setLocationError("Geolocation is not supported by your browser. Please enter coordinates manually.");
         }
     };
 

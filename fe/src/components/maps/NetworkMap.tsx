@@ -407,8 +407,21 @@ export function NetworkMap({
 
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      showToast({
+        title: "Geolocation Error",
+        description: "Geolocation is not supported by your browser.",
+        variant: "error",
+      });
       return;
+    }
+
+    if (window.isSecureContext === false) {
+      showToast({
+        title: "HTTPS Required",
+        description: "Browser blocks location access on non-HTTPS sites. Please use HTTPS or localhost.",
+        variant: "warning",
+      });
+      // Continue anyway, but it will likely auto-fail
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -421,6 +434,11 @@ export function NetworkMap({
       },
       (error) => {
         console.error("Error getting location:", error);
+        showToast({
+          title: "Location Access Denied",
+          description: error.message || "Could not retrieve your location. Ensure location permission is granted.",
+          variant: "error",
+        });
       }
     );
   };
