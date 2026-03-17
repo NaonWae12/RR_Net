@@ -17,7 +17,6 @@ build/
 # Dependencies
 node_modules/
 vendor/
-go.sum
 
 # IDE
 .vscode/
