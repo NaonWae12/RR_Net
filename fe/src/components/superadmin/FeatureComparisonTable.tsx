@@ -241,7 +241,7 @@ export function FeatureComparisonTable() {
   if (!basic || !pro || !business || !enterprise) return null;
 
   return (
-    <Card>
+    <Card className="border-slate-100/20 shadow-sm">
       {/* <CardHeader>
         <CardTitle>Feature Comparison by Plan</CardTitle>
       </CardHeader> */}
@@ -251,7 +251,7 @@ export function FeatureComparisonTable() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b">
+              <tr className="border-b border-slate-100/30">
                 <th className="sticky left-0 z-20 bg-slate-100 p-3 text-left font-semibold min-w-[260px]">
                   Fitur
                 </th>
@@ -294,7 +294,7 @@ export function FeatureComparisonTable() {
                 <tr
                   key={idx}
                   className={`
-                    group border-b transition-colors
+                    group border-b border-slate-100/20 transition-colors
                     ${idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
                     hover:bg-slate-100
                   `}

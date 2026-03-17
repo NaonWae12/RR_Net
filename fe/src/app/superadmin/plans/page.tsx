@@ -75,7 +75,7 @@ function SummaryCard({ title, value, icon: Icon, color, description }: SummaryCa
   };
 
   return (
-    <motion.div variants={item} className={cn("p-5 rounded-2xl border bg-white shadow-sm flex items-start gap-4")}>
+    <motion.div variants={item} className={cn("p-5 rounded-2xl border border-slate-100/20 bg-white shadow-sm flex items-start gap-4")}>
       <div className={cn("p-3 rounded-xl", colors[color])}>
         <Icon size={24} />
       </div>
@@ -341,7 +341,7 @@ export default function PlansPage() {
           </div>
 
           {/* Table Section */}
-          <motion.div variants={item} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <motion.div variants={item} className="bg-white rounded-3xl border border-slate-100/20 shadow-sm overflow-hidden">
             {error ? (
               <div className="p-10 text-center">
                 <TrendingUp className="mx-auto h-10 w-10 text-red-500 mb-4 rotate-180" />
