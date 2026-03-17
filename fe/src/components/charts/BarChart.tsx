@@ -88,11 +88,18 @@ export const BarChart = React.memo(function BarChart({
           layout={orientation === "horizontal" ? "vertical" : "horizontal"}
           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
         >
-          <CartesianGrid strokeDasharray="3 3" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={1} />
           {orientation === "vertical" ? (
             <>
-              <XAxis dataKey={xAxisKey} />
-              <YAxis />
+              <XAxis 
+                dataKey={xAxisKey} 
+                axisLine={{ stroke: '#e2e8f0', strokeOpacity: 0.5 }}
+                tick={{ fill: '#64748b', fontSize: 12 }}
+              />
+              <YAxis 
+                axisLine={{ stroke: '#e2e8f0', strokeOpacity: 0.5 }}
+                tick={{ fill: '#64748b', fontSize: 12 }}
+              />
             </>
           ) : (
             <>

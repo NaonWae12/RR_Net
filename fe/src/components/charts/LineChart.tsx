@@ -108,7 +108,7 @@ export const LineChart = React.memo(function LineChart({
           margin={margin}
           onMouseMove={handleZoom}
         >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={1} />
           <XAxis
             dataKey={xAxis.dataKey}
             type={xAxis.type}
@@ -116,14 +116,14 @@ export const LineChart = React.memo(function LineChart({
             tickFormatter={xAxis.tickFormatter}
             domain={xAxis.domain as any}
             tick={{ fill: '#64748b', fontSize: 12 }}
-            axisLine={{ stroke: '#cbd5e1' }}
+            axisLine={{ stroke: '#e2e8f0', strokeOpacity: 0.5 }}
           />
           <YAxis
             label={yAxis.label ? { value: yAxis.label, angle: -90, position: "insideLeft", offset: -45, style: { textAnchor: 'middle', fill: '#64748b', fontWeight: 600 } } : undefined}
             tickFormatter={yAxis.tickFormatter}
             domain={yAxis.domain as any}
             tick={{ fill: '#64748b', fontSize: 12 }}
-            axisLine={{ stroke: '#cbd5e1' }}
+            axisLine={{ stroke: '#e2e8f0', strokeOpacity: 0.5 }}
           />
           {tooltip?.show && (
             <Tooltip
