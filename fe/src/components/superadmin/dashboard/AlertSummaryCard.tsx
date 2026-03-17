@@ -120,7 +120,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent Notifications</h4>
               <div className="space-y-3 overflow-y-auto max-h-[300px] pr-1 custom-scrollbar">
                 {data.recent.length === 0 ? (
-                  <div className="py-10 text-center bg-slate-50 rounded-xl">
+                  <div className="py-10 text-center bg-slate-50 border border-slate-100 rounded-xl">
                     <CheckCircle2 className="mx-auto h-8 w-8 text-green-200 mb-2" />
                     <p className="text-xs text-slate-500 font-medium">System is running smooth</p>
                   </div>
@@ -139,7 +139,7 @@ export const AlertSummaryCard = React.memo<AlertSummaryCardProps>(
                           title={alert.title}
                           message={alert.message}
                           icon={<Icon className="h-4 w-4" />}
-                          className="border border-transparent shadow-sm bg-white hover:bg-blue-50/50 hover:border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                          className="border border-slate-100 shadow-sm bg-white hover:bg-blue-50/50 hover:border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                         >
                           <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-slate-400">
                             <span className="flex items-center gap-1">

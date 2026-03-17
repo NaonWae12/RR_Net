@@ -116,7 +116,7 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                   <PieIcon size={14} /> Plan Distribution
                 </h4>
-                <div className="bg-slate-50/50 rounded-xl p-6 min-h-[300px] flex items-center justify-center">
+                <div className="bg-slate-50/50 border border-slate-200/50 rounded-xl p-6 min-h-[300px] flex items-center justify-center">
                   <PieChart
                     data={pieData}
                     height={250}
@@ -129,7 +129,7 @@ export const TenantMetricsCard = React.memo<TenantMetricsCardProps>(
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                   <BarChart3 size={14} /> Registration Trend
                 </h4>
-                <div className="bg-slate-50/50 rounded-xl p-4 min-h-[250px]">
+                <div className="bg-slate-50/50 border border-slate-200/50 rounded-xl p-4 min-h-[250px]">
                   <LineChart
                     data={lineData}
                     xAxis={{ dataKey: "date" }}

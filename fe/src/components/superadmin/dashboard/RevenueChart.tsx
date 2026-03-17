@@ -125,7 +125,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                 <LineIcon size={14} /> Monthly Growth
               </h4>
-              <div className="bg-slate-50/50 rounded-xl p-4">
+              <div className="bg-slate-50/50 border border-slate-200/50 rounded-xl p-4">
                 <LineChart
                   data={chartData}
                   xAxis={{ dataKey: "month" }}
@@ -151,7 +151,7 @@ export const RevenueChart = React.memo<RevenueChartProps>(
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                 <BarChart3 size={14} /> Source Comparison
               </h4>
-              <div className="bg-slate-50/50 rounded-xl p-4">
+              <div className="bg-slate-50/50 border border-slate-200/50 rounded-xl p-4">
                 <BarChart
                   data={chartData}
                   xAxisKey="month"

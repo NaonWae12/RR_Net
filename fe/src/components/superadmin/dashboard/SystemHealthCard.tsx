@@ -152,7 +152,7 @@ export const SystemHealthCard = React.memo<SystemHealthCardProps>(
                 </h4>
                 <div className="grid grid-cols-1 gap-2">
                   {data.services.map((service) => (
-                    <div key={service.name} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+                    <div key={service.name} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className={cn("w-2 h-2 rounded-full", 
                           service.status === "healthy" ? "bg-green-500" : 

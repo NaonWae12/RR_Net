@@ -148,7 +148,7 @@ export const RecentActivities = React.memo<RecentActivitiesProps>(
                 ))}
               </div>
             ) : (
-              <div className="py-10 text-center">
+              <div className="py-10 text-center bg-slate-50/50 border border-slate-100 rounded-xl">
                 <Clock className="mx-auto h-8 w-8 text-slate-200 mb-2" />
                 <p className="text-sm text-slate-500">No recent activities found</p>
               </div>
