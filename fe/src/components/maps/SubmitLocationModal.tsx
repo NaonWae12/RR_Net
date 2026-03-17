@@ -84,13 +84,23 @@ export function SubmitLocationModal({
                     setGettingLocation(false);
                 },
                 (error) => {
-                    setLocationError(`Unable to get location: ${error.message}. Please enter manually.`);
+                    let msg = "";
+                    if (error.code === 1) { // PERMISSION_DENIED
+                        msg = "Permission denied. Browsers block location on non-HTTPS sites. Use HTTPS or check browser settings.";
+                    } else if (error.code === 2) { // POSITION_UNAVAILABLE
+                        msg = "Position unavailable. Device signal might be weak.";
+                    } else if (error.code === 3) { // TIMEOUT
+                        msg = "Location request timed out.";
+                    } else {
+                        msg = error.message;
+                    }
+                    setLocationError(`Unable to get location: ${msg}. Please enter manually.`);
                     setGettingLocation(false);
                 },
                 {
-                    enableHighAccuracy: false,
-                    timeout: 10000,
-                    maximumAge: 60000,
+                    enableHighAccuracy: true,
+                    timeout: 5000,
+                    maximumAge: 0,
                 }
             );
         }

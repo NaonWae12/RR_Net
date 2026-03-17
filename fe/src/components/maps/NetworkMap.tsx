@@ -434,11 +434,28 @@ export function NetworkMap({
       },
       (error) => {
         console.error("Error getting location:", error);
+        
+        let errorMsg = "Could not retrieve your location.";
+        if (error.code === 1) { // PERMISSION_DENIED
+          errorMsg = "Permission denied. Browsers block location on non-HTTPS sites. Use HTTPS or check browser settings.";
+        } else if (error.code === 2) { // POSITION_UNAVAILABLE
+          errorMsg = "Position unavailable. Device signal might be weak.";
+        } else if (error.code === 3) { // TIMEOUT
+          errorMsg = "Location request timed out.";
+        } else if (error.message) {
+          errorMsg = error.message;
+        }
+
         showToast({
-          title: "Location Access Denied",
-          description: error.message || "Could not retrieve your location. Ensure location permission is granted.",
+          title: "Location Access Failed",
+          description: errorMsg,
           variant: "error",
         });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
       }
     );
   };
