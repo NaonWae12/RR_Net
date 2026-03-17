@@ -67,7 +67,7 @@ function SummaryCard({ title, value, icon: Icon, color, description }: SummaryCa
   };
 
   return (
-    <motion.div variants={item} className={cn("p-5 rounded-2xl border bg-white shadow-sm flex items-start gap-4", colors[color])}>
+    <motion.div variants={item} className={cn("p-5 rounded-2xl border border-slate-100/20 bg-white shadow-sm flex items-start gap-4", colors[color])}>
       <div className={cn("p-3 rounded-xl", colors[color])}>
         <Icon size={24} />
       </div>
@@ -154,6 +154,25 @@ export default function TenantsPage() {
           </div>
         </div>
       ),
+    },
+    {
+      key: "plan",
+      title: "Plan",
+      sortable: true,
+      filterable: true,
+      render: (_, row) => {
+        const planDisplay = row.plan_name || row.plan_code || "Unassigned";
+        return (
+          <span className={cn(
+            "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tight",
+            row.plan_name || row.plan_code 
+              ? "bg-purple-50 text-purple-600 border-purple-100" 
+              : "bg-slate-50 text-slate-400 border-slate-100"
+          )}>
+            {planDisplay}
+          </span>
+        );
+      },
     },
     {
       key: "domain",
@@ -321,7 +340,7 @@ export default function TenantsPage() {
           </div>
 
           {/* Table Section */}
-          <motion.div variants={item} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <motion.div variants={item} className="bg-white rounded-3xl border border-slate-100/20 shadow-sm overflow-hidden">
             {error ? (
               <div className="p-10 text-center">
                 <AlertCircle className="mx-auto h-10 w-10 text-red-500 mb-4" />

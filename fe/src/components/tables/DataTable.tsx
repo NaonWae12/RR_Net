@@ -215,7 +215,7 @@ export const DataTable = React.memo(function DataTable<T extends Record<string, 
       </div>
 
       {/* Table */}
-      <div className="rounded-md border">
+      <div className="rounded-md border border-slate-100/20 overflow-hidden">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
