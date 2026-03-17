@@ -128,7 +128,7 @@ export function DiscountModal({
                         value={formData.code}
                         onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                         placeholder="e.g., RAMADAN2026"
-                        className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-black tracking-widest text-purple-600"
+                        className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-black tracking-widest text-purple-600 placeholder:text-slate-400"
                       />
                     </div>
                   </div>
@@ -144,7 +144,7 @@ export function DiscountModal({
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g., Ramadhan Promo"
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold text-slate-900 placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -158,7 +158,7 @@ export function DiscountModal({
                     value={formData.description || ""}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Short details about this promo..."
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent min-h-[80px]"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent min-h-[80px] text-slate-900 placeholder:text-slate-400"
                   />
                 </div>
 
@@ -204,7 +204,7 @@ export function DiscountModal({
                           required
                           value={formData.value}
                           onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) })}
-                          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-black text-lg"
+                          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-black text-lg text-slate-900 placeholder:text-slate-400"
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-slate-400">
                           {formData.type === "percent" ? "%" : "IDR"}
@@ -222,7 +222,7 @@ export function DiscountModal({
                         type="number"
                         value={formData.min_purchase}
                         onChange={(e) => setFormData({ ...formData, min_purchase: parseFloat(e.target.value) })}
-                        className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold text-slate-900 placeholder:text-slate-400"
                       />
                     </div>
 
@@ -236,7 +236,7 @@ export function DiscountModal({
                           value={formData.max_discount || ""}
                           onChange={(e) => setFormData({ ...formData, max_discount: e.target.value ? parseFloat(e.target.value) : undefined })}
                           placeholder="Unlimited"
-                          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold"
+                          className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold text-slate-900 placeholder:text-slate-400"
                         />
                       </div>
                     )}
@@ -254,7 +254,7 @@ export function DiscountModal({
                       value={formData.usage_limit || ""}
                       onChange={(e) => setFormData({ ...formData, usage_limit: e.target.value ? parseInt(e.target.value) : undefined })}
                       placeholder="Unlimited usage"
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-slate-900 placeholder:text-slate-400"
                     />
                   </div>
 
@@ -268,7 +268,7 @@ export function DiscountModal({
                         type="date"
                         value={formData.expires_at ? formData.expires_at.split('T')[0] : ""}
                         onChange={(e) => setFormData({ ...formData, expires_at: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
-                        className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold"
+                        className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-bold text-slate-900"
                       />
                     </div>
                   </div>

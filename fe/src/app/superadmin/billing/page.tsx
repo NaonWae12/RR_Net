@@ -73,7 +73,7 @@ function SummaryCard({ title, value, icon: Icon, color, description }: SummaryCa
   };
 
   return (
-    <motion.div variants={item} className={cn("p-5 rounded-2xl border bg-white shadow-sm flex items-start gap-4")}>
+    <motion.div variants={item} className={cn("p-5 rounded-2xl border border-slate-100/20 bg-white shadow-sm flex items-start gap-4")}>
       <div className={cn("p-3 rounded-xl", colors[color])}>
         <Icon size={24} />
       </div>
@@ -736,7 +736,7 @@ export default function SuperAdminBillingPage() {
             </motion.div>
 
             {/* Audit Log / Table Section */}
-            <motion.div variants={item} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <motion.div variants={item} className="bg-white rounded-3xl border border-slate-100/20 shadow-sm overflow-hidden">
               <div className="p-1">
                 <DataTable
                   data={invoices}

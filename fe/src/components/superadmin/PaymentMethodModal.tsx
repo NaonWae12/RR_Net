@@ -133,7 +133,7 @@ export function PaymentMethodModal({
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g., Bank Mandiri - Corporate Account"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-slate-900 placeholder:text-slate-400"
                   />
                 </div>
 
@@ -172,7 +172,7 @@ export function PaymentMethodModal({
                       value={formData.provider || ""}
                       onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
                       placeholder="e.g., GoPay, OVO, Dana"
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-slate-900 placeholder:text-slate-400"
                     />
                   </div>
                 )}
@@ -188,7 +188,7 @@ export function PaymentMethodModal({
                       value={formData.provider || ""}
                       onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
                       placeholder="e.g., Bank Mandiri, BCA, BNI"
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-slate-900 placeholder:text-slate-400"
                     />
                   </div>
                 )}
@@ -204,7 +204,7 @@ export function PaymentMethodModal({
                       value={formData.account_number || ""}
                       onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
                       placeholder={formData.category === "bank" ? "e.g., 1234567890" : "e.g., +62 812-3456-7890"}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-slate-900 placeholder:text-slate-400"
                     />
                   </div>
                 )}
@@ -220,7 +220,7 @@ export function PaymentMethodModal({
                       value={formData.account_name || ""}
                       onChange={(e) => setFormData({ ...formData, account_name: e.target.value })}
                       placeholder="e.g., PT RRNET Indonesia"
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-slate-900 placeholder:text-slate-400"
                     />
                   </div>
                 )}
