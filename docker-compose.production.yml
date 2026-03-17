@@ -103,6 +103,44 @@ services:
       retries: 3
       start_period: 40s
 
+  # WhatsApp Gateway (Baileys)
+  wa-gateway:
+    build:
+      context: ./wa-gateway
+    container_name: rrnet-wa-gateway-prod
+    restart: unless-stopped
+    environment:
+      WA_PORT: "3001"
+      WA_DATA_DIR: /app/data
+      WA_ADMIN_TOKEN: ${WA_ADMIN_TOKEN:-dev-wa-admin-token}
+      WA_SEND_DELAY_MS: "1500"
+      WA_SEND_JITTER_MS: "1000"
+    ports:
+      - "3001:3001"
+    volumes:
+      - wa_gateway_data:/app/data
+    networks:
+      - rrnet-network
+
+  # FreeRADIUS (Hotspot voucher-only MVP)
+  freeradius:
+    build:
+      context: ./infra/freeradius
+    container_name: rrnet-freeradius-prod
+    restart: unless-stopped
+    environment:
+      # Backend REST endpoints consumed by rlm_rest inside FreeRADIUS
+      RRNET_RADIUS_REST_BASE: "http://backend:8080/api/v1/radius"
+      # Shared secret between FreeRADIUS -> RRNET backend REST endpoints
+      RRNET_RADIUS_REST_SECRET: ${RRNET_RADIUS_REST_SECRET:-dev-radius-rest-secret}
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    depends_on:
+      - backend
+    networks:
+      - rrnet-network
+
   # Nginx Reverse Proxy (Optional - for HTTPS termination)
   nginx:
     image: nginx:alpine
@@ -126,6 +164,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  wa_gateway_data:
     driver: local
 
 networks:
