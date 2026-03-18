@@ -43,6 +43,21 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
 
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: rrnet-nginx-prod
+    restart: unless-stopped
+    # Use host network to simplify proxying to backend/frontend on 127.0.0.1
+    network_mode: host
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+
   # Backend API
   backend:
     build:
@@ -50,15 +65,18 @@ services:
       dockerfile: Dockerfile
     container_name: rrnet-backend-prod
     restart: unless-stopped
+    # Required for host-level networking and iptables management
+    network_mode: host
     environment:
       APP_ENV: production
       APP_NAME: rrnet-api
       APP_PORT: 8080
+      # Use 127.0.0.1 because we're on host network connecting to exposed DB/Redis
       DATABASE_URL: postgres://${POSTGRES_USER:-rrnet}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-rrnet_prod}?sslmode=disable
       REDIS_ADDR: 127.0.0.1:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB:-0}
-      # JWT secrets (should be in secrets manager in production)
+      # JWT secrets
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
@@ -69,15 +87,6 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: https://billrrnet.tech/api/v1/auth/google/callback
       FRONTEND_URL: https://billrrnet.tech
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # Use host network so backend can manage host iptables rules for Winbox remote access
-    # Backend connects to postgres/redis via host network (127.0.0.1 or container IP)
-    network_mode: host
-    # ports: not needed with host networking
     # Allow backend to manage host-level VPN users & iptables rules
     cap_add:
       - NET_ADMIN
@@ -105,15 +114,13 @@ services:
         - NEXT_PUBLIC_API_URL=https://billrrnet.tech/api/v1
     container_name: rrnet-frontend-prod
     restart: unless-stopped
+    # Use host network for easier reverse proxy from Nginx on 127.0.0.1
+    network_mode: host
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8080}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://billrrnet.tech/api/v1}
     depends_on:
       - backend
-    networks:
-      - rrnet-network
-    # ports:
-    #   - "${FRONTEND_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
       interval: 30s
@@ -127,14 +134,15 @@ services:
       context: ./wa-gateway
     container_name: rrnet-wa-gateway-prod
     restart: unless-stopped
+    # Expose to localhost so backend can reach it
+    ports:
+      - "127.0.0.1:3001:3001"
     environment:
       WA_PORT: "3001"
       WA_DATA_DIR: /app/data
       WA_ADMIN_TOKEN: ${WA_ADMIN_TOKEN:-dev-wa-admin-token}
       WA_SEND_DELAY_MS: "1500"
       WA_SEND_JITTER_MS: "1000"
-    # ports:
-    #   - "3001:3001"
     volumes:
       - wa_gateway_data:/app/data
     networks:
@@ -147,9 +155,8 @@ services:
     container_name: rrnet-freeradius-prod
     restart: unless-stopped
     environment:
-      # Backend REST endpoints consumed by rlm_rest inside FreeRADIUS
-      RRNET_RADIUS_REST_BASE: "http://backend:8080/api/v1/radius"
-      # Shared secret between FreeRADIUS -> RRNET backend REST endpoints
+      # Use 127.0.0.1:8080 since backend is on host network
+      RRNET_RADIUS_REST_BASE: "http://127.0.0.1:8080/api/v1/radius"
       RRNET_RADIUS_REST_SECRET: ${RRNET_RADIUS_REST_SECRET:-dev-radius-rest-secret}
     ports:
       - "1812:1812/udp"
@@ -158,25 +165,6 @@ services:
       - backend
     networks:
       - rrnet-network
-
-  # Nginx Reverse Proxy (Optional - for HTTPS termination)
-  nginx:
-    image: nginx:alpine
-    container_name: rrnet-nginx-prod
-    restart: unless-stopped
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - rrnet-network
-    profiles:
-      - with-nginx
 
 volumes:
   postgres_data:
@@ -189,4 +177,3 @@ volumes:
 networks:
   rrnet-network:
     driver: bridge
-
