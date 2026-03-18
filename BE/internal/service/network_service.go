@@ -556,11 +556,17 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	// 0. Cleanup Router Configuration (Best Effort)
-	// Try to remove RR-NET settings from the actual hardware if it's online
+	// 1. Cleanup OS Resources (IPTables) - Do this FIRST
+	// This frees up the port (e.g., 10500) immediately for other routers
+	if router.RemoteAccessEnabled && runtime.GOOS == "linux" {
+		_ = s.removeRemoteAccessRules(router)
+	}
+
+	// 2. Cleanup Router Configuration (Best Effort)
+	// Try to remove RR-NET settings from the actual hardware while VPN is still up
 	if router.Type == network.RouterTypeMikroTik && router.Host != "" && router.Username != "" {
 		addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-		cleanupCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Second) // Snappier timeout
 		defer cancel()
 
 		log.Info().Str("router_id", id.String()).Str("addr", addr).Msg("DeleteRouter: Attempting remote cleanup on MikroTik")
@@ -571,12 +577,8 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 		}
 	}
 
-	// 1. Cleanup OS Resources (IPTables)
-	if router.RemoteAccessEnabled && runtime.GOOS == "linux" {
-		_ = s.removeRemoteAccessRules(router)
-	}
-
-	// 2. Cleanup VPN Account if applicable
+	// 3. Cleanup VPN Account if applicable
+	// We do this AFTER remote cleanup so the tunnel is alive for the steps above
 	if router.ConnectivityMode == network.RouterConnectivityModeVPN && router.VPNUsername != "" && runtime.GOOS == "linux" {
 		cmd := exec.Command("/opt/rrnet/scripts/vpn_del_user_auto.sh", router.VPNUsername)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -584,7 +586,7 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 		}
 	}
 
-	// 3. Soft Delete in Database
+	// 4. Soft Delete in Database
 	return s.routerRepo.Delete(ctx, id)
 }
 

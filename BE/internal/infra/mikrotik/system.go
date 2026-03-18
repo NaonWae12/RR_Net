@@ -16,16 +16,13 @@ func UninstallSystemConfig(ctx context.Context, addr string, useTLS bool, userna
 	}
 	defer client.Close()
 
-	// 1. Remove L2TP Client
-	cleanupResource(client, "/interface/l2tp-client", "name", "l2tp-rrnet")
-
-	// 2. Remove RADIUS Config
+	// 1. Remove RADIUS Config
 	cleanupResourceWithComment(client, "/radius", "RR-NET")
 
-	// 3. Remove Firewall Rules
+	// 2. Remove Firewall Rules
 	cleanupResourceWithComment(client, "/ip/firewall/filter", "Allow ERP Access")
 
-	// 4. Disable RADIUS in Default Hotspot Profile
+	// 3. Disable RADIUS in Default Hotspot Profile
 	hotspotRepl, err := client.Run("/ip/hotspot/profile/print", "?default=true")
 	if err == nil && len(hotspotRepl.Re) > 0 {
 		for _, re := range hotspotRepl.Re {
@@ -34,6 +31,9 @@ func UninstallSystemConfig(ctx context.Context, addr string, useTLS bool, userna
 			}
 		}
 	}
+
+	// 4. Remove L2TP Client (LAST STEP - because it kills the connection)
+	cleanupResource(client, "/interface/l2tp-client", "name", "l2tp-rrnet")
 
 	return nil
 }
