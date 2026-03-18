@@ -40,12 +40,12 @@ if [ -z "${VPN_IP}" ]; then
 fi
 
 # Check if user exists
-if grep -qE "^${VPN_USER}[[:space:]]+l2tpd[[:space:]]+" "${CHAP}"; then
-  # If user exists, update password and IP instead of failing?
-  # For safety in automation, we update it.
-  sed -i "s|^${VPN_USER}[[:space:]]\+l2tpd.*|${VPN_USER} l2tpd ${VPN_PASS} ${VPN_IP}|" "${CHAP}"
+if grep -qE "^${VPN_USER}[[:space:]]+" "${CHAP}"; then
+  # If user exists, update password and IP/Server instead of failing?
+  # We use * for the server column to avoid name mismatch issues.
+  sed -i "s|^${VPN_USER}[[:space:]]\+.*|${VPN_USER} * ${VPN_PASS} ${VPN_IP}|" "${CHAP}"
 else
-  echo "${VPN_USER} l2tpd ${VPN_PASS} ${VPN_IP}" >> "${CHAP}"
+  echo "${VPN_USER} * ${VPN_PASS} ${VPN_IP}" >> "${CHAP}"
 fi
 
 # Print the assigned IP so Go can capture it
