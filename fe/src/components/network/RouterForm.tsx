@@ -397,7 +397,12 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           vpn_password: data.vpn_password,
           remote_access_port: data.remote_access_port,
         };
-        await onSubmit(finalData as any);
+        // If router was already provisioned (exists in DB from Step 1), do UPDATE not CREATE
+        if (provisionedId) {
+          await onSubmit({ ...finalData, id: provisionedId } as any);
+        } else {
+          await onSubmit(finalData as any);
+        }
       })}>
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
