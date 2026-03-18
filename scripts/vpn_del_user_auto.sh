@@ -20,7 +20,8 @@ fi
 
 # Remove user from chap-secrets
 if grep -qE "^${VPN_USER}[[:space:]]+" "${CHAP}"; then
-  sed -i "/^${VPN_USER}[[:space:]]\+/d" "${CHAP}"
+  # Use redirection to preserve inode (required for Docker volume mounts)
+  sed "/^${VPN_USER}[[:space:]]\+/d" "${CHAP}" > "${CHAP}.tmp" && cat "${CHAP}.tmp" > "${CHAP}" && rm "${CHAP}.tmp"
   echo "SUCCESS: user ${VPN_USER} removed"
 else
   echo "INFO: user ${VPN_USER} not found"

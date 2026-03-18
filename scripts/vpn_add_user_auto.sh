@@ -43,7 +43,8 @@ fi
 if grep -qE "^${VPN_USER}[[:space:]]+" "${CHAP}"; then
   # If user exists, update password and IP/Server instead of failing?
   # We use * for the server column to avoid name mismatch issues.
-  sed -i "s|^${VPN_USER}[[:space:]]\+.*|${VPN_USER} * ${VPN_PASS} ${VPN_IP}|" "${CHAP}"
+  # Use redirection to preserve inode (required for Docker volume mounts)
+  sed "s|^${VPN_USER}[[:space:]]\+.*|${VPN_USER} * ${VPN_PASS} ${VPN_IP}|" "${CHAP}" > "${CHAP}.tmp" && cat "${CHAP}.tmp" > "${CHAP}" && rm "${CHAP}.tmp"
 else
   echo "${VPN_USER} * ${VPN_PASS} ${VPN_IP}" >> "${CHAP}"
 fi
