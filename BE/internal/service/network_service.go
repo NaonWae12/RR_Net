@@ -193,7 +193,7 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 
 		// Execute script to add/update VPN user and get IP
 		// We call it again in case the user edited credentials in the final step
-		cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_add_user_auto.sh", router.VPNUsername, router.VPNPassword)
+		cmd := exec.Command("/opt/rrnet/scripts/vpn_add_user_auto.sh", router.VPNUsername, router.VPNPassword)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Warning: failed to sync VPN account: %v, output: %s\n", err, string(out))
@@ -325,7 +325,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		octet := int(b[0])%150 + 100
 		assignedIP = fmt.Sprintf("10.10.10.%d", octet)
 	} else {
-		cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_add_user_auto.sh", vpnUser, vpnPass)
+		cmd := exec.Command("/opt/rrnet/scripts/vpn_add_user_auto.sh", vpnUser, vpnPass)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			fmt.Printf("Warning: failed to create VPN account during provision: %v, output: %s\n", err, string(out))
@@ -574,7 +574,7 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 
 	// 2. Cleanup VPN Account if applicable
 	if router.ConnectivityMode == network.RouterConnectivityModeVPN && router.VPNUsername != "" && runtime.GOOS == "linux" {
-		cmd := exec.Command("sudo", "/opt/rrnet/scripts/vpn_del_user_auto.sh", router.VPNUsername)
+		cmd := exec.Command("/opt/rrnet/scripts/vpn_del_user_auto.sh", router.VPNUsername)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Warning: failed to remove VPN user %s: %v, output: %s", router.VPNUsername, err, string(out))
 		}
