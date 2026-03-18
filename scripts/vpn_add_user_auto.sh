@@ -17,18 +17,20 @@ CHAP="/etc/ppp/chap-secrets"
 
 # If IP is not provided, find the next available in 10.10.10.100-200
 if [ -z "${VPN_IP}" ]; then
-    # Get all IPs in use
-    USED_IPS=$(grep -E "^[a-zA-Z0-9].*l2tpd" "${CHAP}" | awk '{print $4}' | grep "^10\.10\.10\." | cut -d. -f4 | sort -n)
-    
+    # Get all IPs in use (using awk to avoid grep 1 exit code when no matches)
+    USED_IPS=$(awk '/^[a-zA-Z0-9].*l2tpd/ && $4 ~ /^10\.10\.10\./ { print $4 }' "${CHAP}" | cut -d. -f4 | sort -n || true)
+
     # Default start
     NEXT_OCTET=100
-    for ip in ${USED_IPS}; do
-        if [ "${ip}" -eq "${NEXT_OCTET}" ]; then
-            NEXT_OCTET=$((NEXT_OCTET + 1))
-        else
-            break
-        fi
-    done
+    if [ -n "${USED_IPS}" ]; then
+        for ip in ${USED_IPS}; do
+            if [ "${ip}" -eq "${NEXT_OCTET}" ]; then
+                NEXT_OCTET=$((NEXT_OCTET + 1))
+            else
+                break
+            fi
+        done
+    fi
     
     if [ "${NEXT_OCTET}" -gt 254 ]; then
         echo "ERROR: no more IPs available in 10.10.10.x"
