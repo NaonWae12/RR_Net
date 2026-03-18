@@ -1522,11 +1522,11 @@ func (s *NetworkService) removeRemoteAccessRules(router *network.Router) error {
 	}
 
 	// Remove DNAT Rule
-	cmd := exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
+	cmd := exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
 	_ = cmd.Run()
 
 	// Remove FORWARD Rule
-	cmd = exec.Command("sudo", "iptables", "-D", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+	cmd = exec.Command("iptables", "-D", "FORWARD", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
 	_ = cmd.Run()
 
 	return nil
