@@ -190,5 +190,11 @@ export const superAdminService = {
     const response = await apiClient.get("/superadmin/whatsapp/qr");
     return response.data;
   },
+
+  // ========== Network Monitoring ==========
+  async getNetworkStats(): Promise<any> {
+    const response = await apiClient.get("/superadmin/network/stats");
+    return response.data;
+  },
 };
 

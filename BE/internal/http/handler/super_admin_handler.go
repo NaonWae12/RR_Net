@@ -23,8 +23,9 @@ type SuperAdminHandler struct {
 	planService   *service.PlanService
 	addonService  *service.AddonService
 	tenantService *service.TenantService
-	userRepo      *repository.UserRepository
-	waClient      *wa_gateway.Client
+	userRepo       *repository.UserRepository
+	waClient       *wa_gateway.Client
+	networkService *service.NetworkService
 }
 
 type TenantDetailResponse struct {
@@ -46,16 +47,18 @@ func NewSuperAdminHandler(
 	tenantService *service.TenantService,
 	userRepo *repository.UserRepository,
 	waClient *wa_gateway.Client,
+	networkService *service.NetworkService,
 ) *SuperAdminHandler {
 	return &SuperAdminHandler{
-		tenantRepo:    tenantRepo,
-		planRepo:      planRepo,
-		addonRepo:     addonRepo,
-		planService:   planService,
-		addonService:  addonService,
-		tenantService: tenantService,
-		userRepo:      userRepo,
-		waClient:      waClient,
+		tenantRepo:     tenantRepo,
+		planRepo:       planRepo,
+		addonRepo:      addonRepo,
+		planService:    planService,
+		addonService:   addonService,
+		tenantService:  tenantService,
+		userRepo:       userRepo,
+		waClient:       waClient,
+		networkService: networkService,
 	}
 }
 
@@ -710,4 +713,22 @@ func (h *SuperAdminHandler) GetWhatsAppQR(w http.ResponseWriter, r *http.Request
 	log.Info().Str("qr_length", qrLen).Msg("[SuperAdmin] QR code retrieved successfully")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(qr)
+}
+func (h *SuperAdminHandler) GetNetworkStats(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msg("[SuperAdmin] GetNetworkStats called")
+
+	if h.networkService == nil {
+		http.Error(w, `{"error":"Network service not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	stats, err := h.networkService.GetGlobalNetworkStats(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("[SuperAdmin] Failed to get global network stats")
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }

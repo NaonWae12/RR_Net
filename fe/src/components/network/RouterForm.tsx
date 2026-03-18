@@ -403,6 +403,9 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         } else {
           await onSubmit(finalData as any);
         }
+      }, (errors) => {
+        console.log("Form validation errors:", errors);
+        toast.error("Please check the form for errors before completing.");
       })}>
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}

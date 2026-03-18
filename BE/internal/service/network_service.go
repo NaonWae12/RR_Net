@@ -602,6 +602,60 @@ func (s *NetworkService) UpdateRouterStatus(ctx context.Context, id uuid.UUID, s
 	return s.routerRepo.UpdateStatus(ctx, id, status)
 }
 
+type GlobalNetworkStats struct {
+	TotalRouters          int     `json:"total_routers"`
+	PortsUsed             int     `json:"ports_used"`
+	PortCapacity          int     `json:"port_capacity"`
+	UsagePercentage       float64 `json:"usage_percentage"`
+	ActiveTunnels         int     `json:"active_tunnels"`
+	PortRangeStart        int     `json:"port_range_start"`
+	PortRangeEnd          int     `json:"port_range_end"`
+	ProvisioningInstances int     `json:"provisioning_instances"`
+}
+
+func (s *NetworkService) GetGlobalNetworkStats(ctx context.Context) (*GlobalNetworkStats, error) {
+	routers, err := s.routerRepo.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	total := len(routers)
+	portsUsed := 0
+	activeTunnels := 0
+	provisioning := 0
+
+	for _, r := range routers {
+		if r.RemoteAccessPort > 0 && r.RemoteAccessEnabled {
+			portsUsed++
+		}
+		if r.Status == network.RouterStatusOnline {
+			activeTunnels++
+		}
+		if r.Status == network.RouterStatusProvisioning {
+			provisioning++
+		}
+	}
+
+	startPort := 10500
+	endPort := 20000
+	capacity := (endPort - startPort) + 1
+	usagePct := 0.0
+	if capacity > 0 {
+		usagePct = (float64(portsUsed) / float64(capacity)) * 100
+	}
+
+	return &GlobalNetworkStats{
+		TotalRouters:          total,
+		PortsUsed:             portsUsed,
+		PortCapacity:          capacity,
+		UsagePercentage:       usagePct,
+		ActiveTunnels:         activeTunnels,
+		PortRangeStart:        startPort,
+		PortRangeEnd:          endPort,
+		ProvisioningInstances: provisioning,
+	}, nil
+}
+
 type RouterConnectionTestResult struct {
 	OK        bool   `json:"ok"`
 	Identity  string `json:"identity,omitempty"`

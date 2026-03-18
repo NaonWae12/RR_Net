@@ -131,7 +131,8 @@ func New(deps Dependencies) http.Handler {
 	addonHandler := handler.NewAddonHandler(addonService)
 	clientHandler := handler.NewClientHandler(clientService)
 	featureHandler := handler.NewFeatureHandler(featureRepo)
-	superAdminHandler := handler.NewSuperAdminHandler(tenantRepo, planRepo, addonRepo, planService, addonService, tenantService, userRepo, deps.WAGateway)
+	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver)
+	superAdminHandler := handler.NewSuperAdminHandler(tenantRepo, planRepo, addonRepo, planService, addonService, tenantService, userRepo, deps.WAGateway, networkService)
 	employeeHandler := handler.NewEmployeeHandler(authService, userRepo)
 	servicePackageHandler := handler.NewServicePackageHandler(servicePackageService)
 	serviceSettingsHandler := handler.NewServiceSettingsHandler(serviceSettingsService)
@@ -1464,6 +1465,9 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/superadmin/whatsapp/connect", requireSuperAdmin(methodHandler("POST", superAdminHandler.ConnectWhatsApp)))
 	mux.Handle("/api/v1/superadmin/whatsapp/qr", requireSuperAdmin(methodHandler("GET", superAdminHandler.GetWhatsAppQR)))
 
+	// Super Admin Network Monitoring
+	mux.Handle("/api/v1/superadmin/network/stats", requireSuperAdmin(methodHandler("GET", superAdminHandler.GetNetworkStats)))
+
 	// Super Admin Addons
 	mux.Handle("/api/v1/superadmin/addons", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -1497,7 +1501,6 @@ func New(deps Dependencies) http.Handler {
 	// ============================================
 	// Network routes (Protected, tenant-scoped)
 	// ============================================
-	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver)
 	networkService.StartHealthCheckScheduler(context.Background())
 	networkHandler := handler.NewNetworkHandler(networkService)
 
