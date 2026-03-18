@@ -21,18 +21,14 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS
-RUN apk --no-cache add ca-certificates tzdata
+# Install ca-certificates, tzdata, and bash (for VPN scripts)
+RUN apk --no-cache add ca-certificates tzdata bash
 
 # Copy binary from builder
 COPY --from=builder /app/rrnet-api .
 
-# Create non-root user
-RUN addgroup -g 1000 rrnet && \
-    adduser -D -u 1000 -G rrnet rrnet && \
-    chown -R rrnet:rrnet /app
-
-USER rrnet
+# Run as root to allow VPN script execution & iptables management
+# Security is enforced at Docker network level (no public ports exposed)
 
 # Expose port
 EXPOSE 8080
