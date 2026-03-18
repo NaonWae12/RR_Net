@@ -1485,16 +1485,16 @@ func (s *NetworkService) applyRemoteAccessRules(router *network.Router) error {
 	}
 
 	// DNAT Rule for Winbox
-	cmd := exec.Command("sudo", "iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
+	cmd := exec.Command("iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to apply PREROUTING rule: %v, output: %s", err, string(out))
 	}
 
 	// FORWARD Rule for Winbox
-	cmd = exec.Command("sudo", "iptables", "-I", "FORWARD", "1", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
+	cmd = exec.Command("iptables", "-I", "FORWARD", "1", "-p", "tcp", "-d", router.Host, "--dport", "8291", "-j", "ACCEPT")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		// Cleanup PREROUTING if FORWARD fails
-		_ = exec.Command("sudo", "iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
+		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "--dport", strconv.Itoa(router.RemoteAccessPort), "-j", "DNAT", "--to-destination", router.Host+":8291").Run()
 		return fmt.Errorf("failed to apply FORWARD rule: %v, output: %s", err, string(out))
 	}
 
@@ -1505,10 +1505,10 @@ func (s *NetworkService) applyRemoteAccessRules(router *network.Router) error {
 	}
 
 	// We use -C to check if rule exists first to avoid duplicates
-	checkCmd := exec.Command("sudo", "iptables", "-t", "nat", "-C", "POSTROUTING", "-d", vpnSubnet, "-j", "MASQUERADE")
+	checkCmd := exec.Command("iptables", "-t", "nat", "-C", "POSTROUTING", "-d", vpnSubnet, "-j", "MASQUERADE")
 	if err := checkCmd.Run(); err != nil {
 		// Rule does not exist, add it
-		if err := exec.Command("sudo", "iptables", "-t", "nat", "-A", "POSTROUTING", "-d", vpnSubnet, "-j", "MASQUERADE").Run(); err != nil {
+		if err := exec.Command("iptables", "-t", "nat", "-A", "POSTROUTING", "-d", vpnSubnet, "-j", "MASQUERADE").Run(); err != nil {
 			fmt.Printf("Warning: failed to add masquerade rule: %v\n", err)
 		}
 	}
