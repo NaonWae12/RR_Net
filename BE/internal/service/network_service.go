@@ -506,6 +506,10 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	if req.EnableRemoteAccess != nil {
 		router.RemoteAccessEnabled = *req.EnableRemoteAccess
 	}
+	// Transition status from provisioning to online if we're completing the setup
+	if router.Status == network.RouterStatusProvisioning {
+		router.Status = network.RouterStatusOnline
+	}
 	router.IsDefault = req.IsDefault
 	router.UpdatedAt = time.Now()
 
