@@ -86,7 +86,7 @@ services:
       context: ./fe
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://76.13.17.143:8080/api/v1
+        - NEXT_PUBLIC_API_URL=http://billrrnet.tech/api/v1
     container_name: rrnet-frontend-prod
     restart: unless-stopped
     environment:
