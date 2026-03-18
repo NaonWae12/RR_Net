@@ -21,8 +21,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install ca-certificates, tzdata, and bash (for VPN scripts)
-RUN apk --no-cache add ca-certificates tzdata bash
+# Install ca-certificates, tzdata, bash, and iptables (for remote access management)
+RUN apk --no-cache add ca-certificates tzdata bash iptables
 
 # Copy binary from builder
 COPY --from=builder /app/rrnet-api .
