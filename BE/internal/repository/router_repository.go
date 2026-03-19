@@ -271,7 +271,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			created_at, updated_at
 		FROM routers
-		WHERE nas_ip = $1 AND radius_enabled = true AND deleted_at IS NULL
+		WHERE (nas_ip = $1 OR host = $1) AND radius_enabled = true AND deleted_at IS NULL
 		LIMIT 1
 	`
 	var router network.Router

@@ -6,7 +6,7 @@ import (
 )
 
 // SetupRadius configures the router to use ERP-NET RADIUS server
-func SetupRadius(ctx context.Context, addr string, useTLS bool, username, password string, radiusServerIP string, secret string) error {
+func SetupRadius(ctx context.Context, addr string, useTLS bool, username, password string, radiusServerIP string, secret string, nasIdentifier string) error {
 	client, err := dialMikroTik(addr, useTLS, username, password)
 	if err != nil {
 		return err
@@ -27,6 +27,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			"=address="+radiusServerIP, 
 			"=secret="+secret, 
 			"=service=hotspot,ppp",
+			"=nas-identifier="+nasIdentifier,
 		)
 	} else {
 		// Add new
@@ -35,6 +36,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			"=secret="+secret, 
 			"=service=hotspot,ppp", 
 			"=comment=RR-NET",
+			"=nas-identifier="+nasIdentifier,
 		)
 	}
 	if err != nil {

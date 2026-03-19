@@ -557,10 +557,11 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 		pass := router.Password
 		rSec := router.RadiusSecret
 		rId := router.ID.String()
+		nasId := router.NASIdentifier // CAPTURE NAS-Identifier
 
 		go func() {
 			addr := net.JoinHostPort(host, strconv.Itoa(apiPort))
-			err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec)
+			err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId) // Pass nasId
 			if err != nil {
 				log.Error().Err(err).Str("router_id", rId).Msg("Failed to setup RADIUS on MikroTik")
 			} else {
@@ -1542,10 +1543,10 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /system identity set name="RR-%s"
 
 ## RADIUS & HOTSPOT SETUP
-/radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS"
+/radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, vpnSubnet, router.Name, radiusSecret)
+`, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
 
 	return script
 }
