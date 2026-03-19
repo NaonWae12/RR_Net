@@ -1216,8 +1216,8 @@ func (s *VoucherService) removePackageFromRouter(ctx context.Context, router *ne
 
 // convertToHotspotProfile converts VoucherPackage to MikroTik HotspotUserProfile
 func convertToHotspotProfile(pkg *voucher.VoucherPackage) mikrotik.HotspotUserProfile {
-	// Format rate limit: "2048k/1024k" (Kbps with 'k' suffix)
-	rateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
+	// Format rate limit: "1024k/2048k" (Upload/Download)
+	rateLimit := fmt.Sprintf("%dk/%dk", pkg.UploadSpeed, pkg.DownloadSpeed)
 
 	profile := mikrotik.HotspotUserProfile{
 		Name:        pkg.Name,

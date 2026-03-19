@@ -178,8 +178,8 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		switch pkg.RateLimitMode {
 		case "full_radius":
 			// Use "k" format (Kbps) for better MikroTik compatibility via RADIUS
-			// Format: "2048k/1024k" is more stable than "M" or raw bps for RADIUS attributes
-			mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
+			// Format: "1024k/2048k" (Upload/Download) 
+			mikrotikRateLimit := fmt.Sprintf("%dk/%dk", pkg.UploadSpeed, pkg.DownloadSpeed)
 			response["Mikrotik-Rate-Limit"] = mikrotikRateLimit
 			log.Printf("[radius_auth] full_radius mode: Sending rate limit '%s'", mikrotikRateLimit)
 		case "radius_auth_only":
