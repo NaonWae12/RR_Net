@@ -1,34 +1,28 @@
-# Build stage
-FROM golang:1.24-alpine AS builder
-
+# 1. Build stage
+FROM golang:1.24 AS builder
 WORKDIR /app
-
-# Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
 
 # Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download -x
+# Go mod download usually has better DNS caching/retrying than apk
+RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build the application
+# Build
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o rrnet-api ./cmd/api/main.go
 
-# Final stage
-FROM alpine:latest
-
+# 2. Final stage (pake Debian-slim yang udah punya library standar)
+FROM debian:bookworm-slim
 WORKDIR /app
 
-# Install ca-certificates, tzdata, bash, and iptables (for remote access management)
-RUN apk --no-cache add ca-certificates tzdata bash iptables
+# Update and install iptables WITHOUT cleaning to avoid DNS lookup again if it fails once
+# Bookworm-slim already has ca-certificates and tzdata pre-installed
+RUN apt-get update && apt-get install -y --no-install-recommends iptables ca-certificates tzdata bash wget && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder
 COPY --from=builder /app/rrnet-api .
-
-# Run as root to allow VPN script execution & iptables management
-# Security is enforced at Docker network level (no public ports exposed)
 
 # Expose port
 EXPOSE 8080
@@ -39,4 +33,3 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # Run the application
 CMD ["./rrnet-api"]
-
