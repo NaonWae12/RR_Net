@@ -547,13 +547,24 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	// If Radius is enabled, ensure MikroTik is configured
 	if router.RadiusEnabled && router.Type == network.RouterTypeMikroTik && router.Host != "" {
 		radiusIP := "10.10.10.1" // Default VPN Gateway IP for Radius
+		
+		// Capture variables locally to prevent race conditions with HTTP handlers 
+		// zeroing out router.Password and router.RadiusSecret before the response.
+		host := router.Host
+		apiPort := router.APIPort
+		tls := router.APIUseTLS
+		user := router.Username
+		pass := router.Password
+		rSec := router.RadiusSecret
+		rId := router.ID.String()
+
 		go func() {
-			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-			err := mikrotik.SetupRadius(context.Background(), addr, router.APIUseTLS, router.Username, router.Password, radiusIP, router.RadiusSecret)
+			addr := net.JoinHostPort(host, strconv.Itoa(apiPort))
+			err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec)
 			if err != nil {
-				log.Error().Err(err).Str("router_id", router.ID.String()).Msg("Failed to setup RADIUS on MikroTik")
+				log.Error().Err(err).Str("router_id", rId).Msg("Failed to setup RADIUS on MikroTik")
 			} else {
-				log.Info().Str("router_id", router.ID.String()).Msg("RADIUS setup successfully on MikroTik")
+				log.Info().Str("router_id", rId).Msg("RADIUS setup successfully on MikroTik")
 			}
 		}()
 	}
