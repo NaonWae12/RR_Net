@@ -272,6 +272,8 @@ export interface Router {
   vpn_password?: string;
   vpn_script?: string;
   dns_name?: string;
+  idle_timeout: number;
+  interim_interval: number;
   created_at: string;
   updated_at: string;
 }
@@ -334,6 +336,8 @@ export interface UpdateRouterRequest {
   radius_secret?: string;
   dns_name?: string;
   remote_access_enabled?: boolean;
+  idle_timeout?: number;
+  interim_interval?: number;
 }
 
 export interface ProvisionRouterRequest {

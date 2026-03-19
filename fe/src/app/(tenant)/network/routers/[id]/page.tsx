@@ -53,6 +53,8 @@ export default function RouterDetailPage() {
   const [statusLoading, setStatusLoading] = useState(true);
   const [radiusEnabled, setRadiusEnabled] = useState(false);
   const [radiusSecret, setRadiusSecret] = useState("");
+  const [idleTimeout, setIdleTimeout] = useState(600);
+  const [interimInterval, setInterimInterval] = useState(60);
   const [updatingRadius, setUpdatingRadius] = useState(false);
   const [isEditingRadius, setIsEditingRadius] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
@@ -93,6 +95,8 @@ export default function RouterDetailPage() {
     if (routerData) {
       setRadiusEnabled(routerData.radius_enabled);
       setRadiusSecret(routerData.radius_secret || "");
+      setIdleTimeout(routerData.idle_timeout || 600);
+      setInterimInterval(routerData.interim_interval || 60);
     }
   }, [routerData]);
 
@@ -154,6 +158,8 @@ export default function RouterDetailPage() {
       await useNetworkStore.getState().updateRouter(routerData.id, {
         radius_enabled: radiusEnabled,
         radius_secret: radiusSecret,
+        idle_timeout: Number(idleTimeout),
+        interim_interval: Number(interimInterval),
       });
       showToast({
         title: "Radius Updated",
@@ -422,6 +428,91 @@ export default function RouterDetailPage() {
                   Save Configuration
                 </Button>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Card: Advanced RADIUS Settings */}
+          <Card className="border-indigo-100 bg-white shadow-sm mt-4">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                RADIUS Advanced Control
+              </CardTitle>
+              {isEditingRadius ? (
+                 <div className="flex gap-2">
+                   <Button 
+                     size="sm" 
+                     variant="ghost" 
+                     className="h-7 text-xs text-slate-500"
+                     onClick={() => {
+                        setIsEditingRadius(false);
+                        setIdleTimeout(routerData.idle_timeout || 600);
+                        setInterimInterval(routerData.interim_interval || 60);
+                     }}
+                   >
+                     Cancel
+                   </Button>
+                   <Button 
+                     size="sm" 
+                     className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700"
+                     onClick={handleUpdateRadius}
+                     disabled={updatingRadius}
+                   >
+                     {updatingRadius ? <RefreshCw className="w-3 h-3 animate-spin" /> : "Save"}
+                   </Button>
+                 </div>
+              ) : (
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="h-7 text-xs text-indigo-600 hover:bg-indigo-50"
+                  onClick={() => setIsEditingRadius(true)}
+                >
+                  <Pencil className="w-3 h-3 mr-1" />
+                  Edit Settings
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="idle_timeout" className="text-[10px] font-bold uppercase text-slate-500">Idle Timeout (sec)</Label>
+                  <Input 
+                    id="idle_timeout"
+                    type="number"
+                    value={idleTimeout}
+                    onChange={(e) => setIdleTimeout(Number(e.target.value))}
+                    disabled={!isEditingRadius}
+                    className="h-9 text-sm border-slate-200"
+                    placeholder="600"
+                  />
+                  <p className="text-[9px] text-slate-400 italic leading-tight">Disconnect if no traffic for X seconds (Default: 600)</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="interim_interval" className="text-[10px] font-bold uppercase text-slate-500">Interim Update (sec)</Label>
+                  <Input 
+                    id="interim_interval"
+                    type="number"
+                    value={interimInterval}
+                    onChange={(e) => setInterimInterval(Number(e.target.value))}
+                    disabled={!isEditingRadius}
+                    className="h-9 text-sm border-slate-200"
+                    placeholder="60"
+                  />
+                  <p className="text-[9px] text-slate-400 italic leading-tight">Frequency of usage reports to dashboard (Default: 60)</p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100 flex items-start gap-3">
+                <Activity className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-blue-900 uppercase">Pro Tip: Real-time Feedback</p>
+                  <p className="text-[10px] text-blue-700 leading-normal">
+                    Setting Interim Update to 60s makes the "MB Used" log in the dashboard feel real-time. 
+                    Setting Idle Timeout prevents ghost sessions that consume user quota.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
