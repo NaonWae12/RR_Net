@@ -157,10 +157,12 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 
 	if status != "" {
 		if status == "kadaluarsa" {
-			whereClauses = append(whereClauses, "v.status IN ('expired', 'revoked')")
+			// Smart Filter: explicit expired/revoked OR naturally expired by time
+			whereClauses = append(whereClauses, "(v.status IN ('expired', 'revoked') OR (v.expires_at IS NOT NULL AND v.expires_at < NOW()))")
 		} else {
+			// Filter other statuses AND ensure they haven't expired yet
 			args = append(args, status)
-			whereClauses = append(whereClauses, fmt.Sprintf("v.status = $%d", len(args)))
+			whereClauses = append(whereClauses, fmt.Sprintf("v.status = $%d AND (v.expires_at IS NULL OR v.expires_at > NOW())", len(args)))
 		}
 	}
 
@@ -180,7 +182,12 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 
 	// 2. Get data
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), 
+			CASE 
+				WHEN v.expires_at IS NOT NULL AND v.expires_at < NOW() AND v.status != 'revoked' THEN 'expired' 
+				ELSE v.status 
+			END as status,
+			v.isolated,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
 			p.name as package_name,
 			COALESCE(rs.total_uptime, 0) as uptime_seconds,
@@ -234,7 +241,12 @@ func (r *VoucherRepository) UpdateVoucherStatus(ctx context.Context, id uuid.UUI
 
 func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), 
+			CASE 
+				WHEN v.expires_at IS NOT NULL AND v.expires_at < NOW() AND v.status != 'revoked' THEN 'expired' 
+				ELSE v.status 
+			END as status,
+			v.isolated,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
 			p.name as package_name,
 			COALESCE(rs.total_uptime, 0) as uptime_seconds,
