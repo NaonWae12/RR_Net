@@ -13,7 +13,8 @@ COPY . .
 # Build the application
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-RUN ./node_modules/.bin/next build
+RUN pwd && ls -la && ls -la node_modules/.bin && find . -name "next" -type f
+RUN npm run build
 
 # Production stage
 FROM node:20-slim AS runner
