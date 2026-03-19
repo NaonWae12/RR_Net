@@ -1590,6 +1590,11 @@ func New(deps Dependencies) http.Handler {
 					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.UninstallIsolirFirewall)).ServeHTTP(w, r)
 					return
 				}
+			case "logs":
+				if r.Method == http.MethodGet {
+					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetRouterLogs)).ServeHTTP(w, r)
+					return
+				}
 			}
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return

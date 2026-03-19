@@ -693,3 +693,41 @@ func (h *NetworkHandler) ImportProfileFromRouter(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(profile)
 }
+// GetRouterLogs fetches recent system logs from the MikroTik router
+func (h *NetworkHandler) GetRouterLogs(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Fetch logs
+	logs, err := h.networkService.GetRouterLogs(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"data":  logs,
+		"total": len(logs),
+	})
+}

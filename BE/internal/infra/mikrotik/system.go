@@ -68,3 +68,42 @@ func cleanupResourceWithComment(client *routeros.Client, path, pattern string) {
 		}
 	}
 }
+// GetLogs fetches the most recent system logs from the MikroTik router
+func GetLogs(ctx context.Context, addr string, useTLS bool, username, password string) ([]map[string]string, error) {
+	client, err := dialMikroTik(addr, useTLS, username, password)
+	if err != nil {
+		return nil, (err)
+	}
+	defer client.Close()
+
+	// Get last 50 logs for diagnostics
+	// We sort by .id descending to get newest first if possible, 
+	// but RouterOS usually sends in order of storage. 
+	// We'll reverse it if needed in the UI or here.
+	repl, err := client.Run("/log/print")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch logs: %w", err)
+	}
+
+	var logs []map[string]string
+	for _, re := range repl.Re {
+		logEntry := map[string]string{
+			"time":    re.Map["time"],
+			"message": re.Map["message"],
+			"topics":  re.Map["topics"],
+		}
+		logs = append(logs, logEntry)
+	}
+
+	// Reverse to get newest first
+	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
+		logs[i], logs[j] = logs[j], logs[i]
+	}
+
+	// Limit to 20 for the dashboard
+	if len(logs) > 20 {
+		logs = logs[:20]
+	}
+
+	return logs, nil
+}

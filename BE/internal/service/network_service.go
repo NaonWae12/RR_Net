@@ -544,6 +544,19 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 		return nil, fmt.Errorf("failed to update router: %w", err)
 	}
 
+	// If Radius is enabled, ensure MikroTik is configured
+	if router.RadiusEnabled && router.Type == network.RouterTypeMikroTik && router.Host != "" {
+		radiusIP := "10.10.10.1" // Default VPN Gateway IP for Radius
+		go func() {
+			err := mikrotik.SetupRadius(context.Background(), router.Host, router.APIUseTLS, router.Username, router.Password, radiusIP, router.RadiusSecret)
+			if err != nil {
+				log.Error().Err(err).Str("router_id", router.ID.String()).Msg("Failed to setup RADIUS on MikroTik")
+			} else {
+				log.Info().Str("router_id", router.ID.String()).Msg("RADIUS setup successfully on MikroTik")
+			}
+		}()
+	}
+
 	// Trigger connection check in background after update
 	s.checkAndUpdateStatusAsync(router)
 
@@ -1776,4 +1789,22 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 		HasNAT:            status.HasNAT,
 		HasFilter:         status.HasFilter,
 	}, nil
+}
+func (s *NetworkService) GetRouterLogs(ctx context.Context, id uuid.UUID) ([]map[string]string, error) {
+	router, err := s.routerRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, (err)
+	}
+
+	if router.Host == "" {
+		return nil, fmt.Errorf("router has no host configured")
+	}
+
+	// Fetch logs from MikroTik
+	logs, err := mikrotik.GetLogs(ctx, router.Host, router.APIUseTLS, router.Username, router.Password)
+	if err != nil {
+		return nil, (err)
+	}
+
+	return logs, nil
 }
