@@ -83,13 +83,15 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Resolve tenant/router via NAS-IP-Address
-	tenantID, routerID, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
+	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		log.Printf("[radius_auth] REJECT: username=%q nas_ip=%s reason=router_not_found", req.UserName, req.NASIPAddress)
 		h.logAuthAttempt(ctx, uuid.Nil, nil, req.UserName, req.NASIPAddress, radius.AuthResultError, "router not found")
 		http.Error(w, `{"error":"NAS not registered"}`, http.StatusForbidden)
 		return
 	}
+	tenantID := router.TenantID
+	routerID := router.ID
 
 	// Step 1: Validate voucher (read-only check, doesn't consume)
 	v, err := h.voucherService.ValidateVoucherForAuth(ctx, tenantID, req.UserName)
@@ -208,11 +210,19 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 📡 LIVE MONITORING (Fix "Optimal Log" Issue)
-	// Acct-Interim-Interval: Forces MikroTik to send usage reports every 60 seconds
-	response["Acct-Interim-Interval"] = 60
+	// Use router-specific InterimInterval if set, otherwise default to 60s
+	interimInterval := 60
+	if router.InterimInterval > 0 {
+		interimInterval = router.InterimInterval
+	}
+	response["Acct-Interim-Interval"] = interimInterval
 	
-	// Idle-Timeout: Disconnect if no traffic for 10 minutes
-	response["Idle-Timeout"] = 600
+	// Use router-specific IdleTimeout if set, otherwise default to 600s
+	idleTimeout := 600
+	if router.IdleTimeout > 0 {
+		idleTimeout = router.IdleTimeout
+	}
+	response["Idle-Timeout"] = idleTimeout
 
 	// 🔥 NINJA ISOLATION OVERRIDE: If account is isolated, handcuff them!
 	if v.Isolated {
@@ -392,12 +402,14 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 		req.AcctStatusType, req.AcctSessionID, req.UserName, req.NASIPAddress)
 
 	// Resolve tenant/router via NAS-IP-Address
-	tenantID, routerID, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
+	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		log.Printf("[radius_acct] ERROR: acct_status=%s acct_session_id=%s nas_ip=%s reason=router_not_found", req.AcctStatusType, req.AcctSessionID, req.NASIPAddress)
 		http.Error(w, `{"error":"NAS not registered"}`, http.StatusForbidden)
 		return
 	}
+	tenantID := router.TenantID
+	routerID := router.ID
 
 	// Find voucher by username
 	var voucherID *uuid.UUID
@@ -542,7 +554,7 @@ func (h *RadiusHandler) ListActiveSessions(w http.ResponseWriter, r *http.Reques
 // It automatically updates NAS-IP in DB if it changed (Self-Healing)
 // resolveRouter looks up the router by NAS-Identifier (preferred) or NAS-IP
 // It automatically updates NAS-IP in DB if it changed (Self-Healing)
-func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP string) (uuid.UUID, uuid.UUID, error) {
+func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP string) (*network.Router, error) {
 	var router *network.Router
 	var err error
 
@@ -557,14 +569,14 @@ func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP 
 	}
 
 	if err != nil {
-		return uuid.Nil, uuid.Nil, err
+		return nil, err
 	}
 
 	// 3. Strict Check: Revoked / Soft-Deleted Router
 	// Revoked routers MUST NOT authenticate and MUST NOT trigger auto-healing
 	if router.DeletedAt != nil || router.Status == network.RouterStatusRevoked {
 		log.Printf("[radius_reject_revoked_router] Rejecting revoked router: %s (ID: %s, NAS-ID: %s)", router.Name, router.ID, router.NASIdentifier)
-		return uuid.Nil, uuid.Nil, fmt.Errorf("router is revoked")
+		return nil, fmt.Errorf("router is revoked")
 	}
 
 	// 4. Self-Healing: Update IP if changed (Only for ACTIVE routers)
@@ -580,7 +592,7 @@ func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP 
 		h.ipUpdateMutex.Unlock()
 	}
 
-	return router.TenantID, router.ID, nil
+	return router, nil
 }
 
 func (h *RadiusHandler) logAuthAttempt(ctx context.Context, tenantID uuid.UUID, routerID *uuid.UUID, username, nasIP string, result radius.AuthResult, reason string) {
