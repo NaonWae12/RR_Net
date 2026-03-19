@@ -1,6 +1,7 @@
 {
   "name": "fe",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "description": "RR_Net ERP Frontend - Fresh Build Forced",
   "private": true,
   "scripts": {
     "dev": "next dev",
