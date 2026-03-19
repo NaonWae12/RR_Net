@@ -108,6 +108,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			&router.ConnectivityMode, &router.APIUseTLS,
 			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 			&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
+			&router.IdleTimeout, &router.InterimInterval,
 			&router.CreatedAt, &router.UpdatedAt,
 		)
 		if err != nil {
@@ -126,6 +127,7 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 			connectivity_mode, api_use_tls,
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
+			COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),
 			created_at, updated_at
 		FROM routers WHERE deleted_at IS NULL
 	`
