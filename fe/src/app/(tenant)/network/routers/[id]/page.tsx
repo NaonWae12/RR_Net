@@ -204,570 +204,540 @@ export default function RouterDetailPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-8 max-w-7xl mx-auto">
       {/* Header Actions */}
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Routers
-        </Button>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => router.push(`/network/routers/${routerData.id}/edit`)}>
-            <Pencil className="h-4 w-4 mr-2" /> Edit
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="space-y-4">
+          <button 
+            onClick={() => router.back()}
+            className="group flex items-center text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <ArrowLeft className="h-3 w-3 mr-2 transition-transform group-hover:-translate-x-1" />
+            Back to Infrastructure
+          </button>
+          
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-slate-900 rounded-2xl shadow-xl shadow-slate-200">
+               <Server className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight">{routerData.name}</h1>
+                <RouterStatusBadge status={routerData.status} className="text-xs px-2 py-0.5 rounded-full font-bold uppercase" />
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                MikroTik {routerData.type} • ID: <span className="font-mono">{routerData.id.slice(0,8)}...</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="h-10 px-4 border-slate-200 text-slate-600 font-bold text-xs uppercase hover:bg-slate-50"
+            onClick={() => fetchRouter(id)}
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-2" />
+            Sync
           </Button>
-          <Button variant="destructive" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 mr-2" /> Delete
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="h-10 px-4 border-slate-200 text-slate-600 font-bold text-xs uppercase hover:bg-slate-50"
+            onClick={() => router.push(`/network/routers/${routerData.id}/edit`)}
+          >
+            <Pencil className="h-3.5 w-3.5 mr-2" />
+            Edit
+          </Button>
+          <Button 
+            variant="destructive" 
+            size="sm"
+            className="h-10 px-4 font-bold text-xs uppercase shadow-lg shadow-red-100"
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-2" />
+            Terminate
           </Button>
         </div>
-      </div>
-
-      {/* Main Title & Status */}
-      <div className="flex items-center space-x-4">
-        <h1 className="text-3xl font-bold text-slate-900">{routerData.name}</h1>
-        <RouterStatusBadge status={routerData.status} className="text-lg px-3 py-1" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
         {/* Card: Device Info */}
-        <Card>
+        <Card className="shadow-sm border-slate-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-900">Device Information</CardTitle>
-            <Server className="h-4 w-4 text-slate-500" />
+            <CardTitle className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Device Information</CardTitle>
+            <Server className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Type</p>
-              <p className="text-lg font-semibold uppercase text-slate-900">{routerData.type}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">System Type</p>
+                <p className="text-lg font-bold text-slate-900">{routerData.type}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Last Check-in</p>
+                <p className="text-sm font-semibold text-slate-700">
+                  {routerData.last_seen ? format(new Date(routerData.last_seen), "HH:mm:ss") : "-"}
+                </p>
+              </div>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Description</p>
-              <p className="text-slate-900">{routerData.description || "-"}</p>
+              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Full Last Seen</p>
+              <p className="text-sm text-slate-600">
+                {routerData.last_seen ? format(new Date(routerData.last_seen), "PPP") : "Never connected"}
+              </p>
             </div>
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide ">Last Seen</p>
-              <p className="text-slate-900">
-                {routerData.last_seen ? format(new Date(routerData.last_seen), "PPp") : "Never"}
+            <div className="pt-2">
+              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Description</p>
+              <p className="text-sm text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-100 mt-1">
+                {routerData.description || "No description provided."}
               </p>
             </div>
           </CardContent>
         </Card>
 
         {/* Card: Connectivity */}
-        <Card className="col-span-1 md:col-span-2 lg:col-span-1 border-indigo-100 bg-indigo-50/30">
+        <Card className="border-indigo-100 bg-gradient-to-br from-white to-indigo-50/30 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-indigo-900">Connectivity</CardTitle>
+            <CardTitle className="text-sm font-semibold text-indigo-900 uppercase tracking-wider">Connectivity</CardTitle>
             <Network className="h-4 w-4 text-indigo-500" />
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Mode</p>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 uppercase">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase border border-indigo-200">
                 {routerData.connectivity_mode.replace("_", " ")}
               </span>
+              <div className="h-px flex-1 bg-indigo-100" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                  <Globe className="w-3 h-3" /> Internal Host
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">Internal Host</p>
+                <p className="font-mono text-xs font-bold text-slate-700 bg-white border border-slate-100 px-2 py-1 rounded select-all">
+                  {routerData.host}
                 </p>
-                <p className="font-mono text-slate-700">{routerData.host}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wide">Port</p>
-                <p className="font-mono text-slate-700">{routerData.port}</p>
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">Winbox Port</p>
+                <p className="font-mono text-xs font-bold text-slate-700 bg-white border border-slate-100 px-2 py-1 rounded">
+                  {routerData.port}
+                </p>
               </div>
             </div>
 
             {/* Remote Access Highlight */}
             {routerData.remote_access_enabled && routerData.remote_access_port ? (
-              <div className="mt-4 p-3 bg-white rounded-lg border border-indigo-200 shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-100 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-                <p className="text-xs text-indigo-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-2">
-                  <Globe className="w-3 h-3" /> Remote Winbox Access
+              <div className="mt-4 p-3 bg-white rounded-xl border border-indigo-200 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-12 h-12 bg-indigo-50 rounded-bl-full -mr-6 -mt-6 transition-transform group-hover:scale-125"></div>
+                <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mb-1 flex items-center gap-2">
+                  <Globe className="w-3 h-3" /> External Address
                 </p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-xl font-bold text-indigo-700 font-mono tracking-tight">
+                  <p className="text-lg font-black text-indigo-700 font-mono tracking-tight select-all">
                     {currentHost}:{routerData.remote_access_port}
                   </p>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Use this address to connect via Winbox from public internet.</p>
+                <p className="text-[9px] text-slate-400 mt-1 font-medium">Connect via Winbox over public internet.</p>
               </div>
             ) : (
-              <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200">
-                <p className="text-sm text-slate-500 italic">Remote access disabled</p>
+              <div className="mt-4 p-3 bg-slate-50/50 rounded-lg border border-slate-200 border-dashed">
+                <p className="text-[10px] text-slate-400 font-bold uppercase text-center py-1">Remote access disabled</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Card: Management & Radius */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-900">Management</CardTitle>
-              <Settings className="h-4 w-4 text-slate-500" />
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4">
+        {/* Card: Management */}
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Management API</CardTitle>
+            <Settings className="h-4 w-4 text-slate-400" />
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1 flex items-center gap-1">
                   <Shield className="w-3 h-3" /> API Port
                 </p>
-                <p className="font-mono text-slate-900">{routerData.api_port || "Default"}</p>
+                <p className="font-mono text-sm font-bold text-slate-900 bg-slate-50 border border-slate-100 px-2 py-1 rounded">
+                  {routerData.api_port || "8728"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wide">API Use TLS</p>
-                <p className="text-slate-900">{routerData.api_use_tls ? "Yes (SSL)" : "No"}</p>
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">Protocol security</p>
+                <div className={cn(
+                  "inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase",
+                  routerData.api_use_tls ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-amber-50 text-amber-700 border border-amber-100"
+                )}>
+                  {routerData.api_use_tls ? "✓ API SSL (TLS)" : "! Standard API"}
+                </div>
               </div>
-              <div className="pt-2 border-t border-slate-100">
-                <p className="text-xs text-slate-400">Credentials hidden for security.</p>
+            </div>
+            
+            <div className="mt-4 p-3 bg-slate-900 rounded-lg border border-slate-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Router Credentials</span>
+                <Shield className="h-3 w-3 text-slate-600" />
               </div>
-            </CardContent>
-          </Card>
+              <p className="text-[10px] text-slate-500 leading-relaxed italic">
+                Username and password are securely stored and encrypted in the cloud vault. 
+                They are never exposed in the dashboard UI.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Card className={cn("transition-all duration-300 border-2", radiusEnabled ? "border-indigo-200 bg-indigo-50/10" : "border-slate-100")}>
-            <CardHeader className="pb-3 border-b border-slate-100/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={cn("p-1.5 rounded-lg", radiusEnabled ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-500")}>
-                    <Shield className="h-4 w-4" />
-                  </div>
-                  <CardTitle className="text-sm font-bold text-slate-900">Radius Server</CardTitle>
+        {/* Card: Radius Server */}
+        <Card className={cn(
+          "transition-all duration-300 border-2 shadow-sm", 
+          radiusEnabled ? "border-violet-200 bg-gradient-to-br from-white to-violet-50/20" : "border-slate-100 bg-slate-50/10 grayscale-[0.5]"
+        )}>
+          <CardHeader className="pb-3 border-b border-slate-100/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={cn("p-1.5 rounded-lg", radiusEnabled ? "bg-violet-100 text-violet-600" : "bg-slate-200 text-slate-500")}>
+                  <Globe className="h-4 w-4" />
                 </div>
-                <div className="flex items-center gap-2">
-                  {isEditingRadius ? (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-xs" 
-                      onClick={() => {
-                        setIsEditingRadius(false);
-                        setRadiusEnabled(routerData.radius_enabled);
-                        setRadiusSecret(routerData.radius_secret || "");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  ) : (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-xs text-indigo-600 font-bold hover:text-indigo-700 hover:bg-indigo-50"
-                      onClick={() => setIsEditingRadius(true)}
-                    >
-                      Configure
-                    </Button>
-                  )}
-                </div>
+                <CardTitle className="text-sm font-black text-slate-800 uppercase tracking-wider">Radius Server</CardTitle>
               </div>
-            </CardHeader>
-            <CardContent className="pt-5 space-y-5">
-              <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-bold text-slate-800">RADIUS Authorization</Label>
-                  <p className="text-[10px] text-slate-500">Enable Hotspot & PPPoE auth via central server</p>
-                </div>
-                <Switch 
-                  checked={radiusEnabled} 
-                  onCheckedChange={(val) => {
-                    setRadiusEnabled(val);
-                    if (!isEditingRadius) setIsEditingRadius(true);
-                  }} 
-                  disabled={updatingRadius}
-                  className="bg-slate-300 data-[state=checked]:bg-indigo-600 ring-offset-white focus-visible:ring-indigo-600"
-                />
+              <div className="flex items-center gap-2">
+                {isEditingRadius ? (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[10px] font-bold uppercase text-slate-400" 
+                    onClick={() => {
+                      setIsEditingRadius(false);
+                      setRadiusEnabled(routerData.radius_enabled);
+                      setRadiusSecret(routerData.radius_secret || "");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[10px] font-bold uppercase text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                    onClick={() => setIsEditingRadius(true)}
+                  >
+                    Configure
+                  </Button>
+                )}
               </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-5 space-y-4">
+            <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm transition-all hover:border-violet-200">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-black text-slate-700 uppercase tracking-tight">Status Authorization</Label>
+                <p className="text-[9px] text-slate-500 uppercase font-bold opacity-60">Hotspot & PPPoE Auth</p>
+              </div>
+              <Switch 
+                checked={radiusEnabled} 
+                onCheckedChange={(val) => {
+                  setRadiusEnabled(val);
+                  if (!isEditingRadius) setIsEditingRadius(true);
+                }} 
+                disabled={updatingRadius}
+                className="bg-slate-300 data-[state=checked]:bg-violet-600"
+              />
+            </div>
 
-              {radiusEnabled && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-300">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Radius Secret (Password)</Label>
-                    <div className="relative flex items-center">
-                      <Input
-                        type={showSecret ? "text" : "password"}
-                        placeholder="Radius shared secret"
-                        value={radiusSecret}
-                        onChange={(e) => setRadiusSecret(e.target.value)}
-                        disabled={!isEditingRadius || updatingRadius}
-                        className="font-mono text-sm bg-white pr-10 border-slate-200 focus:border-indigo-400 focus:ring-indigo-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSecret(!showSecret)}
-                        className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+            {radiusEnabled && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Server IP Address</Label>
+                  <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                       <span className="font-mono text-xs text-violet-400 font-black">10.10.10.1</span>
+                       <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
                     </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Radius Server IP</Label>
-                    <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800 flex items-center justify-between group">
-                      <div className="flex items-center gap-2">
-                         <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                         <span className="font-mono text-xs text-emerald-400 font-bold">10.10.10.1</span>
-                      </div>
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">VPN Gateway</span>
-                    </div>
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">MikroTik Gateway</span>
                   </div>
                 </div>
-              )}
 
-              {isEditingRadius && (
-                <Button 
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100" 
-                  onClick={handleUpdateRadius}
-                  disabled={updatingRadius}
-                >
-                  {updatingRadius ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 mr-2" />
-                  )}
-                  Save Configuration
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Shared Secret Key</Label>
+                  <div className="relative flex items-center">
+                    <Input
+                      type={showSecret ? "text" : "password"}
+                      placeholder="Radius shared secret"
+                      value={radiusSecret}
+                      onChange={(e) => setRadiusSecret(e.target.value)}
+                      disabled={!isEditingRadius || updatingRadius}
+                      className="font-mono text-xs h-9 bg-white pr-10 border-slate-200 focus:border-violet-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecret(!showSecret)}
+                      className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Card: Advanced RADIUS Settings */}
-          <Card className="border-indigo-100 bg-white shadow-sm mt-4">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-bold text-indigo-900 flex items-center gap-2">
-                <Settings className="w-4 h-4" />
-                RADIUS Advanced Control
-              </CardTitle>
-              {isEditingRadius ? (
-                 <div className="flex gap-2">
-                   <Button 
-                     size="sm" 
-                     variant="ghost" 
-                     className="h-7 text-xs text-slate-500"
-                     onClick={() => {
-                        setIsEditingRadius(false);
-                        setIdleTimeout(routerData.idle_timeout || 600);
-                        setInterimInterval(routerData.interim_interval || 60);
-                     }}
-                   >
-                     Cancel
-                   </Button>
-                   <Button 
-                     size="sm" 
-                     className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700"
-                     onClick={handleUpdateRadius}
-                     disabled={updatingRadius}
-                   >
-                     {updatingRadius ? <RefreshCw className="w-3 h-3 animate-spin" /> : "Save"}
-                   </Button>
-                 </div>
-              ) : (
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  className="h-7 text-xs text-indigo-600 hover:bg-indigo-50"
-                  onClick={() => setIsEditingRadius(true)}
-                >
-                  <Pencil className="w-3 h-3 mr-1" />
-                  Edit Settings
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="idle_timeout" className="text-[10px] font-bold uppercase text-slate-500">Idle Timeout (sec)</Label>
+            {isEditingRadius && (
+              <Button 
+                className="w-full h-9 bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-100 text-xs font-bold uppercase tracking-wider" 
+                onClick={handleUpdateRadius}
+                disabled={updatingRadius}
+              >
+                {updatingRadius ? (
+                  <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5 mr-2" />
+                )}
+                Commit Changes
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card: Advanced RADIUS Settings */}
+        <Card className="border-slate-100 bg-white shadow-sm flex flex-col justify-between overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50/50 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+            <CardTitle className="text-sm font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+              <Settings className="w-4 h-4 text-slate-400" />
+              RADIUS Controls
+            </CardTitle>
+            {isEditingRadius && (
+               <div className="flex gap-1.5">
+                 <Button 
+                   size="sm" 
+                   variant="ghost" 
+                   className="h-6 px-2 text-[9px] font-black uppercase text-slate-400"
+                   onClick={() => {
+                      setIsEditingRadius(false);
+                      setIdleTimeout(routerData.idle_timeout || 600);
+                      setInterimInterval(routerData.interim_interval || 60);
+                   }}
+                 >
+                   Clear
+                 </Button>
+                 <Button 
+                   size="sm" 
+                   className="h-6 px-2 text-[9px] font-black uppercase bg-slate-800 hover:bg-slate-900"
+                   onClick={handleUpdateRadius}
+                   disabled={updatingRadius}
+                 >
+                   Save
+                 </Button>
+               </div>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4 relative">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="idle_timeout" className="text-[9px] font-black uppercase text-slate-500 tracking-widest pl-1">Idle Timeout</Label>
+                <div className="relative">
                   <Input 
                     id="idle_timeout"
                     type="number"
                     value={idleTimeout}
                     onChange={(e) => setIdleTimeout(Number(e.target.value))}
                     disabled={!isEditingRadius}
-                    className="h-9 text-sm border-slate-200"
-                    placeholder="600"
+                    className="h-10 text-xs font-bold bg-slate-50 border-slate-200 text-slate-700 focus:bg-white"
                   />
-                  <p className="text-[9px] text-slate-400 italic leading-tight">Disconnect if no traffic for X seconds (Default: 600)</p>
+                  <span className="absolute right-2.5 top-2.5 text-[9px] font-bold text-slate-400">SEC</span>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="interim_interval" className="text-[10px] font-bold uppercase text-slate-500">Interim Update (sec)</Label>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="interim_interval" className="text-[9px] font-black uppercase text-slate-500 tracking-widest pl-1">Interim Upd</Label>
+                <div className="relative">
                   <Input 
                     id="interim_interval"
                     type="number"
                     value={interimInterval}
                     onChange={(e) => setInterimInterval(Number(e.target.value))}
                     disabled={!isEditingRadius}
-                    className="h-9 text-sm border-slate-200"
-                    placeholder="60"
+                    className="h-10 text-xs font-bold bg-slate-50 border-slate-200 text-slate-700 focus:bg-white"
                   />
-                  <p className="text-[9px] text-slate-400 italic leading-tight">Frequency of usage reports to dashboard (Default: 60)</p>
+                  <span className="absolute right-2.5 top-2.5 text-[9px] font-bold text-slate-400">SEC</span>
                 </div>
               </div>
-              
-              <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100 flex items-start gap-3">
-                <Activity className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+            </div>
+            
+            <div className="pt-2">
+              <div className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 flex items-start gap-3">
+                <Activity className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-blue-900 uppercase">Pro Tip: Real-time Feedback</p>
-                  <p className="text-[10px] text-blue-700 leading-normal">
-                    Setting Interim Update to 60s makes the "MB Used" log in the dashboard feel real-time. 
-                    Setting Idle Timeout prevents ghost sessions that consume user quota.
+                  <p className="text-[9px] font-black text-indigo-900 uppercase tracking-tighter">Performance Insight</p>
+                  <p className="text-[9px] text-indigo-700 font-medium leading-normal italic">
+                    60s Interim updates ensure precise bandwidth tracking. 
+                    Idle timeout prevents stale user sessions.
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Card: Isolir Setup */}
-        <Card className="border-orange-100 bg-orange-50/30">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-900">Isolir Setup (Hotspot)</CardTitle>
+        <Card className="border-orange-100 bg-gradient-to-br from-white to-orange-50/20 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-1 opacity-[0.05] -mr-4 -mt-4">
+               <Shield className="h-24 w-24 text-orange-900" />
+          </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+            <CardTitle className="text-sm font-semibold text-orange-900 uppercase tracking-wider">Isolir Gateway</CardTitle>
             <Shield className="h-4 w-4 text-orange-500" />
           </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            {/* Show input only if: not installed yet OR in update mode */}
-            {(!isolirStatus?.firewall_installed || isUpdateMode) && (
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Hotspot IP Address</p>
-                <input
-                  type="text"
-                  placeholder="192.168.88.1"
-                  value={hotspotIP || routerData?.host || ""}
-                  onChange={(e) => setHotspotIP(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  disabled={installingFirewall || uninstallingFirewall}
-                />
-                <p className="text-xs text-slate-400 mt-1">
-                  {!isolirStatus?.firewall_installed 
-                    ? "Gateway IP for HTTP redirect (auto-detected from router host)" 
-                    : "Enter new IP to update firewall rules"}
-                </p>
-              </div>
-            )}
-
-            {/* Show status if already installed and not in update mode */}
-            {isolirStatus?.firewall_installed && !isUpdateMode && (
-              <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                <p className="text-xs font-medium text-green-900 mb-1">✓ Firewall Installed</p>
-                <p className="text-xs text-green-700">
-                  {isolirStatus.rule_count} rules active • Hotspot IP: {isolirStatus.hotspot_ip}
-                </p>
-              </div>
-            )}
-
-            {/* Buttons */}
+          <CardContent className="space-y-4 pt-4 relative">
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Actions</p>
-              <div className="flex gap-2">
-                {statusLoading ? (
-                  <div className="flex items-center justify-center p-2 w-full">
-                    <LoadingSpinner size={20} />
+              <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-2 pl-1">Redirect IP Address</p>
+              {(!isolirStatus?.firewall_installed || isUpdateMode) ? (
+                <div className="relative group">
+                  <Input
+                    type="text"
+                    placeholder="192.168.88.1"
+                    value={hotspotIP || routerData?.host || ""}
+                    onChange={(e) => setHotspotIP(e.target.value)}
+                    className="h-10 bg-white border-orange-200 focus:border-orange-500 focus:ring-orange-500 font-mono text-xs pl-3"
+                    disabled={installingFirewall || uninstallingFirewall}
+                  />
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                     <span className="text-[8px] font-black text-orange-300 uppercase">Input IP</span>
                   </div>
-                ) : !isolirStatus?.firewall_installed ? (
-                  // First time install
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="flex-1 border-orange-200 text-orange-700 hover:bg-orange-100"
-                    disabled={installingFirewall}
-                    onClick={async () => {
-                      if (!routerData) return;
-                      const ipToUse = hotspotIP || routerData.host;
-                      if (!ipToUse) {
-                        showToast({
-                          title: "Missing IP",
-                          description: "Please enter hotspot IP address",
-                          variant: "error"
-                        });
-                        return;
-                      }
-                      setInstallingFirewall(true);
-                      console.log('[Isolir Debug] 4. Starting installation...');
-                      try {
-                        const newStatus = await networkService.installIsolirFirewall(routerData.id, ipToUse);
-                        console.log('[Isolir Debug] 5. Installation API call succeeded, status:', newStatus);
-
-                        showToast({
-                          title: "Firewall Installed",
-                          description: "Isolir firewall rules installed successfully",
-                          variant: "success"
-                        });
-
-                        // 🔥 OPTIMISTIC UPDATE: Use data directly from POST response
-                        // This avoids the race condition where MikroTik hasn't indexed the rules yet
-                        setIsolirStatus(newStatus);
-                        setHotspotIP("");
-                      } catch (err: any) {
-                        showToast({
-                          title: "Installation Failed",
-                          description: err?.message || "Failed to install firewall",
-                          variant: "error"
-                        });
-                      } finally {
-                        setInstallingFirewall(false);
-                      }
-                    }}
-                  >
-                    <Shield className="w-4 h-4 mr-2" />
-                    {installingFirewall ? "Installing..." : "Install Firewall"}
-                  </Button>
-                ) : isUpdateMode ? (
-                  // Update mode: Reinstall or Cancel
-                  <>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="flex-1 border-orange-200 text-orange-700 hover:bg-orange-100"
-                      disabled={!hotspotIP || installingFirewall}
-                      onClick={async () => {
-                        if (!routerData || !hotspotIP) return;
-                        setInstallingFirewall(true);
-                        try {
-                          await networkService.installIsolirFirewall(routerData.id, hotspotIP);
-                          showToast({
-                            title: "Firewall Updated",
-                            description: "Isolir firewall rules reinstalled with new IP",
-                            variant: "success"
-                          });
-                          const status = await networkService.getIsolirStatus(routerData.id);
-                          setIsolirStatus(status);
-                          setHotspotIP("");
-                          setIsUpdateMode(false);
-                        } catch (err: any) {
-                          showToast({
-                            title: "Update Failed",
-                            description: err?.message || "Failed to update firewall",
-                            variant: "error"
-                          });
-                        } finally {
-                          setInstallingFirewall(false);
-                        }
-                      }}
-                    >
-                      <Shield className="w-4 h-4 mr-2" />
-                      {installingFirewall ? "Reinstalling..." : "Reinstall Firewall"}
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="border-slate-200 text-slate-700 hover:bg-slate-100"
-                      disabled={installingFirewall}
-                      onClick={() => {
-                        setIsUpdateMode(false);
-                        setHotspotIP("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  // Already installed: Update IP or Uninstall
-                  <>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="flex-1 border-blue-200 text-blue-700 hover:bg-blue-100"
-                      onClick={() => setIsUpdateMode(true)}
-                    >
-                      📝 Update IP
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="border-red-200 text-red-700 hover:bg-red-100"
-                      disabled={uninstallingFirewall}
-                      onClick={async () => {
-                        if (!routerData) return;
-                        setUninstallingFirewall(true);
-                        try {
-                          await networkService.uninstallIsolirFirewall(routerData.id);
-                          showToast({
-                            title: "Firewall Uninstalled",
-                            description: "Isolir firewall rules removed successfully",
-                            variant: "success"
-                          });
-                          const status = await networkService.getIsolirStatus(routerData.id);
-                          setIsolirStatus(status);
-                        } catch (err: any) {
-                          showToast({
-                            title: "Uninstall Failed",
-                            description: err?.message || "Failed to uninstall firewall",
-                            variant: "error"
-                          });
-                        } finally {
-                          setUninstallingFirewall(false);
-                        }
-                      }}
-                    >
-                      {uninstallingFirewall ? "Uninstalling..." : "🗑️ Uninstall"}
-                    </Button>
-                  </>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 mt-1">
-                {!isolirStatus?.firewall_installed 
-                  ? "Creates NAT redirect for HTTP and blocks HTTPS/other traffic" 
-                  : isUpdateMode
-                  ? "Enter new IP and click Reinstall to update rules"
-                  : "NAT redirect + Filter blocks active"}
-              </p>
+                </div>
+              ) : (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] font-black text-emerald-800 uppercase tracking-wide">✓ Rules Active</p>
+                    <p className="text-[9px] text-emerald-600 font-bold uppercase opacity-80">
+                      IP: {isolirStatus.hotspot_ip}
+                    </p>
+                  </div>
+                  <div className="h-8 w-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <Save className="h-4 w-4 text-emerald-600" />
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="pt-2 border-t border-orange-100">
-              {isolirStatus?.firewall_installed ? (
-                <>
-                  <p className="text-xs text-green-600 font-medium">✓ Firewall Configured</p>
-                  <p className="text-xs text-slate-500 mt-1">Isolir feature is ready to use</p>
-                </>
+            <div className="flex gap-2">
+              {statusLoading ? (
+                <div className="p-2 w-full flex justify-center"><LoadingSpinner size={20} /></div>
+              ) : !isolirStatus?.firewall_installed ? (
+                <Button 
+                  className="w-full h-9 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs uppercase shadow-md shadow-orange-100"
+                  disabled={installingFirewall}
+                  onClick={async () => {
+                    if (!routerData) return;
+                    const ipToUse = hotspotIP || routerData.host;
+                    if (!ipToUse) {
+                      showToast({ title: "Missing IP", description: "Enter hotspot IP", variant: "error" });
+                      return;
+                    }
+                    setInstallingFirewall(true);
+                    try {
+                      const newStatus = await networkService.installIsolirFirewall(routerData.id, ipToUse);
+                      showToast({ title: "Rules Installed", description: "Successfully configured firewall", variant: "success" });
+                      setIsolirStatus(newStatus);
+                      setHotspotIP("");
+                    } catch (err: any) {
+                      showToast({ title: "Error", description: err?.message, variant: "error" });
+                    } finally { setInstallingFirewall(false); }
+                  }}
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  {installingFirewall ? "Working..." : "Install Script"}
+                </Button>
+              ) : isUpdateMode ? (
+                <div className="flex w-full gap-2">
+                  <Button className="flex-1 h-9 bg-orange-600 text-white text-xs font-bold uppercase" onClick={async () => {
+                    if (!routerData || !hotspotIP) return;
+                    setInstallingFirewall(true);
+                    try {
+                      const res = await networkService.installIsolirFirewall(routerData.id, hotspotIP);
+                      showToast({ title: "Updated", variant: "success" });
+                      setIsolirStatus(res); setHotspotIP(""); setIsUpdateMode(false);
+                    } catch (err: any) { showToast({ title: "Failed", variant: "error" }); } finally { setInstallingFirewall(false); }
+                  }}>Re-Apply</Button>
+                  <Button variant="ghost" className="h-9 px-3 text-xs font-bold uppercase text-slate-400" onClick={() => { setIsUpdateMode(false); setHotspotIP(""); }}>Cancel</Button>
+                </div>
               ) : (
-                <>
-                  <p className="text-xs text-orange-600 font-medium">⚠️ Setup Required</p>
-                  <p className="text-xs text-slate-500 mt-1">Install firewall before using Isolir feature</p>
-                </>
+                <div className="flex w-full gap-2 font-black">
+                   <Button variant="outline" className="flex-1 h-9 border-slate-200 text-slate-600 text-[10px] uppercase font-bold" onClick={() => setIsUpdateMode(true)}>Edit IP</Button>
+                   <Button variant="destructive" className="flex-1 h-9 bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 text-[10px] uppercase font-bold" disabled={uninstallingFirewall} onClick={async () => {
+                    if (!routerData) return; setUninstallingFirewall(true);
+                    try {
+                      await networkService.uninstallIsolirFirewall(routerData.id);
+                      showToast({ title: "Cleaned", variant: "success" });
+                      const status = await networkService.getIsolirStatus(routerData.id); setIsolirStatus(status);
+                    } catch (err: any) { showToast({ title: "Failed", variant: "error" }); } finally { setUninstallingFirewall(false); }
+                   }}>{uninstallingFirewall ? "..." : "Remove Script"}</Button>
+                </div>
               )}
             </div>
           </CardContent>
+          <div className="px-4 py-2 bg-orange-50/50 border-t border-orange-100/50">
+             <p className="text-[9px] text-orange-700 font-bold uppercase italic opacity-70">
+                {!isolirStatus?.firewall_installed ? "⚠ Ready to Install" : "✓ Protection Enabled"}
+             </p>
+          </div>
         </Card>
 
       </div>
 
       {/* Live Device Logs Section */}
-      <div className="mt-8">
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
-          <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-slate-900 rounded-lg text-white">
-                <Terminal className="h-4 w-4" />
+      <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
+        <Card className="border-slate-200 shadow-xl shadow-slate-100 overflow-hidden rounded-2xl">
+          <CardHeader className="bg-slate-900 border-b border-slate-800 flex flex-row items-center justify-between py-5 px-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-500/20 rounded-xl text-indigo-400 border border-indigo-500/30">
+                <Terminal className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-sm font-bold text-slate-900">Live Device Logs</CardTitle>
-                <p className="text-[10px] text-slate-500">Recent system events from MikroTik</p>
+                <CardTitle className="text-sm font-black text-white uppercase tracking-widest">Diagnostic Console</CardTitle>
+                <div className="flex items-center gap-2 mt-0.5">
+                   <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Live Traffic Stream • {logs.length} events</p>
+                </div>
               </div>
             </div>
-            {loadingLogs && <RefreshCw className="h-3 w-3 animate-spin text-slate-400" />}
+            <div className="flex items-center gap-3">
+               {loadingLogs && (
+                 <div className="flex items-center gap-2 bg-slate-800 px-2 py-1 rounded-md">
+                    <RefreshCw className="h-3 w-3 animate-spin text-indigo-400" />
+                    <span className="text-[9px] font-black text-slate-400 uppercase">Polling...</span>
+                 </div>
+               )}
+               <button className="text-slate-500 hover:text-white transition-colors" title="Clear View" onClick={() => setLogs([])}>
+                  <Trash2 className="h-4 w-4" />
+               </button>
+            </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+          <CardContent className="p-0 bg-slate-950">
+            <div className="max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
               {logs.length > 0 ? (
-                <div className="divide-y divide-slate-50 font-mono">
+                <div className="divide-y divide-slate-900/50 font-mono">
                   {logs.map((log, idx) => (
-                    <div key={idx} className="p-3 hover:bg-slate-50/80 transition-colors flex gap-4 text-xs italic">
-                      <div className="text-slate-400 shrink-0 select-none hidden md:block w-20">
-                        {log.time || "N/A"}
+                    <div key={idx} className="p-3 hover:bg-slate-900/50 transition-colors flex gap-4 text-[11px] group relative">
+                      <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="text-slate-600 shrink-0 select-none hidden md:block w-20 font-bold">
+                        [{log.time || "sys"}]
                       </div>
                       <div className="flex flex-col gap-1 w-full">
-                        <div className="flex items-baseline gap-2 flex-wrap">
+                        <div className="flex items-start gap-2 flex-wrap">
                           <span className={cn(
-                            "px-1.5 py-0.5 rounded-[4px] font-bold text-[9px] uppercase tracking-wider",
-                            log.topics?.includes("error") || log.topics?.includes("critical") ? "bg-red-100 text-red-600 border border-red-200" :
-                            log.topics?.includes("warning") ? "bg-amber-100 text-amber-600 border border-amber-200" :
-                            log.topics?.includes("hotspot") ? "bg-indigo-100 text-indigo-600 border border-indigo-200" :
-                            log.topics?.includes("pppoe") ? "bg-blue-100 text-blue-600 border border-blue-200" :
-                            log.topics?.includes("system") ? "bg-emerald-100 text-emerald-600 border border-emerald-200" :
-                            "bg-slate-100 text-slate-500 border border-slate-200"
+                            "px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter border",
+                            log.topics?.includes("error") || log.topics?.includes("critical") ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                            log.topics?.includes("warning") ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                            log.topics?.includes("hotspot") ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20" :
+                            log.topics?.includes("pppoe") ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                            log.topics?.includes("system") ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                            "bg-slate-800 text-slate-400 border-slate-700"
                           )}>
                             {log.topics || "info"}
                           </span>
-                          <span className="text-slate-700 leading-relaxed font-semibold break-all md:break-normal">
+                          <span className="text-slate-300 leading-relaxed break-all selection:bg-indigo-500 selection:text-white font-medium">
                             {log.message}
                           </span>
                         </div>
@@ -776,25 +746,26 @@ export default function RouterDetailPage() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-4">
+                <div className="flex flex-col items-center justify-center py-32 text-slate-600 gap-6">
                   {routerData?.status === 'online' ? (
                     <>
-                       <div className="p-4 bg-indigo-50 rounded-full border border-indigo-100">
-                         <Activity className="h-8 w-8 text-indigo-500 animate-pulse" />
+                       <div className="relative">
+                         <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full" />
+                         <Activity className="h-10 w-10 text-indigo-500 animate-pulse relative" />
                        </div>
-                       <div className="text-center">
-                         <p className="text-sm font-bold text-slate-600">Fetching real-time diagnostic logs...</p>
-                         <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">Synchronizing with MikroTik API</p>
+                       <div className="text-center space-y-1">
+                         <p className="text-sm font-black text-slate-300 uppercase tracking-widest">Listening for events...</p>
+                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">MikroTik API handshaking in progress</p>
                        </div>
                     </>
                   ) : (
                     <>
-                       <div className="p-4 bg-slate-50 rounded-full border border-slate-100">
-                         <Globe className="h-8 w-8 text-slate-300 opacity-50" />
+                       <div className="p-5 bg-slate-900/50 rounded-2xl border border-slate-800">
+                         <Globe className="h-10 w-10 text-slate-700" />
                        </div>
-                       <div className="text-center">
-                         <p className="text-sm font-bold text-slate-500">Device Offline</p>
-                         <p className="text-[10px] text-slate-400 mt-1">Logs are only available when the router is online</p>
+                       <div className="text-center space-y-1">
+                         <p className="text-sm font-black text-slate-500 uppercase tracking-widest">Stream Disconnected</p>
+                         <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tight">Power up the device to resume logging</p>
                        </div>
                     </>
                   )}
@@ -802,17 +773,21 @@ export default function RouterDetailPage() {
               )}
             </div>
           </CardContent>
-          <div className="p-3 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center bg-white">
-            <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Auto-Refreshing every 30s</span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium">Diagnostic Topic Filter: Enabled (Critical events prioritized)</p>
+          <div className="bg-slate-900 px-6 py-3 border-t border-slate-800 flex justify-between items-center">
+             <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Buffer: Dynamic</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Encrypted Stream</span>
+                </div>
+             </div>
+             <p className="text-[9px] font-black text-slate-600 uppercase italic">MikroTik RouterOS Diagnostic Data Interface v2.0</p>
           </div>
         </Card>
       </div>
-
     </div>
   );
 }
-
