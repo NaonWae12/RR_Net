@@ -63,6 +63,7 @@ services:
     build:
       context: ./BE
       dockerfile: Dockerfile
+      network: host
     container_name: rrnet-backend-prod
     restart: unless-stopped
     # Required for host-level networking and iptables management
@@ -110,6 +111,7 @@ services:
     build:
       context: ./fe
       dockerfile: Dockerfile
+      network: host
       args:
         - NEXT_PUBLIC_API_URL=https://billrrnet.tech/api/v1
     container_name: rrnet-frontend-prod
@@ -132,6 +134,7 @@ services:
   wa-gateway:
     build:
       context: ./wa-gateway
+      network: host
     container_name: rrnet-wa-gateway-prod
     restart: unless-stopped
     # Expose to localhost so backend can reach it
@@ -152,6 +155,7 @@ services:
   freeradius:
     build:
       context: ./infra/freeradius
+      network: host
     container_name: rrnet-freeradius-prod
     restart: unless-stopped
     environment:
