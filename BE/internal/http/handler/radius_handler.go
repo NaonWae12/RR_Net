@@ -192,6 +192,28 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// ⏳ ENFORCE TIME LIMITS (Fix "Bablas" Issue)
+	if v.ExpiresAt != nil {
+		remaining := time.Until(*v.ExpiresAt)
+		timeoutSeconds := int(remaining.Seconds())
+
+		// Safety check: if expired but somehow reached here, set 1 second to force logout
+		if timeoutSeconds <= 0 {
+			timeoutSeconds = 1
+		}
+
+		// Session-Timeout: How long the user can stay online in THIS session
+		response["Session-Timeout"] = timeoutSeconds
+		log.Printf("[radius_auth] Session-Timeout set: %d seconds remaining", timeoutSeconds)
+	}
+
+	// 📡 LIVE MONITORING (Fix "Optimal Log" Issue)
+	// Acct-Interim-Interval: Forces MikroTik to send usage reports every 60 seconds
+	response["Acct-Interim-Interval"] = 60
+	
+	// Idle-Timeout: Disconnect if no traffic for 10 minutes
+	response["Idle-Timeout"] = 600
+
 	// 🔥 NINJA ISOLATION OVERRIDE: If account is isolated, handcuff them!
 	if v.Isolated {
 		log.Printf("[radius_auth] WARN: User '%s' is ISOLATED. Applying handcuffs (Rate=0/0, List=isolated)", req.UserName)
