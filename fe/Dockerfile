@@ -3,16 +3,17 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy source code first
-COPY . .
-
 # Install dependencies
+COPY package.json package-lock.json* ./
 RUN npm install --legacy-peer-deps
+
+# Copy source code
+COPY . .
 
 # Build the application
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-RUN npm run build
+RUN npx next build
 
 # Production stage
 FROM node:20-alpine AS runner
