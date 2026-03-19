@@ -1,42 +1,26 @@
-# 1. Install dependencies only when needed
-FROM node:20 AS deps
+FROM node:20
+
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
+# Copy package files
 COPY package.json package-lock.json* ./
-RUN npm install --legacy-peer-deps
 
-# 2. Rebuild the source code only when needed
-FROM node:20 AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Clean and Install dependencies
+RUN rm -rf node_modules && npm install --legacy-peer-deps
+
+# Copy the rest of the source code
 COPY . .
+
+# Delete host node_modules again just in case COPY brought them in
+RUN rm -rf node_modules/next && npm install --legacy-peer-deps
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-RUN npm run build
+# Build
+RUN ./node_modules/.bin/next build
 
-# 3. Production image, copy all the files and run next
-FROM node:20-slim AS runner
-WORKDIR /app
-
+# Running stage
 ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-
-# Automatically leverage output traces to reduce image size
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-
 EXPOSE 3000
-
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
