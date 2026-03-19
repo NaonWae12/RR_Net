@@ -162,6 +162,7 @@ services:
       # Use 127.0.0.1:8080 since backend is on host network
       RRNET_RADIUS_REST_BASE: "http://127.0.0.1:8080/api/v1/radius"
       RRNET_RADIUS_REST_SECRET: ${RRNET_RADIUS_REST_SECRET:-dev-radius-rest-secret}
+    command: ["freeradius", "-X"]
     network_mode: host
     depends_on:
       - backend
