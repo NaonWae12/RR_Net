@@ -3,18 +3,19 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm install --legacy-peer-deps
-
-# Copy source code
+# Copy source first
 COPY . .
+
+# Delete any corrupted node_modules from host if they exist
+RUN rm -rf node_modules
+
+# Force install everything
+RUN npm install --force
 
 # Build the application
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-RUN pwd && ls -la && ls -la node_modules/.bin && find . -name "next" -type f
-RUN npm run build
+RUN ./node_modules/.bin/next build
 
 # Production stage
 FROM node:20-slim AS runner
