@@ -548,7 +548,8 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	if router.RadiusEnabled && router.Type == network.RouterTypeMikroTik && router.Host != "" {
 		radiusIP := "10.10.10.1" // Default VPN Gateway IP for Radius
 		go func() {
-			err := mikrotik.SetupRadius(context.Background(), router.Host, router.APIUseTLS, router.Username, router.Password, radiusIP, router.RadiusSecret)
+			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+			err := mikrotik.SetupRadius(context.Background(), addr, router.APIUseTLS, router.Username, router.Password, radiusIP, router.RadiusSecret)
 			if err != nil {
 				log.Error().Err(err).Str("router_id", router.ID.String()).Msg("Failed to setup RADIUS on MikroTik")
 			} else {
@@ -1801,7 +1802,8 @@ func (s *NetworkService) GetRouterLogs(ctx context.Context, id uuid.UUID) ([]map
 	}
 
 	// Fetch logs from MikroTik
-	logs, err := mikrotik.GetLogs(ctx, router.Host, router.APIUseTLS, router.Username, router.Password)
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+	logs, err := mikrotik.GetLogs(ctx, addr, router.APIUseTLS, router.Username, router.Password)
 	if err != nil {
 		return nil, (err)
 	}
