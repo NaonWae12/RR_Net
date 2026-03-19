@@ -26,6 +26,7 @@ export interface GenerateVouchersRequest {
 
 export interface UpdateVoucherRequest {
   package_id: string;
+  router_id?: string;
   code: string;
   password?: string;
   shared_users: number;

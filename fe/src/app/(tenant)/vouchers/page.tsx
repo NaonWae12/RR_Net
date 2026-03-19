@@ -151,6 +151,7 @@ export default function VouchersPage() {
     code: "",
     password: "",
     package_id: "",
+    router_id: "" as string | "all",
     shared_users: 1,
     notes: ""
   });
@@ -419,6 +420,7 @@ export default function VouchersPage() {
       code: voucher.code,
       password: voucher.password || "",
       package_id: voucher.package_id,
+      router_id: voucher.router_id || "all",
       shared_users: voucher.shared_users || 1,
       notes: voucher.notes || ""
     });
@@ -431,6 +433,7 @@ export default function VouchersPage() {
     try {
       await voucherService.updateVoucher(editDialog.voucher.id, {
         package_id: editVoucherForm.package_id,
+        router_id: editVoucherForm.router_id === "all" ? undefined : editVoucherForm.router_id,
         code: editVoucherForm.code,
         password: editVoucherForm.password,
         shared_users: editVoucherForm.shared_users,
@@ -1383,16 +1386,34 @@ export default function VouchersPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-slate-700 leading-none">Router</label>
+                      <select
+                        className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 border-slate-200"
+                        value={editVoucherForm.router_id}
+                        onChange={(e) => setEditVoucherForm({ ...editVoucherForm, router_id: e.target.value })}
+                      >
+                        <option value="all">Semua Router (All)</option>
+                        {routers.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name} ({r.host})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-slate-700 leading-none">Shared Users</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="h-10 border-slate-200"
+                        value={editVoucherForm.shared_users}
+                        onChange={(e) => setEditVoucherForm({ ...editVoucherForm, shared_users: Number(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700 leading-none">Catatan (Notes)</label>
                     <Input
-                      label="Shared Users"
-                      type="number"
-                      min={1}
-                      className="h-10 border-slate-200"
-                      value={editVoucherForm.shared_users}
-                      onChange={(e) => setEditVoucherForm({ ...editVoucherForm, shared_users: Number(e.target.value) })}
-                    />
-                    <Input
-                      label="Notes"
                       className="h-10 border-slate-200"
                       value={editVoucherForm.notes}
                       onChange={(e) => setEditVoucherForm({ ...editVoucherForm, notes: e.target.value })}
