@@ -23,7 +23,7 @@ import { useNetworkStore } from "@/stores/networkStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Zap, ArrowDownCircle, ArrowUpCircle, ShieldCheck, Edit3, Eye } from "lucide-react";
 
 interface NetworkProfileTableProps {
   profiles: NetworkProfile[] | null | undefined;
@@ -91,49 +91,95 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
 
   if (!profiles || profiles.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-500">
-        No network profiles found. Create your first profile to get started.
+      <div className="text-center py-12 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+        <div className="p-3 bg-white w-fit mx-auto rounded-2xl shadow-sm mb-4">
+           <Zap className="h-6 w-6 text-slate-300" />
+        </div>
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No active profiles</p>
+        <p className="text-xs text-slate-400 mt-1">Deploy your first network configuration to begin.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-slate-700 font-semibold">Name</TableHead>
-            <TableHead className="text-slate-700 font-semibold">Download</TableHead>
-            <TableHead className="text-slate-700 font-semibold">Upload</TableHead>
-            <TableHead className="text-slate-700 font-semibold">Priority</TableHead>
-            <TableHead className="text-slate-700 font-semibold">Status</TableHead>
-            <TableHead className="text-slate-700 font-semibold">Actions</TableHead>
+        <TableHeader className="bg-slate-50/50">
+          <TableRow className="border-slate-100 hover:bg-transparent">
+            <TableHead className="py-5 px-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Profile Name</TableHead>
+            <TableHead className="py-5 px-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Download</TableHead>
+            <TableHead className="py-5 px-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Upload</TableHead>
+            <TableHead className="py-5 px-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Operations</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {profiles.map((profile) => (
-            <TableRow key={profile.id} className="border-slate-200">
-              <TableCell className="font-medium text-slate-900">{profile.name}</TableCell>
-              <TableCell className="text-slate-700">{formatSpeed(profile.download_speed)}</TableCell>
-              <TableCell className="text-slate-700">{formatSpeed(profile.upload_speed)}</TableCell>
-              <TableCell className="text-slate-700">{profile.priority}</TableCell>
-              <TableCell>
-                {profile.is_active ? (
-                  <span className="text-xs font-medium px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">Active</span>
-                ) : (
-                  <span className="text-xs font-medium px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200">Inactive</span>
-                )}
+            <TableRow key={profile.id} className="group border-slate-100 hover:bg-slate-50/50 transition-all duration-300">
+              <TableCell className="py-5 px-6">
+                <div className="flex items-center gap-3">
+                   <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+                      <Zap className="h-4 w-4" />
+                   </div>
+                   <div className="flex flex-col">
+                      <span className="font-bold text-slate-900 tracking-tight">{profile.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prority {profile.priority}</span>
+                        {profile.is_active ? (
+                          <div className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">
+                            <ShieldCheck className="h-2.5 w-2.5" />
+                            Live
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter">
+                            Standby
+                          </div>
+                        )}
+                      </div>
+                   </div>
+                </div>
               </TableCell>
-              <TableCell className="flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => handleView(profile.id)}>
-                  View
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleEdit(profile.id)}>
-                  Edit
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(profile.id, profile.name)}>
-                  Delete
-                </Button>
+              <TableCell className="py-5 px-6">
+                 <div className="flex items-center gap-2 bg-emerald-50/50 text-emerald-700 px-3 py-1.5 rounded-2xl border border-emerald-100 w-fit">
+                    <ArrowDownCircle className="h-3.5 w-3.5" />
+                    <span className="text-xs font-black whitespace-nowrap">{formatSpeed(profile.download_speed)}</span>
+                 </div>
+              </TableCell>
+              <TableCell className="py-5 px-6">
+                 <div className="flex items-center gap-2 bg-amber-50/50 text-amber-700 px-3 py-1.5 rounded-2xl border border-amber-100 w-fit">
+                    <ArrowUpCircle className="h-3.5 w-3.5" />
+                    <span className="text-xs font-black whitespace-nowrap">{formatSpeed(profile.upload_speed)}</span>
+                 </div>
+              </TableCell>
+              <TableCell className="py-5 px-6 text-right">
+                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 bg-white border border-slate-200 shadow-sm text-slate-500 hover:text-indigo-600 hover:border-indigo-100 rounded-xl"
+                    onClick={() => handleView(profile.id)}
+                    title="View Profile"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 bg-white border border-slate-200 shadow-sm text-slate-500 hover:text-amber-600 hover:border-amber-100 rounded-xl"
+                    onClick={() => handleEdit(profile.id)}
+                    title="Edit Config"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 bg-white border border-slate-200 shadow-sm text-rose-500 hover:border-rose-100 rounded-xl"
+                    onClick={() => openDeleteDialog(profile.id, profile.name)}
+                    title="Purge Profile"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
@@ -142,32 +188,47 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteDialog.open} onOpenChange={(open) => !deleting && setDeleteDialog({ open, profile: deleteDialog.profile })}>
-        <DialogContent className="sm:max-w-[400px] bg-white text-slate-900">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
-              <Trash2 className="h-5 w-5" />
-              Delete Network Profile
-            </DialogTitle>
-            <DialogDescription className="py-3 text-slate-600 block">
-              Are you sure you want to delete profile <span className="font-semibold text-slate-900">&quot;{deleteDialog.profile?.name}&quot;</span>?
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, profile: null })} disabled={deleting}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
-              {deleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
-            </Button>
-          </DialogFooter>
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+          <div className="bg-rose-600 p-6 flex flex-col items-center text-center text-white space-y-4">
+             <div className="p-3 bg-white/20 rounded-2xl">
+               <Trash2 className="h-8 w-8 text-white" />
+             </div>
+             <div className="space-y-1">
+               <DialogTitle className="text-xl font-black uppercase tracking-tight text-white">Profile Obliteration</DialogTitle>
+               <p className="text-[10px] font-black text-rose-100/70 uppercase tracking-widest">Permanent extraction from system</p>
+             </div>
+          </div>
+          <div className="p-8 space-y-6 bg-white">
+            <p className="text-sm text-slate-500 font-medium text-center leading-relaxed">
+              Are you sure about deleting configuration <span className="font-black text-slate-900">"{deleteDialog.profile?.name}"</span>? 
+              This will impact all linked network nodes.
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <Button 
+                variant="destructive" 
+                className="w-full h-11 bg-rose-600 hover:bg-rose-700 font-black uppercase text-xs tracking-widest shadow-lg shadow-rose-100 rounded-xl"
+                onClick={handleConfirmDelete} 
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Purging Profile...
+                  </>
+                ) : (
+                  "Execute Purge"
+                )}
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="w-full h-11 text-slate-400 hover:text-slate-600 font-black uppercase text-[10px] tracking-widest"
+                onClick={() => setDeleteDialog({ open: false, profile: null })} 
+                disabled={deleting}
+              >
+                Cancel Deletion
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

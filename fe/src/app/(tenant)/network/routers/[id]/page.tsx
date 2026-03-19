@@ -30,6 +30,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { AlertTriangle } from "lucide-react";
 
 export default function RouterDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +70,8 @@ export default function RouterDetailPage() {
   const [showSecret, setShowSecret] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 1. Fetch Basic Router Data
   useEffect(() => {
@@ -131,9 +143,7 @@ export default function RouterDetailPage() {
 
   const handleDelete = async () => {
     if (!routerData) return;
-    if (!confirm(`Are you sure you want to delete router "${routerData.name}"?`)) {
-      return;
-    }
+    setIsDeleting(true);
     try {
       await deleteRouter(routerData.id);
       showToast({
@@ -141,13 +151,16 @@ export default function RouterDetailPage() {
         description: `Router "${routerData.name}" has been successfully deleted.`,
         variant: "success",
       });
-      router.push("/network/routers");
+      setIsDeleteDialogOpen(false);
+      router.push("/network");
     } catch (err: any) {
       showToast({
-        title: "Failed to delete router",
-        description: err?.message || "An unexpected error occurred.",
+        title: "Termination Failed",
+        description: err?.message || "An unexpected error occurred during removal.",
         variant: "error",
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -204,7 +217,8 @@ export default function RouterDetailPage() {
   }
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <>
+      <div className="p-6 space-y-8 max-w-7xl mx-auto">
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="space-y-4">
@@ -255,7 +269,7 @@ export default function RouterDetailPage() {
             variant="destructive" 
             size="sm"
             className="h-10 px-4 font-bold text-xs uppercase shadow-lg shadow-red-100"
-            onClick={handleDelete}
+            onClick={() => setIsDeleteDialogOpen(true)}
           >
             <Trash2 className="h-3.5 w-3.5 mr-2" />
             Terminate
@@ -789,5 +803,77 @@ export default function RouterDetailPage() {
         </Card>
       </div>
     </div>
+
+    {/* Delete Confirmation Modal */}
+    <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden border-none shadow-[0_32px_64px_-16px_rgba(0,0,0,0.35)] rounded-[24px]">
+        <div className="bg-gradient-to-b from-[#dc2626] to-[#991b1b] p-8 flex flex-col items-center text-center text-white space-y-5 relative">
+          <div className="absolute top-0 inset-x-0 h-px bg-white/20"></div>
+          <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
+            <AlertTriangle className="h-10 w-10 text-white animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white drop-shadow-sm">Critical Warning</DialogTitle>
+            <DialogDescription className="text-[10px] font-black text-red-100/70 uppercase tracking-[0.2em]">Destructive Action Required</DialogDescription>
+          </div>
+        </div>
+        
+        <div className="p-8 space-y-6 bg-white">
+          <div className="space-y-3 text-center">
+            <p className="text-sm text-slate-500 font-medium leading-relaxed">
+              You are officially authorizing the terminal decommission of infrastructure 
+              <span className="block text-lg font-black text-slate-900 mt-1 italic">"{routerData?.name}"</span>
+            </p>
+          </div>
+
+          <div className="bg-[#fff1f2] p-5 rounded-2xl border border-[#fecdd3] space-y-3 shadow-sm">
+            <div className="flex items-center gap-2">
+               <div className="w-1.5 h-1.5 rounded-full bg-[#e11d48]" />
+               <p className="text-[10px] font-black text-[#9f1239] uppercase tracking-widest">Permanent Impact Analysis</p>
+            </div>
+            <ul className="text-[10px] text-[#be123c] font-bold space-y-2 pl-2">
+              <li className="flex items-start gap-2">
+                <span className="opacity-50 mt-1">•</span>
+                <span>Immediate blackout for all connected network nodes</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="opacity-50 mt-1">•</span>
+                <span>Irreversible erasure of security certificates & API keys</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="opacity-50 mt-1">•</span>
+                <span>Automatic termination of active pppoe/hotspot sessions</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-3 pt-2">
+            <Button 
+              variant="destructive" 
+              className="w-full h-14 bg-[#e11d48] hover:bg-[#be123c] text-white font-black uppercase text-xs tracking-widest shadow-[0_8px_24px_-4px_rgba(225,29,72,0.4)] rounded-xl transition-all active:scale-[0.98] border-b-4 border-[#9f1239] hover:border-[#881337]"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <div className="flex items-center gap-3">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Purging Matrix...</span>
+                </div>
+              ) : "Execute Termination"}
+            </Button>
+            <DialogClose asChild>
+              <Button 
+                variant="ghost" 
+                className="w-full h-12 text-slate-400 hover:text-slate-900 font-black uppercase text-[10px] tracking-[0.2em] transition-colors"
+                disabled={isDeleting}
+              >
+                Cancel & Return
+              </Button>
+            </DialogClose>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
