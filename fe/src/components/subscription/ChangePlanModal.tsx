@@ -38,7 +38,7 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
     if (isOpen) {
       fetchPlans();
     }
-  }, [isOpen]);
+  }, [isOpen, currentPlanId]);
 
   const fetchPlans = async () => {
     setLoading(true);
@@ -75,13 +75,13 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-950 border-slate-800 text-white shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-indigo-500" />
+          <DialogTitle className="text-2xl font-black flex items-center gap-2 text-white">
+            <Sparkles className="h-6 w-6 text-indigo-400" />
             Empower Your Business
           </DialogTitle>
-          <DialogDescription className="text-slate-500">
+          <DialogDescription className="text-slate-400">
             Choose the architecture that best fits your growing network infrastructure.
           </DialogDescription>
         </DialogHeader>
@@ -100,65 +100,68 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
                 <div
                   key={p.id}
                   className={cn(
-                    "relative flex flex-col p-6 rounded-2xl border transition-all cursor-pointer group hover:shadow-xl",
+                    "relative flex flex-col p-6 rounded-2xl border transition-all cursor-pointer group hover:shadow-2xl",
                     isCurrent
-                      ? "border-emerald-500 bg-emerald-50/30 ring-1 ring-emerald-500"
+                      ? "border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30"
                       : isSelected
-                      ? "border-indigo-500 bg-indigo-50/30 ring-2 ring-indigo-500"
-                      : "border-slate-200 hover:border-indigo-300"
+                      ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500"
+                      : "border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900"
                   )}
                   onClick={() => setSelectedPlanId(p.id)}
                 >
                   {isCurrent && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 font-bold uppercase tracking-wider">
-                      Current Plan
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 hover:bg-emerald-600 font-bold uppercase tracking-widest text-[10px] py-1 shadow-lg shadow-emerald-500/20">
+                      CURRENT PLAN
                     </Badge>
                   )}
                   
                   <div className="mb-6">
-                    <h3 className="font-black text-xl text-slate-900 mb-1">{p.name}</h3>
-                    <p className="text-xs text-slate-500 font-medium">Business Scale Connectivity</p>
+                    <h3 className={cn(
+                      "font-black text-xl mb-1",
+                      isCurrent ? "text-emerald-400" : isSelected ? "text-indigo-400" : "text-white"
+                    )}>{p.name}</h3>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Business Connectivity</p>
                   </div>
 
                   <div className="mb-8">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-indigo-600">
+                      <span className="text-3xl font-black text-white">
                         {new Intl.NumberFormat("id-ID", {
                           style: "currency",
                           currency: p.currency,
                           minimumFractionDigits: 0,
                         }).format(p.price_monthly)}
                       </span>
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">/mo</span>
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">/mo</span>
                     </div>
                   </div>
 
                   <div className="space-y-4 mb-8 flex-grow">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-800 pb-2 flex items-center gap-2">
                       <Zap className="h-3 w-3 text-amber-500" />
                       Key Features
                     </p>
-                    <ul className="space-y-2.5">
-                      {p.features.slice(0, 5).map((feat) => (
-                        <li key={feat} className="flex items-start gap-2.5 text-sm">
-                          <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                          <span className="text-slate-600 leading-tight">
+                    <ul className="space-y-3">
+                      {p.features.slice(0, 6).map((feat) => (
+                        <li key={feat} className="flex items-start gap-2.5 text-xs">
+                          <Check className={cn("h-4 w-4 shrink-0 mt-0.5", isCurrent ? "text-emerald-500" : "text-indigo-400")} />
+                          <span className="text-slate-300 leading-tight font-medium">
                             {feat.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
                           </span>
                         </li>
                       ))}
-                      {p.features.length > 5 && (
-                        <li className="text-[10px] font-bold text-slate-400 italic pl-6 text-center">
-                          + {p.features.length - 5} more capabilities
+                      {p.features.length > 6 && (
+                        <li className="text-[10px] font-bold text-slate-500 italic pl-6 pt-1">
+                          + {p.features.length - 6} more capabilities
                         </li>
                       )}
                     </ul>
                   </div>
 
                   <div className="mt-auto">
-                    <div className="flex items-center gap-2 mb-4 p-2.5 rounded-xl bg-slate-50/50 border border-slate-100">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-black/30 border border-slate-800 group-hover:border-slate-700 transition-colors">
                        <Shield className="h-4 w-4 text-indigo-400" />
-                       <p className="text-[10px] font-medium text-slate-500">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                           {p.limits.max_routers || 0} Routers | {p.limits.max_clients || 0} Clients
                        </p>
                     </div>
@@ -169,16 +172,21 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
           </div>
         )}
 
-        <DialogFooter className="border-t pt-6 gap-2">
-          <Button variant="ghost" onClick={onClose} className="font-bold">
+        <DialogFooter className="border-t border-slate-800 pt-6 gap-2">
+          <Button variant="ghost" onClick={onClose} className="font-bold text-slate-400 hover:text-white hover:bg-slate-900">
             Cancel
           </Button>
           <Button
             onClick={handleChangePlan}
             disabled={!selectedPlanId || selectedPlanId === currentPlanId || submitting}
-            className="bg-indigo-600 hover:bg-indigo-700 font-black px-8 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50"
+            className={cn(
+              "font-black px-8 shadow-xl transition-all disabled:opacity-50",
+              selectedPlanId === currentPlanId 
+                ? "bg-slate-800 text-slate-500" 
+                : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20"
+            )}
           >
-            {submitting ? "Processing..." : isCurrent ? "Current Plan" : "Upgrade Architecture"}
+            {submitting ? "Processing..." : selectedPlanId === currentPlanId ? "CURRENT PLAN" : "UPGRADE ARCHITECTURE"}
           </Button>
         </DialogFooter>
       </DialogContent>
