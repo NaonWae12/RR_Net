@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"bytes"
@@ -108,7 +108,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		responseJSON, _ := json.MarshalIndent(response, "", "  ")
 		zslog.Debug().Msgf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -133,7 +133,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			responseJSON, _ := json.MarshalIndent(response, "", "  ")
 			zslog.Debug().Msgf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
@@ -155,7 +155,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		responseJSON, _ := json.MarshalIndent(response, "", "  ")
 		zslog.Debug().Msgf("[radius_auth] DEBUG: Response JSON:\n%s", string(responseJSON))
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

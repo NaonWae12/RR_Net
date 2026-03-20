@@ -330,8 +330,8 @@ func (r *VoucherRepository) ConsumeVoucherAtomic(
 		UPDATE vouchers
 		SET
 			status = 'used',
-			used_at = $3,
-			expires_at = COALESCE($4, expires_at),
+			used_at = COALESCE(used_at, $3),
+			expires_at = COALESCE(expires_at, $4),
 			updated_at = NOW()
 		WHERE
 			tenant_id = $1
