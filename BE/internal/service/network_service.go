@@ -67,6 +67,69 @@ func (s *NetworkService) StartHealthCheckScheduler(ctx context.Context) {
 	}()
 }
 
+// SyncRemoteAccessRules restores iptables rules for all routers that have
+// RemoteAccessEnabled=true. It runs ONCE at startup as a safety net for when
+// in-memory kernel rules are lost (e.g., after container/VPS restart).
+// It uses `iptables -C` (check) before `-A` (add) to be fully idempotent —
+// zero cost if rules are already in place.
+func (s *NetworkService) SyncRemoteAccessRules(ctx context.Context) {
+	if runtime.GOOS != "linux" {
+		return
+	}
+
+	routers, err := s.routerRepo.ListAll(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("[RemoteAccessSync] Failed to list routers at startup")
+		return
+	}
+
+	restored := 0
+	for _, r := range routers {
+		if !r.RemoteAccessEnabled || r.RemoteAccessPort <= 0 || r.Host == "" {
+			continue
+		}
+
+		portStr := strconv.Itoa(r.RemoteAccessPort)
+		dest := r.Host + ":8291"
+
+		// --- Check & Apply DNAT (PREROUTING) ---
+		checkDNAT := exec.CommandContext(ctx, "iptables", "-t", "nat", "-C", "PREROUTING",
+			"-p", "tcp", "--dport", portStr, "-j", "DNAT", "--to-destination", dest)
+		if err := checkDNAT.Run(); err != nil {
+			// Rule does not exist — add it
+			addDNAT := exec.CommandContext(ctx, "iptables", "-t", "nat", "-A", "PREROUTING",
+				"-p", "tcp", "--dport", portStr, "-j", "DNAT", "--to-destination", dest)
+			if out, err := addDNAT.CombinedOutput(); err != nil {
+				log.Error().Err(err).Str("router", r.Name).Str("output", string(out)).
+					Msg("[RemoteAccessSync] Failed to restore PREROUTING rule")
+				continue
+			}
+			log.Info().Str("router", r.Name).Int("port", r.RemoteAccessPort).
+				Msg("[RemoteAccessSync] Restored PREROUTING (DNAT) rule")
+		}
+
+		// --- Check & Apply FORWARD ---
+		checkFWD := exec.CommandContext(ctx, "iptables", "-C", "FORWARD",
+			"-p", "tcp", "-d", r.Host, "--dport", "8291", "-j", "ACCEPT")
+		if err := checkFWD.Run(); err != nil {
+			// Rule does not exist — insert at top
+			addFWD := exec.CommandContext(ctx, "iptables", "-I", "FORWARD", "1",
+				"-p", "tcp", "-d", r.Host, "--dport", "8291", "-j", "ACCEPT")
+			if out, err := addFWD.CombinedOutput(); err != nil {
+				log.Error().Err(err).Str("router", r.Name).Str("output", string(out)).
+					Msg("[RemoteAccessSync] Failed to restore FORWARD rule")
+				continue
+			}
+			log.Info().Str("router", r.Name).Int("port", r.RemoteAccessPort).
+				Msg("[RemoteAccessSync] Restored FORWARD rule")
+		}
+
+		restored++
+	}
+
+	log.Info().Int("routers_synced", restored).Msg("[RemoteAccessSync] Startup iptables sync complete")
+}
+
 // ========== Router Operations ==========
 
 type CreateRouterRequest struct {

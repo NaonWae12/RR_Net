@@ -1502,6 +1502,9 @@ func New(deps Dependencies) http.Handler {
 	// Network routes (Protected, tenant-scoped)
 	// ============================================
 	networkService.StartHealthCheckScheduler(context.Background())
+	// Restore iptables rules on startup (safety net after container/VPS restart).
+	// Runs in background so it doesn't delay first HTTP response.
+	go networkService.SyncRemoteAccessRules(context.Background())
 	networkHandler := handler.NewNetworkHandler(networkService)
 
 	// RADIUS + Voucher (Hotspot) - initialized above for clientService
