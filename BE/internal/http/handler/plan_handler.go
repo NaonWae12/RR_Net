@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/auth"
+	"rrnet/internal/domain/billing"
 	"rrnet/internal/http/middleware"
 	"rrnet/internal/repository"
 	"rrnet/internal/service"
@@ -17,17 +18,19 @@ import (
 
 // PlanHandler handles plan-related HTTP requests
 type PlanHandler struct {
-	planService     *service.PlanService
-	featureResolver *service.FeatureResolver
-	limitResolver   *service.LimitResolver
+	planService            *service.PlanService
+	featureResolver        *service.FeatureResolver
+	limitResolver          *service.LimitResolver
+	platformBillingService *service.PlatformBillingService
 }
 
 // NewPlanHandler creates a new plan handler
-func NewPlanHandler(planService *service.PlanService, featureResolver *service.FeatureResolver, limitResolver *service.LimitResolver) *PlanHandler {
+func NewPlanHandler(planService *service.PlanService, featureResolver *service.FeatureResolver, limitResolver *service.LimitResolver, platformBillingService *service.PlatformBillingService) *PlanHandler {
 	return &PlanHandler{
-		planService:     planService,
-		featureResolver: featureResolver,
-		limitResolver:   limitResolver,
+		planService:            planService,
+		featureResolver:        featureResolver,
+		limitResolver:          limitResolver,
+		platformBillingService: platformBillingService,
 	}
 }
 
@@ -207,7 +210,135 @@ func (h *PlanHandler) AssignToTenant(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]string{"message": "Plan assigned to tenant"})
 }
 
-// ChangeMyPlan allows a tenant to change their own plan
+// PurchasePlan creates a pending invoice and a payment request in one go
+func (h *PlanHandler) PurchasePlan(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	var req struct {
+		PlanID       string `json:"plan_id"`
+		BillingCycle string `json:"billing_cycle"` // "monthly" or "yearly"
+		DiscountCode string `json:"discount_code"`
+		Method       string `json:"method"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+
+	planID, err := uuid.Parse(req.PlanID)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid plan ID")
+		return
+	}
+
+	if req.BillingCycle == "" {
+		req.BillingCycle = "monthly"
+	}
+
+	// 1. Create Initial Invoice (this already saves it in 'pending' status)
+	invoice, err := h.platformBillingService.CreateInitialInvoice(r.Context(), tenantID, planID, req.BillingCycle)
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", tenantID.String()).Msg("PurchasePlan: Failed to create invoice")
+		sendError(w, http.StatusInternalServerError, "Failed to initiate purchase: "+err.Error())
+		return
+	}
+
+	// 2. Apply Discount (if code provided)
+	if req.DiscountCode != "" {
+		if err := h.platformBillingService.ApplyDiscountToInvoice(r.Context(), invoice.ID, req.DiscountCode); err != nil {
+			log.Warn().Err(err).Str("invoice_id", invoice.ID.String()).Str("code", req.DiscountCode).Msg("PurchasePlan: Failed to apply discount, continuing without it")
+		}
+	}
+
+	// 3. Submit Payment (verified by admin later)
+	payment, err := h.platformBillingService.SubmitPayment(r.Context(), tenantID, invoice.ID, req.Method, "Architecture Upgrade Purchase", "")
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", tenantID.String()).Str("invoice_id", invoice.ID.String()).Msg("PurchasePlan: Failed to submit payment")
+		sendError(w, http.StatusInternalServerError, "Invoice created but payment submission failed: "+err.Error())
+		return
+	}
+
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("invoice_id", invoice.ID.String()).
+		Str("payment_id", payment.ID.String()).
+		Msg("High-level plan purchase successful (pending admin approval)")
+
+	sendJSON(w, http.StatusCreated, payment)
+}
+
+// RequestPlanChange (Old way, kept for internal or legacy, but we'll use PurchasePlan now)
+func (h *PlanHandler) RequestPlanChange(w http.ResponseWriter, r *http.Request) {
+	// ... we will use PurchasePlan from frontend now ...
+	h.PurchasePlan(w, r)
+}
+
+// GetPendingPlanChange returns any pending plan change for the tenant
+func (h *PlanHandler) GetPendingPlanChange(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	invoices, err := h.platformBillingService.GetTenantInvoices(r.Context(), tenantID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	for _, inv := range invoices {
+		if inv.Status == billing.PlatformInvoiceStatusPending && inv.PlanID != uuid.Nil {
+			sendJSON(w, http.StatusOK, inv)
+			return
+		}
+	}
+
+	sendJSON(w, http.StatusNotFound, map[string]string{"message": "No pending plan change"})
+}
+
+// CancelPlanChange deletes a pending plan change invoice
+func (h *PlanHandler) CancelPlanChange(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	var req struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+
+	invoiceID, err := uuid.Parse(req.InvoiceID)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid invoice ID")
+		return
+	}
+
+	// Verify the invoice belongs to the tenant and is pending
+	inv, err := h.platformBillingService.GetInvoice(r.Context(), invoiceID)
+	if err != nil || inv.TenantID != tenantID || inv.Status != billing.PlatformInvoiceStatusPending {
+		sendError(w, http.StatusForbidden, "Cannot cancel this invoice")
+		return
+	}
+
+	if err := h.platformBillingService.DeletePendingInvoice(r.Context(), invoiceID); err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{"message": "Plan change cancelled"})
+}
+
+// ChangeMyPlan allows a tenant to change their own plan directly (deprecated in favor of RequestPlanChange)
 func (h *PlanHandler) ChangeMyPlan(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())
 	if !ok || tenantID == (uuid.UUID{}) {
@@ -223,6 +354,11 @@ func (h *PlanHandler) ChangeMyPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("plan_id", req.PlanID).
+		Msg("Tenant attempting to change plan (DIRECT)")
+
 	planID, err := uuid.Parse(req.PlanID)
 	if err != nil {
 		sendError(w, http.StatusBadRequest, "Invalid plan ID")
@@ -230,9 +366,19 @@ func (h *PlanHandler) ChangeMyPlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.planService.AssignToTenant(r.Context(), tenantID, planID); err != nil {
+		log.Error().
+			Err(err).
+			Str("tenant_id", tenantID.String()).
+			Str("plan_id", planID.String()).
+			Msg("Failed to change tenant plan")
 		sendError(w, http.StatusInternalServerError, "Failed to change plan: "+err.Error())
 		return
 	}
+
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("plan_id", planID.String()).
+		Msg("Tenant plan changed successfully (DIRECT)")
 
 	sendJSON(w, http.StatusOK, map[string]string{"message": "Plan changed successfully"})
 }

@@ -68,4 +68,9 @@ export const platformDiscountService = {
     const response = await apiClient.post("/public/apply-discount", { invoice_id, code });
     return response.data;
   },
+
+  remove: async (invoice_id: string) => {
+    const response = await apiClient.post("/public/remove-discount", { invoice_id });
+    return response.data;
+  },
 };

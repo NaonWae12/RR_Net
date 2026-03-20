@@ -240,6 +240,22 @@ func (s *PlatformBillingService) VerifyPayment(ctx context.Context, paymentID uu
 			if err := s.repo.UpdateInvoiceStatus(ctx, payment.PlatformInvoiceID, billing.PlatformInvoiceStatusPaid, payment.Amount, &now); err != nil {
 				return err
 			}
+
+			// If this invoice was for a plan change (has PlanID), update the tenant's plan
+			inv, err := s.repo.GetInvoiceByID(ctx, payment.PlatformInvoiceID)
+			if err == nil && inv.PlanID != uuid.Nil {
+				log.Info().
+					Str("tenant_id", inv.TenantID.String()).
+					Str("plan_id", inv.PlanID.String()).
+					Msg("Updating tenant plan after verified payment")
+				
+				t, err := s.tenantRepo.GetByID(ctx, inv.TenantID)
+				if err == nil {
+					t.PlanID = &inv.PlanID
+					t.UpdatedAt = now
+					s.tenantRepo.Update(ctx, t)
+				}
+			}
 		}
 	}
 
@@ -328,4 +344,21 @@ func (s *PlatformBillingService) ApplyDiscountToInvoice(ctx context.Context, inv
 
 	log.Info().Str("invoice_id", invoiceID.String()).Msg("Discount applied successfully")
 	return nil
+}
+
+func (s *PlatformBillingService) RemoveDiscountFromInvoice(ctx context.Context, invoiceID uuid.UUID) error {
+	inv, err := s.repo.GetInvoiceByID(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	if inv.Status != billing.PlatformInvoiceStatusPending {
+		return fmt.Errorf("discount can only be removed from pending invoices")
+	}
+
+	return s.repo.RemoveDiscount(ctx, invoiceID, inv.Subtotal)
+}
+
+func (s *PlatformBillingService) DeletePendingInvoice(ctx context.Context, id uuid.UUID) error {
+	return s.repo.DeleteInvoice(ctx, id)
 }

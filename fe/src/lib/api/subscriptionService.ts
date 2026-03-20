@@ -126,4 +126,27 @@ export const subscriptionService = {
   async changeMyPlan(planId: string): Promise<void> {
     await apiClient.patch("/my/plan", { plan_id: planId });
   },
+
+  async requestPlanChange(planId: string, billingCycle: string = "monthly"): Promise<any> {
+    const response = await apiClient.post("/my/plan", { plan_id: planId, billing_cycle: billingCycle });
+    return response.data || response;
+  },
+
+  async getPendingPlanChange(): Promise<PlatformInvoice | null> {
+    try {
+      const response = await apiClient.get("/my/plan/pending");
+      return response.data;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  async cancelPlanChange(invoiceId: string): Promise<void> {
+    await apiClient.delete("/my/plan", { data: { invoice_id: invoiceId } });
+  },
+
+  async purchasePlan(data: { plan_id: string, billing_cycle?: string, discount_code?: string, method: string }): Promise<any> {
+    const response = await apiClient.post("/my/plan", data);
+    return response.data || response;
+  },
 };

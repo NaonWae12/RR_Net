@@ -76,8 +76,31 @@ func (h *PlatformBillingHandler) ApplyDiscount(w http.ResponseWriter, r *http.Re
 	// Fetch updated invoice to return
 	updatedInv, err := h.service.GetInvoice(r.Context(), req.InvoiceID)
 	if err != nil {
-		// Fallback if fetch fails but apply succeeded
 		sendJSON(w, http.StatusOK, map[string]string{"message": "Discount applied successfully"})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, updatedInv)
+}
+
+func (h *PlatformBillingHandler) RemoveDiscount(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		InvoiceID uuid.UUID `json:"invoice_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+
+	if err := h.service.RemoveDiscountFromInvoice(r.Context(), req.InvoiceID); err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Fetch updated invoice to return
+	updatedInv, err := h.service.GetInvoice(r.Context(), req.InvoiceID)
+	if err != nil {
+		sendJSON(w, http.StatusOK, map[string]string{"message": "Discount removed successfully"})
 		return
 	}
 

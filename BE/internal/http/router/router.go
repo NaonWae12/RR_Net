@@ -127,7 +127,7 @@ func New(deps Dependencies) http.Handler {
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService, oauthManager)
 	tenantHandler := handler.NewTenantHandler(tenantService)
-	planHandler := handler.NewPlanHandler(planService, featureResolver, limitResolver)
+	planHandler := handler.NewPlanHandler(planService, featureResolver, limitResolver, platformBillingService)
 	addonHandler := handler.NewAddonHandler(addonService)
 	clientHandler := handler.NewClientHandler(clientService)
 	featureHandler := handler.NewFeatureHandler(featureRepo)
@@ -304,6 +304,7 @@ func New(deps Dependencies) http.Handler {
 	// Discount validation (public - for registration)
 	mux.HandleFunc("/api/v1/public/validate-discount", method("POST", platformDiscountHandler.Validate))
 	mux.HandleFunc("/api/v1/public/apply-discount", method("POST", platformBillingHandler.ApplyDiscount))
+	mux.HandleFunc("/api/v1/public/remove-discount", method("POST", platformBillingHandler.RemoveDiscount))
 
 	// Protected routes
 	mux.Handle("/api/v1/auth/me", requireAuth(methodHandler("GET", authHandler.Me)))
@@ -572,10 +573,15 @@ func New(deps Dependencies) http.Handler {
 			planHandler.GetTenantPlan(w, r)
 		case http.MethodPatch:
 			planHandler.ChangeMyPlan(w, r)
+		case http.MethodPost:
+			planHandler.RequestPlanChange(w, r)
+		case http.MethodDelete:
+			planHandler.CancelPlanChange(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})))
+	mux.Handle("/api/v1/my/plan/pending", requireAuth(methodHandler("GET", planHandler.GetPendingPlanChange)))
 	mux.Handle("/api/v1/my/features", requireAuth(methodHandler("GET", planHandler.GetTenantFeatures)))
 	mux.Handle("/api/v1/my/limits", requireAuth(methodHandler("GET", planHandler.GetTenantLimits)))
 	mux.Handle("/api/v1/my/addons", requireAuth(methodHandler("GET", addonHandler.GetTenantAddons)))

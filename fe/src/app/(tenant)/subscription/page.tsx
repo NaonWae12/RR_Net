@@ -24,6 +24,7 @@ export default function SubscriptionPage() {
    const [loading, setLoading] = useState(true);
   const [showPlanDetails, setShowPlanDetails] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<PlatformInvoice | null>(null);
+  const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState<{ id: string, name: string, price: number, currency: string } | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
 
@@ -37,8 +38,10 @@ export default function SubscriptionPage() {
   };
 
   const handlePlanChangeSuccess = () => {
+    // Force refresh dashboard data to reflect new plan limits/features
+    const store = useDashboardStore.getState();
+    store.reset();
     fetchBootstrapData();
-    // Also refresh other data if needed
   };
 
   const handlePayClick = (invoice: PlatformInvoice) => {
@@ -415,12 +418,20 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      {selectedInvoice && (
+      {isPaymentModalOpen && (
         <SubscriptionPaymentModal
-          invoice={selectedInvoice}
+          invoice={selectedInvoice || undefined}
+          planData={selectedPlanForUpgrade || undefined}
           isOpen={isPaymentModalOpen}
-          onClose={() => setIsPaymentModalOpen(false)}
-          onSuccess={refreshInvoices}
+          onClose={() => {
+            setIsPaymentModalOpen(false);
+            setSelectedInvoice(null);
+            setSelectedPlanForUpgrade(null);
+          }}
+          onSuccess={() => {
+            refreshInvoices();
+            handlePlanChangeSuccess();
+          }}
         />
       )}
 
@@ -429,6 +440,24 @@ export default function SubscriptionPage() {
         onClose={() => setIsChangePlanModalOpen(false)}
         currentPlanId={plan?.id}
         onSuccess={handlePlanChangeSuccess}
+        onWaitPayment={(data: any) => {
+          setIsChangePlanModalOpen(false);
+          if (data.id && data.invoice_number) {
+            // It's an existing invoice (Resume mode)
+            setSelectedInvoice(data);
+            setSelectedPlanForUpgrade(null);
+          } else {
+            // It's a plan selection (New Upgrade mode)
+            setSelectedPlanForUpgrade({
+              id: data.id,
+              name: data.name,
+              price: data.price_monthly,
+              currency: data.currency
+            });
+            setSelectedInvoice(null);
+          }
+          setIsPaymentModalOpen(true);
+        }}
       />
     </PageLayout>
   );

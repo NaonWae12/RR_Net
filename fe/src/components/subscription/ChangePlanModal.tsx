@@ -3,10 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { subscriptionService } from "@/lib/api/subscriptionService";
+import { subscriptionService, PlatformInvoice } from "@/lib/api/subscriptionService";
 import { LoadingSpinner } from "@/components/utilities";
 import { Badge } from "@/components/ui/badge";
-import { Check, Zap, Shield, Sparkles } from "lucide-react";
+import { Check, Zap, Shield, Sparkles, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -26,26 +26,35 @@ interface ChangePlanModalProps {
   onClose: () => void;
   currentPlanId?: string;
   onSuccess: () => void;
+  onWaitPayment?: (invoice: PlatformInvoice) => void;
 }
 
-export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSuccess }: ChangePlanModalProps) {
+export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSuccess, onWaitPayment }: ChangePlanModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [pendingInvoice, setPendingInvoice] = useState<PlatformInvoice | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      fetchPlans();
+      fetchPlansAndPending();
     }
   }, [isOpen, currentPlanId]);
 
-  const fetchPlans = async () => {
+  const fetchPlansAndPending = async () => {
     setLoading(true);
     try {
-      const data = await subscriptionService.getPublicPlans();
-      setPlans(data);
-      if (currentPlanId) {
+      const [plansData, pendingInv] = await Promise.all([
+        subscriptionService.getPublicPlans(),
+        subscriptionService.getPendingPlanChange()
+      ]);
+      setPlans(plansData);
+      setPendingInvoice(pendingInv);
+      
+      if (pendingInv) {
+        setSelectedPlanId(pendingInv.plan_id);
+      } else if (currentPlanId) {
         setSelectedPlanId(currentPlanId);
       }
     } catch (error) {
@@ -56,20 +65,19 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
     }
   };
 
-  const handleChangePlan = async () => {
+  const handleRequestChange = async () => {
     if (!selectedPlanId || selectedPlanId === currentPlanId) return;
 
-    setSubmitting(true);
-    try {
-      await subscriptionService.changeMyPlan(selectedPlanId);
-      toast.success("Plan updated successfully!");
-      onSuccess();
-      onClose();
-    } catch (error) {
-      console.error("Failed to change plan:", error);
-      toast.error("Failed to update plan. Please try again.");
-    } finally {
-      setSubmitting(false);
+    // If we have a pending invoice for THIS plan, just resume
+    if (pendingInvoice && pendingInvoice.plan_id === selectedPlanId) {
+      if (onWaitPayment) onWaitPayment(pendingInvoice);
+      return;
+    }
+
+    // New logic: Instead of creating invoice here, just pass the plan info to the next modal
+    const plan = plans.find(p => p.id === selectedPlanId);
+    if (plan && onWaitPayment) {
+      onWaitPayment(plan as any); // Any because we handle both types in the callback
     }
   };
 
@@ -77,14 +85,39 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-950 border-slate-800 text-white shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black flex items-center gap-2 text-white">
-            <Sparkles className="h-6 w-6 text-indigo-400" />
-            Empower Your Business
-          </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Choose the architecture that best fits your growing network infrastructure.
-          </DialogDescription>
+          <div className="flex justify-between items-start pr-8">
+            <div>
+              <DialogTitle className="text-2xl font-black flex items-center gap-2 text-white">
+                <Sparkles className="h-6 w-6 text-indigo-400" />
+                Empower Your Business
+              </DialogTitle>
+              <DialogDescription className="text-slate-400 mt-1">
+                Choose the architecture that best fits your growing network infrastructure.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
+
+        {pendingInvoice && (
+          <div className="mt-4 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-indigo-400" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-indigo-100 uppercase tracking-wide">Pending Upgrade Active</p>
+                <p className="text-[11px] text-slate-400">You have an outstanding payment for <span className="text-indigo-300 font-bold">{pendingInvoice.plan_name}</span>. Pay now to activate.</p>
+              </div>
+            </div>
+            <Button 
+              size="sm" 
+              onClick={() => onWaitPayment?.(pendingInvoice)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest px-6"
+            >
+              Resume Payment
+            </Button>
+          </div>
+        )}
 
         {loading ? (
           <div className="py-20 flex justify-center">
@@ -95,23 +128,34 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
             {plans.map((p) => {
               const isCurrent = p.id === currentPlanId;
               const isSelected = p.id === selectedPlanId;
+              const isPendingForThis = pendingInvoice?.plan_id === p.id;
 
               return (
                 <div
                   key={p.id}
+                  onClick={() => {
+                    if (!isCurrent) {
+                      setSelectedPlanId(p.id);
+                    }
+                  }}
                   className={cn(
-                    "relative flex flex-col p-6 rounded-2xl border transition-all cursor-pointer group hover:shadow-2xl",
+                    "relative flex flex-col p-6 rounded-2xl border transition-all cursor-pointer group active:scale-[0.98] select-none",
                     isCurrent
-                      ? "border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30"
+                      ? "border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30 cursor-default"
                       : isSelected
-                      ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500"
+                      ? "border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500 shadow-xl shadow-indigo-500/10"
                       : "border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900"
                   )}
-                  onClick={() => setSelectedPlanId(p.id)}
                 >
                   {isCurrent && (
                     <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 hover:bg-emerald-600 font-bold uppercase tracking-widest text-[10px] py-1 shadow-lg shadow-emerald-500/20">
                       CURRENT PLAN
+                    </Badge>
+                  )}
+
+                  {isPendingForThis && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-500 hover:bg-indigo-600 font-bold uppercase tracking-widest text-[10px] py-1 shadow-lg shadow-indigo-500/20">
+                      WAITING PAYMENT
                     </Badge>
                   )}
                   
@@ -158,13 +202,29 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
                     </ul>
                   </div>
 
-                  <div className="mt-auto">
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-black/30 border border-slate-800 group-hover:border-slate-700 transition-colors">
-                       <Shield className="h-4 w-4 text-indigo-400" />
-                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <div className="mt-auto space-y-4">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-black/30 border border-slate-800 transition-colors">
+                      <Shield className="h-4 w-4 text-indigo-400" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                           {p.limits.max_routers || 0} Routers | {p.limits.max_clients || 0} Clients
-                       </p>
+                      </p>
                     </div>
+                    
+                    <Button 
+                      variant="ghost"
+                      className={cn(
+                        "w-full font-bold text-xs uppercase tracking-widest h-10 transition-all border",
+                        isCurrent 
+                          ? "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed" 
+                          : isPendingForThis
+                          ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/50"
+                          : isSelected
+                          ? "bg-indigo-600 hover:bg-indigo-700 text-white border-transparent shadow-lg shadow-indigo-500/20"
+                          : "bg-transparent text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white"
+                      )}
+                    >
+                      {isCurrent ? "Active" : isPendingForThis ? "Resume Pay" : isSelected ? "Selected" : "Select Architecture"}
+                    </Button>
                   </div>
                 </div>
               );
@@ -173,11 +233,11 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
         )}
 
         <DialogFooter className="border-t border-slate-800 pt-6 gap-2">
-          <Button variant="ghost" onClick={onClose} className="font-bold text-slate-400 hover:text-white hover:bg-slate-900">
+          <Button variant="ghost" onClick={onClose} className="font-bold text-slate-400 hover:text-white hover:bg-slate-900 border-none transition-colors">
             Cancel
           </Button>
           <Button
-            onClick={handleChangePlan}
+            onClick={handleRequestChange}
             disabled={!selectedPlanId || selectedPlanId === currentPlanId || submitting}
             className={cn(
               "font-black px-8 shadow-xl transition-all disabled:opacity-50",
@@ -186,7 +246,7 @@ export default function ChangePlanModal({ isOpen, onClose, currentPlanId, onSucc
                 : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20"
             )}
           >
-            {submitting ? "Processing..." : selectedPlanId === currentPlanId ? "CURRENT PLAN" : "UPGRADE ARCHITECTURE"}
+            {submitting ? "Processing..." : selectedPlanId === currentPlanId ? "CURRENT PLAN" : pendingInvoice && pendingInvoice.plan_id === selectedPlanId ? "RESUME UPGRADE" : "UPGRADE ARCHITECTURE"}
           </Button>
         </DialogFooter>
       </DialogContent>

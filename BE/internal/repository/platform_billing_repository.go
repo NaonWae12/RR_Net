@@ -131,6 +131,16 @@ func (r *PlatformBillingRepository) ApplyDiscount(ctx context.Context, id uuid.U
 	return err
 }
 
+func (r *PlatformBillingRepository) RemoveDiscount(ctx context.Context, id uuid.UUID, originalAmount int64) error {
+	query := `
+		UPDATE platform_invoices 
+		SET discount_id = NULL, discount_amount = 0, amount = $2, updated_at = NOW()
+		WHERE id = $1 AND status = 'pending'
+	`
+	_, err := r.db.Exec(ctx, query, id, originalAmount)
+	return err
+}
+
 func (r *PlatformBillingRepository) UpdateInvoicePlan(ctx context.Context, id uuid.UUID, planID uuid.UUID, subtotal int64, amount int64, periodEnd time.Time) error {
 	query := `
 		UPDATE platform_invoices 
@@ -237,4 +247,9 @@ func (r *PlatformBillingRepository) GenerateInvoiceNumber(ctx context.Context) (
 	}
 	now := time.Now()
 	return fmt.Sprintf("INV-PLT-%d%02d-%04d", now.Year(), int(now.Month()), count+1), nil
+}
+
+func (r *PlatformBillingRepository) DeleteInvoice(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM platform_invoices WHERE id = $1 AND status = 'pending'", id)
+	return err
 }
