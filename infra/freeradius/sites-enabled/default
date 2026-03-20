@@ -32,10 +32,9 @@ server default {
 	authenticate {
 		Auth-Type REST {
 			update control {
-				# REST API secret (hardcoded for simplicity)
-				# Default: dev-radius-rest-secret (change if needed)
-				# For production, consider using env var: $ENV{RRNET_RADIUS_REST_SECRET}
-				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: dev-radius-rest-secret"
+				# RADIUS shared secret — read from ENV at container startup
+				# Must match RRNET_RADIUS_REST_SECRET in docker-compose.production.yml
+				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
 			}
 
 			rest
@@ -56,14 +55,11 @@ server default {
 
 	accounting {
 		update control {
-			# REST API secret (hardcoded for simplicity)
-			# Default: dev-radius-rest-secret (change if needed)
-			# For production, consider using env var: $ENV{RRNET_RADIUS_REST_SECRET}
-			&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: dev-radius-rest-secret"
+			# RADIUS shared secret — read from ENV at container startup
+			# Must match RRNET_RADIUS_REST_SECRET in docker-compose.production.yml
+			&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
 		}
 
 		rest
 	}
 }
-
-

@@ -1512,6 +1512,11 @@ func New(deps Dependencies) http.Handler {
 	// Must match FreeRADIUS env: RRNET_RADIUS_REST_SECRET (see infra/freeradius + docker-compose).
 	radiusSecret := utils.GetEnv("RRNET_RADIUS_REST_SECRET", "dev-radius-rest-secret")
 	radiusHandler := handler.NewRadiusHandler(routerRepo, voucherService, radiusRepo, radiusSecret)
+	
+	// Start stale session cleaner (runs once at startup, then every 10 min)
+	// Clears out any ghost/zombie active sessions from before container restart
+	radiusHandler.StartStaleSessionCleaner(context.Background())
+	
 	voucherHandler := handler.NewVoucherHandler(voucherService)
 
 	// Routers

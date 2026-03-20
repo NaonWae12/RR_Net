@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -139,6 +140,30 @@ func (r *RadiusRepository) HasActiveSession(ctx context.Context, voucherID uuid.
 	var hasActive bool
 	err := r.db.QueryRow(ctx, query, voucherID).Scan(&hasActive)
 	return hasActive, err
+}
+
+// MarkStaleSessionsStopped marks all 'active' sessions that haven't received
+// any accounting update (Interim-Update or Stop) within the given threshold as 'stopped'.
+// This is the core fix for ghost/zombie sessions left behind after a FreeRADIUS or
+// backend container restart where Acct-Stop packets were never delivered.
+// Returns the number of sessions cleaned up.
+func (r *RadiusRepository) MarkStaleSessionsStopped(ctx context.Context, threshold time.Duration) (int64, error) {
+	query := `
+		UPDATE radius_sessions
+		SET
+			session_status      = 'stopped',
+			acct_terminate_cause = 'Lost-Carrier',
+			acct_stop_time      = NOW(),
+			updated_at          = NOW()
+		WHERE
+			session_status = 'active'
+			AND updated_at < NOW() - $1::interval
+	`
+	tag, err := r.db.Exec(ctx, query, threshold.String())
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }
 
 func (r *RadiusRepository) ListActiveSessions(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*radius.Session, error) {
