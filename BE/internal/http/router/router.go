@@ -566,7 +566,16 @@ func New(deps Dependencies) http.Handler {
 	// ============================================
 	// Tenant feature/limit routes (Protected, tenant context)
 	// ============================================
-	mux.Handle("/api/v1/my/plan", requireAuth(methodHandler("GET", planHandler.GetTenantPlan)))
+	mux.Handle("/api/v1/my/plan", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			planHandler.GetTenantPlan(w, r)
+		case http.MethodPatch:
+			planHandler.ChangeMyPlan(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
 	mux.Handle("/api/v1/my/features", requireAuth(methodHandler("GET", planHandler.GetTenantFeatures)))
 	mux.Handle("/api/v1/my/limits", requireAuth(methodHandler("GET", planHandler.GetTenantLimits)))
 	mux.Handle("/api/v1/my/addons", requireAuth(methodHandler("GET", addonHandler.GetTenantAddons)))

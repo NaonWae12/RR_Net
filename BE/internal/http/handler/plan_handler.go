@@ -207,6 +207,37 @@ func (h *PlanHandler) AssignToTenant(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]string{"message": "Plan assigned to tenant"})
 }
 
+// ChangeMyPlan allows a tenant to change their own plan
+func (h *PlanHandler) ChangeMyPlan(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == (uuid.UUID{}) {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	var req struct {
+		PlanID string `json:"plan_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	planID, err := uuid.Parse(req.PlanID)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid plan ID")
+		return
+	}
+
+	if err := h.planService.AssignToTenant(r.Context(), tenantID, planID); err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to change plan: "+err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{"message": "Plan changed successfully"})
+}
+
+
 // GetTenantPlan returns the plan assigned to the current tenant
 func (h *PlanHandler) GetTenantPlan(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.GetTenantID(r.Context())

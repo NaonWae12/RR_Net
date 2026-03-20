@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, History, Package, AlertCircle, CheckCircle2, Zap, Users, Shield, ArrowRight, MessageSquare, Bot, Globe, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SubscriptionPaymentModal from "@/components/subscription/SubscriptionPaymentModal";
+import ChangePlanModal from "@/components/subscription/ChangePlanModal";
 
 export default function SubscriptionPage() {
   const { tenant } = useAuthStore();
@@ -24,6 +25,7 @@ export default function SubscriptionPage() {
   const [showPlanDetails, setShowPlanDetails] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<PlatformInvoice | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
 
   const refreshInvoices = async () => {
     try {
@@ -32,6 +34,11 @@ export default function SubscriptionPage() {
     } catch (error) {
       console.error("Failed to refresh invoices:", error);
     }
+  };
+
+  const handlePlanChangeSuccess = () => {
+    fetchBootstrapData();
+    // Also refresh other data if needed
   };
 
   const handlePayClick = (invoice: PlatformInvoice) => {
@@ -103,10 +110,14 @@ export default function SubscriptionPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-4 pt-2">
-                  <div className="bg-white/10 backdrop-blur-md rounded-full px-4 py-1.5 flex items-center gap-2 border border-white/20">
+                  <button
+                    onClick={() => setIsChangePlanModalOpen(true)}
+                    title="Click to upgrade or manage your plan"
+                    className="bg-white/10 backdrop-blur-md rounded-full px-4 py-1.5 flex items-center gap-2 border border-white/20 hover:bg-white/20 hover:scale-105 active:scale-95 transition-all text-white outline-none ring-offset-indigo-600 focus:ring-2 focus:ring-white/40"
+                  >
                     <Shield className="h-4 w-4 text-emerald-300" />
                     <span className="text-xs font-semibold">Enterprise Verified</span>
-                  </div>
+                  </button>
                   <Button 
                     variant="ghost" 
                     className="text-white hover:bg-white/10 flex items-center gap-2"
@@ -117,6 +128,7 @@ export default function SubscriptionPage() {
                   </Button>
                 </div>
               </div>
+
               <div className="flex flex-col items-end gap-6">
                 <div className="text-right">
                   <p className="text-sm text-indigo-100 opacity-80 uppercase font-semibold">Monthly Investment</p>
@@ -411,6 +423,13 @@ export default function SubscriptionPage() {
           onSuccess={refreshInvoices}
         />
       )}
+
+      <ChangePlanModal
+        isOpen={isChangePlanModalOpen}
+        onClose={() => setIsChangePlanModalOpen(false)}
+        currentPlanId={plan?.id}
+        onSuccess={handlePlanChangeSuccess}
+      />
     </PageLayout>
   );
 }

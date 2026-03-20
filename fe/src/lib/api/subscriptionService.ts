@@ -117,4 +117,13 @@ export const subscriptionService = {
   async generateInvoices(): Promise<void> {
     await apiClient.post("/superadmin/billing/generate");
   },
+
+  async getPublicPlans(): Promise<any[]> {
+    const res = await apiClient.get("/plans/public?active=true&public=true");
+    return res.data.plans || [];
+  },
+
+  async changeMyPlan(planId: string): Promise<void> {
+    await apiClient.patch("/my/plan", { plan_id: planId });
+  },
 };
