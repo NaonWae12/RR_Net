@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -101,7 +100,7 @@ func main() {
 	}
 
 	// Sort by version
-	sort.Slice(pendingMigrations, func(i, j int) {
+	sort.Slice(pendingMigrations, func(i, j int) bool {
 		return pendingMigrations[i].version < pendingMigrations[j].version
 	})
 
