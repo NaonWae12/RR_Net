@@ -41,9 +41,10 @@ type CreatePlanRequest struct {
 	PriceMonthly float64        `json:"price_monthly"`
 	PriceYearly  *float64       `json:"price_yearly,omitempty"`
 	Currency     string         `json:"currency,omitempty"`
-	Limits       map[string]int `json:"limits"`
-	Features     []string       `json:"features"`
-	IsActive     bool           `json:"is_active"`
+	Limits         map[string]int `json:"limits"`
+	Features       []string       `json:"features"`
+	HiddenFeatures []string       `json:"hidden_features"`
+	IsActive       bool           `json:"is_active"`
 	IsPublic     bool           `json:"is_public"`
 	SortOrder    int            `json:"sort_order"`
 }
@@ -57,9 +58,10 @@ type PlanDTO struct {
 	PriceMonthly float64        `json:"price_monthly"`
 	PriceYearly  *float64       `json:"price_yearly,omitempty"`
 	Currency     string         `json:"currency"`
-	Limits       map[string]int `json:"limits"`
-	Features     []string       `json:"features"`
-	IsActive     bool           `json:"is_active"`
+	Limits         map[string]int `json:"limits"`
+	Features       []string       `json:"features"`
+	HiddenFeatures []string       `json:"hidden_features"`
+	IsActive       bool           `json:"is_active"`
 	IsPublic     bool           `json:"is_public"`
 	SortOrder    int            `json:"sort_order"`
 	CreatedAt    time.Time      `json:"created_at"`
@@ -99,6 +101,13 @@ func (s *PlanService) Create(ctx context.Context, req *CreatePlanRequest) (*Plan
 	if err != nil {
 		return nil, err
 	}
+	
+	var hiddenFeaturesJSON []byte
+	if req.HiddenFeatures != nil {
+		hiddenFeaturesJSON, _ = json.Marshal(req.HiddenFeatures)
+	} else {
+		hiddenFeaturesJSON = []byte("[]")
+	}
 
 	// Set defaults
 	currency := req.Currency
@@ -121,11 +130,12 @@ func (s *PlanService) Create(ctx context.Context, req *CreatePlanRequest) (*Plan
 		PriceMonthly: req.PriceMonthly,
 		PriceYearly:  req.PriceYearly,
 		Currency:     currency,
-		Limits:       limitsJSON,
-		Features:     featuresJSON,
-		IsActive:     req.IsActive,
-		IsPublic:     req.IsPublic,
-		SortOrder:    req.SortOrder,
+		Limits:         limitsJSON,
+		Features:       featuresJSON,
+		HiddenFeatures: hiddenFeaturesJSON,
+		IsActive:       req.IsActive,
+		IsPublic:       req.IsPublic,
+		SortOrder:      req.SortOrder,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -176,11 +186,12 @@ type UpdatePlanRequest struct {
 	PriceMonthly float64        `json:"price_monthly"`
 	PriceYearly  *float64       `json:"price_yearly,omitempty"`
 	Currency     string         `json:"currency,omitempty"`
-	Limits       map[string]int `json:"limits"`
-	Features     []string       `json:"features"`
-	IsActive     bool           `json:"is_active"`
-	IsPublic     bool           `json:"is_public"`
-	SortOrder    int            `json:"sort_order"`
+	Limits         map[string]int `json:"limits"`
+	Features       []string       `json:"features"`
+	HiddenFeatures []string       `json:"hidden_features"`
+	IsActive       bool           `json:"is_active"`
+	IsPublic       bool           `json:"is_public"`
+	SortOrder      int            `json:"sort_order"`
 }
 
 // Update updates a plan
@@ -217,6 +228,10 @@ func (s *PlanService) Update(ctx context.Context, id uuid.UUID, req *UpdatePlanR
 		}
 		featuresJSON, _ := json.Marshal(req.Features)
 		p.Features = featuresJSON
+	}
+	if req.HiddenFeatures != nil {
+		hiddenFeaturesJSON, _ := json.Marshal(req.HiddenFeatures)
+		p.HiddenFeatures = hiddenFeaturesJSON
 	}
 	p.IsActive = req.IsActive
 	p.IsPublic = req.IsPublic
@@ -265,6 +280,11 @@ func (s *PlanService) toDTO(p *plan.Plan) *PlanDTO {
 	var features []string
 	_ = json.Unmarshal(p.Features, &features)
 
+	var hiddenFeatures []string
+	if len(p.HiddenFeatures) > 0 {
+		_ = json.Unmarshal(p.HiddenFeatures, &hiddenFeatures)
+	}
+
 	return &PlanDTO{
 		ID:           p.ID,
 		Code:         p.Code,
@@ -273,11 +293,12 @@ func (s *PlanService) toDTO(p *plan.Plan) *PlanDTO {
 		PriceMonthly: p.PriceMonthly,
 		PriceYearly:  p.PriceYearly,
 		Currency:     p.Currency,
-		Limits:       limits,
-		Features:     features,
-		IsActive:     p.IsActive,
-		IsPublic:     p.IsPublic,
-		SortOrder:    p.SortOrder,
+		Limits:         limits,
+		Features:       features,
+		HiddenFeatures: hiddenFeatures,
+		IsActive:       p.IsActive,
+		IsPublic:       p.IsPublic,
+		SortOrder:      p.SortOrder,
 		CreatedAt:    p.CreatedAt,
 		UpdatedAt:    p.UpdatedAt,
 	}

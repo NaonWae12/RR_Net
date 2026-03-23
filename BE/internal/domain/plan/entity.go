@@ -16,17 +16,19 @@ type Plan struct {
 	PriceMonthly float64         `json:"price_monthly"`
 	PriceYearly  *float64        `json:"price_yearly,omitempty"`
 	Currency     string          `json:"currency"`
-	Limits       json.RawMessage `json:"limits"`
-	Features     json.RawMessage `json:"features"`
-	IsActive     bool            `json:"is_active"`
-	IsPublic     bool            `json:"is_public"`
-	SortOrder    int             `json:"sort_order"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
+	Limits         json.RawMessage `json:"limits"`
+	Features       json.RawMessage `json:"features"`
+	HiddenFeatures json.RawMessage `json:"hidden_features,omitempty"`
+	IsActive       bool            `json:"is_active"`
+	IsPublic       bool            `json:"is_public"`
+	SortOrder      int             `json:"sort_order"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 
 	// Relational fields (new)
-	FeaturesList []string       `json:"features_list,omitempty"`
-	LimitsMap    map[string]int `json:"limits_map,omitempty"`
+	FeaturesList       []string       `json:"features_list,omitempty"`
+	HiddenFeaturesList []string       `json:"hidden_features_list,omitempty"`
+	LimitsMap          map[string]int `json:"limits_map,omitempty"`
 }
 
 // PlanLimits represents the limits included in a plan

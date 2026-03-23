@@ -234,3 +234,41 @@ func ListHotspotUserProfiles(ctx context.Context, addr string, useTLS bool, rout
 
 	return profiles, nil
 }
+
+// RemoveHotspotActiveByUser kicks a hotspot user from active sessions by username
+func RemoveHotspotActiveByUser(ctx context.Context, addr string, useTLS bool, username string, password string, targetUser string) error {
+	client, err := connectToRouterHotspot(ctx, addr, useTLS, username, password)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	// Find the active session ID by user name first
+	findCmd := "/ip/hotspot/active/print"
+	findArgs := []string{
+		findCmd,
+		"?user=" + targetUser,
+	}
+	reply, err := client.RunArgs(findArgs)
+	if err != nil {
+		return fmt.Errorf("failed to find active Hotspot session: %w", err)
+	}
+
+	if len(reply.Re) == 0 {
+		return nil // No active session to remove
+	}
+
+	for _, re := range reply.Re {
+		activeID := re.Map[".id"]
+		if activeID != "" {
+			// Remove the active session
+			removeCmd := "/ip/hotspot/active/remove"
+			removeArgs := []string{
+				removeCmd,
+				"=.id=" + activeID,
+			}
+			_, _ = client.RunArgs(removeArgs)
+		}
+	}
+	return nil
+}

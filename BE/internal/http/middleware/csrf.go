@@ -67,9 +67,12 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 
 		// Skip CSRF check for exempt paths
 		if c.isExemptPath(r.URL.Path) {
+			log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped (exempt)")
 			next.ServeHTTP(w, r)
 			return
 		}
+		log.Debug().Str("path", r.URL.Path).Str("method", r.Method).Msg("CSRF check processing")
+
 
 		// Only check CSRF for state-changing methods
 		if !isStateChangingMethod(r.Method) {
@@ -186,6 +189,9 @@ func DefaultCSRFProtection() *CSRFProtection {
 		"/api/v1/auth/register",
 		"/api/v1/auth/refresh",
 		"/api/v1/auth/logout", // Logout is typically safe
+		"/api/v1/auth/forgot-password",
+		"/api/v1/auth/reset-password",
+		"/api/v1/affiliate/register",
 		"/api/v1/tenants/register",
 		"/api/v1/tenants/verify-otp",
 		"/api/v1/tenants/resend-otp",

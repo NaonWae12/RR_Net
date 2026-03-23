@@ -35,11 +35,11 @@ func (r *PlanRepository) Create(ctx context.Context, p *plan.Plan) error {
 	defer tx.Rollback(ctx)
 
 	query := `
-		INSERT INTO plans (id, code, name, description, price_monthly, price_yearly, currency, limits, features, is_active, is_public, sort_order, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO plans (id, code, name, description, price_monthly, price_yearly, currency, limits, features, hidden_features, is_active, is_public, sort_order, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 	_, err = tx.Exec(ctx, query,
-		p.ID, p.Code, p.Name, p.Description, p.PriceMonthly, p.PriceYearly, p.Currency, p.Limits, p.Features, p.IsActive, p.IsPublic, p.SortOrder, p.CreatedAt, p.UpdatedAt,
+		p.ID, p.Code, p.Name, p.Description, p.PriceMonthly, p.PriceYearly, p.Currency, p.Limits, p.Features, p.HiddenFeatures, p.IsActive, p.IsPublic, p.SortOrder, p.CreatedAt, p.UpdatedAt,
 	)
 	if err != nil {
 		return err
@@ -62,13 +62,13 @@ func (r *PlanRepository) Create(ctx context.Context, p *plan.Plan) error {
 
 func (r *PlanRepository) GetByID(ctx context.Context, id uuid.UUID) (*plan.Plan, error) {
 	query := `
-		SELECT id, code, name, description, price_monthly, price_yearly, currency, limits, features, is_active, is_public, sort_order, created_at, updated_at
+		SELECT id, code, name, description, price_monthly, price_yearly, currency, limits, features, hidden_features, is_active, is_public, sort_order, created_at, updated_at
 		FROM plans
 		WHERE id = $1
 	`
 	var p plan.Plan
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&p.ID, &p.Code, &p.Name, &p.Description, &p.PriceMonthly, &p.PriceYearly, &p.Currency, &p.Limits, &p.Features, &p.IsActive, &p.IsPublic, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
+		&p.ID, &p.Code, &p.Name, &p.Description, &p.PriceMonthly, &p.PriceYearly, &p.Currency, &p.Limits, &p.Features, &p.HiddenFeatures, &p.IsActive, &p.IsPublic, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -86,13 +86,13 @@ func (r *PlanRepository) GetByID(ctx context.Context, id uuid.UUID) (*plan.Plan,
 
 func (r *PlanRepository) GetByCode(ctx context.Context, code string) (*plan.Plan, error) {
 	query := `
-		SELECT id, code, name, description, price_monthly, price_yearly, currency, limits, features, is_active, is_public, sort_order, created_at, updated_at
+		SELECT id, code, name, description, price_monthly, price_yearly, currency, limits, features, hidden_features, is_active, is_public, sort_order, created_at, updated_at
 		FROM plans
 		WHERE code = $1
 	`
 	var p plan.Plan
 	err := r.db.QueryRow(ctx, query, code).Scan(
-		&p.ID, &p.Code, &p.Name, &p.Description, &p.PriceMonthly, &p.PriceYearly, &p.Currency, &p.Limits, &p.Features, &p.IsActive, &p.IsPublic, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
+		&p.ID, &p.Code, &p.Name, &p.Description, &p.PriceMonthly, &p.PriceYearly, &p.Currency, &p.Limits, &p.Features, &p.HiddenFeatures, &p.IsActive, &p.IsPublic, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -116,7 +116,7 @@ func (r *PlanRepository) ListAll(ctx context.Context) ([]*plan.Plan, error) {
 // List retrieves all plans with optional filters
 func (r *PlanRepository) List(ctx context.Context, activeOnly bool, publicOnly bool) ([]*plan.Plan, error) {
 	query := `
-		SELECT id, code, name, description, price_monthly, price_yearly, currency, limits, features, is_active, is_public, sort_order, created_at, updated_at
+		SELECT id, code, name, description, price_monthly, price_yearly, currency, limits, features, hidden_features, is_active, is_public, sort_order, created_at, updated_at
 		FROM plans
 		WHERE 1=1
 	`
@@ -147,7 +147,7 @@ func (r *PlanRepository) List(ctx context.Context, activeOnly bool, publicOnly b
 	for rows.Next() {
 		var p plan.Plan
 		if err := rows.Scan(
-			&p.ID, &p.Code, &p.Name, &p.Description, &p.PriceMonthly, &p.PriceYearly, &p.Currency, &p.Limits, &p.Features, &p.IsActive, &p.IsPublic, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
+			&p.ID, &p.Code, &p.Name, &p.Description, &p.PriceMonthly, &p.PriceYearly, &p.Currency, &p.Limits, &p.Features, &p.HiddenFeatures, &p.IsActive, &p.IsPublic, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -203,11 +203,11 @@ func (r *PlanRepository) Update(ctx context.Context, p *plan.Plan) error {
 
 	query := `
 		UPDATE plans
-		SET name = $2, description = $3, price_monthly = $4, price_yearly = $5, currency = $6, limits = $7, features = $8, is_active = $9, is_public = $10, sort_order = $11, updated_at = NOW()
+		SET name = $2, description = $3, price_monthly = $4, price_yearly = $5, currency = $6, limits = $7, features = $8, hidden_features = $9, is_active = $10, is_public = $11, sort_order = $12, updated_at = NOW()
 		WHERE id = $1
 	`
 	result, err := tx.Exec(ctx, query,
-		p.ID, p.Name, p.Description, p.PriceMonthly, p.PriceYearly, p.Currency, p.Limits, p.Features, p.IsActive, p.IsPublic, p.SortOrder,
+		p.ID, p.Name, p.Description, p.PriceMonthly, p.PriceYearly, p.Currency, p.Limits, p.Features, p.HiddenFeatures, p.IsActive, p.IsPublic, p.SortOrder,
 	)
 	if err != nil {
 		return err

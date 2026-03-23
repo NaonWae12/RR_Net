@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,8 +12,11 @@ import (
 	"rrnet/internal/auth"
 	"rrnet/internal/domain/tenant"
 	"rrnet/internal/domain/user"
+	"rrnet/internal/infra/wa_gateway"
 	"rrnet/internal/rbac"
 	"rrnet/internal/repository"
+
+	"github.com/go-redis/redis/v8"
 )
 
 var (
@@ -28,15 +33,26 @@ type AuthService struct {
 	tenantRepo   *repository.TenantRepository
 	jwtManager   *auth.JWTManager
 	oauthManager *auth.OAuthManager
+	redis        *redis.Client
+	waClient     *wa_gateway.Client
 }
 
 // NewAuthService creates a new auth service
-func NewAuthService(userRepo *repository.UserRepository, tenantRepo *repository.TenantRepository, jwtManager *auth.JWTManager, oauthManager *auth.OAuthManager) *AuthService {
+func NewAuthService(
+	userRepo *repository.UserRepository,
+	tenantRepo *repository.TenantRepository,
+	jwtManager *auth.JWTManager,
+	oauthManager *auth.OAuthManager,
+	redisClient *redis.Client,
+	waClient *wa_gateway.Client,
+) *AuthService {
 	return &AuthService{
 		userRepo:     userRepo,
 		tenantRepo:   tenantRepo,
 		jwtManager:   jwtManager,
 		oauthManager: oauthManager,
+		redis:        redisClient,
+		waClient:     waClient,
 	}
 }
 
@@ -453,6 +469,90 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, req 
 		return err
 	}
 
-	// Update password
+// Update password
 	return s.userRepo.UpdatePassword(ctx, userID, passwordHash)
 }
+
+// RequestPasswordResetOTP initiates the password reset process by sending an OTP via WhatsApp
+func (s *AuthService) RequestPasswordResetOTP(ctx context.Context, email string) (string, error) {
+	// 1. Find user by email
+	u, err := s.userRepo.GetByEmailAnyTenant(ctx, email)
+	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return "", ErrUserNotFound
+		}
+		return "", err
+	}
+
+	// 2. Check if user has a phone number
+	if u.Phone == nil || *u.Phone == "" {
+		return "", errors.New("akun tidak memiliki nomor WhatsApp terdaftar")
+	}
+
+	// 3. Generate 6-digit OTP
+	otpCode := fmt.Sprintf("%06d", rand.Intn(1000000))
+
+	// 4. Send OTP via WhatsApp from "platform" session (Super Admin)
+	if s.waClient != nil {
+		message := fmt.Sprintf("Halo %s, berikut adalah Kode OTP Anda untuk Mereset Password di RRNET: %s. Kode ini berlaku selama 10 menit. Jangan berikan kode ini kepada siapapun.", u.Name, otpCode)
+		_, err := s.waClient.Send(ctx, "platform", *u.Phone, message)
+		if err != nil {
+			return "", fmt.Errorf("gagal mengirim WhatsApp OTP: %w", err)
+		}
+	} else {
+		return "", errors.New("layanan WhatsApp sedang tidak tersedia")
+	}
+
+	// 5. Store OTP in Redis
+	otpKey := "otp:reset:" + email
+	if err := s.redis.Set(ctx, otpKey, otpCode, 10*time.Minute).Err(); err != nil {
+		return "", err
+	}
+
+	// Return masked phone for UI feedback
+	phone := *u.Phone
+	if len(phone) > 7 {
+		return phone[:4] + "******" + phone[len(phone)-2:], nil
+	}
+	return phone, nil
+}
+
+// VerifyAndResetPassword verifies the OTP and updates the user's password
+func (s *AuthService) VerifyAndResetPassword(ctx context.Context, email, otp, newPassword string) error {
+	// 1. Verify OTP from Redis
+	otpKey := "otp:reset:" + email
+	val, err := s.redis.Get(ctx, otpKey).Result()
+	if err != nil {
+		return errors.New("kode OTP sudah kadaluarsa atau tidak ditemukan")
+	}
+
+	if val != otp {
+		return errors.New("kode OTP tidak valid")
+	}
+
+	// 2. Find user
+	u, err := s.userRepo.GetByEmailAnyTenant(ctx, email)
+	if err != nil {
+		return err
+	}
+
+	// 3. Hash and update password
+	if err := auth.ValidatePassword(newPassword); err != nil {
+		return err
+	}
+
+	passwordHash, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	if err := s.userRepo.UpdatePassword(ctx, u.ID, passwordHash); err != nil {
+		return err
+	}
+
+	// 4. Clear OTP
+	_ = s.redis.Del(ctx, otpKey)
+
+	return nil
+}
+

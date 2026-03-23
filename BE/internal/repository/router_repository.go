@@ -48,10 +48,10 @@ func (r *RouterRepository) Create(ctx context.Context, router *network.Router) e
 
 func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
-			username, password_hash, api_port, status, last_seen, is_default,
-			radius_enabled, radius_secret,
-			connectivity_mode, api_use_tls,
+		SELECT id, tenant_id, name, COALESCE(description, ''), type, host, COALESCE(nas_identifier, ''), COALESCE(nas_ip, ''), port,
+			username, password_hash, COALESCE(api_port, 8728), status, last_seen, is_default,
+			COALESCE(radius_enabled, true), COALESCE(radius_secret, ''),
+			COALESCE(connectivity_mode, 'direct_public'), COALESCE(api_use_tls, false),
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),
@@ -79,14 +79,14 @@ func (r *RouterRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.
 
 func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
-			username, password_hash, api_port, status, last_seen, is_default,
-			radius_enabled, radius_secret,
-			connectivity_mode, api_use_tls,
+		SELECT id, tenant_id, name, COALESCE(description, ''), type, host, COALESCE(nas_identifier, ''), COALESCE(nas_ip, ''), port,
+			username, password_hash, COALESCE(api_port, 8728), status, last_seen, is_default,
+			COALESCE(radius_enabled, true), COALESCE(radius_secret, ''),
+			COALESCE(connectivity_mode, 'direct_public'), COALESCE(api_use_tls, false),
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),
-			created_at, updated_at
+			created_at, updated_at, deleted_at
 		FROM routers
 		WHERE tenant_id = $1 AND deleted_at IS NULL
 		ORDER BY is_default DESC, name ASC
@@ -109,7 +109,7 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 			&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 			&router.IdleTimeout, &router.InterimInterval,
-			&router.CreatedAt, &router.UpdatedAt,
+			&router.CreatedAt, &router.UpdatedAt, &router.DeletedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -121,14 +121,14 @@ func (r *RouterRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 
 func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
-			username, password_hash, api_port, status, last_seen, is_default,
-			radius_enabled, radius_secret,
-			connectivity_mode, api_use_tls,
+		SELECT id, tenant_id, name, COALESCE(description, ''), type, host, COALESCE(nas_identifier, ''), COALESCE(nas_ip, ''), port,
+			username, password_hash, COALESCE(api_port, 8728), status, last_seen, is_default,
+			COALESCE(radius_enabled, true), COALESCE(radius_secret, ''),
+			COALESCE(connectivity_mode, 'direct_public'), COALESCE(api_use_tls, false),
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),
-			created_at, updated_at
+			created_at, updated_at, deleted_at
 		FROM routers WHERE deleted_at IS NULL
 	`
 	rows, err := r.db.Query(ctx, query)
@@ -149,7 +149,7 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 			&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 			&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 			&router.IdleTimeout, &router.InterimInterval,
-			&router.CreatedAt, &router.UpdatedAt,
+			&router.CreatedAt, &router.UpdatedAt, &router.DeletedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan router: %w", err)
@@ -161,14 +161,14 @@ func (r *RouterRepository) ListAll(ctx context.Context) ([]*network.Router, erro
 
 func (r *RouterRepository) GetDefaultByTenant(ctx context.Context, tenantID uuid.UUID) (*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
-			username, password_hash, api_port, status, last_seen, is_default,
-			radius_enabled, radius_secret,
-			connectivity_mode, api_use_tls,
+		SELECT id, tenant_id, name, COALESCE(description, ''), type, host, COALESCE(nas_identifier, ''), COALESCE(nas_ip, ''), port,
+			username, password_hash, COALESCE(api_port, 8728), status, last_seen, is_default,
+			COALESCE(radius_enabled, true), COALESCE(radius_secret, ''),
+			COALESCE(connectivity_mode, 'direct_public'), COALESCE(api_use_tls, false),
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 		COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 		COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),
-		created_at, updated_at
+		created_at, updated_at, deleted_at
 	FROM routers
 	WHERE tenant_id = $1 AND is_default = true AND deleted_at IS NULL
 `
@@ -182,7 +182,7 @@ err := r.db.QueryRow(ctx, query, tenantID).Scan(
 	&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 	&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 	&router.IdleTimeout, &router.InterimInterval,
-	&router.CreatedAt, &router.UpdatedAt,
+	&router.CreatedAt, &router.UpdatedAt, &router.DeletedAt,
 )
 	if err == pgx.ErrNoRows {
 		return nil, nil // No default router
@@ -275,14 +275,14 @@ func (r *RouterRepository) CountByTenant(ctx context.Context, tenantID uuid.UUID
 
 func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*network.Router, error) {
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
-			username, password_hash, api_port, status, last_seen, is_default,
-			radius_enabled, radius_secret,
-			connectivity_mode, api_use_tls,
+		SELECT id, tenant_id, name, COALESCE(description, ''), type, host, COALESCE(nas_identifier, ''), COALESCE(nas_ip, ''), port,
+			username, password_hash, COALESCE(api_port, 8728), status, last_seen, is_default,
+			COALESCE(radius_enabled, true), COALESCE(radius_secret, ''),
+			COALESCE(connectivity_mode, 'direct_public'), COALESCE(api_use_tls, false),
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),
-			created_at, updated_at
+			created_at, updated_at, deleted_at
 		FROM routers
 		WHERE (nas_ip = $1 OR host = $1) AND radius_enabled = true AND deleted_at IS NULL
 		LIMIT 1
@@ -297,7 +297,7 @@ func (r *RouterRepository) GetByNASIP(ctx context.Context, nasIP string) (*netwo
 		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
 		&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
 		&router.IdleTimeout, &router.InterimInterval,
-		&router.CreatedAt, &router.UpdatedAt,
+		&router.CreatedAt, &router.UpdatedAt, &router.DeletedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("router not found for NAS-IP: %s", nasIP)
@@ -309,10 +309,10 @@ func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string)
 	// We intentionally do NOT filter by deleted_at here, because we want to find revoked routers
 	// so we can explicitly reject them in the Radius Handler with a clear reason.
 	query := `
-		SELECT id, tenant_id, name, description, type, host, nas_identifier, nas_ip, port,
-			username, password_hash, api_port, status, last_seen, is_default,
-			radius_enabled, radius_secret,
-			connectivity_mode, api_use_tls,
+		SELECT id, tenant_id, name, COALESCE(description, ''), type, host, COALESCE(nas_identifier, ''), COALESCE(nas_ip, ''), port,
+			username, password_hash, COALESCE(api_port, 8728), status, last_seen, is_default,
+			COALESCE(radius_enabled, true), COALESCE(radius_secret, ''),
+			COALESCE(connectivity_mode, 'direct_public'), COALESCE(api_use_tls, false),
 			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
 			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
 			COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),

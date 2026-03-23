@@ -88,6 +88,8 @@ export default function LoginPage() {
         router.push("/superadmin");
       } else if (userRole === "client") {
         router.push("/portal/dashboard");
+      } else if (userRole === "affiliate") {
+        router.push("/affiliate/dashboard");
       } else {
         router.push("/dashboard");
       }
@@ -139,8 +141,8 @@ export default function LoginPage() {
 
           <div className="mt-20 grid grid-cols-1 gap-8">
             {[
-              { title: "Real-time Monitoring", desc: "Live status of all network points.", icon: Globe },
-              { title: "Smart Billing", desc: "Automated revenue management.", icon: Zap },
+              { title: "Monitoring Real-time", desc: "Pantau status seluruh titik jaringan secara langsung.", icon: Globe },
+              { title: "Sistem Penagihan Pintar", desc: "Manajemen pendapatan yang terautomasi sepenuhnya.", icon: Zap },
             ].map((item, i) => (
               <div key={i} className="flex gap-4 p-4 rounded-3xl bg-white/5 border border-white/10">
                 <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center shrink-0 border border-purple-500/20">
@@ -179,13 +181,13 @@ export default function LoginPage() {
             className="space-y-8"
           >
             <div className="text-center lg:text-left">
-              <h1 className="text-3xl font-bold mb-2">Sign In</h1>
-              <p className="text-muted-foreground">Enter your credentials to access your workspace.</p>
+              <h1 className="text-3xl font-bold mb-2">Masuk ke Akun</h1>
+              <p className="text-muted-foreground">Silakan masukkan kredensial Anda untuk mengakses panel kontrol.</p>
             </div>
 
             <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-white/70 ml-1">Email Address</label>
+                <label className="text-sm font-medium text-white/70 ml-1">Alamat Email</label>
                 <div className="relative group">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-purple-500 transition-colors" />
                   <input 
@@ -203,9 +205,9 @@ export default function LoginPage() {
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center ml-1">
-                  <label className="text-sm font-medium text-white/70">Password</label>
+                  <label className="text-sm font-medium text-white/70">Kata Sandi</label>
                   <Link href="/forgot-password" size="sm" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-                    Forgot password?
+                    Lupa kata sandi?
                   </Link>
                 </div>
                 <div className="relative group">
@@ -233,7 +235,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between ml-1">
                   <label className="text-sm font-medium text-white/70 flex items-center gap-2">
-                    Tenant Slug <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded uppercase opacity-50 font-normal">Optional</span>
+                    Slug Organisasi <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded uppercase opacity-50 font-normal">Opsional</span>
                   </label>
                   <button 
                     type="button"
@@ -280,7 +282,7 @@ export default function LoginPage() {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    Sign In
+                    Masuk Sekarang
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
@@ -288,7 +290,7 @@ export default function LoginPage() {
 
               <div className="flex items-center gap-4 py-2">
                 <div className="h-px bg-white/5 flex-grow" />
-                <span className="text-[10px] uppercase tracking-widest text-white/20 font-bold">OR LOGIN WITH</span>
+                <span className="text-[10px] uppercase tracking-widest text-white/20 font-bold">ATAU MASUK DENGAN</span>
                 <div className="h-px bg-white/5 flex-grow" />
               </div>
 
@@ -310,8 +312,8 @@ export default function LoginPage() {
             </form>
 
             <div className="text-center text-sm border-t border-white/5 pt-8">
-               <span className="text-muted-foreground">Don't have an account or workspace?</span><br/>
-               <Link href="/register" className="text-purple-400 font-bold hover:underline">Create an organization</Link>
+               <span className="text-muted-foreground">Belum memiliki akun atau organisasi?</span><br/>
+               <Link href="/register" className="text-purple-400 font-bold hover:underline">Daftar organisasi sekarang</Link>
             </div>
           </motion.div>
         </div>

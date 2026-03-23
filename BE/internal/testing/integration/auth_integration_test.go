@@ -32,7 +32,7 @@ func TestAuthIntegration(t *testing.T) {
 
 	// Create services
 	oauthManager := auth.NewOAuthManager()
-	_ = service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager)
+	_ = service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager, nil, nil)
 
 	// Test: Create tenant
 	tenantID := uuid.New()

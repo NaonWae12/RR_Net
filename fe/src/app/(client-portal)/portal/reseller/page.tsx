@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { paymentMethodService, PaymentMethod } from '@/lib/api/paymentMethodService';
+import { LimitWarningBanner } from '@/components/dashboard/LimitWarningBanner';
 
 export default function PortalResellerPage() {
   const router = useRouter();
@@ -433,6 +434,8 @@ export default function PortalResellerPage() {
                  </div>
               </div>
           </div>
+
+          <LimitWarningBanner resource="vouchers" />
 
           {/* Navigation */}
           <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1 overflow-x-auto scrollbar-hide">

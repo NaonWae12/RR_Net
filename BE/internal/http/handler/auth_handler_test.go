@@ -68,6 +68,17 @@ func (m *MockAuthService) OAuthLogin(ctx context.Context, oauthUser *auth.OAuthU
 	return args.Get(0).(*service.LoginResponse), args.Error(1)
 }
 
+func (m *MockAuthService) RequestPasswordResetOTP(ctx context.Context, email string) (string, error) {
+	args := m.Called(ctx, email)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockAuthService) VerifyAndResetPassword(ctx context.Context, email, otp, newPassword string) error {
+	args := m.Called(ctx, email, otp, newPassword)
+	return args.Error(0)
+}
+
+
 // Ensure MockAuthService implements AuthServiceInterface
 var _ AuthServiceInterface = (*MockAuthService)(nil)
 

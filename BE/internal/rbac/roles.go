@@ -13,6 +13,7 @@ const (
 	RoleTechnician Role = "technician"
 	RoleCollector  Role = "collector"
 	RoleClient     Role = "client"
+	RoleAffiliate  Role = "affiliate"
 )
 
 // AllRoles returns all predefined roles
@@ -26,6 +27,7 @@ func AllRoles() []Role {
 		RoleTechnician,
 		RoleCollector,
 		RoleClient,
+		RoleAffiliate,
 	}
 }
 

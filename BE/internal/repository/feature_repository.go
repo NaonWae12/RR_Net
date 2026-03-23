@@ -28,11 +28,11 @@ func NewFeatureRepository(db *pgxpool.Pool) *FeatureRepository {
 // Create creates a new feature toggle
 func (r *FeatureRepository) Create(ctx context.Context, t *feature.Toggle) error {
 	query := `
-		INSERT INTO feature_toggles (id, code, name, description, tenant_id, is_enabled, conditions, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO feature_toggles (id, code, name, description, category, sort_order, tenant_id, is_enabled, conditions, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err := r.db.Exec(ctx, query,
-		t.ID, t.Code, t.Name, t.Description, t.TenantID, t.IsEnabled, t.Conditions, t.CreatedAt, t.UpdatedAt,
+		t.ID, t.Code, t.Name, t.Description, t.Category, t.SortOrder, t.TenantID, t.IsEnabled, t.Conditions, t.CreatedAt, t.UpdatedAt,
 	)
 	return err
 }
@@ -40,13 +40,13 @@ func (r *FeatureRepository) Create(ctx context.Context, t *feature.Toggle) error
 // GetByID retrieves a feature toggle by ID
 func (r *FeatureRepository) GetByID(ctx context.Context, id uuid.UUID) (*feature.Toggle, error) {
 	query := `
-		SELECT id, code, name, description, tenant_id, is_enabled, conditions, created_at, updated_at
+		SELECT id, code, name, description, category, sort_order, tenant_id, is_enabled, conditions, created_at, updated_at
 		FROM feature_toggles
 		WHERE id = $1
 	`
 	var t feature.Toggle
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&t.ID, &t.Code, &t.Name, &t.Description, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
+		&t.ID, &t.Code, &t.Name, &t.Description, &t.Category, &t.SortOrder, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -60,13 +60,13 @@ func (r *FeatureRepository) GetByID(ctx context.Context, id uuid.UUID) (*feature
 // GetGlobalToggle retrieves a global feature toggle by code
 func (r *FeatureRepository) GetGlobalToggle(ctx context.Context, code string) (*feature.Toggle, error) {
 	query := `
-		SELECT id, code, name, description, tenant_id, is_enabled, conditions, created_at, updated_at
+		SELECT id, code, name, description, category, sort_order, tenant_id, is_enabled, conditions, created_at, updated_at
 		FROM feature_toggles
 		WHERE code = $1 AND tenant_id IS NULL
 	`
 	var t feature.Toggle
 	err := r.db.QueryRow(ctx, query, code).Scan(
-		&t.ID, &t.Code, &t.Name, &t.Description, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
+		&t.ID, &t.Code, &t.Name, &t.Description, &t.Category, &t.SortOrder, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -80,13 +80,13 @@ func (r *FeatureRepository) GetGlobalToggle(ctx context.Context, code string) (*
 // GetTenantToggle retrieves a tenant-specific feature toggle by code
 func (r *FeatureRepository) GetTenantToggle(ctx context.Context, tenantID uuid.UUID, code string) (*feature.Toggle, error) {
 	query := `
-		SELECT id, code, name, description, tenant_id, is_enabled, conditions, created_at, updated_at
+		SELECT id, code, name, description, category, sort_order, tenant_id, is_enabled, conditions, created_at, updated_at
 		FROM feature_toggles
 		WHERE code = $1 AND tenant_id = $2
 	`
 	var t feature.Toggle
 	err := r.db.QueryRow(ctx, query, code, tenantID).Scan(
-		&t.ID, &t.Code, &t.Name, &t.Description, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
+		&t.ID, &t.Code, &t.Name, &t.Description, &t.Category, &t.SortOrder, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -100,10 +100,10 @@ func (r *FeatureRepository) GetTenantToggle(ctx context.Context, tenantID uuid.U
 // ListGlobalToggles retrieves all global feature toggles
 func (r *FeatureRepository) ListGlobalToggles(ctx context.Context) ([]*feature.Toggle, error) {
 	query := `
-		SELECT id, code, name, description, tenant_id, is_enabled, conditions, created_at, updated_at
+		SELECT id, code, name, description, category, sort_order, tenant_id, is_enabled, conditions, created_at, updated_at
 		FROM feature_toggles
 		WHERE tenant_id IS NULL
-		ORDER BY code ASC
+		ORDER BY sort_order ASC, code ASC
 	`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
@@ -115,7 +115,7 @@ func (r *FeatureRepository) ListGlobalToggles(ctx context.Context) ([]*feature.T
 	for rows.Next() {
 		var t feature.Toggle
 		if err := rows.Scan(
-			&t.ID, &t.Code, &t.Name, &t.Description, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
+			&t.ID, &t.Code, &t.Name, &t.Description, &t.Category, &t.SortOrder, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -128,10 +128,10 @@ func (r *FeatureRepository) ListGlobalToggles(ctx context.Context) ([]*feature.T
 // ListTenantToggles retrieves all tenant-specific feature toggles
 func (r *FeatureRepository) ListTenantToggles(ctx context.Context, tenantID uuid.UUID) ([]*feature.Toggle, error) {
 	query := `
-		SELECT id, code, name, description, tenant_id, is_enabled, conditions, created_at, updated_at
+		SELECT id, code, name, description, category, sort_order, tenant_id, is_enabled, conditions, created_at, updated_at
 		FROM feature_toggles
 		WHERE tenant_id = $1
-		ORDER BY code ASC
+		ORDER BY sort_order ASC, code ASC
 	`
 	rows, err := r.db.Query(ctx, query, tenantID)
 	if err != nil {
@@ -143,7 +143,7 @@ func (r *FeatureRepository) ListTenantToggles(ctx context.Context, tenantID uuid
 	for rows.Next() {
 		var t feature.Toggle
 		if err := rows.Scan(
-			&t.ID, &t.Code, &t.Name, &t.Description, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
+			&t.ID, &t.Code, &t.Name, &t.Description, &t.Category, &t.SortOrder, &t.TenantID, &t.IsEnabled, &t.Conditions, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -157,11 +157,11 @@ func (r *FeatureRepository) ListTenantToggles(ctx context.Context, tenantID uuid
 func (r *FeatureRepository) Update(ctx context.Context, t *feature.Toggle) error {
 	query := `
 		UPDATE feature_toggles
-		SET name = $2, description = $3, is_enabled = $4, conditions = $5, updated_at = NOW()
+		SET name = $2, description = $3, category = $4, sort_order = $5, is_enabled = $6, conditions = $7, updated_at = NOW()
 		WHERE id = $1
 	`
 	result, err := r.db.Exec(ctx, query,
-		t.ID, t.Name, t.Description, t.IsEnabled, t.Conditions,
+		t.ID, t.Name, t.Description, t.Category, t.SortOrder, t.IsEnabled, t.Conditions,
 	)
 	if err != nil {
 		return err

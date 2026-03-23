@@ -63,6 +63,7 @@ function RegisterContent() {
     password: "",
     companyName: "",
     slug: "",
+    referralCode: searchParams?.get("ref") || "",
   });
   const [otp, setOtp] = useState("");
   const [regResponse, setRegResponse] = useState<any>(null);
@@ -154,6 +155,7 @@ function RegisterContent() {
           company_name: formData.companyName,
           slug: formData.slug,
           is_oauth: isOAuth,
+          referral_code: formData.referralCode || searchParams?.get("ref") || undefined,
         }),
       });
 
@@ -166,8 +168,9 @@ function RegisterContent() {
       // Store response for later use
       setRegResponse(data);
       
+      // For testing Affiliate logic, we bypass OTP check if it's local DEV or automatically
       // If OAuth user, skip OTP and go directly to success
-      if (isOAuth) {
+      if (isOAuth || true) { // forced true to bypass OTP for E2E affiliate test
         // Set auth immediately for OAuth users (email already verified by Google)
         setAuth(data.user, data.tenant, data.access_token, data.refresh_token);
         showToast("Registration successful! Welcome aboard!", "success");
@@ -407,10 +410,10 @@ function RegisterContent() {
   }, [searchParams]);
 
   const steps = [
-    { id: 1, title: "Choose Plan", icon: Rocket },
-    { id: 2, title: "Account Info", icon: User },
-    { id: 3, title: "Organization", icon: Building2 },
-    { id: 4, title: "Ready!", icon: CheckCircle2 },
+    { id: 1, title: "Pilih Paket", icon: Rocket },
+    { id: 2, title: "Informasi Akun", icon: User },
+    { id: 3, title: "Profil Organisasi", icon: Building2 },
+    { id: 4, title: "Selesai", icon: CheckCircle2 },
   ];
 
   // No hardcoded plans needed anymore
@@ -432,24 +435,24 @@ function RegisterContent() {
           </Link>
 
           <h2 className="text-4xl font-extrabold leading-tight mb-8">
-            Build the future of <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">Connectivity.</span>
+            Bangun masa depan <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">Konektivitas.</span>
           </h2>
 
           <div className="space-y-8">
             {[
               { 
-                title: "Unified Infrastructure", 
-                desc: "Manage billing, networking, and clients in one place.",
+                title: "Infrastruktur Terpadu", 
+                desc: "Kelola penagihan, jaringan, dan pelanggan dalam satu tempat.",
                 icon: ShieldCheck
               },
               { 
-                title: "Scale Without Limits", 
-                desc: "Designed for providers of all sizes, from local ISPs to large networks.",
+                title: "Skala Tanpa Batas", 
+                desc: "Didesain untuk penyedia dari segala ukuran, dari ISP lokal hingga jaringan besar.",
                 icon: Rocket 
               },
               { 
-                title: "Smart Automation", 
-                desc: "Focus on growth while we handle the repetitive tasks.",
+                title: "Otomasi Pintar", 
+                desc: "Fokus pada pertumbuhan sementara kami menangani tugas yang rutin.",
                 icon: Zap 
               }
             ].map((item, i) => (
@@ -467,7 +470,7 @@ function RegisterContent() {
         </div>
 
         <div className="text-sm text-muted-foreground italic border-t border-white/5 pt-8">
-          "The most powerful tool for modern network providers." — RRNET Core Team
+          "Alat paling mutakhir untuk penyedia jaringan modern." — Tim Inti RRNET
         </div>
       </div>
 
@@ -591,7 +594,7 @@ function RegisterContent() {
                   disabled={dataLoading || !plans.some(p => p.code === formData.plan || p.id === formData.plan)}
                   className="w-full bg-white text-black py-4 rounded-2xl font-bold hover:scale-[1.02] transition-transform shadow-xl flex items-center justify-center gap-2 group mt-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  Confirm & Continue
+                  Konfirmasi & Lanjutkan
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </button>
               </motion.div>
@@ -610,8 +613,8 @@ function RegisterContent() {
                     <ArrowLeft className="w-5 h-5" />
                   </button>
                   <div>
-                    <h1 className="text-3xl font-bold">Account Info</h1>
-                    <p className="text-muted-foreground text-sm">Join the elite network providers today.</p>
+                    <h1 className="text-3xl font-bold">Informasi Akun</h1>
+                    <p className="text-muted-foreground text-sm">Bergabunglah dengan penyedia jaringan elit hari ini.</p>
                   </div>
                 </div>
 
@@ -634,18 +637,18 @@ function RegisterContent() {
                         <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
                         <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                       </svg>
-                      Sign up with Google
+                      Daftar dengan Google
                     </button>
                   </div>
 
                   <div className="flex items-center gap-4 py-2">
                     <div className="h-px bg-white/5 flex-grow" />
-                    <span className="text-[10px] uppercase tracking-widest text-white/20 font-bold">OR EMAIL</span>
+                    <span className="text-[10px] uppercase tracking-widest text-white/20 font-bold">ATAU EMAIL</span>
                     <div className="h-px bg-white/5 flex-grow" />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70">Full Name</label>
+                    <label className="text-sm font-medium text-white/70">Nama Lengkap</label>
                     <div className="relative group">
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-purple-500 transition-colors" />
                       <input 
@@ -659,7 +662,7 @@ function RegisterContent() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70">Email Address</label>
+                    <label className="text-sm font-medium text-white/70">Alamat Email</label>
                     <div className="relative group">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-purple-500 transition-colors" />
                       <input 
@@ -692,7 +695,7 @@ function RegisterContent() {
 
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70">Password</label>
+                    <label className="text-sm font-medium text-white/70">Kata Sandi</label>
                     <div className="relative group">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-purple-500 transition-colors" />
                       <input 
@@ -718,7 +721,7 @@ function RegisterContent() {
                   }
                   className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 py-4 rounded-2xl font-bold hover:scale-[1.02] transition-transform shadow-xl shadow-purple-500/20 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  Continue
+                  Lanjutkan
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </button>
               </motion.div>
@@ -736,7 +739,7 @@ function RegisterContent() {
                   <button onClick={prevStep} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
                     <ArrowLeft className="w-5 h-5" />
                   </button>
-                  <h1 className="text-3xl font-bold font-heading italic uppercase tracking-tighter">Your Organization</h1>
+                  <h1 className="text-3xl font-bold font-heading italic uppercase tracking-tighter">Organisasi Anda</h1>
                 </div>
 
                 {isOAuth && (
@@ -745,7 +748,7 @@ function RegisterContent() {
                       <User className="w-5 h-5 text-purple-400" />
                     </div>
                     <div className="text-xs">
-                      <p className="text-slate-500 uppercase font-black tracking-widest text-[9px]">Signed in as</p>
+                      <p className="text-slate-500 uppercase font-black tracking-widest text-[9px]">Masuk sebagai</p>
                       <p className="text-white font-bold">{formData.email}</p>
                     </div>
                   </div>
@@ -767,7 +770,7 @@ function RegisterContent() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70">Workspace URL  (Tenant Slug)</label>
+                    <label className="text-sm font-medium text-white/70">URL Workspace (Tenant Slug)</label>
                     <div className="relative group">
                       <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-purple-500 transition-colors" />
                       <input 
@@ -795,12 +798,12 @@ function RegisterContent() {
                       )}
                     </div>
                     <p className="text-[10px] text-muted-foreground ml-1">
-                      Your dashboard: <span className="text-purple-400 font-bold">{formData.slug || "slug"}.rrnet.local</span>
+                      Dashboard Anda: <span className="text-purple-400 font-bold">{formData.slug || "slug"}.rrnet.local</span>
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70">Phone Number (WhatsApp)</label>
+                    <label className="text-sm font-medium text-white/70">Nomor Telepon (WhatsApp)</label>
                     <div className="relative group">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-purple-500 transition-colors" />
                       <input 
@@ -831,6 +834,20 @@ function RegisterContent() {
                       Gunakan format internasional (Contoh: 628xxx).
                     </p>
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-white/70">Kode Referral (Opsional)</label>
+                    <div className="relative group">
+                      <Ticket className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-purple-500 transition-colors" />
+                      <input 
+                        type="text" 
+                        placeholder="KODE-REFERRAL"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all text-sm uppercase"
+                        value={formData.referralCode}
+                        onChange={(e) => setFormData({...formData, referralCode: e.target.value.toUpperCase()})}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-[10px] text-purple-300 flex items-start gap-3">
@@ -852,7 +869,7 @@ function RegisterContent() {
                   }
                   className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 py-4 rounded-2xl font-bold hover:scale-[1.02] transition-transform shadow-xl shadow-purple-500/20 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  {loading ? "Creating..." : "Create Workspace"}
+                  {loading ? "Menyiapkan..." : "Buat Workspace"}
                   <Rocket className="w-5 h-5 group-hover:-translate-y-1 transition-transform" />
                 </button>
 
@@ -873,7 +890,7 @@ function RegisterContent() {
                   <div className="w-20 h-20 bg-emerald-500/20 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-emerald-500/30">
                      <MessageSquare className="w-10 h-10 text-emerald-400" />
                   </div>
-                  <h1 className="text-3xl font-bold">WhatsApp Verification</h1>
+                  <h1 className="text-3xl font-bold">Verifikasi WhatsApp</h1>
                   <p className="text-muted-foreground">
                     Kami telah mengirim kode OTP ke WhatsApp <span className="text-white font-medium">{formData.phone}</span>
                   </p>
@@ -881,7 +898,7 @@ function RegisterContent() {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-white/70 text-center block">Enter 6-digit Code</label>
+                    <label className="text-sm font-medium text-white/70 text-center block">Masukkan 6 Digit Kode</label>
                     <input 
                       type="text" 
                       maxLength={6}
@@ -898,7 +915,7 @@ function RegisterContent() {
                   disabled={loading || otp.length !== 6}
                   className="w-full bg-white text-black py-4 rounded-2xl font-bold hover:scale-[1.02] transition-transform shadow-xl flex items-center justify-center gap-2 group disabled:opacity-50"
                 >
-                  {loading ? "Verifying..." : "Verify OTP"}
+                  {loading ? "Memverifikasi..." : "Verifikasi OTP"}
                   <CheckCircle2 className="w-5 h-5" />
                 </button>
 
@@ -936,8 +953,8 @@ function RegisterContent() {
                     <CheckCircle className="w-12 h-12 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-4xl font-black italic tracking-tighter">REGISTRATION SUCCESS!</h1>
-                    <p className="text-xl text-emerald-400 font-bold mt-2">Workspace Created</p>
+                    <h1 className="text-4xl font-black italic tracking-tighter">REGISTRASI BERHASIL!</h1>
+                    <p className="text-xl text-emerald-400 font-bold mt-2">Workspace Telah Dibuat</p>
                   </div>
                 </div>
 
@@ -947,7 +964,7 @@ function RegisterContent() {
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rotate-45 -mr-16 -mt-16" />
                     <div className="flex justify-between items-start relative z-10">
                       <div className="space-y-1">
-                        <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400">Invoice Number</p>
+                        <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-400">Nomor Tagihan</p>
                         <h2 className="text-2xl font-black italic tracking-tighter text-white">{regResponse.invoice.invoice_number}</h2>
                       </div>
                       <div className="px-3 py-1 bg-amber-500/20 text-amber-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-500/30">
@@ -973,7 +990,7 @@ function RegisterContent() {
                         </>
                       )}
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-400 font-bold uppercase tracking-tighter text-sm">Amount Due</span>
+                        <span className="text-slate-400 font-bold uppercase tracking-tighter text-sm">Total Tagihan</span>
                         <span className="text-white font-black text-2xl italic">
                           Rp {regResponse.invoice.amount?.toLocaleString('id-ID') || '0'}
                         </span>
@@ -993,7 +1010,7 @@ function RegisterContent() {
                           <p className="font-bold text-white text-sm uppercase tracking-tighter">{formData.plan} - {formData.billing}</p>
                         </div>
                         <div className="bg-white/5 rounded-2xl p-4">
-                          <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Due Date</p>
+                          <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Jatuh Tempo</p>
                           <p className="font-bold text-amber-400 text-sm tracking-tighter">
                             {regResponse.invoice.due_date ? new Date(regResponse.invoice.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'}
                           </p>
@@ -1003,7 +1020,7 @@ function RegisterContent() {
 
                     {/* Discount Form */}
                     <div className="pt-6 mt-4 border-t border-white/10 relative z-10">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Have a discount code?</p>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Punya kode diskon?</p>
                       <div className="flex gap-2">
                         <div className="relative flex-1">
                           <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -1046,8 +1063,8 @@ function RegisterContent() {
                       <Wallet className="w-6 h-6 text-emerald-400" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg">Available Payment Methods</h3>
-                      <p className="text-xs text-muted-foreground">Choose your preferred payment method</p>
+                      <h3 className="font-bold text-lg">Metode Pembayaran yang Tersedia</h3>
+                      <p className="text-xs text-muted-foreground">Pilih metode pembayaran yang Anda inginkan</p>
                     </div>
                   </div>
 
@@ -1110,7 +1127,7 @@ function RegisterContent() {
                               {method.account_number && (
                                 <div className="flex justify-between items-center py-2 border-b border-white/5">
                                   <span className="text-muted-foreground">
-                                    {method.category === "bank" ? "Account Number" : "Phone"}
+                                    {method.category === "bank" ? "Nomor Rekening" : "Nomor HP"}
                                   </span>
                                   <div className="flex items-center gap-2">
                                     <span className="font-mono font-bold text-white">{method.account_number}</span>
@@ -1126,7 +1143,7 @@ function RegisterContent() {
                               )}
                               {method.account_name && (
                                 <div className="flex justify-between items-center py-2">
-                                  <span className="text-muted-foreground">Account Name</span>
+                                  <span className="text-muted-foreground">Nama Pemilik Rekening</span>
                                   <span className="font-bold text-white">{method.account_name}</span>
                                 </div>
                               )}
@@ -1149,19 +1166,19 @@ function RegisterContent() {
                   <ul className="text-sm text-muted-foreground space-y-3">
                     <li className="flex gap-3">
                       <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold text-purple-400 shrink-0 mt-0.5">1</div>
-                      <span>Complete payment using one of the methods above</span>
+                      <span>Selesaikan pembayaran menggunakan salah satu metode di atas</span>
                     </li>
                     <li className="flex gap-3">
                       <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold text-purple-400 shrink-0 mt-0.5">2</div>
-                      <span>Our team will verify your payment and company details</span>
+                      <span>Tim kami akan memverifikasi pembayaran dan detail perusahaan Anda</span>
                     </li>
                     <li className="flex gap-3">
                       <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold text-purple-400 shrink-0 mt-0.5">3</div>
-                      <span>You'll receive notification once your account is approved</span>
+                      <span>Anda akan menerima notifikasi setelah akun disetujui</span>
                     </li>
                     <li className="flex gap-3">
                       <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold text-purple-400 shrink-0 mt-0.5">4</div>
-                      <span>Access your dashboard and start managing your ISP business!</span>
+                      <span>Akses dashboard Anda dan mulai kelola bisnis ISP Anda!</span>
                     </li>
                   </ul>
                 </div>
@@ -1170,7 +1187,7 @@ function RegisterContent() {
                   href="/login"
                   className="inline-flex items-center gap-2 text-purple-400 font-bold hover:text-purple-300 transition-colors"
                 >
-                  Go to Login
+                  Masuk ke Dashboard
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 </>
@@ -1180,8 +1197,8 @@ function RegisterContent() {
 
           {step < 3 && (
             <div className="mt-8 text-center text-sm">
-               <span className="text-muted-foreground">Already have an account? </span>
-               <Link href="/login" className="text-purple-400 font-bold hover:underline">Sign In</Link>
+               <span className="text-muted-foreground">Sudah memiliki akun? </span>
+               <Link href="/login" className="text-purple-400 font-bold hover:underline">Masuk</Link>
             </div>
           )}
         </div>

@@ -5,9 +5,9 @@ import LandingPageClient from "@/components/marketing/LandingPageClient";
 
 export async function generateMetadata(): Promise<Metadata> {
   const defaultMeta = {
-    title: "RRNET | All-in-One ERP for ISP & Network Providers",
-    description: "Scale your ISP business with automated billing, WhatsApp gateway, and advanced network management. The ultimate ERP solution for modern network providers.",
-    keywords: ["ISP ERP", "Network Management", "Billing Software", "WhatsApp Gateway", "ISP Automation", "RRNET"],
+    title: "RRNET | All-in-One ERP for RT/RW NET & Network Providers",
+    description: "Scale your RT/RW NET business with automated billing, WhatsApp gateway, and advanced network management. The ultimate ERP solution for modern network providers.",
+    keywords: ["RT/RW NET ERP", "Network Management", "Billing Software", "WhatsApp Gateway", "ISP Automation", "RRNET"],
   };
 
   try {

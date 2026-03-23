@@ -73,6 +73,9 @@ interface SuperAdminActions {
   fetchPricingConfig: () => Promise<void>;
   updatePricingConfig: (data: LandingPagePricing) => Promise<void>;
 
+  // Router actions
+  decommissionRouter: (routerId: string) => Promise<void>;
+
   // Clear
   clearTenant: () => void;
   clearPlan: () => void;
@@ -423,6 +426,17 @@ export const useSuperAdminStore = create<SuperAdminState & SuperAdminActions>(
       try {
         const pricingConfig = await superAdminService.updatePricingConfig(data);
         set({ pricingConfig, loading: false });
+      } catch (err) {
+        set({ error: toApiError(err).message, loading: false });
+        throw err;
+      }
+    },
+
+    decommissionRouter: async (routerId: string) => {
+      set({ loading: true, error: null });
+      try {
+        await superAdminService.decommissionRouter(routerId);
+        set({ loading: false });
       } catch (err) {
         set({ error: toApiError(err).message, loading: false });
         throw err;

@@ -15,6 +15,7 @@ import (
 	"rrnet/internal/domain/billing"
 	"rrnet/internal/domain/tenant"
 	"rrnet/internal/domain/user"
+	"rrnet/internal/domain/affiliate"
 	"rrnet/internal/infra/wa_gateway"
 	"rrnet/internal/repository"
 )
@@ -35,6 +36,7 @@ type TenantService struct {
 	redis                  *redis.Client
 	waClient               *wa_gateway.Client
 	platformBillingService *PlatformBillingService
+	affiliateService       *AffiliateService
 }
 
 // NewTenantService creates a new tenant service
@@ -46,6 +48,7 @@ func NewTenantService(
 	redisClient *redis.Client,
 	waClient *wa_gateway.Client,
 	platformBillingService *PlatformBillingService,
+	affiliateService *AffiliateService,
 ) *TenantService {
 	return &TenantService{
 		tenantRepo:             tenantRepo,
@@ -55,6 +58,7 @@ func NewTenantService(
 		redis:                  redisClient,
 		waClient:               waClient,
 		platformBillingService: platformBillingService,
+		affiliateService:       affiliateService,
 	}
 }
 
@@ -136,6 +140,7 @@ type RegisterTenantRequest struct {
 
 	BillingCycle string `json:"billing_cycle"`
 	IsOAuth      bool   `json:"is_oauth"`
+	ReferralCode string `json:"referral_code"` // The code from the affiliate
 }
 
 // RegisterTenantResponse represents tenant registration response
@@ -226,6 +231,22 @@ func (s *TenantService) RegisterTenant(ctx context.Context, req *RegisterTenantR
 		log.Info().Str("email", req.Email).Msg("Register via OAuth, skipping OTP")
 	}
 
+	// 5b. Handle Referral if provided
+	var affiliateProfile *affiliate.Affiliate
+	if req.ReferralCode != "" {
+		aff, err := s.affiliateService.GetByCode(ctx, req.ReferralCode)
+		if err == nil && aff != nil {
+			affiliateProfile = aff
+			log.Info().Str("code", req.ReferralCode).Str("affiliate_id", aff.ID.String()).Msg("Valid referral code found")
+		} else {
+			if err != nil {
+				log.Warn().Err(err).Str("code", req.ReferralCode).Msg("Invalid referral code provided")
+			} else {
+				log.Warn().Str("code", req.ReferralCode).Msg("Invalid referral code provided")
+			}
+		}
+	}
+
 	// 6. NOW create tenant (only after WhatsApp validation succeeds)
 	now := time.Now()
 	tenantID := uuid.New()
@@ -253,6 +274,23 @@ func (s *TenantService) RegisterTenant(ctx context.Context, req *RegisterTenantR
 	}
 
 	log.Info().Str("tenant_id", tenantID.String()).Msg("Tenant created")
+
+	// Record the referral if present
+	if affiliateProfile != nil {
+		commissionRate := s.affiliateService.GetCommissionRate(ctx, affiliateProfile.Tier)
+
+		ref := &affiliate.Referral{
+			ID:                   uuid.New(),
+			AffiliateID:          affiliateProfile.ID,
+			ReferredTenantID:     tenantID,
+			CommissionPercentage: commissionRate,
+			Status:               "active",
+			CreatedAt:            now,
+		}
+		if err := s.affiliateService.ProcessReferral(ctx, ref); err != nil {
+			log.Error().Err(err).Msg("Failed to record affiliate referral")
+		}
+	}
 
 	// 6. Get owner role
 	ownerRole, err := s.userRepo.GetRoleByCode(ctx, "owner")

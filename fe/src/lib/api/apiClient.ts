@@ -411,12 +411,26 @@ apiClient.interceptors.request.use(
       tokenPreview: currentToken.substring(0, 20) + '...',
     });
   } else {
-    console.warn('[AXIOS] WARNING: No token available in interceptor:', {
-      url: config.url,
-      method: config.method,
-      accessToken: accessToken ? accessToken.substring(0, 20) + '...' : null,
-      currentToken: null,
-    });
+    // Only warn if it's NOT a public/auth path and no token exists
+    // This avoids noise for registration, login, etc.
+    const isPublicPath = [
+      '/auth/login',
+      '/auth/register',
+      '/tenants/register',
+      '/affiliate/register',
+      '/health',
+      '/version',
+      '/auth/forgot-password',
+      '/auth/reset-password'
+    ].some(p => url.includes(p));
+
+    if (!isPublicPath) {
+      console.warn('[AXIOS] WARNING: No token available in interceptor for protected route:', {
+        url: config.url,
+        method: config.method,
+        accessToken: accessToken ? accessToken.substring(0, 20) + '...' : null,
+      });
+    }
   }
   
   // Add tenant slug (only if provided and not empty)
@@ -434,8 +448,16 @@ apiClient.interceptors.request.use(
       '/auth/register',
       '/auth/refresh',
       '/auth/logout',
+      '/affiliate/register',
+      '/tenants/register',
+      '/tenants/verify-otp',
+      '/tenants/resend-otp',
+      '/auth/forgot-password',
+      '/auth/reset-password',
     ];
     const isExempt = csrfExemptPaths.some((p) => url === p || url.startsWith(p + '?'));
+    console.log(`[CSRF DEBUG] Method: ${config.method}, URL: ${url}, isExempt: ${isExempt}`);
+
 
     // For non-exempt paths, ensure CSRF token is available before sending request
     if (!isExempt) {

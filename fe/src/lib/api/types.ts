@@ -907,6 +907,12 @@ export interface ClientSubmissionListResponse {
 
 // ========== Super Admin Types ==========
 
+export interface ResourceUsage {
+  resource_name: string;
+  usage: number;
+  limit: number;
+}
+
 export interface SuperAdminTenant {
   id: string;
   name: string;
@@ -927,13 +933,22 @@ export interface SuperAdminTenant {
   plan_code?: string;
   plan_name?: string;
   plan_price?: number;
+  usage_stats?: ResourceUsage[];
+  is_compliant?: boolean;
+  routers?: Router[];
 }
 
 export interface Feature {
+  id?: string;
   code: string;
   name: string;
   description?: string;
   category?: string;
+  sort_order?: number;
+  is_system?: boolean;
+  is_enabled?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Plan {
@@ -946,6 +961,7 @@ export interface Plan {
   currency: string;
   limits: Record<string, number>;
   features: string[];
+  hidden_features: string[];
   is_active: boolean;
   is_public: boolean;
   sort_order: number;
@@ -994,6 +1010,7 @@ export interface CreatePlanRequest {
   currency?: string;
   limits: Record<string, number>;
   features: string[];
+  hidden_features: string[];
   is_active: boolean;
   is_public: boolean;
   sort_order: number;
@@ -1007,6 +1024,7 @@ export interface UpdatePlanRequest {
   currency?: string;
   limits: Record<string, number>;
   features: string[];
+  hidden_features: string[];
   is_active: boolean;
   is_public: boolean;
   sort_order: number;

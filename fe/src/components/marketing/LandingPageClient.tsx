@@ -17,35 +17,49 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-import { useEffect, useState } from "react";
-import { Plan, LandingPagePricing } from "@/lib/api/types";
+import { useEffect, useState, useMemo } from "react";
+import { Plan, Feature, LandingPagePricing } from "@/lib/api/types";
 
 export default function LandingPageClient() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [featureCatalog, setFeatureCatalog] = useState<Feature[]>([]);
   const [config, setConfig] = useState<LandingPagePricing | null>(null);
   const [isYearly, setIsYearly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [randomHeights, setRandomHeights] = useState<number[]>(Array(12).fill(40));
+  const [expandedPlans, setExpandedPlans] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (planId: string) => {
+    setExpandedPlans(prev => ({ ...prev, [planId]: !prev[planId] }));
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const apiURL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
         
-        const [plansRes, configRes] = await Promise.all([
+        const [plansRes, configRes, featuresRes] = await Promise.all([
           fetch(`${apiURL}/plans/public?public=true&active=true`),
-          fetch(`${apiURL}/public/site-settings/pricing`)
+          fetch(`${apiURL}/public/site-settings/pricing`),
+          fetch(`${apiURL}/features`)
         ]);
 
         if (plansRes.ok) {
           const data = await plansRes.json();
-          // Backend returns { plans: [], total: 0 }, not { data: [] }
           setPlans(data.plans || data.data || []);
         }
 
         if (configRes.ok) {
           const data = await configRes.json();
           setConfig(data);
+        }
+
+        if (featuresRes.ok) {
+          const data = await featuresRes.json();
+          console.log("Fetched feature catalog:", data.features?.length, "features");
+          setFeatureCatalog(data.features || []);
+        } else {
+          console.error("Failed to fetch features:", featuresRes.status);
         }
       } catch (err) {
         console.error("Failed to fetch landing data", err);
@@ -55,6 +69,7 @@ export default function LandingPageClient() {
     };
 
     fetchData();
+    console.log("LandingPageClient init");
     setRandomHeights(Array.from({ length: 12 }).map(() => 20 + Math.random() * 60));
   }, []);
 
@@ -71,9 +86,17 @@ export default function LandingPageClient() {
 
   const showToggle = config ? (config.show_monthly && config.show_yearly) : true;
   const initialYearly = config ? (!config.show_monthly && config.show_yearly) : false;
-
   // Use effective billing cycle
   const effectiveYearly = showToggle ? isYearly : initialYearly;
+
+  // Feature mapping cache
+  const featureMap = useMemo(() => {
+    const map: Record<string, Feature> = {};
+    featureCatalog.forEach(f => {
+      map[f.code] = f;
+    });
+    return map;
+  }, [featureCatalog]);
 
   return (
     <div className="overflow-hidden">
@@ -97,7 +120,7 @@ export default function LandingPageClient() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
               </span>
-              Next-Gen ISP Management
+              Next-Gen RT/RW NET Management
             </motion.div>
 
             <motion.h1
@@ -106,7 +129,7 @@ export default function LandingPageClient() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-[1.1]"
             >
-              Scale Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-500">ISP Business</span> with Intelligent Automation
+              Scale Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-500">RT/RW NET Business</span> with Intelligent Automation
             </motion.h1>
 
             <motion.p
@@ -226,7 +249,7 @@ export default function LandingPageClient() {
             >
               <h2 className="text-4xl md:text-5xl font-black mb-8 leading-tight uppercase italic">
                 Solusi Cerdas untuk <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">ISP Masa Depan.</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">RT/RW NET Masa Depan.</span>
               </h2>
               <div className="space-y-8">
                 {[
@@ -260,7 +283,7 @@ export default function LandingPageClient() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                 <div className="absolute bottom-8 left-8 right-8 p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10">
                    <p className="text-xs font-black text-purple-400 uppercase tracking-widest mb-2">Live Insight</p>
-                   <h4 className="text-2xl font-bold mb-4 italic">Visualisasikan Pertumbuhan ISP Anda.</h4>
+                   <h4 className="text-2xl font-bold mb-4 italic">Visualisasikan Pertumbuhan RT/RW NET Anda.</h4>
                    <div className="flex gap-2 items-end h-[80px]">
                      {randomHeights.map((h, i) => (
                        <div key={i} className="flex-1 bg-white/10 rounded-full transition-all duration-1000" style={{ height: `${h}px` }} />
@@ -289,7 +312,7 @@ export default function LandingPageClient() {
                 <h2 className="text-4xl md:text-5xl font-bold mb-6">Join the <span className="text-cyan-500">RRNET Affiliate</span> Program</h2>
                 <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
                   Earn recurring commission by introducing RRNET to your network. 
-                  Help other ISP providers thrive while building your own revenue stream.
+                  Help other RT/RW NET providers thrive while building your own revenue stream.
                 </p>
                 <div className="space-y-4 mb-10">
                   <div className="flex items-center gap-3">
@@ -344,11 +367,16 @@ export default function LandingPageClient() {
                 <span className={cn("text-sm font-bold transition-colors", !isYearly ? "text-foreground" : "text-muted-foreground")}>Monthly</span>
                 <button 
                   onClick={() => setIsYearly(!isYearly)}
-                  className="w-14 h-8 rounded-full bg-secondary border border-border p-1 relative transition-colors hover:border-primary/50"
+                  className={cn(
+                    "w-14 h-8 rounded-full border-2 p-1 relative transition-all duration-300 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    isYearly ? "bg-indigo-600 border-indigo-500 shadow-[0_0_15px_-3px_rgba(79,70,229,0.4)]" : "bg-slate-800 border-slate-700"
+                  )}
                 >
                   <motion.div 
+                    initial={false}
                     animate={{ x: isYearly ? 24 : 0 }}
-                    className="w-6 h-6 rounded-full bg-primary shadow-lg shadow-primary/20" 
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    className="w-5 h-5 rounded-full bg-white shadow-xl flex items-center justify-center" 
                   />
                 </button>
                 <span className={cn("text-sm font-bold transition-colors text-emerald-500 flex items-center gap-2", isYearly ? "opacity-100" : "opacity-60")}>
@@ -401,13 +429,78 @@ export default function LandingPageClient() {
                       <span className="text-sm opacity-60">/mo</span>
                     </div>
                     
-                    <ul className="space-y-4 mb-10 min-h-[200px]">
-                      {features.slice(0, 6).map((f, j) => (
-                        <li key={j} className="flex items-center gap-3 text-sm">
-                          <CheckCircle2 className={cn("w-5 h-5 flex-shrink-0", isPopular ? "text-background" : "text-primary")} />
-                          <span className="line-clamp-1">{f}</span>
+                    <ul className="space-y-4 mb-10 min-h-[220px]">
+                      {(() => {
+                        // Convert limits to human readable features
+                        const limitFeatures = Object.entries(p.limits || {})
+                          .filter(([key]) => key !== "max_user") // Skip max_user
+                          .map(([key, value]) => {
+                            let label = "";
+                            const valStr = value === -1 ? "Unlimited" : (typeof value === 'number' ? value.toLocaleString("id-ID") : value);
+                            
+                            if (key === "max_router") label = `Up to ${valStr} MikroTik Routers`;
+                            else if (key === "active_user") label = `${valStr} Active Capacity`;
+                            else if (key === "voucher_limit") label = `${valStr} Monthly Vouchers`;
+                            else if (key === "max_client") label = `Max ${valStr} Clients`;
+                            else label = `${key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}: ${valStr}`;
+                            
+                            return { code: `limit_${key}`, name: label, sort_order: -100 }; // Ensure they stay at top
+                          });
+
+                        // Map codes to objects, and filter based on global visibility and per-plan hidden settings
+                        const planFeatures = [
+                           ...limitFeatures,
+                           ...features
+                             .filter(code => {
+                               // 1. Global visibility check
+                               const feat = featureMap[code];
+                               if (feat && feat.is_enabled === false) return false;
+                               
+                               // 2. Per-plan visibility check
+                               if (p.hidden_features?.includes(code)) return false;
+                               
+                               return true;
+                             })
+                             .map(code => featureMap[code] || { code, name: code.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') })
+                        ].sort((a, b) => {
+                            const sa = a.sort_order || 0;
+                            const sb = b.sort_order || 0;
+                            if (sa !== sb) return sa - sb;
+                            return a.code.localeCompare(b.code);
+                          });
+                        
+                        const visibleFeatures = expandedPlans[p.id] ? planFeatures : planFeatures.slice(0, 6);
+
+                        return visibleFeatures.map((f, j) => (
+                          <li key={j} className="flex items-center gap-3 text-sm">
+                            <CheckCircle2 className={cn("w-5 h-5 flex-shrink-0", isPopular ? "text-background" : "text-primary")} />
+                            <span className="line-clamp-1 font-medium">{f.name}</span>
+                          </li>
+                        ));
+                      })()}
+                      
+                      {features.length > 6 && (
+                        <li className="pt-2">
+                           <button 
+                             onClick={() => toggleExpand(p.id)}
+                             className={cn(
+                             "text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:translate-x-1 transition-transform",
+                             isPopular ? "text-background/70 hover:text-background" : "text-primary"
+                           )}>
+                              {expandedPlans[p.id] ? (
+                                <>
+                                  Show Less
+                                  <ArrowRight className="w-3 h-3 rotate-180" />
+                                </>
+                              ) : (
+                                <>
+                                  + {features.length - 6} More Features
+                                  <ArrowRight className="w-3 h-3" />
+                                </>
+                              )}
+                           </button>
                         </li>
-                      ))}
+                      )}
                     </ul>
 
                     <Link 
@@ -439,7 +532,7 @@ export default function LandingPageClient() {
       <section className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-primary/5 -z-10" />
         <div className="container mx-auto px-4 md:px-6 text-center">
-            <h2 className="text-4xl md:text-6xl font-bold mb-10">Ready to <span className="text-purple-600">Revolutionize</span> Your ISP?</h2>
+            <h2 className="text-4xl md:text-6xl font-bold mb-10">Ready to <span className="text-purple-600">Revolutionize</span> Your RT/RW NET?</h2>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <Link href="/register?plan=pro" className="bg-primary text-primary-foreground px-10 py-5 rounded-3xl font-bold text-xl hover:scale-105 transition-transform flex items-center gap-3">
                 Start 14-Day Free Trial
@@ -449,7 +542,7 @@ export default function LandingPageClient() {
                 Talk to Sales
               </Link>
             </div>
-            <p className="mt-10 text-muted-foreground">Join 150+ network providers scaling with RRNET.</p>
+            <p className="mt-10 text-muted-foreground">Join 150+ RT/RW NET providers scaling with RRNET.</p>
         </div>
       </section>
     </div>

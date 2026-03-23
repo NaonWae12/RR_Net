@@ -36,11 +36,12 @@ export const authService = {
     setAccessToken(null);
   },
 
-  async forgotPassword(email: string): Promise<void> {
-    await apiClient.post("/auth/forgot-password", { email });
+  async forgotPassword(email: string): Promise<{ message: string; phone: string }> {
+    const res = await apiClient.post("/auth/forgot-password", { email });
+    return res.data;
   },
 
-  async resetPassword(data: { token: string; password: string }): Promise<void> {
+  async resetPassword(data: { email: string; otp: string; password: string }): Promise<void> {
     await apiClient.post("/auth/reset-password", data);
   },
 

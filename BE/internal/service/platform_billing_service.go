@@ -13,10 +13,11 @@ import (
 )
 
 type PlatformBillingService struct {
-	repo         *repository.PlatformBillingRepository
-	tenantRepo   *repository.TenantRepository
-	planRepo     *repository.PlanRepository
-	discountRepo *repository.PlatformDiscountRepository
+	repo             *repository.PlatformBillingRepository
+	tenantRepo       *repository.TenantRepository
+	planRepo         *repository.PlanRepository
+	discountRepo     *repository.PlatformDiscountRepository
+	affiliateService *AffiliateService
 }
 
 func NewPlatformBillingService(
@@ -31,6 +32,11 @@ func NewPlatformBillingService(
 		planRepo:     planRepo,
 		discountRepo: discountRepo,
 	}
+}
+
+// SetAffiliateService injects the AffiliateService dynamically to avoid circular issues during router wiring
+func (s *PlatformBillingService) SetAffiliateService(as *AffiliateService) {
+	s.affiliateService = as
 }
 
 func (s *PlatformBillingService) UpdateInvoicePlan(ctx context.Context, invoiceID uuid.UUID, planID uuid.UUID, billingCycle string) error {
@@ -239,6 +245,17 @@ func (s *PlatformBillingService) VerifyPayment(ctx context.Context, paymentID uu
 			// For MVP, assume 1 payment pays the full invoice
 			if err := s.repo.UpdateInvoiceStatus(ctx, payment.PlatformInvoiceID, billing.PlatformInvoiceStatusPaid, payment.Amount, &now); err != nil {
 				return err
+			}
+
+			if s.affiliateService != nil {
+				// Process the commission based on the final paid amount (which accounts for discounts)
+				err := s.affiliateService.ProcessCommission(ctx, payment.TenantID, payment.PlatformInvoiceID, float64(payment.Amount))
+				if err != nil {
+					log.Error().Err(err).
+						Str("tenant_id", payment.TenantID.String()).
+						Str("invoice_id", payment.PlatformInvoiceID.String()).
+						Msg("Failed to process affiliate commission, continuing anyway")
+				}
 			}
 
 			// If this invoice was for a plan change (has PlanID), update the tenant's plan

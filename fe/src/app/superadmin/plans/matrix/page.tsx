@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, Fragment } from "react";
 import { useSuperAdminStore } from "@/stores/superAdminStore";
 import { featureService } from "@/lib/api/featureService";
+import { superAdminService } from "@/lib/api/superAdminService";
 import { Feature, Plan } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
@@ -21,6 +22,8 @@ import {
   Edit,
   AlertTriangle,
   Loader2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +66,7 @@ export default function FeatureMatrixPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
-  const [formData, setFormData] = useState({ code: "", name: "", description: "", category: "Custom" });
+  const [formData, setFormData] = useState({ code: "", name: "", description: "", category: "Custom", sort_order: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -77,15 +80,9 @@ export default function FeatureMatrixPage() {
       const data = await featureService.getFeatures();
       setFeatures(data);
       
-      // Initialize visibility from localStorage if available, otherwise default to all true
-      const savedVisibility = localStorage.getItem("feature_matrix_visibility");
-      if (savedVisibility) {
-          setFeatureVisibility(JSON.parse(savedVisibility));
-      } else {
-          const initialVisibility: FeatureVisibility = {};
-          data.forEach(f => initialVisibility[f.code] = true);
-          setFeatureVisibility(initialVisibility);
-      }
+      const initialVisibility: FeatureVisibility = {};
+      data.forEach(f => initialVisibility[f.code] = f.is_enabled !== false);
+      setFeatureVisibility(initialVisibility);
     } catch (err) {
       console.error("Failed to load features:", err);
       showToast({ title: "Error", description: "Failed to load feature catalog", variant: "error" });
@@ -125,22 +122,83 @@ export default function FeatureMatrixPage() {
     const allFeatures = [...features, ...uncategorizedFeatures];
     const processedFeatures = allFeatures.filter(f => showHidden || featureVisibility[f.code] !== false);
     
-    processedFeatures.forEach((f) => {
+    // Sort all features by sort_order first to ensure consistency across categories
+    const sortedFeatures = [...processedFeatures].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+    sortedFeatures.forEach((f) => {
       const category = f.category || "Other";
       if (!groups[category]) groups[category] = [];
       groups[category].push(f);
     });
-    return groups;
+
+    // Alphabetize categories for consistent display
+    const orderedGroups: Record<string, Feature[]> = {};
+    Object.keys(groups).sort().forEach(key => {
+        orderedGroups[key] = groups[key];
+    });
+
+    return orderedGroups;
   }, [features, plans, showHidden, featureVisibility]);
 
-  const toggleVisibility = (code: string) => {
+  const toggleVisibility = async (code: string) => {
+      const feature = features.find(f => f.code === code);
+      if (!feature) return;
+
+      const newStatus = !featureVisibility[code];
       const newVisibility = {
           ...featureVisibility,
-          [code]: !featureVisibility[code]
+          [code]: newStatus
       };
       setFeatureVisibility(newVisibility);
-      // Persist to local storage
-      localStorage.setItem("feature_matrix_visibility", JSON.stringify(newVisibility));
+      
+      try {
+          // If it has an ID, update it. If not (system feature but not in DB yet), we might need to create it 
+          // but for now let's assume update works if handled by backend to create on demand or features are already there.
+          if (feature.id) {
+              await featureService.updateFeature(feature.id, { 
+                  name: feature.name,
+                  description: feature.description,
+                  category: feature.category,
+                  sort_order: feature.sort_order,
+                  is_enabled: newStatus 
+              });
+          }
+      } catch (err) {
+          console.error("Failed to update visibility:", err);
+          showToast({ title: "Error", description: "Failed to save visibility", variant: "error" });
+          // Rollback local state
+          setFeatureVisibility(featureVisibility);
+      }
+  };
+  
+  const togglePlanFeatureVisibility = async (plan: Plan, featureCode: string) => {
+    let newHidden = plan.hidden_features || [];
+    if (newHidden.includes(featureCode)) {
+      newHidden = newHidden.filter(c => c !== featureCode);
+    } else {
+      newHidden = [...newHidden, featureCode];
+    }
+    
+    try {
+      await superAdminService.updatePlan(plan.id, {
+        name: plan.name,
+        description: plan.description || "",
+        price_monthly: plan.price_monthly,
+        price_yearly: plan.price_yearly,
+        currency: plan.currency,
+        limits: plan.limits || {},
+        features: plan.features || [],
+        hidden_features: newHidden,
+        is_active: plan.is_active,
+        is_public: plan.is_public,
+        sort_order: plan.sort_order
+      });
+      fetchPlans();
+      showToast({ title: "Success", description: "Updated plan visibility" });
+    } catch (err) {
+      console.error("Failed to update plan feature:", err);
+      showToast({ title: "Error", description: "Failed to update plan feature visibility", variant: "error" });
+    }
   };
 
   const handleCreate = async () => {
@@ -153,8 +211,8 @@ export default function FeatureMatrixPage() {
       await featureService.createFeature(formData);
       showToast({ title: "Success", description: "Feature created successfully", variant: "success" });
       setIsAddOpen(false);
-      setFormData({ code: "", name: "", description: "", category: "Custom" });
-      loadFeatures(); // Turn off local state update, refresh from server
+      setFormData({ code: "", name: "", description: "", category: "Custom", sort_order: 0 });
+      loadFeatures(); // Refresh from server
     } catch (err: any) {
       showToast({ title: "Error", description: err.response?.data?.message || err.message, variant: "error" });
     } finally {
@@ -164,12 +222,18 @@ export default function FeatureMatrixPage() {
 
   const handleUpdate = async () => {
     if (!selectedFeature?.id) return;
-    setIsSubmitting(true);
     try {
-      await featureService.updateFeature(selectedFeature.id, {
-        name: formData.name,
-        description: formData.description
-      });
+      if (selectedFeature.id && !selectedFeature.id.toString().startsWith('temp-')) {
+          await featureService.updateFeature(selectedFeature.id, {
+            name: formData.name,
+            description: formData.description,
+            category: formData.category,
+            sort_order: formData.sort_order
+          });
+      } else {
+          // If it's a system feature or temp feature, create it in DB to override
+          await featureService.createFeature(formData);
+      }
       showToast({ title: "Success", description: "Feature updated successfully", variant: "success" });
       setIsEditOpen(false);
       setSelectedFeature(null);
@@ -203,7 +267,8 @@ export default function FeatureMatrixPage() {
       code: feature.code,
       name: feature.name,
       description: feature.description || "",
-      category: feature.category || "Custom"
+      category: feature.category || "Custom",
+      sort_order: feature.sort_order || 0
     });
     setIsEditOpen(true);
   };
@@ -214,16 +279,8 @@ export default function FeatureMatrixPage() {
   };
 
   const canEdit = (feature: Feature) => {
-    // Only allow editing if it has an ID (so it's in DB, or we support editing system features via overriding in DB)
-    // Current backend logic supports overriding system features by creating a DB entry with same code.
-    // However, our `List` returns `id: nil` for pure system features.
-    // If we want to support "Edit System Feature" (to override it), we would create an entry.
-    // But currently `updateFeature` requires an ID.
-    // So we can only edit features that HAVE an ID (i.e. override exists OR content is custom).
-    // If user wants to "Edit" a pure system feature, they technically need to "Create" an override.
-    // For simplicity, let's only allow editing features with ID, OR if we want to allow overriding system features, we'd need a different flow.
-    // Let's stick to: Can edit if feature.id exists.
-    return !!feature.id; 
+    // Allow editing any feature. If it's a system feature, saving will create an override entry in DB.
+    return true; 
   };
 
   if (isLoading) {
@@ -300,11 +357,11 @@ export default function FeatureMatrixPage() {
                         Visibility Configuration Mode
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-600">Show hidden features</span>
+                        <span className="text-sm font-semibold text-slate-700">Show hidden features</span>
                         <Switch 
                             checked={showHidden} 
                             onCheckedChange={setShowHidden} 
-                            className="scale-75"
+                            className="data-[state=unchecked]:bg-slate-300 data-[state=checked]:bg-blue-600 shadow-sm border border-slate-200/50"
                         />
                     </div>
                 </div>
@@ -315,7 +372,10 @@ export default function FeatureMatrixPage() {
                     <thead>
                         <tr>
                             <th className="sticky left-0 top-0 z-20 bg-white border-b border-r border-slate-100/20 p-4 text-left w-[360px] shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-                                <span className="text-sm font-semibold text-slate-900">Features</span>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm font-semibold text-slate-900">Features</span>
+                                    {editMode && <span className="text-[10px] uppercase text-slate-400 font-bold">Sort #</span>}
+                                </div>
                             </th>
                             {plans.map((plan) => (
                                 <th key={plan.id} className="bg-slate-50/50 border-b border-r border-slate-100/20 p-4 min-w-[200px] text-center">
@@ -381,6 +441,9 @@ export default function FeatureMatrixPage() {
                                                     
                                                     {editMode && (
                                                         <div className="flex flex-col gap-1 items-end">
+                                                            <Badge variant="outline" className="text-[10px] font-mono h-5 bg-slate-50 border-slate-200">
+                                                                #{feature.sort_order || 0}
+                                                            </Badge>
                                                             <div className="flex gap-1">
                                                                 {isEditable && (
                                                                     <>
@@ -421,27 +484,51 @@ export default function FeatureMatrixPage() {
                                             {plans.map((plan) => {
                                                 const hasFeature = plan.features?.includes(feature.code) || plan.features?.includes("*");
                                                 const isWildcard = plan.features?.includes("*");
+                                                const isHiddenInPlan = plan.hidden_features?.includes(feature.code);
                                                 
                                                 return (
-                                                    <td key={`${plan.id}-${feature.code}`} className="border-b border-r border-slate-100/20 p-3 text-center align-middle">
-                                                        {hasFeature ? (
-                                                            <div className="flex justify-center">
-                                                                {isWildcard ? (
-                                                                    <div className="group/wildcard relative">
-                                                                        <div className="h-6 w-6 rounded-full bg-purple-100 flex items-center justify-center">
-                                                                            <Check className="h-4 w-4 text-purple-600" />
+                                                    <td key={`${plan.id}-${feature.code}`} className={cn(
+                                                        "border-b border-r border-slate-100/20 p-3 text-center align-middle relative group/cell",
+                                                        isHiddenInPlan && "bg-slate-50/50"
+                                                    )}>
+                                                        <div className="flex flex-col items-center justify-center gap-2">
+                                                            {hasFeature ? (
+                                                                <div className={cn(
+                                                                    "flex justify-center transition-opacity",
+                                                                    isHiddenInPlan ? "opacity-30" : "opacity-100"
+                                                                )}>
+                                                                    {isWildcard ? (
+                                                                        <div className="group/wildcard relative">
+                                                                            <div className="h-6 w-6 rounded-full bg-purple-100 flex items-center justify-center">
+                                                                                <Check className="h-4 w-4 text-purple-600" />
+                                                                            </div>
+                                                                            <span className="text-[10px] text-purple-600 font-medium absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap opacity-0 group-hover/wildcard:opacity-100 transition-opacity z-10 bg-white shadow-sm border border-slate-100 px-2 py-0.5 rounded-full">Via Wildcard</span>
                                                                         </div>
-                                                                        <span className="text-[10px] text-purple-600 font-medium absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap opacity-0 group-hover/wildcard:opacity-100 transition-opacity z-10 bg-white shadow-sm border border-slate-100 px-2 py-0.5 rounded-full">Via Wildcard</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center">
-                                                                        <Check className="h-4 w-4 text-green-600" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="h-1 w-4 bg-slate-200 rounded mx-auto" />
-                                                        )}
+                                                                    ) : (
+                                                                        <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center">
+                                                                            <Check className="h-4 w-4 text-green-600" />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="h-1 w-4 bg-slate-200 rounded mx-auto" />
+                                                            )}
+
+                                                            {editMode && hasFeature && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className={cn(
+                                                                        "h-6 w-6 absolute top-1 right-1 opacity-0 group-hover/cell:opacity-100 transition-opacity",
+                                                                        isHiddenInPlan ? "text-slate-400 hover:text-slate-900" : "text-slate-300 hover:text-indigo-600"
+                                                                    )}
+                                                                    onClick={() => togglePlanFeatureVisibility(plan, feature.code)}
+                                                                    title={isHiddenInPlan ? "Show for this plan" : "Hide for this plan"}
+                                                                >
+                                                                    {isHiddenInPlan ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 );
                                             })}
@@ -505,6 +592,16 @@ export default function FeatureMatrixPage() {
                             className="focus-visible:ring-indigo-500 min-h-[80px]"
                         />
                     </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-slate-700">Sort Order</label>
+                        <Input 
+                            type="number"
+                            value={formData.sort_order}
+                            onChange={(e) => setFormData({...formData, sort_order: parseInt(e.target.value) || 0})}
+                            className="focus-visible:ring-indigo-500"
+                        />
+                        <p className="text-xs text-slate-500">Lower numbers appear first.</p>
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsAddOpen(false)} className="border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</Button>
@@ -548,6 +645,25 @@ export default function FeatureMatrixPage() {
                             onChange={(e) => setFormData({...formData, description: e.target.value})}
                             className="focus-visible:ring-indigo-500 min-h-[80px]"
                         />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-slate-700">Category</label>
+                            <Input 
+                                value={formData.category}
+                                onChange={(e) => setFormData({...formData, category: e.target.value})}
+                                className="focus-visible:ring-indigo-500"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-slate-700">Sort Order</label>
+                            <Input 
+                                type="number"
+                                value={formData.sort_order}
+                                onChange={(e) => setFormData({...formData, sort_order: parseInt(e.target.value) || 0})}
+                                className="focus-visible:ring-indigo-500"
+                            />
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>

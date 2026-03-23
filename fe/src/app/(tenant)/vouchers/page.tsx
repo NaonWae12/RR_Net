@@ -41,6 +41,7 @@ import {
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
+import { LimitWarningBanner } from "@/components/dashboard/LimitWarningBanner";
 import { useAuth } from "@/lib/hooks/useAuth";
 import {
   DropdownMenu,
@@ -568,6 +569,8 @@ export default function VouchersPage() {
           <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sync Data
         </Button>
       </div>
+      
+      <LimitWarningBanner resource="vouchers" />
 
       {/* Tab Navigation */}
       <div className="bg-white rounded-2xl border border-slate-200 p-1.5 flex gap-1 shadow-sm">

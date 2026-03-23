@@ -13,6 +13,8 @@ type Toggle struct {
 	Code        string          `json:"code"`
 	Name        string          `json:"name"`
 	Description *string         `json:"description,omitempty"`
+	Category    string          `json:"category,omitempty"`
+	SortOrder   int             `json:"sort_order"`
 	TenantID    *uuid.UUID      `json:"tenant_id,omitempty"` // nil = global toggle
 	IsEnabled   bool            `json:"is_enabled"`
 	Conditions  json.RawMessage `json:"conditions,omitempty"`

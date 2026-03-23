@@ -57,6 +57,7 @@ func New(deps Dependencies) http.Handler {
 	planRepo := repository.NewPlanRepository(deps.DB)
 	addonRepo := repository.NewAddonRepository(deps.DB)
 	featureRepo := repository.NewFeatureRepository(deps.DB)
+	affiliateRepo := repository.NewAffiliateRepository(deps.DB)
 
 	jwtManager := auth.NewJWTManager(
 		deps.Config.Auth.JWTSecret,
@@ -85,11 +86,15 @@ func New(deps Dependencies) http.Handler {
 	}
 
 	// Services
-	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager)
+	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager, deps.Redis, deps.WAGateway)
 	platformBillingService := service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo)
 	platformDiscountService := service.NewPlatformDiscountService(platformDiscountRepo)
 
-	tenantService := service.NewTenantService(tenantRepo, userRepo, planRepo, jwtManager, deps.Redis, deps.WAGateway, platformBillingService)
+	// Affiliate management
+	affiliateService := service.NewAffiliateService(userRepo, affiliateRepo, siteSettingRepo)
+	platformBillingService.SetAffiliateService(affiliateService)
+
+	tenantService := service.NewTenantService(tenantRepo, userRepo, planRepo, jwtManager, deps.Redis, deps.WAGateway, platformBillingService, affiliateService)
 	planService := service.NewPlanService(planRepo, tenantRepo)
 	addonService := service.NewAddonService(addonRepo, planRepo, tenantRepo)
 	featureResolver := service.NewFeatureResolver(planRepo, addonRepo, featureRepo)
@@ -98,6 +103,7 @@ func New(deps Dependencies) http.Handler {
 	// RADIUS + Voucher (Hotspot)
 	voucherRepo := repository.NewVoucherRepository(deps.DB)
 	radiusRepo := repository.NewRadiusRepository(deps.DB)
+	syncRepo := repository.NewRouterSyncRepository(deps.DB)
 	financeRepo := repository.NewFinanceRepository(deps.DB)
 
 	// Services
@@ -143,6 +149,7 @@ func New(deps Dependencies) http.Handler {
 	waTemplateHandler := handler.NewWATemplateHandler(waTemplateService)
 	waLogHandler := handler.NewWALogHandler(waLogRepo)
 	dashboardHandler := handler.NewDashboardHandler(clientService, planService, featureResolver, limitResolver, routerRepo, voucherRepo)
+	affiliateHandler := handler.NewAffiliateHandler(affiliateService)
 	financeHandler := handler.NewFinanceHandler(financeService)
 	siteSettingService := service.NewSiteSettingService(siteSettingRepo)
 	siteSettingHandler := handler.NewSiteSettingHandler(siteSettingService)
@@ -253,13 +260,18 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/auth/register", method("POST", authHandler.Register))
 	mux.HandleFunc("/api/v1/auth/refresh", method("POST", authHandler.RefreshToken))
 	mux.HandleFunc("/api/v1/auth/logout", method("POST", authHandler.Logout))
+	mux.HandleFunc("/api/v1/auth/forgot-password", method("POST", authHandler.ForgotPassword))
+	mux.HandleFunc("/api/v1/auth/reset-password", method("POST", authHandler.ResetPassword))
 
 	// Tenant registration (public)
 	mux.HandleFunc("/api/v1/tenants/register", method("POST", tenantHandler.RegisterTenant))
 	mux.HandleFunc("/api/v1/tenants/verify-otp", method("POST", tenantHandler.VerifyOTP))
 	mux.HandleFunc("/api/v1/tenants/resend-otp", method("POST", tenantHandler.ResendOTP))
-	mux.Handle("/api/v1/tenants/pending-invoice", requireAuth(methodHandler("GET", tenantHandler.GetPendingInvoice)))
 	mux.Handle("/api/v1/tenants/update-plan", requireAuth(methodHandler("PATCH", tenantHandler.UpdateRegistrationPlan)))
+
+	// Affiliate registration (public)
+	mux.HandleFunc("/api/v1/affiliate/register", method("POST", affiliateHandler.Register))
+	mux.Handle("/api/v1/affiliate/settings", requireAuth(methodHandler("GET", affiliateHandler.GetSettings)))
 
 	// Validation routes (public - for checking email/phone availability)
 	validationHandler := handler.NewValidationHandler(userRepo, tenantRepo)
@@ -308,10 +320,93 @@ func New(deps Dependencies) http.Handler {
 
 	// Protected routes
 	mux.Handle("/api/v1/auth/me", requireAuth(methodHandler("GET", authHandler.Me)))
+	mux.Handle("/api/v1/affiliate/dashboard", requireAuth(methodHandler("GET", affiliateHandler.GetDashboard)))
+	mux.Handle("/api/v1/affiliate/withdrawals", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			affiliateHandler.GetWithdrawals(w, r)
+		case http.MethodPost:
+			affiliateHandler.CreateWithdrawal(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/affiliate/profile/metadata", requireAuth(methodHandler("PATCH", affiliateHandler.UpdateMetadata)))
 
 	// AI Settings
 	// Tenants can only GET (check if configured)
 	mux.Handle("/api/v1/ai/config", requireAuth(methodHandler("GET", aiHandler.GetConfig)))
+
+	// Super Admin - Affiliate Management
+	mux.Handle("/api/v1/superadmin/affiliates", requireSuperAdmin(methodHandler("GET", affiliateHandler.ListAll)))
+	mux.Handle("/api/v1/superadmin/affiliates/stats", requireSuperAdmin(methodHandler("GET", affiliateHandler.GetGlobalStats)))
+	mux.Handle("/api/v1/superadmin/affiliates/settings", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			affiliateHandler.GetSettings(w, r)
+		case http.MethodPatch:
+			affiliateHandler.UpdateSettings(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/superadmin/affiliates/campaigns", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			affiliateHandler.ListCampaigns(w, r)
+		case http.MethodPost:
+			affiliateHandler.CreateCampaign(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/superadmin/affiliates/campaigns/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/affiliates/campaigns/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		idStr := strings.TrimSuffix(path, "/")
+		r = setPathParam(r, "id", idStr)
+
+		switch r.Method {
+		case http.MethodGet:
+			affiliateHandler.GetCampaign(w, r)
+		case http.MethodPatch, http.MethodPut:
+			affiliateHandler.UpdateCampaign(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/superadmin/affiliates/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/affiliates/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if strings.HasSuffix(path, "/status") {
+			idStr := strings.TrimSuffix(path, "/status")
+			idStr = strings.TrimSuffix(idStr, "/")
+			r = setPathParam(r, "id", idStr)
+			if r.Method == http.MethodPatch {
+				affiliateHandler.UpdateStatus(w, r)
+				return
+			}
+		}
+
+		idStr := strings.TrimSuffix(path, "/")
+		r = setPathParam(r, "id", idStr)
+		if r.Method == http.MethodGet {
+			affiliateHandler.GetDetail(w, r)
+			return
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})))
 
 	// Super Admin can manage global AI
 	mux.Handle("/api/v1/superadmin/ai/config", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1415,6 +1510,27 @@ func New(deps Dependencies) http.Handler {
 		}
 	})))
 
+	mux.Handle("/api/v1/superadmin/routers/", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/superadmin/routers/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		parts := strings.Split(path, "/")
+		routerID := parts[0]
+		r = setPathParam(r, "router_id", routerID)
+
+		if len(parts) >= 2 && parts[1] == "decommission" {
+			if r.Method == http.MethodPost {
+				superAdminHandler.DecommissionRouter(w, r)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})))
+
 	// Super Admin Plans
 	mux.Handle("/api/v1/superadmin/plans", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -1520,7 +1636,17 @@ func New(deps Dependencies) http.Handler {
 	// Restore iptables rules on startup (safety net after container/VPS restart).
 	// Runs in background so it doesn't delay first HTTP response.
 	go networkService.SyncRemoteAccessRules(context.Background())
-	networkHandler := handler.NewNetworkHandler(networkService)
+	
+	encryptionSecret := deps.Config.Auth.JWTSecret
+	decommissionService := service.NewRouterDecommissionService(
+		routerRepo,
+		syncRepo,
+		pppoeRepo,
+		voucherRepo,
+		profileRepo,
+		encryptionSecret,
+	)
+	networkHandler := handler.NewNetworkHandler(networkService, decommissionService)
 
 	// RADIUS + Voucher (Hotspot) - initialized above for clientService
 	// RADIUS shared secret from env (for FreeRADIUS rlm_rest authentication)
@@ -1616,6 +1742,16 @@ func New(deps Dependencies) http.Handler {
 			case "logs":
 				if r.Method == http.MethodGet {
 					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetRouterLogs)).ServeHTTP(w, r)
+					return
+				}
+			case "decommission":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.DecommissionRouter)).ServeHTTP(w, r)
+					return
+				}
+			case "decommission-progress":
+				if r.Method == http.MethodGet {
+					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetDecommissionProgress)).ServeHTTP(w, r)
 					return
 				}
 			}
@@ -1814,6 +1950,8 @@ func New(deps Dependencies) http.Handler {
 		// Single ID route: /api/v1/vouchers/{id}
 		r = setPathParam(r, "id", path)
 		switch r.Method {
+		case http.MethodPut:
+			voucherHandler.UpdateVoucher(w, r)
 		case http.MethodDelete:
 			voucherHandler.DeleteVoucher(w, r)
 		default:

@@ -12,6 +12,7 @@ import (
 	"rrnet/internal/domain/addon"
 	"rrnet/internal/domain/tenant"
 	"rrnet/internal/infra/wa_gateway"
+	"rrnet/internal/domain/network"
 	"rrnet/internal/repository"
 	"rrnet/internal/service"
 )
@@ -28,14 +29,23 @@ type SuperAdminHandler struct {
 	networkService *service.NetworkService
 }
 
+type ResourceUsage struct {
+	ResourceName string `json:"resource_name"`
+	Usage        int    `json:"usage"`
+	Limit        int    `json:"limit"`
+}
+
 type TenantDetailResponse struct {
 	tenant.Tenant
-	OwnerName  string   `json:"owner_name"`
-	OwnerEmail string   `json:"owner_email"`
-	OwnerPhone string   `json:"owner_phone"`
-	PlanCode   *string  `json:"plan_code,omitempty"`
-	PlanName   *string  `json:"plan_name,omitempty"`
-	PlanPrice  *float64 `json:"plan_price,omitempty"`
+	OwnerName    string            `json:"owner_name"`
+	OwnerEmail   string            `json:"owner_email"`
+	OwnerPhone   string            `json:"owner_phone"`
+	PlanCode     *string           `json:"plan_code,omitempty"`
+	PlanName     *string           `json:"plan_name,omitempty"`
+	PlanPrice    *float64          `json:"plan_price,omitempty"`
+	UsageStats   []ResourceUsage   `json:"usage_stats"`
+	IsCompliant  bool              `json:"is_compliant"`
+	Routers      []*network.Router `json:"routers,omitempty"`
 }
 
 func NewSuperAdminHandler(
@@ -174,14 +184,55 @@ func (h *SuperAdminHandler) GetTenant(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch compliance and router usage
+	usageStats := []ResourceUsage{}
+	isCompliant := true
+	var routers []*network.Router
+
+	if h.networkService != nil {
+		// 1. Get Router Usage
+		routerCount, _ := h.networkService.CountRouters(r.Context(), t.ID)
+		
+		// 2. Get Limits (using networkService's internal limitResolver through a temp access if possible or just manual fetch)
+		// For simplicity in this handler, we fetch router limit from the plan we already have
+		routerLimit := 0
+		limitFound := false
+		if t.PlanID != nil {
+			plan, err := h.planRepo.GetByID(r.Context(), *t.PlanID)
+			if err == nil {
+				routerLimit = plan.GetLimit("max_routers")
+				limitFound = true
+			}
+		}
+
+		usageStats = append(usageStats, ResourceUsage{
+			ResourceName: "Routers",
+			Usage:        routerCount,
+			Limit:        routerLimit,
+		})
+
+		if limitFound && routerCount > routerLimit {
+			isCompliant = false
+		}
+
+		// 3. Fetch list of routers to allow superadmin to decommission
+		tenantRouters, err := h.networkService.ListRouters(r.Context(), t.ID)
+		if err == nil {
+			routers = tenantRouters
+		}
+	}
+
 	resp := TenantDetailResponse{
-		Tenant:     *t,
-		OwnerName:  ownerName,
-		OwnerEmail: ownerEmail,
-		OwnerPhone: ownerPhone,
-		PlanCode:   planCode,
-		PlanName:   planName,
-		PlanPrice:  planPrice,
+		Tenant:      *t,
+		OwnerName:   ownerName,
+		OwnerEmail:  ownerEmail,
+		OwnerPhone:  ownerPhone,
+		PlanCode:    planCode,
+		PlanName:    planName,
+		PlanPrice:   planPrice,
+		UsageStats:  usageStats,
+		IsCompliant: isCompliant,
+		Routers:     routers,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -362,11 +413,12 @@ type CreatePlanRequest struct {
 	PriceMonthly float64        `json:"price_monthly"`
 	PriceYearly  *float64       `json:"price_yearly,omitempty"`
 	Currency     string         `json:"currency,omitempty"`
-	Limits       map[string]int `json:"limits"`
-	Features     []string       `json:"features"`
-	IsActive     bool           `json:"is_active"`
-	IsPublic     bool           `json:"is_public"`
-	SortOrder    int            `json:"sort_order"`
+	Limits         map[string]int `json:"limits"`
+	Features       []string       `json:"features"`
+	HiddenFeatures []string       `json:"hidden_features"`
+	IsActive       bool           `json:"is_active"`
+	IsPublic       bool           `json:"is_public"`
+	SortOrder      int            `json:"sort_order"`
 }
 
 func (h *SuperAdminHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
@@ -389,8 +441,9 @@ func (h *SuperAdminHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 		PriceYearly:  req.PriceYearly,
 		Currency:     req.Currency,
 		Limits:       req.Limits,
-		Features:     req.Features,
-		IsActive:     req.IsActive,
+		Features:       req.Features,
+		HiddenFeatures: req.HiddenFeatures,
+		IsActive:       req.IsActive,
 		IsPublic:     req.IsPublic,
 		SortOrder:    req.SortOrder,
 	})
@@ -410,11 +463,12 @@ type UpdatePlanRequest struct {
 	PriceMonthly float64        `json:"price_monthly"`
 	PriceYearly  *float64       `json:"price_yearly,omitempty"`
 	Currency     string         `json:"currency,omitempty"`
-	Limits       map[string]int `json:"limits"`
-	Features     []string       `json:"features"`
-	IsActive     bool           `json:"is_active"`
-	IsPublic     bool           `json:"is_public"`
-	SortOrder    int            `json:"sort_order"`
+	Limits         map[string]int `json:"limits"`
+	Features       []string       `json:"features"`
+	HiddenFeatures []string       `json:"hidden_features"`
+	IsActive       bool           `json:"is_active"`
+	IsPublic       bool           `json:"is_public"`
+	SortOrder      int            `json:"sort_order"`
 }
 
 func (h *SuperAdminHandler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
@@ -438,8 +492,9 @@ func (h *SuperAdminHandler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
 		PriceYearly:  req.PriceYearly,
 		Currency:     req.Currency,
 		Limits:       req.Limits,
-		Features:     req.Features,
-		IsActive:     req.IsActive,
+		Features:       req.Features,
+		HiddenFeatures: req.HiddenFeatures,
+		IsActive:       req.IsActive,
 		IsPublic:     req.IsPublic,
 		SortOrder:    req.SortOrder,
 	})
@@ -731,4 +786,21 @@ func (h *SuperAdminHandler) GetNetworkStats(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
+}
+
+func (h *SuperAdminHandler) DecommissionRouter(w http.ResponseWriter, r *http.Request) {
+	routerIDStr := getPathParam(r, "router_id")
+	routerID, err := uuid.Parse(routerIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// For Super Admin, we force decommission (soft delete & cleanup)
+	if err := h.networkService.DeleteRouter(r.Context(), routerID); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -24,8 +24,9 @@ const (
 	RouterStatusOnline       RouterStatus = "online"
 	RouterStatusOffline      RouterStatus = "offline"
 	RouterStatusMaintenance  RouterStatus = "maintenance"
-	RouterStatusProvisioning RouterStatus = "provisioning"
-	RouterStatusRevoked      RouterStatus = "revoked"
+	RouterStatusProvisioning   RouterStatus = "provisioning"
+	RouterStatusDecommissioning RouterStatus = "decommissioning"
+	RouterStatusRevoked        RouterStatus = "revoked"
 )
 
 // RouterConnectivityMode defines how ERP reaches router management API
@@ -91,7 +92,38 @@ type NetworkProfile struct {
 	DNSServers    *string    `json:"dns_servers,omitempty"`
 	IsActive      bool       `json:"is_active"`
 	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+// RouterDecommissionTask represents a synchronization task during router removal
+type RouterDecommissionTaskStatus string
+
+const (
+	DecommissionTaskPending    RouterDecommissionTaskStatus = "pending"
+	DecommissionTaskProcessing RouterDecommissionTaskStatus = "processing"
+	DecommissionTaskCompleted  RouterDecommissionTaskStatus = "completed"
+	DecommissionTaskFailed     RouterDecommissionTaskStatus = "failed"
+)
+
+type RouterDecommissionTaskType string
+
+const (
+	DecommissionTaskVoucher      RouterDecommissionTaskType = "voucher"     // Hotspot/Radius
+	DecommissionTaskPPPoE        RouterDecommissionTaskType = "pppoe"       // PPPoE Secret
+	DecommissionTaskActiveSession RouterDecommissionTaskType = "active_session" // Kick active users
+)
+
+type RouterDecommissionTask struct {
+	ID             uuid.UUID                    `json:"id"`
+	RouterID       uuid.UUID                    `json:"router_id"`
+	TargetRouterID *uuid.UUID                   `json:"target_router_id,omitempty"` // NULL if deleting global-bound
+	TaskType       RouterDecommissionTaskType   `json:"task_type"`
+	ReferenceID    uuid.UUID                    `json:"reference_id"` // ID of Voucher or PPPoESecret
+	Status         RouterDecommissionTaskStatus `json:"status"`
+	ErrorMessage   string                       `json:"error_message,omitempty"`
+	Attempt        int                          `json:"attempt"`
+	CreatedAt      time.Time                    `json:"created_at"`
+	UpdatedAt      time.Time                    `json:"updated_at"`
 }
 
 // PPPoESecret represents a PPPoE user account

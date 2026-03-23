@@ -12,11 +12,18 @@ import (
 )
 
 type NetworkHandler struct {
-	networkService *service.NetworkService
+	networkService     *service.NetworkService
+	decommissionService *service.RouterDecommissionService
 }
 
-func NewNetworkHandler(networkService *service.NetworkService) *NetworkHandler {
-	return &NetworkHandler{networkService: networkService}
+func NewNetworkHandler(
+	networkService *service.NetworkService,
+	decommissionService *service.RouterDecommissionService,
+) *NetworkHandler {
+	return &NetworkHandler{
+		networkService:     networkService,
+		decommissionService: decommissionService,
+	}
 }
 
 // ========== Router Handlers ==========
@@ -729,5 +736,58 @@ func (h *NetworkHandler) GetRouterLogs(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"data":  logs,
 		"total": len(logs),
+	})
+}
+
+func (h *NetworkHandler) DecommissionRouter(w http.ResponseWriter, r *http.Request) {
+	tenantID, _ := auth.GetTenantID(r.Context())
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		TargetRouterID *uuid.UUID `json:"target_router_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Simple authorization: check if router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil || router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	err = h.decommissionService.StartDecommission(r.Context(), id, req.TargetRouterID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Decommissioning started"})
+}
+
+func (h *NetworkHandler) GetDecommissionProgress(w http.ResponseWriter, r *http.Request) {
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	comp, total, err := h.decommissionService.GetProgress(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"completed": comp,
+		"total":     total,
+		"progress":  float64(comp) / float64(total) * 100,
 	})
 }

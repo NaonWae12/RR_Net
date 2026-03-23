@@ -196,5 +196,10 @@ export const superAdminService = {
     const response = await apiClient.get("/superadmin/network/stats");
     return response.data;
   },
+
+  // ========== Router Actions ==========
+  async decommissionRouter(routerId: string): Promise<void> {
+    await apiClient.post(`/superadmin/routers/${routerId}/decommission`, {});
+  },
 };
 

@@ -41,7 +41,7 @@ func (r *NetworkProfileRepository) Create(ctx context.Context, profile *network.
 func (r *NetworkProfileRepository) GetByID(ctx context.Context, id uuid.UUID) (*network.NetworkProfile, error) {
 	query := `
 		SELECT id, tenant_id, name, description, download_speed, upload_speed,
-			burst_download, burst_upload, priority, shared_users,
+			COALESCE(burst_download, 0), COALESCE(burst_upload, 0), priority, COALESCE(shared_users, 1),
 			address_pool, local_address, remote_address, dns_servers,
 			is_active, router_id, created_at, updated_at
 		FROM network_profiles
@@ -64,7 +64,7 @@ func (r *NetworkProfileRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 func (r *NetworkProfileRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID, activeOnly bool) ([]*network.NetworkProfile, error) {
 	query := `
 		SELECT id, tenant_id, name, description, download_speed, upload_speed,
-			burst_download, burst_upload, priority, shared_users,
+			COALESCE(burst_download, 0), COALESCE(burst_upload, 0), priority, COALESCE(shared_users, 1),
 			address_pool, local_address, remote_address, dns_servers,
 			is_active, router_id, created_at, updated_at
 		FROM network_profiles

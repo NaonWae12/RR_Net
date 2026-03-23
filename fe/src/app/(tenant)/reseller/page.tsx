@@ -28,8 +28,9 @@ import {
   XCircle,
   MoreHorizontal,
   Printer,
-  Clock
+  Clock 
 } from 'lucide-react';
+import { LimitWarningBanner } from '@/components/dashboard/LimitWarningBanner';
 
 import resellerService from '@/lib/api/resellerService';
 import clientService from '@/lib/api/clientService';
@@ -1502,6 +1503,8 @@ export default function ResellerPage() {
           )}
         </div>
       </div>
+
+      <LimitWarningBanner resource="vouchers" />
 
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1.5 rounded-2xl w-fit">

@@ -23,7 +23,10 @@ import {
   Fingerprint,
   CheckCircle,
   XCircle,
-  RefreshCcw
+  RefreshCcw,
+  AlertTriangle,
+  Server,
+  AlertCircle
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { format } from "date-fns";
@@ -33,11 +36,15 @@ import { cn } from "@/lib/utils";
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { tenant, loading, error, fetchTenant, clearTenant, approveTenant, rejectTenant, unsuspendTenant } = useSuperAdminStore();
+  const { 
+    tenant, loading, error, fetchTenant, clearTenant, 
+    approveTenant, rejectTenant, unsuspendTenant, decommissionRouter 
+  } = useSuperAdminStore();
   const { showToast } = useNotificationStore();
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [unsuspending, setUnsuspending] = useState(false);
+  const [decommissioningId, setDecommissioningId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -94,6 +101,21 @@ export default function TenantDetailPage() {
       showToast(err.message || 'Failed to unsuspend tenant', 'error');
     } finally {
       setUnsuspending(false);
+    }
+  };
+
+  const handleDecommission = async (routerId: string) => {
+    if (!confirm("Are you sure you want to FORCE decommission this router? This will remove all configurations from VPS and MikroTik.")) return;
+    
+    setDecommissioningId(routerId);
+    try {
+      await decommissionRouter(routerId);
+      showToast('Router decommissioning initiated', 'success');
+      fetchTenant(id);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to decommission router', 'error');
+    } finally {
+      setDecommissioningId(null);
     }
   };
 
@@ -311,6 +333,31 @@ export default function TenantDetailPage() {
         </div>
       </motion.div>
 
+      {/* Compliance Alert - Only shown if NOT compliant */}
+      {tenant && tenant.is_compliant === false && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-amber-50 border-2 border-amber-500/20 rounded-[2rem] p-6 flex flex-col md:flex-row items-center gap-6 shadow-xl shadow-amber-900/5"
+        >
+          <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-amber-200">
+             <AlertTriangle className="w-8 h-8" />
+          </div>
+          <div className="flex-1 text-center md:text-left space-y-1">
+             <h3 className="text-xl font-black text-amber-900">Compliance Warning: Limit Exceeded</h3>
+             <p className="text-amber-700 font-medium">Ini terjadi karena tenant melakukan downgrade plan namun resource lama masih aktif. Segera sesuaikan jumlah router agar sesuai dengan limit plan baru.</p>
+          </div>
+          <div className="flex items-center gap-4 bg-white/50 p-4 rounded-2xl border border-amber-200">
+             {tenant.usage_stats?.map(stat => (
+                <div key={stat.resource_name} className="text-center px-4 border-r last:border-0 border-amber-200">
+                   <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{stat.resource_name}</p>
+                   <p className="text-lg font-black text-amber-900">{stat.usage} / {stat.limit}</p>
+                </div>
+             ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
          <div className="lg:col-span-2 space-y-8">
@@ -347,6 +394,81 @@ export default function TenantDetailPage() {
                   </div>
                </motion.div>
             ))}
+
+            {/* Router Compliance Management Section - Only shown if NOT compliant */}
+            {tenant && tenant.is_compliant === false && (
+               <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-6"
+               >
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-black text-slate-400 tracking-[0.2em]">
+                     <Server className="w-4 h-4" />
+                     ROUTER COMPLIANCE MANAGEMENT
+                  </div>
+                  {tenant.routers && (
+                    <div className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500">
+                      Total: {tenant.routers.length} Active Routers
+                    </div>
+                  )}
+               </div>
+
+               <div className="grid grid-cols-1 gap-4">
+                  {tenant.routers && tenant.routers.length > 0 ? (
+                    tenant.routers.map((router, idx) => (
+                      <div key={router.id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row items-center justify-between gap-6 group">
+                         <div className="flex items-center gap-6">
+                            <div className={cn(
+                              "w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner transition-colors",
+                              router.status === "online" ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"
+                            )}>
+                               <Server className="w-6 h-6" />
+                            </div>
+                            <div>
+                               <div className="flex items-center gap-2">
+                                  <h4 className="font-black text-slate-900 uppercase tracking-tight">{router.name}</h4>
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest",
+                                    router.status === "online" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"
+                                  )}>
+                                    {router.status}
+                                  </span>
+                               </div>
+                               <p className="text-xs font-mono text-slate-400">{router.host}:{router.port} • ID: {router.id.substring(0,8)}</p>
+                            </div>
+                         </div>
+
+                         <div className="flex items-center gap-3">
+                            <div className="text-right hidden md:block">
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">VPN Tunnel</p>
+                               <p className="text-sm font-black text-purple-600">{router.vpn_username || "Direct"}</p>
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="rounded-xl h-10 px-4 font-bold bg-white border-2 border-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                              disabled={decommissioningId === router.id}
+                              onClick={() => handleDecommission(router.id)}
+                            >
+                              {decommissioningId === router.id ? (
+                                <RefreshCcw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                "Force Stop"
+                              )}
+                            </Button>
+                         </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] p-12 text-center space-y-2">
+                       <Server className="w-8 h-8 text-slate-300 mx-auto opacity-20" />
+                       <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No active routers detected</p>
+                    </div>
+                  )}
+               </div>
+            </motion.div>
+            )}
          </div>
 
          {/* Sidebar Stats/Info */}

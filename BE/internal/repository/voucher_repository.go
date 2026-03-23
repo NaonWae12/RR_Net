@@ -277,13 +277,13 @@ func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*
 func (r *VoucherRepository) UpdateVoucher(ctx context.Context, v *voucher.Voucher) error {
 	query := `
 		UPDATE vouchers SET
-			package_id = $2, code = $3, password = $4, shared_users = $5,
-			status = $6, used_at = $7, expires_at = $8, first_session_id = $9,
-			notes = $10, updated_at = $11
+			package_id = $2, router_id = $3, code = $4, password = $5, shared_users = $6,
+			status = $7, used_at = $8, expires_at = $9, first_session_id = $10,
+			notes = $11, updated_at = $12
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
-		v.ID, v.PackageID, v.Code, v.Password, v.SharedUsers,
+		v.ID, v.PackageID, v.RouterID, v.Code, v.Password, v.SharedUsers,
 		v.Status, v.UsedAt, v.ExpiresAt, v.FirstSessionID,
 		v.Notes, time.Now(),
 	)
@@ -291,7 +291,7 @@ func (r *VoucherRepository) UpdateVoucher(ctx context.Context, v *voucher.Vouche
 }
 
 func (r *VoucherRepository) CountVouchersByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
-	query := `SELECT COUNT(*) FROM vouchers WHERE tenant_id = $1`
+	query := `SELECT COUNT(*) FROM vouchers WHERE tenant_id = $1 AND status NOT IN ('expired', 'revoked') AND (expires_at IS NULL OR expires_at > NOW())`
 	var count int
 	err := r.db.QueryRow(ctx, query, tenantID).Scan(&count)
 	return count, err
@@ -415,6 +415,34 @@ func (r *VoucherRepository) ListVouchersByPurchase(ctx context.Context, purchase
 			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
 			&v.PackageName, &v.PackagePrice, &v.RouterName,
+		)
+		if err != nil {
+			return nil, err
+		}
+		vouchers = append(vouchers, &v)
+	}
+	return vouchers, nil
+}
+
+func (r *VoucherRepository) ListByRouter(ctx context.Context, routerID uuid.UUID) ([]*voucher.Voucher, error) {
+	query := `
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at
+		FROM vouchers v
+		WHERE v.router_id = $1
+	`
+	rows, err := r.db.Query(ctx, query, routerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vouchers []*voucher.Voucher
+	for rows.Next() {
+		var v voucher.Voucher
+		err := rows.Scan(
+			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
+			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err

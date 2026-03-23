@@ -17,7 +17,7 @@ export const MarketingFooter = () => {
     {
       title: "Solution",
       links: [
-        { label: "For Small ISP", href: "#" },
+        { label: "For Small RT/RW NET", href: "#" },
         { label: "Enterprise", href: "#" },
         { label: "Hotspot Management", href: "#" },
         { label: "Financial Reporting", href: "#" },
@@ -55,7 +55,7 @@ export const MarketingFooter = () => {
               <span className="text-xl font-bold tracking-tight">RRNET</span>
             </Link>
             <p className="text-muted-foreground text-sm leading-relaxed mb-6 max-w-xs">
-              The next-generation ERP platform designed specifically for ISP and 
+              The next-generation ERP platform designed specifically for RT/RW NET and 
               Network Providers. Empowering growth through intelligent automation.
             </p>
             <div className="flex gap-4">
