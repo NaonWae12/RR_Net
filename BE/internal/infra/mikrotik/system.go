@@ -10,11 +10,11 @@ import (
 
 // UninstallSystemConfig removes all RR-NET specific configurations from the router
 func UninstallSystemConfig(ctx context.Context, addr string, useTLS bool, username, password string) error {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// 1. Remove RADIUS Config
 	cleanupResourceWithComment(client, "/radius", "RR-NET")
@@ -70,11 +70,11 @@ func cleanupResourceWithComment(client *routeros.Client, path, pattern string) {
 }
 // GetLogs fetches the most recent system logs from the MikroTik router
 func GetLogs(ctx context.Context, addr string, useTLS bool, username, password string) ([]map[string]string, error) {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return nil, (err)
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Get last 50 logs for diagnostics
 	// We sort by .id descending to get newest first if possible, 
@@ -106,4 +106,34 @@ func GetLogs(ctx context.Context, addr string, useTLS bool, username, password s
 	}
 
 	return logs, nil
+}
+
+// AddMikrotikUser creates a new user on the MikroTik router (or updates if it exists)
+func AddMikrotikUser(ctx context.Context, addr string, useTLS bool, reqUsername, reqPassword, newUsername, newPassword, group string) error {
+	client, err := GetClient(addr, useTLS, reqUsername, reqPassword)
+	if err != nil {
+		return err
+	}
+	defer ReleaseClient(client)
+
+	// Check if user exists
+	repl, err := client.Run("/user/print", "?name="+newUsername)
+	if err == nil && len(repl.Re) > 0 {
+		// Change password and group if exists
+		if id, ok := repl.Re[0].Map[".id"]; ok {
+			_, err = client.Run("/user/set", "=.id="+id, "=password="+newPassword, "=group="+group)
+			if err != nil {
+				return fmt.Errorf("failed to update existing user: %w", err)
+			}
+			return nil
+		}
+	}
+
+	// Create new user
+	_, err = client.Run("/user/add", "=name="+newUsername, "=password="+newPassword, "=group="+group)
+	if err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+
+	return nil
 }

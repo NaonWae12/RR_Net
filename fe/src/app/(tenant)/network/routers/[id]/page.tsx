@@ -72,6 +72,12 @@ export default function RouterDetailPage() {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Remote User Setup State
+  const [remoteUsername, setRemoteUsername] = useState("");
+  const [remotePassword, setRemotePassword] = useState("");
+  const [isSettingUpRemoteUser, setIsSettingUpRemoteUser] = useState(false);
+  const [showRemoteUserDialog, setShowRemoteUserDialog] = useState(false);
 
   // 1. Fetch Basic Router Data
   useEffect(() => {
@@ -314,10 +320,14 @@ export default function RouterDetailPage() {
         </Card>
 
         {/* Card: Connectivity */}
-        <Card className="border-indigo-100 bg-gradient-to-br from-white to-indigo-50/30 shadow-sm">
+        <Card className="border-indigo-100 bg-gradient-to-br from-white to-indigo-50/30 shadow-sm relative group overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-indigo-500/10 transition-colors"></div>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-semibold text-indigo-900 uppercase tracking-wider">Connectivity</CardTitle>
-            <Network className="h-4 w-4 text-indigo-500" />
+            <CardTitle className="text-sm font-semibold text-indigo-900 uppercase tracking-wider flex items-center gap-2">
+              <Activity className="w-4 h-4 text-indigo-500" />
+              Connectivity
+            </CardTitle>
+            <Network className="h-4 w-4 text-indigo-400 opacity-50" />
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
             <div className="flex items-center gap-2 mb-2">
@@ -329,14 +339,14 @@ export default function RouterDetailPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">Internal Host</p>
-                <p className="font-mono text-xs font-bold text-slate-700 bg-white border border-slate-100 px-2 py-1 rounded select-all">
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">Tunnel Destination</p>
+                <p className="font-mono text-[11px] font-bold text-slate-700 bg-white/80 border border-slate-100 px-2 py-1.5 rounded-lg select-all shadow-sm">
                   {routerData.host}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">Winbox Port</p>
-                <p className="font-mono text-xs font-bold text-slate-700 bg-white border border-slate-100 px-2 py-1 rounded">
+                <p className="font-mono text-[11px] font-bold text-slate-700 bg-white/80 border border-slate-100 px-2 py-1.5 rounded-lg shadow-sm">
                   {routerData.port}
                 </p>
               </div>
@@ -344,21 +354,56 @@ export default function RouterDetailPage() {
 
             {/* Remote Access Highlight */}
             {routerData.remote_access_enabled && routerData.remote_access_port ? (
-              <div className="mt-4 p-3 bg-white rounded-xl border border-indigo-200 shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-12 h-12 bg-indigo-50 rounded-bl-full -mr-6 -mt-6 transition-transform group-hover:scale-125"></div>
-                <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mb-1 flex items-center gap-2">
-                  <Globe className="w-3 h-3" /> External Address
-                </p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-lg font-black text-indigo-700 font-mono tracking-tight select-all">
-                    {currentHost}:{routerData.remote_access_port}
+              <div className="mt-4">
+                <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm relative overflow-hidden">
+                  <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <Globe className="w-3 h-3" /> FQDN Remote Access
+                  </p>
+                  <p className="text-md font-black text-indigo-700 font-mono tracking-tight select-all">
+                    vpn.billrrnet.tech:{routerData.remote_access_port}
                   </p>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1 font-medium">Connect via Winbox over public internet.</p>
+
+                {/* Remote User Setup Alert/Button */}
+                <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200 border-dashed animate-in fade-in slide-in-from-top-2 duration-500 delay-300">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 p-1 bg-amber-100 rounded-lg text-amber-600">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-black text-amber-900 uppercase tracking-tight leading-none pt-1">Recommended Action</p>
+                      <p className="text-[10px] text-amber-700 font-medium leading-normal">
+                        Create a dedicated <b>Remoting User</b> to avoid session collisions with ERP polling.
+                      </p>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-7 px-0 text-[10px] font-black text-indigo-600 hover:bg-transparent hover:text-indigo-800 flex items-center gap-1 group"
+                        onClick={() => {
+                          setRemoteUsername(`admin_${routerData.name.toLowerCase().replace(/\s+/g, '_')}`);
+                          setRemotePassword(Math.random().toString(36).slice(-10));
+                          setShowRemoteUserDialog(true);
+                        }}
+                      >
+                        <RefreshCw className="w-3 h-3 transition-transform group-hover:rotate-180 duration-500" />
+                        One-Click Winbox Setup
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="mt-4 p-3 bg-slate-50/50 rounded-lg border border-slate-200 border-dashed">
-                <p className="text-[10px] text-slate-400 font-bold uppercase text-center py-1">Remote access disabled</p>
+              <div className="mt-4 p-4 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-2">
+                <Globe className="h-5 w-5 text-slate-300" />
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">External Access Disabled</p>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  className="h-6 text-[9px] font-black uppercase text-indigo-600"
+                  onClick={() => networkService.toggleRemoteAccess(routerData.id, true).then(() => fetchRouter(id))}
+                >
+                  Enable Now
+                </Button>
               </div>
             )}
           </CardContent>
@@ -868,6 +913,111 @@ export default function RouterDetailPage() {
                 disabled={isDeleting}
               >
                 Cancel & Return
+              </Button>
+            </DialogClose>
+          </div>
+        </div>
+      </DialogContent>
+    {/* Remote User Setup Modal */}
+    <Dialog open={showRemoteUserDialog} onOpenChange={setShowRemoteUserDialog}>
+      <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden border-none shadow-[0_32px_64px_-16px_rgba(0,0,0,0.35)] rounded-[24px]">
+        <div className="bg-gradient-to-b from-indigo-600 to-indigo-800 p-8 flex flex-col items-center text-center text-white space-y-4 relative">
+          <div className="absolute top-0 inset-x-0 h-px bg-white/20"></div>
+          <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
+            <Shield className="h-8 w-8 text-white" />
+          </div>
+          <div className="space-y-1">
+            <DialogTitle className="text-xl font-black uppercase tracking-tight text-white italic">Winbox Remote Setup</DialogTitle>
+            <DialogDescription className="text-[10px] font-bold text-indigo-100/70 uppercase tracking-widest leading-relaxed">
+              Create a dedicated admin user on your MikroTik<br/>specifically for secure remote management.
+            </DialogDescription>
+          </div>
+        </div>
+
+        <div className="p-8 space-y-6 bg-white">
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Winbox Username</Label>
+              <Input 
+                value={remoteUsername} 
+                onChange={(e) => setRemoteUsername(e.target.value)}
+                className="h-10 text-xs font-bold border-slate-200 focus:border-indigo-500 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5 relative">
+              <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Access Password</Label>
+              <div className="relative">
+                <Input 
+                  type={showSecret ? "text" : "password"}
+                  value={remotePassword} 
+                  onChange={(e) => setRemotePassword(e.target.value)}
+                  className="h-10 text-xs font-mono font-bold border-slate-200 focus:border-indigo-500 rounded-xl pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecret(!showSecret)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100/50">
+            <div className="flex items-center gap-2 mb-2">
+               <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+               <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">Setup Configuration</p>
+            </div>
+            <p className="text-[10px] text-indigo-700 font-medium leading-normal italic">
+              This will add a new user to the <code>full</code> group on your MikroTik router via API. 
+              Use these credentials only in your Winbox application.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 pt-2">
+            <Button 
+              className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-100 rounded-xl transition-all active:scale-[0.98]"
+              disabled={isSettingUpRemoteUser || !remoteUsername || !remotePassword}
+              onClick={async () => {
+                if (!routerData) return;
+                setIsSettingUpRemoteUser(true);
+                try {
+                  await useNetworkStore.getState().setupRemoteUser(routerData.id, {
+                    username: remoteUsername,
+                    password: remotePassword
+                  });
+                  showToast({
+                    title: "Provisioning Success",
+                    description: `Admin user "${remoteUsername}" has been created on your MikroTik.`,
+                    variant: "success"
+                  });
+                  setShowRemoteUserDialog(false);
+                } catch (err: any) {
+                  showToast({
+                    title: "Setup Failed",
+                    description: err?.message || "Verify your API connection and try again.",
+                    variant: "error"
+                  });
+                } finally {
+                  setIsSettingUpRemoteUser(false);
+                }
+              }}
+            >
+              {isSettingUpRemoteUser ? (
+                <div className="flex items-center gap-2 italic">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  Generating Identity...
+                </div>
+              ) : "Create Admin Identity"}
+            </Button>
+            <DialogClose asChild>
+              <Button 
+                variant="ghost" 
+                className="w-full h-10 text-slate-400 hover:text-slate-900 font-black uppercase text-[10px] tracking-widest"
+                disabled={isSettingUpRemoteUser}
+              >
+                Cancel
               </Button>
             </DialogClose>
           </div>

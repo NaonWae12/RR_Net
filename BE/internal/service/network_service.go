@@ -1915,3 +1915,26 @@ func (s *NetworkService) GetRouterLogs(ctx context.Context, id uuid.UUID) ([]map
 
 	return logs, nil
 }
+
+// SetupRemoteUser creates a new remote user on the MikroTik router specifically for the admin's Winbox usage
+func (s *NetworkService) SetupRemoteUser(ctx context.Context, id uuid.UUID, username, password string) error {
+	router, err := s.routerRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if router.Host == "" {
+		return fmt.Errorf("router has no host configured")
+	}
+
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+	
+	// Create user with "full" group so the admin can manage the router via Winbox
+	err = mikrotik.AddMikrotikUser(ctx, addr, router.APIUseTLS, router.Username, router.Password, username, password, "full")
+	if err != nil {
+		return fmt.Errorf("failed to create user on mikrotik: %w", err)
+	}
+
+	return nil
+}
+

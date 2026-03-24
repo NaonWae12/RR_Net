@@ -86,6 +86,10 @@ export const networkService = {
     return response.data;
   },
 
+  async setupRemoteUser(id: string, data: any): Promise<void> {
+    await apiClient.post(`/network/routers/${id}/setup-remote-user`, data);
+  },
+
   // ========== Network Profiles ==========
   async getNetworkProfiles(): Promise<NetworkProfile[]> {
     const response = await apiClient.get<NetworkProfileListResponse>("/network/profiles");

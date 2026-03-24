@@ -20,7 +20,7 @@ func AddHotspotUser(ctx context.Context, addr string, useTLS bool, routerUsernam
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ip/hotspot/user/add"
 	args := []string{
@@ -55,7 +55,7 @@ func FindHotspotUser(ctx context.Context, addr string, useTLS bool, routerUserna
 	if err != nil {
 		return false, err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ip/hotspot/user/print"
 	args := []string{
@@ -77,7 +77,7 @@ func RemoveHotspotUser(ctx context.Context, addr string, useTLS bool, routerUser
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// First, find the user by name
 	cmd := "/ip/hotspot/user/print"

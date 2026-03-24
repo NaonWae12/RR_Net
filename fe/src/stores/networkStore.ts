@@ -29,6 +29,7 @@ interface NetworkActions {
   testRouterConnection: (id: string) => Promise<{ ok: boolean; identity?: string; latency_ms?: number; error?: string }>;
   disconnectRouter: (id: string) => Promise<void>;
   toggleRemoteAccess: (id: string, enabled: boolean) => Promise<Router>;
+  setupRemoteUser: (id: string, data: any) => Promise<void>;
   
   // Profile actions
   fetchProfiles: () => Promise<void>;
@@ -177,6 +178,17 @@ export const useNetworkStore = create<NetworkState & NetworkActions>((set, get) 
         loading: false,
       }));
       return updatedRouter;
+    } catch (err) {
+      set({ error: toApiError(err).message, loading: false });
+      throw err;
+    }
+  },
+
+  setupRemoteUser: async (id: string, data: any) => {
+    set({ loading: true, error: null });
+    try {
+      await networkService.setupRemoteUser(id, data);
+      set({ loading: false });
     } catch (err) {
       set({ error: toApiError(err).message, loading: false });
       throw err;

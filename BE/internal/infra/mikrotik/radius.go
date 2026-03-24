@@ -7,11 +7,11 @@ import (
 
 // SetupRadius configures the router to use ERP-NET RADIUS server
 func SetupRadius(ctx context.Context, addr string, useTLS bool, username, password string, radiusServerIP string, secret string, nasIdentifier string) error {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// 1. Check if RADIUS already exists
 	repl, err := client.Run("/radius/print", "?comment=RR-NET")

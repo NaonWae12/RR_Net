@@ -2,7 +2,6 @@ package mikrotik
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"strings"
@@ -27,11 +26,11 @@ func DefaultIsolirConfig() *IsolirConfig {
 
 // AddToIsolatedList adds a user IP to the isolated address-list
 func AddToIsolatedList(ctx context.Context, addr string, useTLS bool, username, password, userIP, comment string) error {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Add IP to address-list "isolated"
 	// /ip/firewall/address-list/add list=isolated address=192.168.1.100 comment="voucher:abc123"
@@ -50,11 +49,11 @@ func AddToIsolatedList(ctx context.Context, addr string, useTLS bool, username, 
 
 // RemoveFromIsolatedList removes a user from the isolated address-list by comment
 func RemoveFromIsolatedList(ctx context.Context, addr string, useTLS bool, username, password, comment string) error {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Find the address-list entry by comment (voucher:CODE)
 	reply, err := client.Run(
@@ -84,11 +83,11 @@ func RemoveFromIsolatedList(ctx context.Context, addr string, useTLS bool, usern
 
 // DisconnectHotspotUser disconnects an active Hotspot user by username
 func DisconnectHotspotUser(ctx context.Context, addr string, useTLS bool, username, password, hotspotUsername string) error {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Find active Hotspot session by username
 	reply, err := client.Run(
@@ -125,11 +124,11 @@ func DisconnectHotspotUser(ctx context.Context, addr string, useTLS bool, userna
 // InstallIsolirFirewall installs the complete isolir firewall setup (idempotent)
 // Includes: NAT redirect for HTTP, Filter reject for HTTPS and other traffic, and Walled Garden for the portal
 func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password, hotspotIP, serverHost string) error {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Remove old rules first (idempotent - safe to call multiple times)
 	_ = removeIsolirRules(client)
@@ -220,11 +219,11 @@ func InstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, userna
 
 // UninstallIsolirFirewall removes all isolir firewall rules
 func UninstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password string) error {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	return removeIsolirRules(client)
 }
@@ -284,11 +283,11 @@ type IsolirFirewallStatus struct {
 
 // CheckIsolirFirewall checks if the isolir firewall rules are installed and returns details
 func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username, password string) (*IsolirFirewallStatus, error) {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	status := &IsolirFirewallStatus{}
 
@@ -340,11 +339,11 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 
 // GetHotspotUserIP gets the IP address of an active Hotspot user
 func GetHotspotUserIP(ctx context.Context, addr string, useTLS bool, username, password, hotspotUsername string) (string, error) {
-	client, err := dialMikroTik(addr, useTLS, username, password)
+	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
 		return "", err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Find active Hotspot session by username
 	reply, err := client.Run(
@@ -363,13 +362,4 @@ func GetHotspotUserIP(ctx context.Context, addr string, useTLS bool, username, p
 	}
 
 	return "", fmt.Errorf("user not found or not active")
-}
-
-// dialMikroTik is a helper function to dial MikroTik API
-func dialMikroTik(addr string, useTLS bool, username, password string) (*routeros.Client, error) {
-	if useTLS {
-		tlsCfg := &tls.Config{InsecureSkipVerify: true} //nolint:gosec
-		return routeros.DialTLS(addr, username, password, tlsCfg)
-	}
-	return routeros.Dial(addr, username, password)
 }

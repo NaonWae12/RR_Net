@@ -1723,6 +1723,11 @@ func New(deps Dependencies) http.Handler {
 					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.ToggleRemoteAccess)).ServeHTTP(w, r)
 					return
 				}
+			case "setup-remote-user":
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.SetupRemoteUser)).ServeHTTP(w, r)
+					return
+				}
 
 			case "isolir-install":
 				if r.Method == http.MethodPost {

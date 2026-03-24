@@ -61,7 +61,7 @@ func AddHotspotUserProfile(ctx context.Context, addr string, useTLS bool, router
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ip/hotspot/user/profile/add"
 	args := []string{
@@ -98,7 +98,7 @@ func UpdateHotspotUserProfile(ctx context.Context, addr string, useTLS bool, rou
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ip/hotspot/user/profile/set"
 	args := []string{
@@ -138,7 +138,7 @@ func RemoveHotspotUserProfile(ctx context.Context, addr string, useTLS bool, rou
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// First, find the profile by name
 	profileID, err := FindHotspotUserProfileID(ctx, addr, useTLS, routerUsername, routerPassword, profileName)
@@ -166,7 +166,7 @@ func FindHotspotUserProfileID(ctx context.Context, addr string, useTLS bool, rou
 	if err != nil {
 		return "", err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ip/hotspot/user/profile/print"
 	args := []string{
@@ -198,7 +198,7 @@ func ListHotspotUserProfiles(ctx context.Context, addr string, useTLS bool, rout
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ip/hotspot/user/profile/print"
 	reply, err := client.Run(cmd)
@@ -241,7 +241,7 @@ func RemoveHotspotActiveByUser(ctx context.Context, addr string, useTLS bool, us
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Find the active session ID by user name first
 	findCmd := "/ip/hotspot/active/print"

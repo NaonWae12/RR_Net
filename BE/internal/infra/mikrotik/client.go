@@ -50,7 +50,7 @@ func TestLogin(ctx context.Context, addr string, useTLS bool, username string, p
 			done <- fmt.Errorf("failed to connect/login to Mikrotik API: %w", err)
 			return
 		}
-		defer client.Close()
+		defer ReleaseClient(client)
 
 		// Simple authenticated request to validate session.
 		// /system/identity/print returns router identity name.

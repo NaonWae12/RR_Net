@@ -95,7 +95,7 @@ func AddPPPoESecret(ctx context.Context, addr string, useTLS bool, routerUsernam
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/secret/add"
 	args := []string{
@@ -144,7 +144,7 @@ func UpdatePPPoESecret(ctx context.Context, addr string, useTLS bool, routerUser
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/secret/set"
 	args := []string{
@@ -196,7 +196,7 @@ func RemovePPPoESecret(ctx context.Context, addr string, useTLS bool, routerUser
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// First, find the secret by username
 	findCmd := "/ppp/secret/print"
@@ -238,7 +238,7 @@ func ListPPPoEActive(ctx context.Context, addr string, useTLS bool, routerUserna
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/active/print"
 	reply, err := client.Run(cmd)
@@ -283,7 +283,7 @@ func DisconnectPPPoE(ctx context.Context, addr string, useTLS bool, routerUserna
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/active/remove"
 	args := []string{
@@ -305,7 +305,7 @@ func FindPPPoESecretID(ctx context.Context, addr string, useTLS bool, routerUser
 	if err != nil {
 		return "", err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/secret/print"
 	args := []string{
@@ -335,7 +335,7 @@ func ListPPPoEProfiles(ctx context.Context, addr string, useTLS bool, routerUser
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/profile/print"
 	reply, err := client.Run(cmd)
@@ -373,7 +373,7 @@ func FindPPPoEProfileID(ctx context.Context, addr string, useTLS bool, routerUse
 	if err != nil {
 		return "", err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/profile/print"
 	args := []string{
@@ -403,7 +403,7 @@ func AddPPPoEProfile(ctx context.Context, addr string, useTLS bool, routerUserna
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/profile/add"
 	args := []string{
@@ -452,7 +452,7 @@ func UpdatePPPoEProfile(ctx context.Context, addr string, useTLS bool, routerUse
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	cmd := "/ppp/profile/set"
 	args := []string{
@@ -504,7 +504,7 @@ func RemovePPPoEProfile(ctx context.Context, addr string, useTLS bool, routerUse
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// First, find the profile by name
 	profileID, err := FindPPPoEProfileID(ctx, addr, useTLS, routerUsername, routerPassword, profileName)
@@ -533,7 +533,7 @@ func GetPPPoEServerLocalAddress(ctx context.Context, addr string, useTLS bool, u
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to router: %w", err)
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Get PPPoE server interface configuration
 	// /interface pppoe-server server print

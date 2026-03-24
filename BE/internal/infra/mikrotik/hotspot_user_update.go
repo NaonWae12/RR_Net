@@ -11,7 +11,7 @@ func UpdateHotspotUser(ctx context.Context, addr string, useTLS bool, routerUser
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer ReleaseClient(client)
 
 	// Find user by old name
 	cmd := "/ip/hotspot/user/print"

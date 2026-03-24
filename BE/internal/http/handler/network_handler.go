@@ -278,6 +278,57 @@ func (h *NetworkHandler) DisconnectRouter(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// SetupRemoteUser creates a new remote user
+func (h *NetworkHandler) SetupRemoteUser(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, `{"error":"Username and password are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if err := h.networkService.SetupRemoteUser(r.Context(), id, req.Username, req.Password); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok": true,
+		"message": "Remote user initialized successfully",
+	})
+}
+
 // ========== Network Profile Handlers ==========
 
 func (h *NetworkHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
