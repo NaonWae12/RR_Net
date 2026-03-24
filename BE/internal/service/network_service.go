@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -13,6 +15,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"sync"
 	"strings"
 	"time"
 
@@ -380,31 +383,31 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 	vpnUser := "vpn-" + strings.ReplaceAll(strings.ToLower(name), " ", "-") + "-" + generateRandomString(4)
 	vpnPass := generateRandomString(12)
 
-	// 4. Execute script to add VPN user on the VPS (strongswan/accel-ppp)
-	// The script is responsible for finding the next available IP
+	// 4. Allocate a collision-free VPN IP and register the user.
+	// This is done entirely in Go to avoid relying on an external bash script
+	// that may have race conditions or IP allocation bugs.
 	var assignedIP string
 
 	if runtime.GOOS == "windows" {
-		// Mock for local development
-		fmt.Println("[MOCK-WINDOWS] Executing VPN script skipped. Generating mock IP.")
-		// Random IP in range 10.10.10.100-250
-		b := make([]byte, 1)
-		_, _ = rand.Read(b)
-		octet := int(b[0])%150 + 100
-		assignedIP = fmt.Sprintf("10.10.10.%d", octet)
-	} else {
-		cmd := exec.Command("/opt/rrnet/scripts/vpn_add_user_auto.sh", vpnUser, vpnPass)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("Warning: failed to create VPN account during provision: %v, output: %s\n", err, string(out))
-			// If script fails, we can't get an IP, so we might return error or fallback
-			return nil, fmt.Errorf("failed to create vpn user: %s", string(out))
+		// Mock for local development - pick a random IP that isn't in usedIPs
+		fmt.Println("[MOCK-WINDOWS] VPN script skipped. Allocating mock IP.")
+		for i := 100; i <= 254; i++ {
+			candidate := fmt.Sprintf("10.10.10.%d", i)
+			if !usedIPs[candidate] {
+				assignedIP = candidate
+				break
+			}
 		}
-
-		// 5. Read assigned IP from script output
-		assignedIP = strings.TrimSpace(string(out))
-		if net.ParseIP(assignedIP) == nil {
-			return nil, fmt.Errorf("script returned invalid IP: %s", assignedIP)
+		if assignedIP == "" {
+			return nil, fmt.Errorf("no available VPN IPs in range 10.10.10.100-254")
+		}
+	} else {
+		// Allocate next free VPN IP by reading chap-secrets directly.
+		// This is global across all tenants to prevent any collision.
+		var allocErr error
+		assignedIP, allocErr = allocateVPNIP(vpnUser, vpnPass)
+		if allocErr != nil {
+			return nil, fmt.Errorf("failed to allocate VPN IP: %w", allocErr)
 		}
 	}
 
@@ -678,10 +681,11 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 
 	// 3. Cleanup VPN Account if applicable
 	// We do this AFTER remote cleanup so the tunnel is alive for the steps above
-	if router.ConnectivityMode == network.RouterConnectivityModeVPN && router.VPNUsername != "" && runtime.GOOS == "linux" {
-		cmd := exec.Command("/opt/rrnet/scripts/vpn_del_user_auto.sh", router.VPNUsername)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Warning: failed to remove VPN user %s: %v, output: %s", router.VPNUsername, err, string(out))
+	if router.ConnectivityMode == network.RouterConnectivityModeVPN && router.VPNUsername != "" {
+		if runtime.GOOS == "linux" {
+			if err := removeVPNUser(router.VPNUsername); err != nil {
+				log.Printf("Warning: failed to remove VPN user %s from chap-secrets: %v", router.VPNUsername, err)
+			}
 		}
 	}
 
@@ -1588,6 +1592,116 @@ func generateRandomString(n int) string {
 		return ""
 	}
 	return hex.EncodeToString(b)[:n]
+}
+
+// vpnMu guards concurrent access to /etc/ppp/chap-secrets so two simultaneous
+// provisioning requests never collide on the same IP.
+var vpnMu sync.Mutex
+
+const chapSecretsPath = "/etc/ppp/chap-secrets"
+
+// allocateVPNIP reads /etc/ppp/chap-secrets to find all globally in-use IPs
+// (across ALL tenants), picks the next free octet in 10.10.10.100-254, writes
+// the new user entry, and returns the allocated IP.
+// It uses a mutex so concurrent provisioning requests can't collide.
+func allocateVPNIP(username, password string) (string, error) {
+	vpnMu.Lock()
+	defer vpnMu.Unlock()
+
+	// --- 1. Read current chap-secrets ---
+	data, err := os.ReadFile(chapSecretsPath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("failed to read %s: %w", chapSecretsPath, err)
+	}
+
+	usedIPs := make(map[string]bool)
+	var lines []string
+
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+
+		// Skip comments and blank lines but preserve them
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			lines = append(lines, line)
+			continue
+		}
+
+		// Format: username * password ip
+		parts := strings.Fields(trimmed)
+		if len(parts) >= 4 {
+			ip := parts[3]
+			if net.ParseIP(ip) != nil {
+				usedIPs[ip] = true
+			}
+		}
+		lines = append(lines, line)
+	}
+
+	// --- 2. Find next free IP in range 10.10.10.100-254 ---
+	assignedIP := ""
+	for i := 100; i <= 254; i++ {
+		candidate := fmt.Sprintf("10.10.10.%d", i)
+		if !usedIPs[candidate] {
+			assignedIP = candidate
+			break
+		}
+	}
+	if assignedIP == "" {
+		return "", fmt.Errorf("VPN IP pool exhausted (10.10.10.100-254 all in use)")
+	}
+
+	// --- 3. Append new user entry ---
+	newEntry := fmt.Sprintf("%s * %s %s", username, password, assignedIP)
+	lines = append(lines, newEntry)
+
+	// --- 4. Write back atomically (temp file + rename) ---
+	content := strings.Join(lines, "\n") + "\n"
+	tmpPath := chapSecretsPath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(content), 0600); err != nil {
+		return "", fmt.Errorf("failed to write temp chap-secrets: %w", err)
+	}
+	if err := os.Rename(tmpPath, chapSecretsPath); err != nil {
+		return "", fmt.Errorf("failed to replace chap-secrets: %w", err)
+	}
+
+	return assignedIP, nil
+}
+
+// removeVPNUser removes a user entry from /etc/ppp/chap-secrets by username.
+func removeVPNUser(username string) error {
+	if username == "" {
+		return nil
+	}
+	vpnMu.Lock()
+	defer vpnMu.Unlock()
+
+	data, err := os.ReadFile(chapSecretsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing to remove
+		}
+		return fmt.Errorf("failed to read chap-secrets: %w", err)
+	}
+
+	var newLines []string
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Fields(strings.TrimSpace(line))
+		if len(parts) >= 1 && parts[0] == username {
+			continue // drop this user's line
+		}
+		newLines = append(newLines, line)
+	}
+
+	content := strings.Join(newLines, "\n") + "\n"
+	tmpPath := chapSecretsPath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(content), 0600); err != nil {
+		return fmt.Errorf("failed to write temp chap-secrets: %w", err)
+	}
+	return os.Rename(tmpPath, chapSecretsPath)
 }
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
