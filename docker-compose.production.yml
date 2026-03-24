@@ -63,7 +63,7 @@ services:
       context: ./BE
       dockerfile: Dockerfile
     container_name: rrnet-migrate-prod
-    command: ["./migrate", "-path", "migrations", "-database", "postgres://${POSTGRES_USER:-rrnet}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-rrnet_prod}?sslmode=disable", "up"]
+    command: ["./rrnet-migrate", "-path", "migrations", "-database", "postgres://${POSTGRES_USER:-rrnet}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-rrnet_prod}?sslmode=disable", "up"]
     network_mode: host
     depends_on:
       postgres:
