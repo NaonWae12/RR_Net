@@ -312,7 +312,7 @@ func (r *AffiliateRepository) ListAllAffiliates(ctx context.Context) ([]map[stri
 	}
 	defer rows.Close()
 
-	var results []map[string]interface{}
+	results := []map[string]interface{}{}
 	for rows.Next() {
 		var id, userID uuid.UUID
 		var name, email, code, tier, status string
@@ -356,27 +356,22 @@ func (r *AffiliateRepository) GetGlobalStats(ctx context.Context) (map[string]in
 	query := `
 		SELECT 
 			COUNT(*) as total_partners,
-			SUM(referred_count) as total_referrals,
-			SUM(total_earnings) as total_payouts,
-			COUNT(*) FILTER (WHERE status = 'pending') as pending_review
+			COALESCE(SUM(referred_count), 0) as total_referrals,
+			COALESCE(SUM(total_earnings), 0) as total_payouts,
+			COALESCE(COUNT(*) FILTER (WHERE status = 'pending'), 0) as pending_review
 		FROM affiliates
 	`
 	var totalPartners, totalReferrals, pendingReview int
-	var totalPayouts *float64 // Can be null if no affiliates
+	var totalPayouts float64
 	err := r.db.QueryRow(ctx, query).Scan(&totalPartners, &totalReferrals, &totalPayouts, &pendingReview)
 	if err != nil {
 		return nil, err
 	}
 
-	payoutsValue := 0.0
-	if totalPayouts != nil {
-		payoutsValue = *totalPayouts
-	}
-
 	return map[string]interface{}{
 		"total_partners":  totalPartners,
 		"total_referrals": totalReferrals,
-		"total_payouts":   payoutsValue,
+		"total_payouts":   totalPayouts,
 		"pending_review":  pendingReview,
 	}, nil
 }

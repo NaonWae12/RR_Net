@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
@@ -27,17 +29,20 @@ type NetworkService struct {
 	routerRepo    *repository.RouterRepository
 	profileRepo   *repository.NetworkProfileRepository
 	limitResolver *LimitResolver
+	redis         *redis.Client
 }
 
 func NewNetworkService(
 	routerRepo *repository.RouterRepository,
 	profileRepo *repository.NetworkProfileRepository,
 	limitResolver *LimitResolver,
+	redisClient *redis.Client,
 ) *NetworkService {
 	return &NetworkService{
 		routerRepo:    routerRepo,
 		profileRepo:   profileRepo,
 		limitResolver: limitResolver,
+		redis:         redisClient,
 	}
 }
 
@@ -431,7 +436,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		return nil, fmt.Errorf("failed to pre-save provisioning router: %w", err)
 	}
 
-	publicIP := s.getPublicIP()
+	vpnHost := s.getVPNHost()
 	psk := s.getIPsecPSK()
 
 	return &ProvisionRouterResponse{
@@ -442,12 +447,17 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		VPNScript:        script,
 		RemoteAccessPort: assignedPort,
 		TunnelIP:         assignedIP,
-		PublicIP:         publicIP,
+		PublicIP:         vpnHost,
 	}, nil
 }
 
-func (s *NetworkService) getPublicIP() string {
-	// 1. Check ENV
+func (s *NetworkService) getVPNHost() string {
+	// 1. Check VPN_DOMAIN first (Recommended for seamless migration)
+	if domain := os.Getenv("VPN_DOMAIN"); domain != "" {
+		return domain
+	}
+
+	// 2. Check PUBLIC_IP env
 	if ip := os.Getenv("PUBLIC_IP"); ip != "" {
 		return ip
 	}
@@ -1581,7 +1591,7 @@ func generateRandomString(n int) string {
 }
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
-	publicIP := s.getPublicIP()
+	vpnHost := s.getVPNHost()
 	psk := s.getIPsecPSK()
 	radiusSecret := os.Getenv("RRNET_RADIUS_REST_SECRET")
 	if radiusSecret == "" {
@@ -1609,7 +1619,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, publicIP, router.VPNPassword, router.VPNUsername, psk, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
+`, router.Name, vpnHost, router.VPNPassword, router.VPNUsername, psk, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
 
 	return script
 }
@@ -1867,6 +1877,17 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 	}, nil
 }
 func (s *NetworkService) GetRouterLogs(ctx context.Context, id uuid.UUID) ([]map[string]string, error) {
+	// Try to fetch from cache first
+	cacheKey := fmt.Sprintf("router:%s:logs", id.String())
+	if s.redis != nil {
+		if cached, err := s.redis.Get(ctx, cacheKey).Result(); err == nil {
+			var logs []map[string]string
+			if err := json.Unmarshal([]byte(cached), &logs); err == nil {
+				return logs, nil
+			}
+		}
+	}
+
 	router, err := s.routerRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, (err)
@@ -1881,6 +1902,15 @@ func (s *NetworkService) GetRouterLogs(ctx context.Context, id uuid.UUID) ([]map
 	logs, err := mikrotik.GetLogs(ctx, addr, router.APIUseTLS, router.Username, router.Password)
 	if err != nil {
 		return nil, (err)
+	}
+
+	// Save to cache
+	if s.redis != nil {
+		if data, err := json.Marshal(logs); err == nil {
+			// Cache for 60 seconds. When actively polling (e.g. 30s intervals), 
+			// this cuts the actual router hits by half or more. When idle, no hits occur.
+			_ = s.redis.Set(ctx, cacheKey, data, 60*time.Second)
+		}
 	}
 
 	return logs, nil

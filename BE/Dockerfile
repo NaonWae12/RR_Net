@@ -10,8 +10,11 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build
+# Build API binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o rrnet-api ./cmd/api/main.go
+
+# Build Migrate binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o rrnet-migrate ./cmd/migrate/main.go
 
 # 2. Final stage (pake Debian-slim yang udah punya library standar)
 FROM debian:bookworm-slim
@@ -21,8 +24,18 @@ WORKDIR /app
 # Bookworm-slim already has ca-certificates and tzdata pre-installed
 RUN apt-get update && apt-get install -y --no-install-recommends iptables ca-certificates tzdata bash wget && rm -rf /var/lib/apt/lists/*
 
-# Copy binary from builder
+# Copy API binary from builder
 COPY --from=builder /app/rrnet-api .
+
+# Copy Migrate binary from builder
+COPY --from=builder /app/rrnet-migrate .
+
+# Copy migrations folder (needed by migrate binary at runtime)
+COPY --from=builder /app/migrations ./migrations
+
+# Entrypoint: run migrations then start API
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Expose port
 EXPOSE 8080
@@ -31,5 +44,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Run the application
-CMD ["./rrnet-api"]
+# Run via entrypoint
+ENTRYPOINT ["/docker-entrypoint.sh"]

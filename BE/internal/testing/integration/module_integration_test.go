@@ -82,7 +82,7 @@ func TestBillingNetworkIntegration(t *testing.T) {
 
 	// Create services
 	limitResolver := service.NewLimitResolver(planRepo, addonRepo)
-	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver)
+	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver, nil)
 
 	// Test: Create tenant with client
 	tenant := fixtures.CreateTestTenant("Test Tenant", "test-tenant")

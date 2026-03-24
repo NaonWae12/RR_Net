@@ -49,14 +49,13 @@ scp /etc/ipsec.secrets root@IP_VPS_BARU:/etc/
 ```
 
 ### C. WA Gateway Volume (Sesi WhatsApp)
-Copy folder `wa_gateway_data` agar tenant tidak perlu scan ulang QR Code:
+Copy folder `wa_gateway_data` agar tenant tidak perlu scan ulang QR Code. Docker volume biasanya ada di `/var/lib/docker/volumes/`:
 ```bash
-# Stop kontainer WA dulu di VPS lama untuk amannya
-docker stop rrnet-wa-gateway-prod
-
-# Sync folder volume
+# Sync folder volume langsung (Sesuaikan prefix nama project jika berbeda)
 rsync -avz /var/lib/docker/volumes/rrnet_wa_gateway_data root@IP_VPS_BARU:/var/lib/docker/volumes/
 ```
+> [!IMPORTANT]
+> Pastikan di VPS BARU, folder tersebut memiliki permission yang benar (biasanya dialihkan ke user docker).
 
 ---
 
@@ -69,9 +68,12 @@ Saatnya memindahaan trafik:
    cd /opt/rrnet
    docker-compose -f docker-compose.production.yml up -d
    ```
-3. **SSL/HTTPS**: Generate ulang sertifikat SSL (Certbot) segera setelah DNS terarah ke server baru.
-4. **Monitor Log**: Cek apakah paket RADIUS sudah masuk ke server baru:
+3. **SSL/HTTPS**: 
+   - Jika menggunakan sertifikat lama, pastikan file di `./nginx/ssl/` sudah di-copy.
+   - Jika generate baru, jalankan `certbot` di host VPS BARU dan arahkan outputnya ke folder `./nginx/ssl/` project.
+4. **Monitor Log**: Cek apakah paket RADIUS dan API sudah masuk ke server baru:
    ```bash
+   docker logs -f rrnet-backend-prod
    docker logs -f rrnet-freeradius-prod
    ```
 

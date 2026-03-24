@@ -137,7 +137,7 @@ func New(deps Dependencies) http.Handler {
 	addonHandler := handler.NewAddonHandler(addonService)
 	clientHandler := handler.NewClientHandler(clientService)
 	featureHandler := handler.NewFeatureHandler(featureRepo)
-	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver)
+	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver, deps.Redis)
 	superAdminHandler := handler.NewSuperAdminHandler(tenantRepo, planRepo, addonRepo, planService, addonService, tenantService, userRepo, deps.WAGateway, networkService)
 	employeeHandler := handler.NewEmployeeHandler(authService, userRepo)
 	servicePackageHandler := handler.NewServicePackageHandler(servicePackageService)
