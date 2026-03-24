@@ -194,18 +194,36 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// â³ ENFORCE TIME LIMITS (Fix "Bablas" Issue)
+	// ⏳ ENFORCE DUAL TIME LIMITS (Wall-clock + Uptime limit)
+	minRemainingSeconds := -1
+
+	// Get package to check expiration mode
+	pkg, _ := h.voucherService.GetPackage(ctx, v.PackageID)
+	
+	// 1. Wall-clock expiration (fixed end date) - Always applied if set
 	if v.ExpiresAt != nil {
 		remaining := time.Until(*v.ExpiresAt)
-		timeoutSeconds := int(remaining.Seconds())
+		minRemainingSeconds = int(remaining.Seconds())
+	}
 
-		// Safety check: if expired but somehow reached here, set 1 second to force logout
-		if timeoutSeconds <= 0 {
-			timeoutSeconds = 1
+	// 2. Play/Pause Uptime limit (Cumulative usage) - Only if mode is uptime_limit
+	if pkg != nil && pkg.ExpirationMode == "uptime_limit" && pkg.MaxUptimeSeconds != nil {
+		remainingUptime := *pkg.MaxUptimeSeconds - v.TotalUptimeSeconds
+		// If uptime limit is tighter than wall-clock, use it
+		if minRemainingSeconds == -1 || remainingUptime < minRemainingSeconds {
+			minRemainingSeconds = remainingUptime
+		}
+	}
+
+	if minRemainingSeconds != -1 {
+		// Safety check: if expired but somehow reached here, set 1 second to force logout shortly
+		if minRemainingSeconds <= 0 {
+			minRemainingSeconds = 1
 		}
 
 		// Session-Timeout: How long the user can stay online in THIS session
-		response["Session-Timeout"] = timeoutSeconds
-		zslog.Debug().Msgf("[radius_auth] Session-Timeout set: %d seconds remaining", timeoutSeconds)
+		response["Session-Timeout"] = minRemainingSeconds
+		zslog.Debug().Msgf("[radius_auth] Combined Session-Timeout (Mode: %s): %d seconds", pkg.ExpirationMode, minRemainingSeconds)
 	}
 
 	// ðŸ“¡ LIVE MONITORING (Fix "Optimal Log" Issue)

@@ -41,7 +41,7 @@ func (r *VoucherRepository) CreatePackage(ctx context.Context, pkg *voucher.Vouc
 func (r *VoucherRepository) GetPackageByID(ctx context.Context, id uuid.UUID) (*voucher.VoucherPackage, error) {
 	query := `
 		SELECT id, tenant_id, name, COALESCE(description, ''), download_speed, upload_speed,
-			duration_hours, quota_mb, price::float8, currency, rate_limit_mode, is_active, created_at, updated_at
+			duration_hours, quota_mb, price::float8, currency, rate_limit_mode, is_active, max_uptime_seconds, expiration_mode, created_at, updated_at
 		FROM voucher_packages
 		WHERE id = $1
 	`
@@ -49,7 +49,7 @@ func (r *VoucherRepository) GetPackageByID(ctx context.Context, id uuid.UUID) (*
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&pkg.ID, &pkg.TenantID, &pkg.Name, &pkg.Description, &pkg.DownloadSpeed, &pkg.UploadSpeed,
 		&pkg.DurationHours, &pkg.QuotaMB, &pkg.Price, &pkg.Currency, &pkg.RateLimitMode, &pkg.IsActive,
-		&pkg.CreatedAt, &pkg.UpdatedAt,
+		&pkg.MaxUptimeSeconds, &pkg.ExpirationMode, &pkg.CreatedAt, &pkg.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("package not found")
@@ -60,7 +60,7 @@ func (r *VoucherRepository) GetPackageByID(ctx context.Context, id uuid.UUID) (*
 func (r *VoucherRepository) ListPackagesByTenant(ctx context.Context, tenantID uuid.UUID, activeOnly bool) ([]*voucher.VoucherPackage, error) {
 	query := `
 		SELECT id, tenant_id, name, COALESCE(description, ''), download_speed, upload_speed,
-			duration_hours, quota_mb, price::float8, currency, rate_limit_mode, is_active, created_at, updated_at
+			duration_hours, quota_mb, price::float8, currency, rate_limit_mode, is_active, max_uptime_seconds, expiration_mode, created_at, updated_at
 		FROM voucher_packages
 		WHERE tenant_id = $1
 	`
@@ -81,7 +81,7 @@ func (r *VoucherRepository) ListPackagesByTenant(ctx context.Context, tenantID u
 		err := rows.Scan(
 			&pkg.ID, &pkg.TenantID, &pkg.Name, &pkg.Description, &pkg.DownloadSpeed, &pkg.UploadSpeed,
 			&pkg.DurationHours, &pkg.QuotaMB, &pkg.Price, &pkg.Currency, &pkg.RateLimitMode, &pkg.IsActive,
-			&pkg.CreatedAt, &pkg.UpdatedAt,
+			&pkg.MaxUptimeSeconds, &pkg.ExpirationMode, &pkg.CreatedAt, &pkg.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -130,9 +130,8 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 
 func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	query := `
-		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
-			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
-			p.name as package_name
+			v.total_uptime_seconds, v.total_bytes_used,
+			p.name as package_name, p.expiration_mode
 		FROM vouchers v
 		JOIN voucher_packages p ON v.package_id = p.id
 		WHERE v.tenant_id = $1 AND v.code = $2
@@ -141,7 +140,8 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 	err := r.db.QueryRow(ctx, query, tenantID, code).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
-		&v.PackageName,
+		&v.TotalUptimeSeconds, &v.TotalBytesUsed,
+		&v.PackageName, &v.ExpirationMode,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("voucher not found")
@@ -190,17 +190,11 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 			v.isolated,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
 			p.name as package_name,
-			COALESCE(rs.total_uptime, 0) as uptime_seconds,
-			COALESCE(rs.total_bytes, 0) as total_bytes_used
+			p.expiration_mode,
+			v.total_uptime_seconds,
+			v.total_bytes_used
 		FROM vouchers v
 		JOIN voucher_packages p ON v.package_id = p.id
-		LEFT JOIN (
-			SELECT voucher_id, 
-				   SUM(COALESCE(acct_session_time, 0)) as total_uptime,
-				   SUM(COALESCE(acct_input_octets, 0) + COALESCE(acct_output_octets, 0)) as total_bytes
-			FROM radius_sessions
-			GROUP BY voucher_id
-		) rs ON v.id = rs.voucher_id
 		` + whereSQL + `
 		ORDER BY v.created_at DESC
 		LIMIT $` + fmt.Sprintf("%d OFFSET $%d", len(args)+1, len(args)+2)
@@ -219,7 +213,7 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 		err := rows.Scan(
 			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
-			&v.PackageName, &v.UptimeSeconds, &v.TotalBytesUsed,
+			&v.PackageName, &v.ExpirationMode, &v.TotalUptimeSeconds, &v.TotalBytesUsed,
 		)
 		if err != nil {
 			return nil, 0, err
@@ -249,24 +243,18 @@ func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*
 			v.isolated,
 			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
 			p.name as package_name,
-			COALESCE(rs.total_uptime, 0) as uptime_seconds,
-			COALESCE(rs.total_bytes, 0) as total_bytes_used
+			p.expiration_mode,
+			v.total_uptime_seconds,
+			v.total_bytes_used
 		FROM vouchers v
 		JOIN voucher_packages p ON v.package_id = p.id
-		LEFT JOIN (
-			SELECT voucher_id, 
-				   SUM(COALESCE(acct_session_time, 0)) as total_uptime,
-				   SUM(COALESCE(acct_input_octets, 0) + COALESCE(acct_output_octets, 0)) as total_bytes
-			FROM radius_sessions
-			GROUP BY voucher_id
-		) rs ON v.id = rs.voucher_id
 		WHERE v.id = $1
 	`
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
 		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
-		&v.PackageName, &v.UptimeSeconds, &v.TotalBytesUsed,
+		&v.PackageName, &v.ExpirationMode, &v.TotalUptimeSeconds, &v.TotalBytesUsed,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("voucher not found")

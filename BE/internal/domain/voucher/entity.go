@@ -23,10 +23,15 @@ type VoucherPackage struct {
 	QuotaMB       *int      `json:"quota_mb,omitempty"`
 	Price         float64   `json:"price"`
 	Currency      string    `json:"currency"`
-	RateLimitMode string    `json:"rate_limit_mode"` // full_radius or radius_auth_only
-	IsActive      bool      `json:"is_active"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	RateLimitMode  string    `json:"rate_limit_mode"` // full_radius or radius_auth_only
+	IsActive       bool      `json:"is_active"`
+	ExpirationMode string    `json:"expiration_mode"` // "wall_clock" or "uptime_limit"
+
+	// Max usage limit (in seconds, NULL = unlimited)
+	MaxUptimeSeconds *int `json:"max_uptime_seconds,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type VoucherStatus string
@@ -53,17 +58,19 @@ type Voucher struct {
 	FirstSessionID     *uuid.UUID    `json:"first_session_id,omitempty"`
 	Notes              string        `json:"notes,omitempty"`
 	ResellerPurchaseID *uuid.UUID    `json:"reseller_purchase_id,omitempty"`
+	
+	// Denormalized Uptime & Usage (updated by accounting)
+	TotalUptimeSeconds int   `json:"total_uptime_seconds"`
+	TotalBytesUsed      int64 `json:"total_bytes_used"`
+
 	CreatedAt          time.Time     `json:"created_at"`
 	UpdatedAt          time.Time     `json:"updated_at"`
-
-	// Uptime & Usage (populated from radius sessions)
-	UptimeSeconds  int   `json:"uptime_seconds"`
-	TotalBytesUsed int64 `json:"total_bytes_used"`
 
 	// Joined fields (optional, populated by repository)
 	PackageName  *string  `json:"package_name,omitempty"`
 	PackagePrice *float64 `json:"package_price,omitempty"`
 	RouterName   *string  `json:"router_name,omitempty"`
+	ExpirationMode string `json:"expiration_mode"`
 }
 
 type VoucherUsage struct {

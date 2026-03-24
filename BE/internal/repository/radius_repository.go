@@ -69,7 +69,13 @@ func (r *RadiusRepository) ListAuthAttempts(ctx context.Context, tenantID uuid.U
 }
 
 func (r *RadiusRepository) UpsertSession(ctx context.Context, session *radius.Session) error {
-	query := `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	upsertQuery := `
 		INSERT INTO radius_sessions (
 			id, tenant_id, router_id, voucher_id, acct_session_id, acct_unique_id,
 			username, nas_ip_address, nas_port_id, framed_ip_address,
@@ -89,7 +95,7 @@ func (r *RadiusRepository) UpsertSession(ctx context.Context, session *radius.Se
 			session_status = EXCLUDED.session_status,
 			updated_at = EXCLUDED.updated_at
 	`
-	_, err := r.db.Exec(ctx, query,
+	_, err = tx.Exec(ctx, upsertQuery,
 		session.ID, session.TenantID, session.RouterID, session.VoucherID,
 		session.AcctSessionID, session.AcctUniqueID, session.Username,
 		session.NASIPAddress, session.NASPortID, session.FramedIPAddress,
@@ -98,7 +104,35 @@ func (r *RadiusRepository) UpsertSession(ctx context.Context, session *radius.Se
 		session.AcctOutputOctets, session.AcctInputPackets, session.AcctOutputPackets,
 		session.AcctTerminateCause, session.SessionStatus, session.CreatedAt, session.UpdatedAt,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// If linked to a voucher, update the voucher's denormalized stats
+	if session.VoucherID != nil {
+		updateVoucherQuery := `
+			UPDATE vouchers v
+			SET 
+				total_uptime_seconds = COALESCE((
+					SELECT SUM(COALESCE(acct_session_time, 0))
+					FROM radius_sessions
+					WHERE voucher_id = $1
+				), 0),
+				total_bytes_used = COALESCE((
+					SELECT SUM(COALESCE(acct_input_octets, 0) + COALESCE(acct_output_octets, 0))
+					FROM radius_sessions
+					WHERE voucher_id = $1
+				), 0),
+				updated_at = NOW()
+			WHERE v.id = $1
+		`
+		_, err = tx.Exec(ctx, updateVoucherQuery, *session.VoucherID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *RadiusRepository) GetSessionByAcctSessionID(ctx context.Context, acctSessionID string) (*radius.Session, error) {

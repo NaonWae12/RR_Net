@@ -66,6 +66,22 @@ function formatDuration(seconds: number = 0) {
   return `${s}s`;
 }
 
+function calculateUptime(v: Voucher) {
+  // If wall_clock mode and used, calculate elapsed time since first login
+  if (v.expiration_mode === 'wall_clock' && v.used_at) {
+    const usedAt = new Date(v.used_at).getTime();
+    const now = new Date().getTime();
+    const elapsedSeconds = Math.floor((now - usedAt) / 1000);
+    
+    // Cap it at whatever the expiry was supposed to be (if we have it)
+    // For now, just return elapsed. If it's expired, it will show accurately.
+    return elapsedSeconds > 0 ? elapsedSeconds : 0;
+  }
+  
+  // Otherwise return the actual session uptime (Play/Pause)
+  return v.total_uptime_seconds || 0;
+}
+
 function formatBytes(bytes: number = 0) {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -133,13 +149,22 @@ export default function VouchersPage() {
   const [isLoadingMoreVouchers, setIsLoadingMoreVouchers] = useState(false);
 
   // Mikhmon-ish state
-  const [pkgForm, setPkgForm] = useState({
+  const [pkgForm, setPkgForm] = useState<{
+    name: string;
+    download_speed: number;
+    upload_speed: number;
+    validity: string;
+    price: number | "";
+    rate_limit_mode: string;
+    expiration_mode: 'wall_clock' | 'uptime_limit';
+  }>({
     name: "",
     download_speed: 2048,
     upload_speed: 1024,
     validity: "2h",
-    price: "" as number | "",
+    price: "",
     rate_limit_mode: "radius_auth_only", // Default to MVP mode
+    expiration_mode: "wall_clock",
   });
 
   const [editDialog, setEditDialog] = useState<{
@@ -171,14 +196,22 @@ export default function VouchersPage() {
     open: boolean;
     pkg: VoucherPackage | null;
   }>({ open: false, pkg: null });
-
-  const [editPkgForm, setEditPkgForm] = useState({
+  const [editPkgForm, setEditPkgForm] = useState<{
+    name: string;
+    download_speed: number;
+    upload_speed: number;
+    validity: string;
+    price: number | "";
+    rate_limit_mode: string;
+    expiration_mode: 'wall_clock' | 'uptime_limit';
+  }>({
     name: "",
     download_speed: 2048,
     upload_speed: 1024,
     validity: "2h",
-    price: "" as number | "",
+    price: "",
     rate_limit_mode: "radius_auth_only",
+    expiration_mode: "wall_clock",
   });
 
   const handleDeletePackageClick = (id: string, name: string) => {
@@ -345,6 +378,7 @@ export default function VouchersPage() {
       validity: pkg.validity || "2h",
       price: pkg.price || "",
       rate_limit_mode: pkg.rate_limit_mode || "radius_auth_only",
+      expiration_mode: pkg.expiration_mode || "wall_clock",
     });
     setEditPackageDialog({ open: true, pkg });
   };
@@ -682,7 +716,20 @@ export default function VouchersPage() {
                     <option value="radius_auth_only">MikroTik Profile</option>
                     <option value="full_radius">Full RADIUS</option>
                   </select>
-                  <span className="text-xs text-slate-500">MikroTik Profile: Rate limit via MikroTik Hotspot profiles (MVP)</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-slate-700">Sistem Waktu (Timer)</label>
+                  <select
+                    value={pkgForm.expiration_mode || "wall_clock"}
+                    onChange={(e) => setPkgForm({ ...pkgForm, expiration_mode: e.target.value })}
+                    className="h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+                  >
+                    <option value="wall_clock">Jalan Terus (Wall-Clock)</option>
+                    <option value="uptime_limit">Pause/Play (Uptime-Only)</option>
+                  </select>
+                  <span className="text-xs text-slate-500">
+                    {pkgForm.expiration_mode === "uptime_limit" ? "Timer hanya jalan saat user online" : "Timer jalan terus sejak login pertama"}
+                  </span>
                 </div>
                 <Button onClick={createPackage} disabled={loading || !pkgForm.name} className="w-full bg-indigo-600 hover:bg-indigo-700">
                   Simpan Paket Baru
@@ -987,7 +1034,7 @@ export default function VouchersPage() {
                       )}
                       {visibleColumns.uptime && (
                         <td className="px-6 py-4 text-center text-slate-600 font-mono text-xs">
-                          {formatDuration(v.uptime_seconds)}
+                          {formatDuration(calculateUptime(v))}
                         </td>
                       )}
                       {visibleColumns.usage && (
@@ -1614,6 +1661,17 @@ export default function VouchersPage() {
               >
                 <option value="radius_auth_only">MikroTik Profile</option>
                 <option value="full_radius">Full RADIUS</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-700">Sistem Waktu (Timer)</label>
+              <select
+                value={editPkgForm.expiration_mode || "wall_clock"}
+                onChange={(e) => setEditPkgForm({ ...editPkgForm, expiration_mode: e.target.value as 'wall_clock' | 'uptime_limit' })}
+                className="h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
+              >
+                <option value="wall_clock">Jalan Terus (Wall-Clock)</option>
+                <option value="uptime_limit">Pause/Play (Uptime-Only)</option>
               </select>
             </div>
           </div>

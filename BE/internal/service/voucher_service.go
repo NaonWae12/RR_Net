@@ -899,13 +899,24 @@ func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uu
 		return nil, fmt.Errorf("voucher not found: %w", err)
 	}
 
-	// Check expiration FIRST (before status check)
+	// Check wall-clock expiration FIRST
 	if v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt) {
 		// Mark as expired
 		v.Status = voucher.VoucherStatusExpired
 		v.UpdatedAt = time.Now()
 		_ = s.voucherRepo.UpdateVoucher(ctx, v)
-		return nil, fmt.Errorf("voucher expired")
+		return nil, fmt.Errorf("voucher expired (validity period ended)")
+	}
+
+	// Check uptime limit (Play/Pause)
+	if pkg, err := s.voucherRepo.GetPackageByID(ctx, v.PackageID); err == nil && pkg.MaxUptimeSeconds != nil {
+		if v.TotalUptimeSeconds >= *pkg.MaxUptimeSeconds {
+			// Mark as expired if uptime limit reached
+			v.Status = voucher.VoucherStatusExpired
+			v.UpdatedAt = time.Now()
+			_ = s.voucherRepo.UpdateVoucher(ctx, v)
+			return nil, fmt.Errorf("voucher expired (uptime limit reached)")
+		}
 	}
 
 	// Allow reuse if voucher is 'used' but not expired and no active session

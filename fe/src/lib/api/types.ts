@@ -1137,6 +1137,7 @@ export interface VoucherPackage {
   price: number;
   currency: string;
   rate_limit_mode: string;
+  expiration_mode: 'wall_clock' | 'uptime_limit';
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -1160,9 +1161,10 @@ export interface Voucher {
   package_name?: string | null;
   package_price?: number | null;
   router_name?: string | null;
+  expiration_mode?: 'wall_clock' | 'uptime_limit';
   created_at: string;
   updated_at: string;
-  uptime_seconds?: number;
+  total_uptime_seconds?: number;
   total_bytes_used?: number;
 }
 

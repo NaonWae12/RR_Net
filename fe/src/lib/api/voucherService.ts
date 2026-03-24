@@ -12,6 +12,7 @@ export interface CreateVoucherPackageRequest {
   price?: number;
   currency?: string;
   rate_limit_mode?: string; // "full_radius" or "radius_auth_only"
+  expiration_mode?: string; // "wall_clock" or "uptime_limit"
 }
 
 export interface GenerateVouchersRequest {
