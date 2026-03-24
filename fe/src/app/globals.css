@@ -92,19 +92,22 @@
 }
 
 .topology-line-flow {
-  stroke-dasharray: 6 12;
-  animation: flow-animation 3s linear infinite;
-  stroke-linecap: round;
+  stroke-dasharray: 6 12 !important;
+  animation: flow-animation 3s linear infinite !important;
+  stroke-linecap: round !important;
+  /* Ensure stroke weight doesn't change relative to zoom if desired, 
+     but here we want them scaling with map zoom typically. 
+     However, adding vector-effect can help with crispness in some browsers. */
 }
 
 .topology-line-odc-odp {
-  stroke-dasharray: 10 20;
-  animation-duration: 2s;
+  stroke-dasharray: 10 20 !important;
+  animation-duration: 2s !important;
   stroke-width: 2.5;
 }
 
 .topology-line-odp-client {
-  stroke-dasharray: 4 12;
-  animation-duration: 1s;
+  stroke-dasharray: 4 12 !important;
+  animation-duration: 1s !important;
   stroke-width: 1.5;
 }

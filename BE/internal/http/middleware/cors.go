@@ -24,7 +24,8 @@ func DefaultCORSConfig() *CORSConfig {
 		AllowedOrigins: []string{
 			"http://localhost:3000",
 			"http://127.0.0.1:3000",
-			"http://76.13.17.143:3000", // VPS production frontend
+			"http://76.13.17.143:3000", // VPS production frontend IP
+			"https://billrrnet.tech",     // VPS production domain
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Tenant-Slug", "X-Request-ID", "X-CSRF-Token"},
