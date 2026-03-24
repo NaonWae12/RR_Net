@@ -666,7 +666,8 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 
 	// 2. Cleanup Router Configuration (Best Effort)
 	// Try to remove RR-NET settings from the actual hardware while VPN is still up
-	if router.Type == network.RouterTypeMikroTik && router.Host != "" && router.Username != "" {
+	// Only attempt if we have valid connection details and the router is not in a broken state
+	if router.Type == network.RouterTypeMikroTik && router.Host != "" && router.Username != "" && router.APIPort > 0 {
 		addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 		cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Second) // Snappier timeout
 		defer cancel()
@@ -689,7 +690,7 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 		}
 	}
 
-	// 4. Soft Delete in Database
+	// 4. Finally, remove from database
 	return s.routerRepo.Delete(ctx, id)
 }
 
