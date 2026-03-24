@@ -918,6 +918,8 @@ export default function RouterDetailPage() {
           </div>
         </div>
       </DialogContent>
+    </Dialog>
+
     {/* Remote User Setup Modal */}
     <Dialog open={showRemoteUserDialog} onOpenChange={setShowRemoteUserDialog}>
       <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden border-none shadow-[0_32px_64px_-16px_rgba(0,0,0,0.35)] rounded-[24px]">
