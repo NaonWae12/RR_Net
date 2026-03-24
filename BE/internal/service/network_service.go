@@ -1656,14 +1656,12 @@ func allocateVPNIP(username, password string) (string, error) {
 	newEntry := fmt.Sprintf("%s * %s %s", username, password, assignedIP)
 	lines = append(lines, newEntry)
 
-	// --- 4. Write back atomically (temp file + rename) ---
+	// --- 4. Write directly to chap-secrets.
+	// NOTE: os.Rename fails on Docker bind-mounts ("device or resource busy").
+	// Writing directly is safe here because the mutex above prevents concurrent writes.
 	content := strings.Join(lines, "\n") + "\n"
-	tmpPath := chapSecretsPath + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(content), 0600); err != nil {
-		return "", fmt.Errorf("failed to write temp chap-secrets: %w", err)
-	}
-	if err := os.Rename(tmpPath, chapSecretsPath); err != nil {
-		return "", fmt.Errorf("failed to replace chap-secrets: %w", err)
+	if err := os.WriteFile(chapSecretsPath, []byte(content), 0600); err != nil {
+		return "", fmt.Errorf("failed to write chap-secrets: %w", err)
 	}
 
 	return assignedIP, nil
@@ -1696,12 +1694,9 @@ func removeVPNUser(username string) error {
 		newLines = append(newLines, line)
 	}
 
+	// Write directly (os.Rename fails on Docker bind-mounts).
 	content := strings.Join(newLines, "\n") + "\n"
-	tmpPath := chapSecretsPath + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(content), 0600); err != nil {
-		return fmt.Errorf("failed to write temp chap-secrets: %w", err)
-	}
-	return os.Rename(tmpPath, chapSecretsPath)
+	return os.WriteFile(chapSecretsPath, []byte(content), 0600)
 }
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
