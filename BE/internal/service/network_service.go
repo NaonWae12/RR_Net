@@ -478,7 +478,7 @@ func (s *NetworkService) getVPNHost() string {
 	}
 
 	// 3. Fallback to hardcoded if all fails (your current VPS)
-	return "72.60.74.209"
+	return "vpn.billrrnet.tech"
 }
 
 func (s *NetworkService) GetRouter(ctx context.Context, id uuid.UUID) (*network.Router, error) {
