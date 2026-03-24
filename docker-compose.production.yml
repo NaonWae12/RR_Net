@@ -103,7 +103,7 @@ services:
       FRONTEND_URL: https://billrrnet.tech
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_started
     # Allow backend to manage host-level VPN users & iptables rules
     cap_add:
       - NET_ADMIN
