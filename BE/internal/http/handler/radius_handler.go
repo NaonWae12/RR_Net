@@ -81,7 +81,35 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve tenant/router via NAS-IP-Address
+	// Detect if this is a Router VPN connection instead of a Client Voucher
+	if strings.HasPrefix(req.UserName, "vpn-") {
+		router, err := h.routerRepo.GetByVPNUsername(ctx, req.UserName)
+		if err != nil || router == nil {
+			zslog.Debug().Msgf("[radius_auth] REJECT VPN: username=%q nas_ip=%s reason=router_not_found", req.UserName, req.NASIPAddress)
+			http.Error(w, `{"error":"router not found"}`, http.StatusForbidden)
+			return
+		}
+
+		if strings.TrimSpace(router.VPNPassword) != strings.TrimSpace(req.UserPassword) {
+			zslog.Debug().Msgf("[radius_auth] REJECT VPN: username=%q nas_ip=%s reason=password_mismatch", req.UserName, req.NASIPAddress)
+			http.Error(w, `{"error":"invalid password"}`, http.StatusUnauthorized)
+			return
+		}
+
+		response := map[string]interface{}{
+			"Reply-Message":     "VPN Router Accepted",
+			"Framed-IP-Address": router.Host, // Force Static IP expected by ERP Backend
+		}
+		
+		responseJSON, _ := json.MarshalIndent(response, "", "  ")
+		zslog.Debug().Msgf("[radius_auth] ACCEPT VPN: username=%q IP=%s\n%s", req.UserName, router.Host, string(responseJSON))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Resolve tenant/router via NAS-IP-Address for standard Hotspot Vouchers
 	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		zslog.Debug().Msgf("[radius_auth] REJECT: username=%q nas_ip=%s reason=router_not_found", req.UserName, req.NASIPAddress)
@@ -414,10 +442,13 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	zslog.Debug().Msgf("[radius_acct] DEBUG: Parsed request - AcctStatusType=%s, AcctSessionID=%s, UserName=%s, NASIPAddress=%s",
-		req.AcctStatusType, req.AcctSessionID, req.UserName, req.NASIPAddress)
+	// Ignore accounting for VPN Routers (We only need auth for static IPs)
+	if strings.HasPrefix(req.UserName, "vpn-") {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 
-	// Resolve tenant/router via NAS-IP-Address
+	// Resolve tenant/router via NAS-IP-Address for standard Hotspot Clients
 	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		zslog.Debug().Msgf("[radius_acct] ERROR: acct_status=%s acct_session_id=%s nas_ip=%s reason=router_not_found", req.AcctStatusType, req.AcctSessionID, req.NASIPAddress)

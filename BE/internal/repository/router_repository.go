@@ -339,6 +339,38 @@ func (r *RouterRepository) GetByNASIdentifier(ctx context.Context, nasID string)
 	return &router, err
 }
 
+func (r *RouterRepository) GetByVPNUsername(ctx context.Context, vpnUsername string) (*network.Router, error) {
+	query := `
+		SELECT id, tenant_id, name, COALESCE(description, ''), type, host, COALESCE(nas_identifier, ''), COALESCE(nas_ip, ''), port,
+			username, password_hash, COALESCE(api_port, 8728), status, last_seen, is_default,
+			COALESCE(radius_enabled, true), COALESCE(radius_secret, ''),
+			COALESCE(connectivity_mode, 'direct_public'), COALESCE(api_use_tls, false),
+			COALESCE(remote_access_enabled, FALSE), COALESCE(remote_access_port, 0),
+			COALESCE(vpn_username, ''), COALESCE(vpn_password, ''), COALESCE(vpn_script, ''), COALESCE(dns_name, ''),
+			COALESCE(idle_timeout, 600), COALESCE(interim_interval, 60),
+			created_at, updated_at, deleted_at
+		FROM routers
+		WHERE vpn_username = $1 AND deleted_at IS NULL
+		LIMIT 1
+	`
+	var router network.Router
+	err := r.db.QueryRow(ctx, query, vpnUsername).Scan(
+		&router.ID, &router.TenantID, &router.Name, &router.Description,
+		&router.Type, &router.Host, &router.NASIdentifier, &router.NASIP, &router.Port, &router.Username,
+		&router.Password, &router.APIPort, &router.Status, &router.LastSeen,
+		&router.IsDefault, &router.RadiusEnabled, &router.RadiusSecret,
+		&router.ConnectivityMode, &router.APIUseTLS,
+		&router.RemoteAccessEnabled, &router.RemoteAccessPort,
+		&router.VPNUsername, &router.VPNPassword, &router.VPNScript, &router.DNSName,
+		&router.IdleTimeout, &router.InterimInterval,
+		&router.CreatedAt, &router.UpdatedAt, &router.DeletedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("router not found for VPN Username: %s", vpnUsername)
+	}
+	return &router, err
+}
+
 func (r *RouterRepository) UpdateNASIP(ctx context.Context, id uuid.UUID, newIP string) error {
 	query := `UPDATE routers SET nas_ip = $2, updated_at = NOW() WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id, newIP)
