@@ -1756,6 +1756,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
 %s
+/ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc pfs-group=none
 /ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
 /ip service set api disabled=no port=8728
 /ip service set api-ssl disabled=yes
