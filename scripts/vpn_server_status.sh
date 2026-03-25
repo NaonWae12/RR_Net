@@ -18,7 +18,21 @@ echo "=========================================="
 echo ""
 
 echo "Services:"
-systemctl is-active --quiet strongswan && echo "  ✓ strongswan: running" || echo "  ✗ strongswan: stopped"
+# Auto-detect strongswan unit
+STRONGSWAN_UNIT=""
+for CANDIDATE in strongswan-swanctl strongswan-starter strongswan charon; do
+  if systemctl list-unit-files "${CANDIDATE}.service" 2>/dev/null | grep -q "${CANDIDATE}.service"; then
+    STRONGSWAN_UNIT="${CANDIDATE}"
+    break
+  fi
+done
+
+if [ -n "${STRONGSWAN_UNIT}" ]; then
+  systemctl is-active --quiet "${STRONGSWAN_UNIT}" && echo "  ✓ strongswan (${STRONGSWAN_UNIT}): running" || echo "  ✗ strongswan (${STRONGSWAN_UNIT}): stopped"
+else
+  echo "  ? strongswan: service unit not found"
+fi
+
 systemctl is-active --quiet xl2tpd && echo "  ✓ xl2tpd: running" || echo "  ✗ xl2tpd: stopped"
 echo ""
 
