@@ -86,6 +86,35 @@ systemctl restart xl2tpd
 echo "✓ xl2tpd restarted"
 echo ""
 
+# Ensure strongswan/IPSec is enabled for autostart on reboot.
+# Unit name differs by distro — auto-detect to avoid 'Unit file does not exist' errors:
+#   Debian 12 (Bookworm): strongswan-swanctl or charon
+#   Debian 11 / Ubuntu 20-22: strongswan-starter
+echo "Checking strongswan autostart..."
+STRONGSWAN_UNIT=""
+for CANDIDATE in strongswan-swanctl strongswan-starter strongswan charon; do
+  if systemctl list-unit-files "${CANDIDATE}.service" 2>/dev/null | grep -q "${CANDIDATE}.service"; then
+    STRONGSWAN_UNIT="${CANDIDATE}"
+    break
+  fi
+done
+
+if [ -n "${STRONGSWAN_UNIT}" ]; then
+  systemctl enable "${STRONGSWAN_UNIT}" > /dev/null 2>&1 || true
+  # Start if not already active
+  if ! systemctl is-active --quiet "${STRONGSWAN_UNIT}"; then
+    systemctl start "${STRONGSWAN_UNIT}"
+    echo "✓ strongswan started (${STRONGSWAN_UNIT}) and enabled for autostart"
+  else
+    echo "✓ strongswan (${STRONGSWAN_UNIT}) already active, enabled for autostart"
+  fi
+else
+  echo "WARNING: could not detect strongswan service unit!"
+  echo "  IPSec may not survive a reboot. Check manually:"
+  echo "  systemctl list-units | grep -iE 'strongswan|charon|ipsec'"
+fi
+echo ""
+
 echo "✓ Done. Active VPN tunnels (ppp interfaces):"
 ip addr show | grep -E "ppp[0-9]" | awk '{print "  " $0}' || echo "  (none active)"
 echo ""

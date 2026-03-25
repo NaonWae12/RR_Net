@@ -191,11 +191,33 @@ else
 fi
 
 echo ""
-echo "Step 7: Restart services..."
-systemctl enable strongswan-starter xl2tpd >/dev/null 2>&1 || true
-systemctl restart strongswan-starter
+echo "Step 7: Enable & restart services..."
+# xl2tpd is consistent across distros
+systemctl enable xl2tpd > /dev/null 2>&1 || true
 systemctl restart xl2tpd
-echo "✓ Services restarted"
+
+# strongswan unit name differs by distro/version:
+#   Debian 12 (Bookworm): strongswan-swanctl  OR  charon  (strongswan-starter may not exist)
+#   Debian 11 / Ubuntu 20-22: strongswan-starter
+# We auto-detect which unit is available to avoid 'Unit file does not exist' errors.
+STRONGSWAN_UNIT=""
+for CANDIDATE in strongswan-swanctl strongswan-starter strongswan charon; do
+  if systemctl list-unit-files "${CANDIDATE}.service" 2>/dev/null | grep -q "${CANDIDATE}.service"; then
+    STRONGSWAN_UNIT="${CANDIDATE}"
+    break
+  fi
+done
+
+if [ -n "${STRONGSWAN_UNIT}" ]; then
+  systemctl enable "${STRONGSWAN_UNIT}" > /dev/null 2>&1 || true
+  systemctl restart "${STRONGSWAN_UNIT}"
+  echo "✓ strongswan started via unit: ${STRONGSWAN_UNIT}"
+else
+  echo "WARNING: could not detect strongswan service unit."
+  echo "  IPSec may not survive a reboot. Find and enable manually:"
+  echo "  systemctl list-units | grep -iE 'strongswan|charon|ipsec'"
+fi
+echo "✓ Services started"
 
 echo ""
 echo "=========================================="
