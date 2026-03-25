@@ -18,17 +18,30 @@ echo "=========================================="
 echo ""
 
 echo "Services:"
-# Auto-detect strongswan unit
+# Auto-detect ACTIVE strongswan unit from common candidates
+CANDIDATES=("ipsec" "strongswan-swanctl" "strongswan-starter" "strongswan" "charon")
 STRONGSWAN_UNIT=""
-for CANDIDATE in ipsec strongswan-swanctl strongswan-starter strongswan charon; do
+STRONGSWAN_ACTIVE=""
+
+for CANDIDATE in "${CANDIDATES[@]}"; do
   if systemctl list-unit-files "${CANDIDATE}.service" 2>/dev/null | grep -q "${CANDIDATE}.service"; then
     STRONGSWAN_UNIT="${CANDIDATE}"
-    break
+    if systemctl is-active --quiet "${CANDIDATE}"; then
+      STRONGSWAN_ACTIVE="${CANDIDATE}"
+      break
+    fi
   fi
 done
 
-if [ -n "${STRONGSWAN_UNIT}" ]; then
-  systemctl is-active --quiet "${STRONGSWAN_UNIT}" && echo "  ✓ strongswan (${STRONGSWAN_UNIT}): running" || echo "  ✗ strongswan (${STRONGSWAN_UNIT}): stopped"
+if [ -n "${STRONGSWAN_ACTIVE}" ]; then
+  echo "  ✓ strongswan (${STRONGSWAN_ACTIVE}): running"
+elif [ -n "${STRONGSWAN_UNIT}" ]; then
+  # Check if charon is actually running even if service manager is confused (happens with manually start)
+  if pgrep -x "charon" > /dev/null; then
+    echo "  ✓ strongswan (charon process): running (standalone/manual)"
+  else
+    echo "  ✗ strongswan (${STRONGSWAN_UNIT}): stopped"
+  fi
 else
   echo "  ? strongswan: service unit not found"
 fi
