@@ -1669,9 +1669,9 @@ func allocateVPNIP(username, password string) (string, error) {
 	// SoftEther has its own DB, we need to register the user explicitly via vpncmd.
 	if runtime.GOOS == "linux" {
 		// 1. Create the user
-		_ = exec.Command("sudo", "/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserCreate", username, "/GROUP:none", "/REALNAME:none", "/NOTE:none").Run()
+		_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserCreate", username, "/GROUP:none", "/REALNAME:none", "/NOTE:none").Run()
 		// 2. Set the password
-		_ = exec.Command("sudo", "/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserPasswordSet", username, "/PASSWORD:"+password).Run()
+		_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserPasswordSet", username, "/PASSWORD:"+password).Run()
 	}
 
 	return assignedIP, nil
