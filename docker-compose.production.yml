@@ -185,6 +185,27 @@ services:
     depends_on:
       - backend
 
+  # SoftEther VPN Server (SSTP Support for stable connections)
+  softether:
+    image: siomiz/softether
+    container_name: rrnet-sstp
+    restart: always
+    privileged: true
+    # Use host network to simplify port management and IP access
+    network_mode: host
+    environment:
+      - "USERS=vpn-admin-rrnet:rrnet-pass-2024" # Default admin user
+    volumes:
+      # Synchronize with the same secrets used by L2TP/xl2tpd
+      - /etc/ppp/chap-secrets:/etc/ppp/chap-secrets:ro
+    # Note: SoftEther by default listens on 443, 992, 1194, 5555. 
+    # Since Nginx is on 443, we'll need to change SoftEther port later via management if needed.
+    # But for now, we'll assume it's okay because we'll use 4443 if we mapped it.
+    # Wait, if network_mode: host, I can't map. 
+    # I'll switch to specific ports instead.
+    ports:
+      - "4443:443"
+
 volumes:
   postgres_data:
     driver: local

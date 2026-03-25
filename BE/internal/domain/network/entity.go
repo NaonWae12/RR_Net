@@ -36,7 +36,8 @@ type RouterConnectivityMode string
 
 const (
 	RouterConnectivityModeDirectPublic RouterConnectivityMode = "direct_public"
-	RouterConnectivityModeVPN          RouterConnectivityMode = "vpn"
+	RouterConnectivityModeVPN          RouterConnectivityMode = "vpn"      // L2TP/IPsec
+	RouterConnectivityModeVPNSSTP      RouterConnectivityMode = "vpn_sstp" // SSTP (Port 443/4443)
 )
 
 // Router represents a network router device

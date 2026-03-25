@@ -13,11 +13,7 @@ import { networkService } from "@/lib/api/networkService";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, Loader2, Copy, Terminal, ShieldCheck, Activity } from "lucide-react";
 
-const routerFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  type: z.enum(["mikrotik", "cisco", "ubiquiti", "other"]),
-  connectivity_mode: z.enum(["direct_public", "vpn"]).default("vpn"),
+  connectivity_mode: z.enum(["direct_public", "vpn", "vpn_sstp"]).default("vpn"),
   host: z.string().optional(),
   nas_ip: z.string().optional(),
   port: z.coerce.number().min(1).max(65535).default(22),
@@ -115,7 +111,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
     try {
       const res = await networkService.provisionRouter({
         name: watch("name"),
-        connectivity_mode: "vpn",
+        connectivity_mode: watch("connectivity_mode"),
       });
       setProvisioningData(res);
       setProvisionedId(res.router_id);
@@ -186,11 +182,34 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             placeholder="Contoh: Kantor Pusat, Cabang Malang, dll"
             className="text-base"
           />
+
+          <div className="space-y-3">
+            <label className="text-sm font-bold text-slate-700">Pilih Mode Koneksi VPN</label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className={cn(
+                "flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all",
+                connectivityMode === 'vpn' ? "border-indigo-600 bg-indigo-50 shadow-md" : "border-slate-200 hover:border-slate-300"
+              )}>
+                <input type="radio" value="vpn" {...register("connectivity_mode")} className="hidden" />
+                <span className="font-bold text-sm mb-1">Standard (L2TP/IPsec)</span>
+                <span className="text-[10px] text-slate-500">Cepat & Umum. Cocok buat ruter standar.</span>
+              </label>
+              <label className={cn(
+                "flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all",
+                connectivityMode === 'vpn_sstp' ? "border-indigo-600 bg-indigo-50 shadow-md" : "border-slate-200 hover:border-slate-300"
+              )}>
+                <input type="radio" value="vpn_sstp" {...register("connectivity_mode")} className="hidden" />
+                <span className="font-bold text-sm mb-1">Premium (SSTP)</span>
+                <span className="text-[10px] text-slate-500">Super Stabil & Anti-Blokir. Cocok buat NAT/Kantor.</span>
+              </label>
+            </div>
+          </div>
+
           <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-3">
             <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
             <div className="text-xs text-blue-800">
               <p className="font-bold">Pro-Tip:</p>
-              <p>Gunakan nama yang unik. Sistem akan otomatis menyiapkan tunnel VPN L2TP/IPSec yang aman untuk Anda.</p>
+              <p>{connectivityMode === 'vpn_sstp' ? "SSTP menggunakan port 4443 (TCP). Pastikan firewall ruter Anda mengizinkannya." : "Sistem akan otomatis menyiapkan tunnel VPN L2TP/IPSec yang aman untuk Anda."}</p>
             </div>
           </div>
         </div>
@@ -256,10 +275,12 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">VPN Password</p>
             <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.vpn_password}</p>
           </div>
-          <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">IPsec PSK</p>
-            <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.vpn_ipsec_psk}</p>
-          </div>
+          {connectivityMode === 'vpn' && (
+            <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">IPsec PSK</p>
+              <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.vpn_ipsec_psk}</p>
+            </div>
+          )}
           <div className="bg-white/60 p-3 rounded-lg border border-indigo-100 backdrop-blur-sm">
             <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Remote Winbox Port</p>
             <p className="text-sm font-mono font-bold text-indigo-700">{provisioningData?.remote_access_port}</p>

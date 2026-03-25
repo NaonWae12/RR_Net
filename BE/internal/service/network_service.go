@@ -338,7 +338,7 @@ type ProvisionRouterResponse struct {
 	PublicIP         string    `json:"public_ip"`
 }
 
-func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID, name string) (*ProvisionRouterResponse, error) {
+func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID, name string, mode network.RouterConnectivityMode) (*ProvisionRouterResponse, error) {
 	// 0. Enforce Limit
 	currentCount, err := s.routerRepo.CountByTenant(ctx, tenantID)
 	if err != nil {
@@ -419,7 +419,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		TenantID:            tenantID,
 		Name:                name,
 		Type:                network.RouterTypeMikroTik,
-		ConnectivityMode:    network.RouterConnectivityModeVPN,
+		ConnectivityMode:    mode,
 		Status:              network.RouterStatusProvisioning,
 		VPNUsername:         vpnUser,
 		VPNPassword:         vpnPass,
@@ -1665,6 +1665,12 @@ func allocateVPNIP(username, password string) (string, error) {
 		return "", fmt.Errorf("failed to write chap-secrets: %w", err)
 	}
 
+	// Trigger SSTP Container restart to pick up new users from mounted chap-secrets
+	// if we are on linux and docker is available.
+	if runtime.GOOS == "linux" {
+		_ = exec.Command("docker", "restart", "rrnet-sstp").Run()
+	}
+
 	return assignedIP, nil
 }
 
@@ -1713,8 +1719,20 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 		vpnSubnet = "10.10.10.0/24"
 	}
 
+	// Choose VPN Interface Command
+	var vpnInterfaceCmd string
+	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
+		// SSTP (TCP 4443)
+		vpnInterfaceCmd = fmt.Sprintf("/interface sstp-client add connect-to=%s port=4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no",
+			vpnHost, router.VPNUsername, router.VPNPassword)
+	} else {
+		// L2TP/IPsec (Standard)
+		vpnInterfaceCmd = fmt.Sprintf("/interface l2tp-client add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet password=%s user=%s use-ipsec=yes ipsec-secret=%s",
+			vpnHost, router.VPNPassword, router.VPNUsername, psk)
+	}
+
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
-/interface l2tp-client add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet password=%s user=%s use-ipsec=yes ipsec-secret=%s
+%s
 /ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
 /ip service set api disabled=no port=8728
 /ip service set api-ssl disabled=yes
@@ -1729,7 +1747,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, vpnHost, router.VPNPassword, router.VPNUsername, psk, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
 
 	return script
 }

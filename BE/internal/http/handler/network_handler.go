@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"rrnet/internal/auth"
+	"rrnet/internal/domain/network"
 	"rrnet/internal/service"
 )
 
@@ -111,14 +112,20 @@ func (h *NetworkHandler) ProvisionRouter(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name             string                         `json:"name"`
+		ConnectivityMode network.RouterConnectivityMode `json:"connectivity_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"Invalid request body"}`, http.StatusBadRequest)
 		return
 	}
 
-	res, err := h.networkService.ProvisionRouter(r.Context(), tenantID, req.Name)
+	// Default to standard VPN if not specified
+	if req.ConnectivityMode == "" {
+		req.ConnectivityMode = network.RouterConnectivityModeVPN
+	}
+
+	res, err := h.networkService.ProvisionRouter(r.Context(), tenantID, req.Name, req.ConnectivityMode)
 	if err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
