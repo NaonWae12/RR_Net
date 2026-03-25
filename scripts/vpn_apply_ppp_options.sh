@@ -13,10 +13,13 @@
 #   - lcp-echo-interval 60  (was 30: less aggressive keepalive)
 #   - lcp-echo-failure 5    (was 4:  5 min tolerance before drop, was 2 min)
 #   - removes proxyarp      (caused ARP conflicts when 2+ routers connect)
+#   - adds MSS Clamping     (blocks TCP fragmentation issues for Winbox/API)
+#   - sets uniqueids=no     (allows multiple routers behind same NAT/Public IP)
 
 set -euo pipefail
 
 PPP_OPTS="/etc/ppp/options.xl2tpd"
+IPSEC_CONF="/etc/ipsec.conf"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: please run as root"
@@ -70,13 +73,47 @@ fi
 #    Each router has a unique static IP in chap-secrets, so proxyarp is not needed.
 if grep -q "^proxyarp" "${PPP_OPTS}"; then
   sed -i "/^proxyarp/d" "${PPP_OPTS}"
-  echo "[4/4] proxyarp removed"
+  echo "[4/5] proxyarp removed"
 else
-  echo "[4/4] proxyarp not present (already clean)"
+  echo "[4/5] proxyarp not present (already clean)"
+fi
+
+# 5. Add MSS Clamping for VPN stability (Winbox Fix)
+#    Blocks fragmentation issues for large TCP packets.
+echo "[5/5] Checking MSS Clamping in iptables..."
+if ! iptables -t mangle -C FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; then
+  iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+  echo "      - Added MSS Clamping rule to iptables mangle FORWARD"
 fi
 
 echo ""
-echo "After:"
+echo "Tuning IPSec Config (/etc/ipsec.conf)..."
+if [ -f "${IPSEC_CONF}" ]; then
+  # 1. uniqueids=no is CRITICAL for multiple routers behind same NAT (SLA 99.98%)
+  if grep -q "uniqueids=" "${IPSEC_CONF}"; then
+    if ! grep -q "uniqueids=no" "${IPSEC_CONF}"; then
+       sed -i "s/uniqueids=.*/uniqueids=no/" "${IPSEC_CONF}"
+       echo "   - uniqueids -> no (updated)"
+    else
+       echo "   - uniqueids already set to no"
+    fi
+  else
+    # Insert under config setup
+    sed -i "/config setup/a \    uniqueids=no" "${IPSEC_CONF}"
+    echo "   - uniqueids=no (added)"
+  fi
+  
+  # 2. Add dpd tuning to existing L2TP conn if present
+  #    Ensures tunnel drops are detected quickly and reconnectable
+  if grep -q "dpddelay=" "${IPSEC_CONF}"; then
+    sed -i "s/dpddelay=.*/dpddelay=30s/" "${IPSEC_CONF}"
+  fi
+else
+  echo "WARNING: ${IPSEC_CONF} not found, skipping tuning"
+fi
+
+echo ""
+echo "After (PPP Options):"
 echo "------"
 cat "${PPP_OPTS}"
 echo ""
@@ -86,28 +123,27 @@ systemctl restart xl2tpd
 echo "✓ xl2tpd restarted"
 echo ""
 
-# Ensure strongswan/IPSec is enabled for autostart on reboot.
 # Unit name differs by distro — auto-detect to avoid 'Unit file does not exist' errors:
 #   Debian 12 (Bookworm): strongswan-swanctl or charon
 #   Debian 11 / Ubuntu 20-22: strongswan-starter
+#   Some distros use 'ipsec' as alias
 echo "Checking strongswan autostart..."
+CANDIDATES=("ipsec" "strongswan-swanctl" "strongswan-starter" "strongswan" "charon")
 STRONGSWAN_UNIT=""
-for CANDIDATE in ipsec strongswan-swanctl strongswan-starter strongswan charon; do
+
+for CANDIDATE in "${CANDIDATES[@]}"; do
   if systemctl list-unit-files "${CANDIDATE}.service" 2>/dev/null | grep -q "${CANDIDATE}.service"; then
     STRONGSWAN_UNIT="${CANDIDATE}"
-    break
+    # Force enable EVERY match to be safe
+    systemctl enable "${CANDIDATE}" > /dev/null 2>&1 || true
+    echo "   - Enabled: ${CANDIDATE}.service"
   fi
 done
 
 if [ -n "${STRONGSWAN_UNIT}" ]; then
-  systemctl enable "${STRONGSWAN_UNIT}" > /dev/null 2>&1 || true
-  # Start if not already active
-  if ! systemctl is-active --quiet "${STRONGSWAN_UNIT}"; then
-    systemctl start "${STRONGSWAN_UNIT}"
-    echo "✓ strongswan started (${STRONGSWAN_UNIT}) and enabled for autostart"
-  else
-    echo "✓ strongswan (${STRONGSWAN_UNIT}) already active, enabled for autostart"
-  fi
+  # Restart to apply ipsec.conf changes
+  systemctl restart "${STRONGSWAN_UNIT}"
+  echo "✓ strongswan (${STRONGSWAN_UNIT}) RESTARTED and fully enabled"
 else
   echo "WARNING: could not detect strongswan service unit!"
   echo "  IPSec may not survive a reboot. Check manually:"
