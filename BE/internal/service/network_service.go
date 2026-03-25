@@ -1665,10 +1665,13 @@ func allocateVPNIP(username, password string) (string, error) {
 		return "", fmt.Errorf("failed to write chap-secrets: %w", err)
 	}
 
-	// Trigger Native SSTP (SoftEther) restart to pick up new users from mounted chap-secrets
-	// if we are on linux.
+	// Trigger Native SSTP (SoftEther) user creation
+	// SoftEther has its own DB, we need to register the user explicitly via vpncmd.
 	if runtime.GOOS == "linux" {
-		_ = exec.Command("sudo", "systemctl", "restart", "vpnserver").Run()
+		// 1. Create the user
+		_ = exec.Command("sudo", "/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserCreate", username, "/GROUP:none", "/REALNAME:none", "/NOTE:none").Run()
+		// 2. Set the password
+		_ = exec.Command("sudo", "/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserPasswordSet", username, "/PASSWORD:"+password).Run()
 	}
 
 	return assignedIP, nil
