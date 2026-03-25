@@ -292,7 +292,8 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 	status := &IsolirFirewallStatus{}
 
 	// 1. Check NAT rules (Get all and filter in Go for reliability)
-	natReply, err := client.Run("/ip/firewall/nat/print")
+	// We use .proplist to retrieve ONLY needed properties, saving huge CPU & bandwidth!
+	natReply, err := client.Run("/ip/firewall/nat/print", "=.proplist=.id,comment,to-addresses")
 	if err == nil {
 		for _, re := range natReply.Re {
 			comment := re.Map["comment"]
@@ -307,7 +308,7 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 	}
 
 	// 2. Check Filter rules
-	filterReply, err := client.Run("/ip/firewall/filter/print")
+	filterReply, err := client.Run("/ip/firewall/filter/print", "=.proplist=.id,comment")
 	if err == nil {
 		for _, re := range filterReply.Re {
 			comment := re.Map["comment"]
@@ -319,7 +320,7 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 	}
 
 	// 3. Check Walled Garden
-	wgReply, err := client.Run("/ip/hotspot/walled-garden/print")
+	wgReply, err := client.Run("/ip/hotspot/walled-garden/print", "=.proplist=.id,comment")
 	hasWG := false
 	if err == nil {
 		for _, re := range wgReply.Re {

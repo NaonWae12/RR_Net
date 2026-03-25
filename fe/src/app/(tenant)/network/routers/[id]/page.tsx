@@ -142,8 +142,8 @@ export default function RouterDetailPage() {
     };
 
     fetchLogs();
-    // Refresh logs every 30 seconds if page is active
-    const interval = setInterval(fetchLogs, 30000);
+    // Refresh logs every 60 seconds if page is active to prevent overloading Mikrotik API
+    const interval = setInterval(fetchLogs, 60000);
     return () => clearInterval(interval);
   }, [id, routerData?.status]);
 

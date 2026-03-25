@@ -16,9 +16,9 @@ var (
 )
 
 type mikrotikConnection struct {
+	mu         sync.Mutex // lock for dialing/reconnecting this specific router
 	client     *routeros.Client
 	lastUsed   time.Time
-	inUse      bool
 	addr       string
 	useTLS     bool
 	username   string
@@ -38,21 +38,22 @@ func GetClient(addr string, useTLS bool, username, password string) (*routeros.C
 	conn, exists := clientPool[key]
 	
 	if !exists {
-		// New connection needed, create an entry marked as in-use
+		// Register early but lock it so others wait until dial completes.
 		conn = &mikrotikConnection{
-			inUse:    true,
 			addr:     addr,
 			useTLS:   useTLS,
 			username: username,
 			password: password,
 			lastUsed: time.Now(),
 		}
+		conn.mu.Lock()
 		clientPool[key] = conn
 		poolMu.Unlock()
 		
 		client, err := dialMikroTikRaw(addr, useTLS, username, password)
 		if err != nil {
-			// Failed to connect, remove from pool
+			// Failed: unlock, remove from pool
+			conn.mu.Unlock()
 			poolMu.Lock()
 			delete(clientPool, key)
 			poolMu.Unlock()
@@ -60,49 +61,50 @@ func GetClient(addr string, useTLS bool, username, password string) (*routeros.C
 		}
 		
 		conn.client = client
+		conn.mu.Unlock()
 		return client, nil
 	}
-	
-	// If it's already in use by another goroutine, let them wait or we can just dial a new temporary one?
-	// But go-routeros clients CAN process concurrent requests if we just use the same client!
-	// It uses tags for concurrency underneath. Wait, routeros.Client is safe for concurrent use for *most* things,
-	// but the library documentation says "A Client is safe for concurrent use by multiple goroutines."
-	// Oh! It IS safe for concurrent use! So we don't need to track `inUse` and block.
-	// We just need to ensure we return the same `*routeros.Client` to everyone!
-	
-	// Wait, let's keep it simple. It's safe for concurrent use.
-	
-	client := conn.client
 	poolMu.Unlock()
+
+	// Wait if another goroutine is currently dialing or reconnecting this router
+	conn.mu.Lock()
+	client := conn.client
+	conn.mu.Unlock()
+	
+	if client == nil {
+		// This happens if the first dialer failed, and we just acquired the lock after it.
+		// Or another edge case. Best to force reconnect.
+		return nil, fmt.Errorf("mikrotik client is nil")
+	}
 
 	// Quick health check
 	_, err := client.Run("/system/identity/print")
 	if err != nil {
-		// Dead connection. Close and reconnect
 		client.Close()
 		
-		poolMu.Lock()
-		// Double check it hasn't been replaced already by another goroutine
-		if clientPool[key].client == client {
+		conn.mu.Lock()
+		// Check if another goroutine already fixed it while we were waiting to lock
+		if conn.client == client {
 			newClient, errDial := dialMikroTikRaw(addr, useTLS, username, password)
 			if errDial != nil {
-				delete(clientPool, key)
-				poolMu.Unlock()
+				conn.client = nil
+				conn.mu.Unlock()
+				ForceReconnect(addr, username)
 				return nil, errDial
 			}
-			clientPool[key].client = newClient
-			clientPool[key].lastUsed = time.Now()
+			conn.client = newClient
+			conn.lastUsed = time.Now()
 			client = newClient
 		} else {
 			// Another goroutine fixed it
-			client = clientPool[key].client
+			client = conn.client
 		}
-		poolMu.Unlock()
+		conn.mu.Unlock()
 	}
 
-	poolMu.Lock()
-	clientPool[key].lastUsed = time.Now()
-	poolMu.Unlock()
+	conn.mu.Lock()
+	conn.lastUsed = time.Now()
+	conn.mu.Unlock()
 
 	return client, nil
 }

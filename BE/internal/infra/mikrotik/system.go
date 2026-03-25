@@ -79,8 +79,8 @@ func GetLogs(ctx context.Context, addr string, useTLS bool, username, password s
 	// Get last 50 logs for diagnostics
 	// We sort by .id descending to get newest first if possible, 
 	// but RouterOS usually sends in order of storage. 
-	// We'll reverse it if needed in the UI or here.
-	repl, err := client.Run("/log/print")
+	// Using .proplist massively limits the bandwidth/CPU footprint of fetching logs.
+	repl, err := client.Run("/log/print", "=.proplist=time,message,topics")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch logs: %w", err)
 	}
