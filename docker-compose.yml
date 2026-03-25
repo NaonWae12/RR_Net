@@ -88,21 +88,6 @@ services:
     networks:
       - default
 
-  # SoftEther VPN Server (SSTP Support for stable connections)
-  softether:
-    image: siomiz/softether
-    container_name: rrnet-sstp
-    restart: always
-    privileged: true
-    ports:
-      - "4443:443"
-    environment:
-      - "USERS=vpn-admin-rrnet:rrnet-pass-2024" # Default admin user
-    volumes:
-      - /etc/ppp/chap-secrets:/etc/ppp/chap-secrets:ro
-    networks:
-      - default
-
 volumes:
   postgres_data:
     driver: local

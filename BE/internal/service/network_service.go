@@ -1665,10 +1665,10 @@ func allocateVPNIP(username, password string) (string, error) {
 		return "", fmt.Errorf("failed to write chap-secrets: %w", err)
 	}
 
-	// Trigger SSTP Container restart to pick up new users from mounted chap-secrets
-	// if we are on linux and docker is available.
+	// Trigger Native SSTP (SoftEther) restart to pick up new users from mounted chap-secrets
+	// if we are on linux.
 	if runtime.GOOS == "linux" {
-		_ = exec.Command("docker", "restart", "rrnet-sstp").Run()
+		_ = exec.Command("sudo", "systemctl", "restart", "vpnserver").Run()
 	}
 
 	return assignedIP, nil
