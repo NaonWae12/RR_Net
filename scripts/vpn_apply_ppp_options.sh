@@ -15,6 +15,8 @@
 #   - removes proxyarp      (caused ARP conflicts when 2+ routers connect)
 #   - adds MSS Clamping     (blocks TCP fragmentation issues for Winbox/API)
 #   - sets uniqueids=no     (allows multiple routers behind same NAT/Public IP)
+#   - adds overlapip=yes    (allows IP overlap for multiple SAs)
+#   - sets fragmentation=yes (better handling of flaky network paths)
 
 set -euo pipefail
 
@@ -102,11 +104,34 @@ if [ -f "${IPSEC_CONF}" ]; then
     sed -i "/config setup/a \    uniqueids=no" "${IPSEC_CONF}"
     echo "   - uniqueids=no (added)"
   fi
+
+  # 1b. overlapip=yes is a legacy but helpful option for IP collisions
+  if ! grep -q "overlapip=yes" "${IPSEC_CONF}"; then
+    if grep -q "config setup" "${IPSEC_CONF}"; then
+      sed -i "/config setup/a \    overlapip=yes" "${IPSEC_CONF}"
+      echo "   - overlapip=yes (added)"
+    fi
+  fi
   
-  # 2. Add dpd tuning to existing L2TP conn if present
+  # 2. Add tuning to existing L2TP conn if present
   #    Ensures tunnel drops are detected quickly and reconnectable
-  if grep -q "dpddelay=" "${IPSEC_CONF}"; then
-    sed -i "s/dpddelay=.*/dpddelay=30s/" "${IPSEC_CONF}"
+  if grep -q "conn L2TP-PSK" "${IPSEC_CONF}"; then
+    # Set rekey=no for multi-router stability behind same NAT
+    if ! grep -q "rekey=no" "${IPSEC_CONF}"; then
+      sed -i "/conn L2TP-PSK/a \  rekey=no" "${IPSEC_CONF}"
+      echo "   - rekey=no (added to conn)"
+    fi
+    # Enable fragmentation handling
+    if ! grep -q "fragmentation=yes" "${IPSEC_CONF}"; then
+      sed -i "/conn L2TP-PSK/a \  fragmentation=yes" "${IPSEC_CONF}"
+      echo "   - fragmentation=yes (added to conn)"
+    fi
+    # Set DPD delay
+    if grep -q "dpddelay=" "${IPSEC_CONF}"; then
+      sed -i "s/dpddelay=.*/dpddelay=30s/" "${IPSEC_CONF}"
+    else
+      sed -i "/conn L2TP-PSK/a \  dpddelay=30s" "${IPSEC_CONF}"
+    fi
   fi
 else
   echo "WARNING: ${IPSEC_CONF} not found, skipping tuning"
