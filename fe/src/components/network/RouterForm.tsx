@@ -191,19 +191,19 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
             <div className="grid grid-cols-2 gap-3">
               <label className={cn(
                 "flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all",
-                connectivityMode === 'vpn' ? "border-indigo-600 bg-indigo-50 shadow-md" : "border-slate-200 hover:border-slate-300"
+                connectivityMode === 'vpn' ? "border-indigo-600 bg-indigo-50 shadow-md" : "border-slate-200 hover:border-slate-300 bg-white"
               )}>
                 <input type="radio" value="vpn" {...register("connectivity_mode")} className="hidden" />
-                <span className="font-bold text-sm mb-1">Standard (L2TP/IPsec)</span>
-                <span className="text-[10px] text-slate-500">Cepat & Umum. Cocok buat ruter standar.</span>
+                <span className={cn("font-bold text-sm mb-1", connectivityMode === 'vpn' ? "text-indigo-900" : "text-slate-700")}>Standard (L2TP/IPsec)</span>
+                <span className={cn("text-[10px]", connectivityMode === 'vpn' ? "text-indigo-700" : "text-slate-500")}>Cepat & Umum. Cocok buat ruter standar.</span>
               </label>
               <label className={cn(
                 "flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all",
-                connectivityMode === 'vpn_sstp' ? "border-indigo-600 bg-indigo-50 shadow-md" : "border-slate-200 hover:border-slate-300"
+                connectivityMode === 'vpn_sstp' ? "border-indigo-600 bg-indigo-50 shadow-md" : "border-slate-200 hover:border-slate-300 bg-white"
               )}>
                 <input type="radio" value="vpn_sstp" {...register("connectivity_mode")} className="hidden" />
-                <span className="font-bold text-sm mb-1">Premium (SSTP)</span>
-                <span className="text-[10px] text-slate-500">Super Stabil & Anti-Blokir. Cocok buat NAT/Kantor.</span>
+                <span className={cn("font-bold text-sm mb-1", connectivityMode === 'vpn_sstp' ? "text-indigo-900" : "text-slate-700")}>Premium (SSTP)</span>
+                <span className={cn("text-[10px]", connectivityMode === 'vpn_sstp' ? "text-indigo-700" : "text-slate-500")}>Super Stabil & Anti-Blokir. Cocok buat NAT/Kantor.</span>
               </label>
             </div>
           </div>
