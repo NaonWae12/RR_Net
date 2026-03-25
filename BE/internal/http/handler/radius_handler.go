@@ -101,8 +101,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			"Framed-IP-Address": router.Host, // Force Static IP expected by ERP Backend
 		}
 		
-		responseJSON, _ := json.MarshalIndent(response, "", "  ")
-		zslog.Debug().Msgf("[radius_auth] ACCEPT VPN: username=%q IP=%s\n%s", req.UserName, router.Host, string(responseJSON))
+		zslog.Info().Msgf("[radius_auth_vpn] ACCEPT: username=%q forced_ip=%s nas_ip=%s", req.UserName, router.Host, req.NASIPAddress)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)

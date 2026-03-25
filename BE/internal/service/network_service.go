@@ -669,12 +669,13 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 	// Only attempt if we have valid connection details and the router is not in a broken state
 	if router.Type == network.RouterTypeMikroTik && router.Host != "" && router.Username != "" && router.APIPort > 0 {
 		addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-		cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Second) // Snappier timeout
+		// Use a much shorter timeout for cleanup so we don't hang if the router is offline
+		cleanupCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
 		log.Info().Str("router_id", id.String()).Str("addr", addr).Msg("DeleteRouter: Attempting remote cleanup on MikroTik")
 		if err := mikrotik.UninstallSystemConfig(cleanupCtx, addr, router.APIUseTLS, router.Username, router.Password); err != nil {
-			log.Warn().Err(err).Str("router_id", id.String()).Msg("DeleteRouter: Remote cleanup failed or timed out (Best-effort)")
+			log.Warn().Err(err).Str("router_id", id.String()).Msg("DeleteRouter: Remote cleanup skipped (Router unreachable or timed out)")
 		} else {
 			log.Info().Str("router_id", id.String()).Msg("DeleteRouter: Remote cleanup successful")
 		}
