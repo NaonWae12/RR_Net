@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 
@@ -127,6 +128,7 @@ func (h *NetworkHandler) ProvisionRouter(w http.ResponseWriter, r *http.Request)
 
 	res, err := h.networkService.ProvisionRouter(r.Context(), tenantID, req.Name, req.ConnectivityMode)
 	if err != nil {
+		fmt.Printf("ERROR ProvisionRouter: %v\n", err) // Temporary logging to pinpoint 500 error
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
