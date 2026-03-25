@@ -688,6 +688,12 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 				log.Printf("Warning: failed to remove VPN user %s from chap-secrets: %v", router.VPNUsername, err)
 			}
 		}
+	} else if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP && router.VPNUsername != "" {
+		if runtime.GOOS == "linux" {
+			if err := removeSoftEtherUser(router.VPNUsername); err != nil {
+				log.Printf("Warning: failed to remove SoftEther VPN user %s: %v", router.VPNUsername, err)
+			}
+		}
 	}
 
 	// 4. Finally, remove from database
@@ -1707,6 +1713,20 @@ func removeVPNUser(username string) error {
 	// Write directly (os.Rename fails on Docker bind-mounts).
 	content := strings.Join(newLines, "\n") + "\n"
 	return os.WriteFile(chapSecretsPath, []byte(content), 0600)
+}
+
+// removeSoftEtherUser removes a user from SoftEther Virtual Hub 'DEFAULT'.
+func removeSoftEtherUser(username string) error {
+	if username == "" {
+		return nil
+	}
+	// Call vpncmd to delete the user
+	cmd := exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserDelete", username)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("softether UserDelete failed: %w (output: %s)", err, string(output))
+	}
+	return nil
 }
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
