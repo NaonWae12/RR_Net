@@ -92,7 +92,7 @@ echo ""
 #   Debian 11 / Ubuntu 20-22: strongswan-starter
 echo "Checking strongswan autostart..."
 STRONGSWAN_UNIT=""
-for CANDIDATE in strongswan-swanctl strongswan-starter strongswan charon; do
+for CANDIDATE in ipsec strongswan-swanctl strongswan-starter strongswan charon; do
   if systemctl list-unit-files "${CANDIDATE}.service" 2>/dev/null | grep -q "${CANDIDATE}.service"; then
     STRONGSWAN_UNIT="${CANDIDATE}"
     break
