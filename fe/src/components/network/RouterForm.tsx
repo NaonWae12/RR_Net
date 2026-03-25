@@ -12,7 +12,10 @@ import React from "react";
 import { networkService } from "@/lib/api/networkService";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, Loader2, Copy, Terminal, ShieldCheck, Activity } from "lucide-react";
-
+const routerFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+  type: z.enum(["mikrotik", "cisco", "ubiquiti", "other"]),
   connectivity_mode: z.enum(["direct_public", "vpn", "vpn_sstp"]).default("vpn"),
   host: z.string().optional(),
   nas_ip: z.string().optional(),
