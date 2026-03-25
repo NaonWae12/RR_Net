@@ -1603,7 +1603,7 @@ func generateRandomString(n int) string {
 }
 
 // vpnMu guards concurrent access to /etc/ppp/chap-secrets so two simultaneous
-// provisioning requests never collide on the same IP.
+// provisioning requests never collide on the same IP or username.
 var vpnMu sync.Mutex
 
 const chapSecretsPath = "/etc/ppp/chap-secrets"
@@ -1611,7 +1611,19 @@ const chapSecretsPath = "/etc/ppp/chap-secrets"
 // allocateVPNIP reads /etc/ppp/chap-secrets to find all globally in-use IPs
 // (across ALL tenants), picks the next free octet in 10.10.10.100-254, writes
 // the new user entry, and returns the allocated IP.
-// It uses a mutex so concurrent provisioning requests can't collide.
+//
+// Pool range: 10.10.10.100-254 (155 IPs).
+// IMPORTANT: This range MUST match xl2tpd's 'ip range' in xl2tpd.conf.
+//   See: scripts/install_vpn_server.sh → VPN_POOL_END_DEFAULT="10.10.10.254"
+//   If xl2tpd pool is smaller, routers assigned IPs above its range will
+//   connect to the tunnel but cannot be reached by the backend.
+//
+// chap-secrets format: "username * password ip"
+//   Server field is '*' (wildcard). Must NOT use 'l2tpd' here because
+//   xl2tpd authenticates against chap-secrets using wildcard matching.
+//   Mixing '*' and 'l2tpd' entries causes intermittent auth failures.
+//
+// It uses a mutex so concurrent provisioning requests cannot collide.
 func allocateVPNIP(username, password string) (string, error) {
 	vpnMu.Lock()
 	defer vpnMu.Unlock()
@@ -1623,6 +1635,7 @@ func allocateVPNIP(username, password string) (string, error) {
 	}
 
 	usedIPs := make(map[string]bool)
+	usedUsernames := make(map[string]bool)
 	var lines []string
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -1638,6 +1651,9 @@ func allocateVPNIP(username, password string) (string, error) {
 
 		// Format: username * password ip
 		parts := strings.Fields(trimmed)
+		if len(parts) >= 1 {
+			usedUsernames[parts[0]] = true
+		}
 		if len(parts) >= 4 {
 			ip := parts[3]
 			if net.ParseIP(ip) != nil {
@@ -1647,7 +1663,15 @@ func allocateVPNIP(username, password string) (string, error) {
 		lines = append(lines, line)
 	}
 
-	// --- 2. Find next free IP in range 10.10.10.100-254 ---
+	// --- 2. Guard against duplicate username ---
+	// This prevents overwriting an existing router's VPN entry if somehow
+	// the same username is generated (e.g., name collision + same random suffix).
+	if usedUsernames[username] {
+		return "", fmt.Errorf("VPN username already exists in chap-secrets: %s", username)
+	}
+
+	// --- 3. Find next free IP in range 10.10.10.100-254 ---
+	// Range MUST match xl2tpd 'ip range' in xl2tpd.conf (see install_vpn_server.sh).
 	assignedIP := ""
 	for i := 100; i <= 254; i++ {
 		candidate := fmt.Sprintf("10.10.10.%d", i)
@@ -1660,11 +1684,12 @@ func allocateVPNIP(username, password string) (string, error) {
 		return "", fmt.Errorf("VPN IP pool exhausted (10.10.10.100-254 all in use)")
 	}
 
-	// --- 3. Append new user entry ---
+	// --- 4. Append new user entry ---
+	// Server field '*' = wildcard, consistent with vpn_server_add_user.sh.
 	newEntry := fmt.Sprintf("%s * %s %s", username, password, assignedIP)
 	lines = append(lines, newEntry)
 
-	// --- 4. Write directly to chap-secrets.
+	// --- 5. Write directly to chap-secrets.
 	// NOTE: os.Rename fails on Docker bind-mounts ("device or resource busy").
 	// Writing directly is safe here because the mutex above prevents concurrent writes.
 	content := strings.Join(lines, "\n") + "\n"

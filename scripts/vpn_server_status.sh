@@ -3,6 +3,12 @@
 #
 # Usage:
 #   sudo bash scripts/vpn_server_status.sh
+#
+# Changelog:
+# 2026-03-25 - Updated chap-secrets display:
+#   - Filter changed from $2=="l2tpd" to all non-comment entries.
+#     Reason: server field is now '*' (wildcard) in both script and Go code.
+#     Old filter missed all entries written by Go's allocateVPNIP().
 
 set -euo pipefail
 
@@ -42,9 +48,15 @@ if [ -d /var/run/xl2tpd ]; then
 fi
 echo ""
 
-echo "Users in /etc/ppp/chap-secrets (names only):"
+echo "Users in /etc/ppp/chap-secrets (name + assigned IP):"
 if [ -f /etc/ppp/chap-secrets ]; then
-  awk 'NF>=3 && $2=="l2tpd" {print "  - " $1}' /etc/ppp/chap-secrets | head -50
+  # Show all non-comment, non-empty lines regardless of server field.
+  # Server field is '*' (wildcard) for entries from Go (allocateVPNIP) and this script.
+  # Old entries written by install_vpn_server.sh may still use 'l2tpd' — both are shown here.
+  awk 'NF>=3 && substr($1,1,1) != "#" {
+    ip = (NF>=4) ? $4 : "(dynamic)"
+    print "  - " $1 "  ip=" ip
+  }' /etc/ppp/chap-secrets | head -50
 else
   echo "  (no chap-secrets found)"
 fi

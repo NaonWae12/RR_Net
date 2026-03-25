@@ -13,12 +13,23 @@
 # Notes:
 # - Re-run safely; it will overwrite config files but will not delete existing chap-secrets lines.
 # - Do NOT commit generated secrets from /etc to git.
+#
+# Changelog:
+# 2026-03-25 - Fix VPN stability & multi-router conflicts:
+#   - Pool extended .100-.254 (was .100-.200) to match Go allocateVPNIP range
+#   - Removed 'proxyarp' from ppp options (caused ARP conflicts when 2+ routers connect)
+#   - idle set to 0 (was 1800) to prevent disconnect during low-traffic periods
+#   - lcp-echo-interval 60 (was 30) + lcp-echo-failure 5 (was 4) = 5 min tolerance before drop
+#   - chap-secrets server field changed to '*' (was 'l2tpd') to match Go allocateVPNIP format
 
 set -euo pipefail
 
 VPN_LOCAL_IP_DEFAULT="10.10.10.1"
 VPN_POOL_START_DEFAULT="10.10.10.100"
-VPN_POOL_END_DEFAULT="10.10.10.200"
+# IMPORTANT: Pool end must match Go allocateVPNIP range (10.10.10.100-254).
+# If this differs from Go code, routers assigned IPs above the pool end
+# will connect to VPN but cannot be reached (IP outside xl2tpd DHCP range).
+VPN_POOL_END_DEFAULT="10.10.10.254"
 
 echo "=========================================="
 echo "Install L2TP/IPSec VPN SERVER (VPS)"
@@ -111,6 +122,7 @@ cat > /etc/xl2tpd/xl2tpd.conf <<EOF
 port = 1701
 
 [lns default]
+# Pool MUST match Go allocateVPNIP range: 10.10.10.100-254
 ip range = ${VPN_POOL_START}-${VPN_POOL_END}
 local ip = ${VPN_LOCAL_IP}
 require chap = yes
@@ -130,15 +142,20 @@ ms-dns 8.8.8.8
 noccp
 auth
 crtscts
-idle 1800
+# idle 0 = disable idle timeout.
+# Previously was 1800 (30 min) which caused VPN to drop during low-traffic periods.
+idle 0
 mtu 1410
 mru 1410
 lock
 hide-password
 modem
-proxyarp
-lcp-echo-interval 30
-lcp-echo-failure 4
+# proxyarp REMOVED: caused ARP conflicts when multiple routers connect simultaneously.
+# Each router gets a unique static IP via chap-secrets, so proxyarp is not needed.
+# lcp-echo: 60s interval x 5 failures = 5 min tolerance before drop.
+# Previously 30s x 4 = only 2 min, which was too aggressive for flaky networks.
+lcp-echo-interval 60
+lcp-echo-failure 5
 EOF
 chmod 600 /etc/ppp/options.xl2tpd
 echo "✓ xl2tpd configured"
@@ -148,11 +165,13 @@ echo "Step 5: Add initial VPN user (chap-secrets)..."
 touch /etc/ppp/chap-secrets
 chmod 600 /etc/ppp/chap-secrets
 
-# Avoid duplicate entries for same user/server
-if grep -qE "^${VPN_USER}[[:space:]]+l2tpd[[:space:]]+" /etc/ppp/chap-secrets; then
+# Server field uses '*' (wildcard) to match any LNS name.
+# IMPORTANT: Must use '*' (not 'l2tpd') to be consistent with Go's allocateVPNIP()
+# which also writes '*'. Mixing 'l2tpd' and '*' causes auth failures for some users.
+if grep -qE "^${VPN_USER}[[:space:]]+" /etc/ppp/chap-secrets; then
   echo "  User already exists in chap-secrets (skipping): ${VPN_USER}"
 else
-  echo "${VPN_USER} l2tpd ${VPN_PASS} *" >> /etc/ppp/chap-secrets
+  echo "${VPN_USER} * ${VPN_PASS} *" >> /etc/ppp/chap-secrets
   echo "✓ Added user: ${VPN_USER}"
 fi
 
