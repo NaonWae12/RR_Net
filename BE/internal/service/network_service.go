@@ -1726,7 +1726,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 	var vpnInterfaceCmd string
 	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
 		// SSTP (TCP 4443)
-		vpnInterfaceCmd = fmt.Sprintf("/interface sstp-client add connect-to=%s port=4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no",
+		vpnInterfaceCmd = fmt.Sprintf("/interface sstp-client add connect-to=%s:4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no",
 			vpnHost, router.VPNUsername, router.VPNPassword)
 	} else {
 		// L2TP/IPsec (Standard)
