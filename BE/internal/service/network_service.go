@@ -405,7 +405,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		// Allocate next free VPN IP by reading chap-secrets directly.
 		// This is global across all tenants to prevent any collision.
 		var allocErr error
-		assignedIP, allocErr = allocateVPNIP(vpnUser, vpnPass)
+		assignedIP, allocErr = allocateVPNIP(mode, vpnUser, vpnPass)
 		if allocErr != nil {
 			return nil, fmt.Errorf("failed to allocate VPN IP: %w", allocErr)
 		}
@@ -1624,7 +1624,7 @@ const chapSecretsPath = "/etc/ppp/chap-secrets"
 //   Mixing '*' and 'l2tpd' entries causes intermittent auth failures.
 //
 // It uses a mutex so concurrent provisioning requests cannot collide.
-func allocateVPNIP(username, password string) (string, error) {
+func allocateVPNIP(mode network.RouterConnectivityMode, username, password string) (string, error) {
 	vpnMu.Lock()
 	defer vpnMu.Unlock()
 
@@ -1670,18 +1670,32 @@ func allocateVPNIP(username, password string) (string, error) {
 		return "", fmt.Errorf("VPN username already exists in chap-secrets: %s", username)
 	}
 
-	// --- 3. Find next free IP in range 10.10.10.100-254 ---
-	// Range MUST match xl2tpd 'ip range' in xl2tpd.conf (see install_vpn_server.sh).
+	// --- 3. Find next free IP based on connectivity mode ---
 	assignedIP := ""
-	for i := 100; i <= 254; i++ {
-		candidate := fmt.Sprintf("10.10.10.%d", i)
-		if !usedIPs[candidate] {
-			assignedIP = candidate
-			break
+	isSSTP := mode == network.RouterConnectivityModeVPNSSTP
+
+	if isSSTP {
+		// SSTP Range: 10.10.20.10-100
+		for i := 10; i <= 100; i++ {
+			candidate := fmt.Sprintf("10.10.20.%d", i)
+			if !usedIPs[candidate] {
+				assignedIP = candidate
+				break
+			}
+		}
+	} else {
+		// L2TP Range: 10.10.10.100-254
+		for i := 100; i <= 254; i++ {
+			candidate := fmt.Sprintf("10.10.10.%d", i)
+			if !usedIPs[candidate] {
+				assignedIP = candidate
+				break
+			}
 		}
 	}
+
 	if assignedIP == "" {
-		return "", fmt.Errorf("VPN IP pool exhausted (10.10.10.100-254 all in use)")
+		return "", fmt.Errorf("VPN IP pool exhausted for %s mode", mode)
 	}
 
 	// --- 4. Append new user entry ---
@@ -1700,9 +1714,15 @@ func allocateVPNIP(username, password string) (string, error) {
 	// Trigger Native SSTP (SoftEther) user creation
 	// SoftEther has its own DB, we need to register the user explicitly via vpncmd.
 	if runtime.GOOS == "linux" {
-		// 1. Create the user
+		// 1. Ensure Hub is correctly configured for SSTP if not already
+		if isSSTP {
+			_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "NatSet", "/MTU:1500", "/LOG:no", "/IP:10.10.20.1", "/MASK:255.255.255.0").Run()
+			_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "DhcpSet", "/START:10.10.20.10", "/END:10.10.20.100", "/MASK:255.255.255.0", "/GW:10.10.20.1", "/DNS:8.8.8.8").Run()
+		}
+
+		// 2. Create the user
 		_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserCreate", username, "/GROUP:none", "/REALNAME:none", "/NOTE:none").Run()
-		// 2. Set the password
+		// 3. Set the password
 		_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserPasswordSet", username, "/PASSWORD:"+password).Run()
 	}
 
@@ -1765,7 +1785,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 
 	vpnSubnet := os.Getenv("VPN_SUBNET")
 	if vpnSubnet == "" {
-		vpnSubnet = "10.10.10.0/24"
+		vpnSubnet = "10.10.0.0/16"
 	}
 
 	// Choose VPN Interface Command
