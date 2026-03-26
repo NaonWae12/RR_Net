@@ -683,17 +683,13 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 
 	// 3. Cleanup VPN Account if applicable
 	// We do this AFTER remote cleanup so the tunnel is alive for the steps above
-	if router.ConnectivityMode == network.RouterConnectivityModeVPN && router.VPNUsername != "" {
+	if (router.ConnectivityMode == network.RouterConnectivityModeVPN || router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP) && router.VPNUsername != "" {
 		if runtime.GOOS == "linux" {
 			if err := removeVPNUser(router.VPNUsername); err != nil {
 				log.Printf("Warning: failed to remove VPN user %s from chap-secrets: %v", router.VPNUsername, err)
 			}
-		}
-	} else if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP && router.VPNUsername != "" {
-		if runtime.GOOS == "linux" {
-			if err := removeSoftEtherUser(router.VPNUsername); err != nil {
-				log.Printf("Warning: failed to remove SoftEther VPN user %s: %v", router.VPNUsername, err)
-			}
+			// Trigger reload for accel-ppp to catch standard L2TP/SSTP drops immediately
+			_ = exec.Command("sudo", "accel-cmd", "reload").Run()
 		}
 	}
 
@@ -1711,19 +1707,10 @@ func allocateVPNIP(mode network.RouterConnectivityMode, username, password strin
 		return "", fmt.Errorf("failed to write chap-secrets: %w", err)
 	}
 
-	// Trigger Native SSTP (SoftEther) user creation
-	// SoftEther has its own DB, we need to register the user explicitly via vpncmd.
+	// Both xl2tpd (L2TP) and accel-ppp (SSTP) use /etc/ppp/chap-secrets.
+	// Trigger accel-ppp reload to pick up the new user instantly without restart.
 	if runtime.GOOS == "linux" {
-		// 1. Ensure Hub is correctly configured for SSTP if not already
-		if isSSTP {
-			_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "NatSet", "/MTU:1500", "/LOG:no", "/IP:10.10.20.1", "/MASK:255.255.255.0").Run()
-			_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "DhcpSet", "/START:10.10.20.10", "/END:10.10.20.100", "/MASK:255.255.255.0", "/GW:10.10.20.1", "/DNS:8.8.8.8").Run()
-		}
-
-		// 2. Create the user
-		_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserCreate", username, "/GROUP:none", "/REALNAME:none", "/NOTE:none").Run()
-		// 3. Set the password
-		_ = exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserPasswordSet", username, "/PASSWORD:"+password).Run()
+		_ = exec.Command("sudo", "accel-cmd", "reload").Run()
 	}
 
 	return assignedIP, nil
@@ -1761,19 +1748,7 @@ func removeVPNUser(username string) error {
 	return os.WriteFile(chapSecretsPath, []byte(content), 0600)
 }
 
-// removeSoftEtherUser removes a user from SoftEther Virtual Hub 'DEFAULT'.
-func removeSoftEtherUser(username string) error {
-	if username == "" {
-		return nil
-	}
-	// Call vpncmd to delete the user
-	cmd := exec.Command("/opt/vpnserver/vpncmd", "localhost:5555", "/SERVER", "/HUB:DEFAULT", "/CMD", "UserDelete", username)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("softether UserDelete failed: %w (output: %s)", err, string(output))
-	}
-	return nil
-}
+
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
 	vpnHost := s.getVPNHost()
@@ -1800,14 +1775,8 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 			vpnHost, router.VPNPassword, router.VPNUsername, psk)
 	}
 
-	// Construct Optional Manual IP for SSTP (SoftEther sometimes flips 1.0.0.1 incorrectly)
-	manualIPCmd := ""
-	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP && router.Host != "" {
-		manualIPCmd = fmt.Sprintf("\n/ip address add address=%s/24 interface=sstp-rrnet network=10.10.20.1", router.Host)
-	}
-
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
-%s%s
+%s
 /ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc pfs-group=none
 /ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
 /ip service set api disabled=no port=8728
@@ -1823,7 +1792,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, vpnInterfaceCmd, manualIPCmd, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
 
 	return script
 }
