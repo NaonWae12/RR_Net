@@ -15,8 +15,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -623,8 +623,8 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	// If Radius is enabled, ensure MikroTik is configured
 	if router.RadiusEnabled && router.Type == network.RouterTypeMikroTik && router.Host != "" {
 		radiusIP := "10.10.10.1" // Default VPN Gateway IP for Radius
-		
-		// Capture variables locally to prevent race conditions with HTTP handlers 
+
+		// Capture variables locally to prevent race conditions with HTTP handlers
 		// zeroing out router.Password and router.RadiusSecret before the response.
 		host := router.Host
 		apiPort := router.APIPort
@@ -1610,14 +1610,16 @@ const chapSecretsPath = "/etc/ppp/chap-secrets"
 //
 // Pool range: 10.10.10.100-254 (155 IPs).
 // IMPORTANT: This range MUST match xl2tpd's 'ip range' in xl2tpd.conf.
-//   See: scripts/install_vpn_server.sh → VPN_POOL_END_DEFAULT="10.10.10.254"
-//   If xl2tpd pool is smaller, routers assigned IPs above its range will
-//   connect to the tunnel but cannot be reached by the backend.
+//
+//	See: scripts/install_vpn_server.sh → VPN_POOL_END_DEFAULT="10.10.10.254"
+//	If xl2tpd pool is smaller, routers assigned IPs above its range will
+//	connect to the tunnel but cannot be reached by the backend.
 //
 // chap-secrets format: "username * password ip"
-//   Server field is '*' (wildcard). Must NOT use 'l2tpd' here because
-//   xl2tpd authenticates against chap-secrets using wildcard matching.
-//   Mixing '*' and 'l2tpd' entries causes intermittent auth failures.
+//
+//	Server field is '*' (wildcard). Must NOT use 'l2tpd' here because
+//	xl2tpd authenticates against chap-secrets using wildcard matching.
+//	Mixing '*' and 'l2tpd' entries causes intermittent auth failures.
 //
 // It uses a mutex so concurrent provisioning requests cannot collide.
 func allocateVPNIP(mode network.RouterConnectivityMode, username, password string) (string, error) {
@@ -1748,8 +1750,6 @@ func removeVPNUser(username string) error {
 	return os.WriteFile(chapSecretsPath, []byte(content), 0600)
 }
 
-
-
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
 	vpnHost := s.getVPNHost()
 	psk := s.getIPsecPSK()
@@ -1775,11 +1775,17 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 			vpnHost, router.VPNPassword, router.VPNUsername, psk)
 	}
 
+	// Choose Internal Gateway IP (Radius should point here)
+	gatewayIP := "10.10.10.1" // Default L2TP
+	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
+		gatewayIP = "10.10.20.1" // SSTP Gateway
+	}
+
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
 %s
 /ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc pfs-group=none
 /ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
-/ip service set api disabled=no port=8728
+/ip service set api address=%s disabled=no port=8728
 /ip service set api-ssl disabled=yes
 /ip service set winbox disabled=no port=8291
 /ip service set www disabled=yes
@@ -1789,10 +1795,10 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /system identity set name="RR-%s"
 
 ## RADIUS & HOTSPOT SETUP
-/radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
+/radius add address=%s secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, vpnInterfaceCmd, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, router.Name, gatewayIP, radiusSecret, router.NASIdentifier)
 
 	return script
 }
@@ -2080,7 +2086,7 @@ func (s *NetworkService) GetRouterLogs(ctx context.Context, id uuid.UUID) ([]map
 	// Save to cache
 	if s.redis != nil {
 		if data, err := json.Marshal(logs); err == nil {
-			// Cache for 60 seconds. When actively polling (e.g. 30s intervals), 
+			// Cache for 60 seconds. When actively polling (e.g. 30s intervals),
 			// this cuts the actual router hits by half or more. When idle, no hits occur.
 			_ = s.redis.Set(ctx, cacheKey, data, 60*time.Second)
 		}
@@ -2101,7 +2107,7 @@ func (s *NetworkService) SetupRemoteUser(ctx context.Context, id uuid.UUID, user
 	}
 
 	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-	
+
 	// Create user with "full" group so the admin can manage the router via Winbox
 	err = mikrotik.AddMikrotikUser(ctx, addr, router.APIUseTLS, router.Username, router.Password, username, password, "full")
 	if err != nil {
@@ -2110,4 +2116,3 @@ func (s *NetworkService) SetupRemoteUser(ctx context.Context, id uuid.UUID, user
 
 	return nil
 }
-
