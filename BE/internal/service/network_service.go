@@ -1800,8 +1800,14 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 			vpnHost, router.VPNPassword, router.VPNUsername, psk)
 	}
 
+	// Construct Optional Manual IP for SSTP (SoftEther sometimes flips 1.0.0.1 incorrectly)
+	manualIPCmd := ""
+	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP && router.Host != "" {
+		manualIPCmd = fmt.Sprintf("\n/ip address add address=%s/24 interface=sstp-rrnet network=10.10.20.1", router.Host)
+	}
+
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
-%s
+%s%s
 /ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc pfs-group=none
 /ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
 /ip service set api disabled=no port=8728
@@ -1817,7 +1823,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /radius add address=10.10.10.1 secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, vpnInterfaceCmd, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
+`, router.Name, vpnInterfaceCmd, manualIPCmd, vpnSubnet, router.Name, radiusSecret, router.NASIdentifier)
 
 	return script
 }
