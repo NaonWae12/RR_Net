@@ -238,6 +238,12 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		// For many setups, NAS-IP equals router host (when host is an IP).
 		router.NASIP = router.Host
 	}
+
+	// Set default RadiusSecret to match VPS config (One-Secret Policy)
+	if router.RadiusSecret == "" {
+		router.RadiusSecret = "rrnet-dev-radius-secret"
+	}
+
 	if req.RadiusEnabled != nil {
 		router.RadiusEnabled = *req.RadiusEnabled
 	}
@@ -1829,7 +1835,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ppp aaa set use-radius=yes
-`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, radiusSecret, router.NASIdentifier)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, router.RadiusSecret, router.NASIdentifier)
 
 	return script
 }
