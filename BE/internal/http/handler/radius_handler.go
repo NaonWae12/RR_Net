@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -57,11 +58,11 @@ type AuthRequest struct {
 func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// DEBUG: Always allow for now
+	// DEBUG: Always allow secret for now
 	secret := r.Header.Get("X-RRNET-RADIUS-SECRET")
 	zslog.Info().Str("received_secret", secret).Msg("[radius_auth] Received request")
 
-	// Decode directly (No HEX needed for now)
+	// Decode directly
 	var req AuthRequest
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -70,6 +71,16 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		zslog.Error().Err(err).Str("body", string(bodyBytes)).Msg("[radius_auth] JSON decode failed")
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
+	}
+
+	// DECODE HEX PASSWORD (if present)
+	// FreeRADIUS sends binary attributes as 0xHEXSTRING via hex:%{Attribute}
+	if strings.HasPrefix(req.UserPassword, "0x") {
+		hexStr := req.UserPassword[2:]
+		decoded, err := hex.DecodeString(hexStr)
+		if err == nil {
+			req.UserPassword = string(decoded)
+		}
 	}
 
 	// SPECIAL CASE: VPN Auth (SSTP/L2TP for Routers)
@@ -81,7 +92,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	// Resolve router (for Hotspot/Voucher)
 	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
-		zslog.Warn().Str("username", req.UserName).Str("nas_ip", req.NASIPAddress).Msg("[radius_auth] Router not found")
+		zslog.Warn().Str("username", req.UserName).Str("nas_ip", req.NASIPAddress).Str("nas_id", req.NASIdentifier).Msg("[radius_auth] Router not found")
 		http.Error(w, `{"error":"NAS not registered"}`, http.StatusForbidden)
 		return
 	}
@@ -96,6 +107,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	// Password check (Backup style: pure string)
 	if v.Password != "" {
 		if strings.TrimSpace(v.Password) != strings.TrimSpace(req.UserPassword) {
+			zslog.Warn().Str("expected", v.Password).Str("got", req.UserPassword).Msg("[radius_auth] Password mismatch")
 			h.logAuthReject(w, r, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, "password mismatch")
 			return
 		}

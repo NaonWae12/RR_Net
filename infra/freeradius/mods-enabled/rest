@@ -11,7 +11,7 @@ rest {
 		uri = "http://127.0.0.1:8080/api/v1/radius/auth"
 		method = 'post'
 		body = 'json'
-		data = '{ "User-Name": "%{User-Name}", "User-Password": "%{User-Password}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}" }'
+		data = '{ "User-Name": "%{User-Name}", "User-Password": "%{hex:User-Password}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}" }'
 	}
 
 	# Accounting: Start/Interim/Stop
