@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	zslog "github.com/rs/zerolog/log"
 
-	"rrnet/internal/auth"
 	"rrnet/internal/domain/network"
 	"rrnet/internal/domain/radius"
 	"rrnet/internal/repository"
