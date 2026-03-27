@@ -153,17 +153,37 @@ export default function WhatsAppSetupPage() {
       if (resp.qr) {
         console.log("[WA Setup] QR code received in connect response");
         setQrCode(resp.qr);
+        // Set expiry time to 1 minute from now
+        const newExpiry = Date.now() + 1 * 60 * 1000;
+        setQrExpiryTime(newExpiry);
+        setQrExpired(false);
       }
       showToast("Memulai koneksi WhatsApp...", "info");
     } catch (error: any) {
       console.error("[WA Setup] Failed to connect WhatsApp:", error);
-      console.error("[WA Setup] Error details:", {
-        message: error.message,
-        response: error.response,
-        data: error.response?.data,
-        stack: error.stack
-      });
       showToast(error.response?.data?.error || error.message || "Gagal inisialisasi koneksi", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm("Are you sure you want to disconnect WhatsApp from the platform? This will stop all OTP services.")) return;
+    
+    console.log("[WA Setup] Disconnecting WhatsApp...");
+    setActionLoading(true);
+    try {
+      await superAdminService.disconnectWhatsApp();
+      showToast("WhatsApp terputus dari platform", "success");
+      setQrCode(null);
+      setQrExpired(false);
+      setQrExpiryTime(null);
+      localStorage.removeItem("wa_platform_qr");
+      localStorage.removeItem("wa_platform_qr_expiry");
+      fetchStatus();
+    } catch (error: any) {
+      console.error("[WA Setup] Failed to disconnect:", error);
+      showToast(error.response?.data?.error || "Gagal memutuskan koneksi", "error");
     } finally {
       setActionLoading(false);
     }
@@ -239,6 +259,7 @@ export default function WhatsAppSetupPage() {
                    <Button 
                     variant="outline" 
                     className="bg-white/5 border-white/10 text-white hover:bg-white/10 font-bold px-6 py-6 rounded-2xl"
+                    disabled={loading || actionLoading}
                     onClick={() => {
                         setLoading(true);
                         fetchStatus();
@@ -308,11 +329,17 @@ export default function WhatsAppSetupPage() {
                             <h3 className="text-2xl font-black text-slate-900">Sistem Berjalan Lancar</h3>
                             <p className="text-slate-500 text-sm max-w-[250px] mx-auto">WhatsApp Platform sudah terhubung. Siap kirim ribuan OTP! 🚀</p>
                         </div>
-                        <Button variant="outline" className="text-red-500 border-red-100 hover:bg-red-50 font-bold px-8 rounded-2xl">
+                        <Button 
+                          variant="outline" 
+                          className="text-red-500 border-red-100 hover:bg-red-50 font-bold px-8 rounded-2xl"
+                          onClick={handleDisconnect}
+                          disabled={actionLoading}
+                        >
                             <LogOut className="h-4 w-4 mr-2" />
-                            Putuskan Koneksi
+                            {actionLoading ? "Memutus..." : "Putuskan Koneksi"}
                         </Button>
                     </div>
+
                 ) : (status?.status === "qr_ready" || status?.status === "needs_qr" || status?.status === "not_connected") && qrCode ? (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                         <div className="relative">

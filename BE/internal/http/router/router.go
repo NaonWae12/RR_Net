@@ -85,8 +85,15 @@ func New(deps Dependencies) http.Handler {
 		asynqClient = asynqInfra.NewClient(deps.Config.Redis.Addr, deps.Config.Redis.Password, deps.Config.Redis.DB)
 	}
 
+	// WhatsApp Gateway client (Baileys) - used globally
+	waGatewayClient := deps.WAGateway
+	if waGatewayClient == nil {
+		// Fallback to creating one from config if not injected
+		waGatewayClient = wagw.NewClient(deps.Config.WAGateway.URL, deps.Config.WAGateway.AdminToken)
+	}
+
 	// Services
-	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager, deps.Redis, deps.WAGateway)
+	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager, deps.Redis, waGatewayClient)
 	platformBillingService := service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo)
 	platformDiscountService := service.NewPlatformDiscountService(platformDiscountRepo)
 
@@ -94,7 +101,7 @@ func New(deps Dependencies) http.Handler {
 	affiliateService := service.NewAffiliateService(userRepo, affiliateRepo, siteSettingRepo)
 	platformBillingService.SetAffiliateService(affiliateService)
 
-	tenantService := service.NewTenantService(tenantRepo, userRepo, planRepo, jwtManager, deps.Redis, deps.WAGateway, platformBillingService, affiliateService)
+	tenantService := service.NewTenantService(tenantRepo, userRepo, planRepo, jwtManager, deps.Redis, waGatewayClient, platformBillingService, affiliateService)
 	planService := service.NewPlanService(planRepo, tenantRepo)
 	addonService := service.NewAddonService(addonRepo, planRepo, tenantRepo)
 	featureResolver := service.NewFeatureResolver(planRepo, addonRepo, featureRepo)
@@ -138,7 +145,7 @@ func New(deps Dependencies) http.Handler {
 	clientHandler := handler.NewClientHandler(clientService)
 	featureHandler := handler.NewFeatureHandler(featureRepo)
 	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver, deps.Redis)
-	superAdminHandler := handler.NewSuperAdminHandler(tenantRepo, planRepo, addonRepo, planService, addonService, tenantService, userRepo, deps.WAGateway, networkService)
+	superAdminHandler := handler.NewSuperAdminHandler(tenantRepo, planRepo, addonRepo, planService, addonService, tenantService, userRepo, waGatewayClient, networkService)
 	employeeHandler := handler.NewEmployeeHandler(authService, userRepo)
 	servicePackageHandler := handler.NewServicePackageHandler(servicePackageService)
 	serviceSettingsHandler := handler.NewServiceSettingsHandler(serviceSettingsService)
@@ -165,7 +172,6 @@ func New(deps Dependencies) http.Handler {
 	migrationHandler := handler.NewMigrationHandler(migrationService)
 
 	// WhatsApp Gateway (Baileys) proxy client + handler (tenant-scoped; protected)
-	waGatewayClient := wagw.NewClient(deps.Config.WAGateway.URL, deps.Config.WAGateway.AdminToken)
 	waGatewayHandler := handler.NewWAGatewayHandler(waGatewayClient, waLogService)
 
 	// Technician module (repositories, service, handler)
@@ -1595,6 +1601,8 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/superadmin/whatsapp/status", requireSuperAdmin(methodHandler("GET", superAdminHandler.GetWhatsAppStatus)))
 	mux.Handle("/api/v1/superadmin/whatsapp/connect", requireSuperAdmin(methodHandler("POST", superAdminHandler.ConnectWhatsApp)))
 	mux.Handle("/api/v1/superadmin/whatsapp/qr", requireSuperAdmin(methodHandler("GET", superAdminHandler.GetWhatsAppQR)))
+	mux.Handle("/api/v1/superadmin/whatsapp/disconnect", requireSuperAdmin(methodHandler("POST", superAdminHandler.DisconnectWhatsApp)))
+
 
 	// Super Admin Network Monitoring
 	mux.Handle("/api/v1/superadmin/network/stats", requireSuperAdmin(methodHandler("GET", superAdminHandler.GetNetworkStats)))

@@ -151,3 +151,8 @@ func (c *Client) SendBulk(ctx context.Context, tenantID string, to []string, tex
 	}
 	return &out, nil
 }
+
+func (c *Client) Logout(ctx context.Context, tenantID string) error {
+	return c.doJSON(ctx, http.MethodPost, "/v1/tenants/"+tenantID+"/logout", nil, nil)
+}
+

@@ -191,6 +191,11 @@ export const superAdminService = {
     return response.data;
   },
 
+  async disconnectWhatsApp(): Promise<any> {
+    const response = await apiClient.post("/superadmin/whatsapp/disconnect", {});
+    return response.data;
+  },
+
   // ========== Network Monitoring ==========
   async getNetworkStats(): Promise<any> {
     const response = await apiClient.get("/superadmin/network/stats");

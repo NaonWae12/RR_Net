@@ -769,6 +769,30 @@ func (h *SuperAdminHandler) GetWhatsAppQR(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(qr)
 }
+
+func (h *SuperAdminHandler) DisconnectWhatsApp(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msg("[SuperAdmin] DisconnectWhatsApp called")
+
+	if h.waClient == nil {
+		log.Error().Msg("[SuperAdmin] WhatsApp client is nil - gateway not configured")
+		http.Error(w, `{"error":"WhatsApp gateway not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	log.Info().Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Calling waClient.Logout")
+	err := h.waClient.Logout(r.Context(), platformTenantID)
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", platformTenantID).Msg("[SuperAdmin] Failed to disconnect WhatsApp")
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().Msg("[SuperAdmin] WhatsApp disconnect successful")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Disconnected successfully",
+	})
+}
 func (h *SuperAdminHandler) GetNetworkStats(w http.ResponseWriter, r *http.Request) {
 	log.Info().Msg("[SuperAdmin] GetNetworkStats called")
 

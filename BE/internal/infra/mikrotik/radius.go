@@ -27,7 +27,6 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			"=address="+radiusServerIP, 
 			"=secret="+secret, 
 			"=service=hotspot,ppp",
-			"=nas-identifier="+nasIdentifier,
 		)
 	} else {
 		// Add new
@@ -36,11 +35,18 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			"=secret="+secret, 
 			"=service=hotspot,ppp", 
 			"=comment=RR-NET",
-			"=nas-identifier="+nasIdentifier,
 		)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to set radius: %w", err)
+	}
+
+	// 1.5. Set System Identity as NAS-Identifier (MikroTik uses system identity for NAS-Identifier)
+	if nasIdentifier != "" {
+		_, err = client.Run("/system/identity/set", "=name="+nasIdentifier)
+		if err != nil {
+			return fmt.Errorf("failed to set system identity to nas-identifier: %w", err)
+		}
 	}
 
 	// 2. Enable RADIUS in Hotspot Profile (Default)
