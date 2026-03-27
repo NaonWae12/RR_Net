@@ -1852,7 +1852,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ppp aaa set use-radius=yes
-`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, router.Name, radiusSec, nasID)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, router.Name, gatewayIP, radiusSec, nasID)
 
 	return script
 }
