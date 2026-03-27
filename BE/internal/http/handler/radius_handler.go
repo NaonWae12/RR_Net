@@ -53,9 +53,6 @@ type AuthRequest struct {
 	CalledStationID  string `json:"Called-Station-Id"`
 }
 
-// AuthResponse is returned to FreeRADIUS with reply attributes
-type AuthResponse map[string]interface{}
-
 // Auth handles RADIUS Access-Request (REST-only, NO PAP)
 func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -75,7 +72,13 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve router
+	// SPECIAL CASE: VPN Auth (SSTP/L2TP for Routers)
+	if strings.HasPrefix(req.UserName, "vpn-") {
+		h.handleVPNAuth(w, r, req)
+		return
+	}
+
+	// Resolve router (for Hotspot/Voucher)
 	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		zslog.Warn().Str("username", req.UserName).Str("nas_ip", req.NASIPAddress).Msg("[radius_auth] Router not found")
@@ -106,7 +109,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Success response
-	zslog.Info().Str("username", req.UserName).Msg("[radius_auth] ACCEPT")
+	zslog.Info().Str("username", req.UserName).Msg("[radius_auth] ACCEPT (Hotspot)")
 	h.logAuthAttempt(ctx, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "")
 
 	response := map[string]interface{}{
@@ -127,6 +130,36 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		response["Mikrotik-Address-List"] = "isolated"
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *RadiusHandler) handleVPNAuth(w http.ResponseWriter, r *http.Request, req AuthRequest) {
+	ctx := r.Context()
+	
+	// Lookup in routers table by vpn_username
+	router, err := h.routerRepo.GetByVPNUsername(ctx, req.UserName)
+	if err != nil {
+		zslog.Warn().Str("username", req.UserName).Msg("[radius_auth] VPN User not found")
+		http.Error(w, `{"error":"VPN account not found"}`, http.StatusForbidden)
+		return
+	}
+
+	// Verify VPN Password
+	if strings.TrimSpace(router.VPNPassword) != strings.TrimSpace(req.UserPassword) {
+		zslog.Warn().Str("username", req.UserName).Msg("[radius_auth] VPN Password mismatch")
+		h.logAuthAttempt(ctx, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, radius.AuthResultReject, "VPN password mismatch")
+		http.Error(w, `{"error":"invalid password"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Success VPN
+	zslog.Info().Str("username", req.UserName).Str("router", router.Name).Msg("[radius_auth] ACCEPT (VPN)")
+	h.logAuthAttempt(ctx, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "VPN authenticated")
+
+	response := map[string]interface{}{
+		"Reply-Message": "VPN Authenticated",
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
