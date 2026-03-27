@@ -477,6 +477,11 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		return nil, fmt.Errorf("failed to pre-save provisioning router: %w", err)
 	}
 
+	// Apply Remote Access (iptables) rules immediately so the admin can connect right away!
+	if runtime.GOOS == "linux" && router.Host != "" && router.RemoteAccessPort > 0 {
+		_ = s.applyRemoteAccessRules(router)
+	}
+
 	vpnHost := s.getVPNHost()
 	psk := s.getIPsecPSK()
 
