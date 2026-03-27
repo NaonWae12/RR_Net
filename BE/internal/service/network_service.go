@@ -623,6 +623,9 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	// If Radius is enabled, ensure MikroTik is configured
 	if router.RadiusEnabled && router.Type == network.RouterTypeMikroTik && router.Host != "" {
 		radiusIP := "10.10.10.1" // Default VPN Gateway IP for Radius
+		if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
+			radiusIP = "10.10.20.1" // SSTP Gateway
+		}
 
 		// Capture variables locally to prevent race conditions with HTTP handlers
 		// zeroing out router.Password and router.RadiusSecret before the response.
