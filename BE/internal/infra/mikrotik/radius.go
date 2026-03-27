@@ -29,7 +29,8 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			"=.id=" + id,
 			"=address=" + radiusServerIP,
 			"=secret=" + secret,
-			"=service=hotspot,ppp",
+			"=service=hotspot",
+			"=service=ppp",
 		}
 		if nasIdentifier != "" {
 			args = append(args, "=nas-identifier="+nasIdentifier)
@@ -48,7 +49,8 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 				"=.id=" + id,
 				"=comment=RR-NET",
 				"=secret=" + secret,
-				"=service=hotspot,ppp",
+				"=service=hotspot",
+				"=service=ppp",
 			}
 			if nasIdentifier != "" {
 				args = append(args, "=nas-identifier="+nasIdentifier)
@@ -62,9 +64,11 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 				"/radius/add",
 				"=address=" + radiusServerIP,
 				"=secret=" + secret,
-				"=service=hotspot,ppp",
+				"=service=hotspot",
+				"=service=ppp",
 				"=comment=RR-NET",
 			}
+
 			if nasIdentifier != "" {
 				args = append(args, "=nas-identifier="+nasIdentifier)
 			}
