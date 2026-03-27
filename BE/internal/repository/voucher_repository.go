@@ -130,6 +130,9 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 
 func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	query := `
+		SELECT
+			v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
 			v.total_uptime_seconds, v.total_bytes_used,
 			p.name as package_name, p.expiration_mode
 		FROM vouchers v
