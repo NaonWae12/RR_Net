@@ -77,7 +77,7 @@ export default function RouterDetailPage() {
   const [statusLoading, setStatusLoading] = useState(true);
   const [radiusEnabled, setRadiusEnabled] = useState(false);
   const [radiusSecret, setRadiusSecret] = useState("");
-  const [idleTimeout, setIdleTimeout] = useState(600);
+  const [idleTimeout, setIdleTimeout] = useState(48); // Default 48 Hours
   const [interimInterval, setInterimInterval] = useState(60);
   const [updatingRadius, setUpdatingRadius] = useState(false);
   const [isEditingRadius, setIsEditingRadius] = useState(false);
@@ -126,7 +126,7 @@ export default function RouterDetailPage() {
     if (routerData) {
       setRadiusEnabled(routerData.radius_enabled);
       setRadiusSecret(routerData.radius_secret || "");
-      setIdleTimeout(routerData.idle_timeout || 600);
+      setIdleTimeout(routerData.idle_timeout || 48);
       setInterimInterval(routerData.interim_interval || 60);
     }
   }, [routerData]);
@@ -542,9 +542,11 @@ export default function RouterDetailPage() {
               <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-300">
                 <div className="space-y-1">
                   <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Server IP Address</Label>
-                  <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 flex items-center justify-between">
+                   <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                       <span className="font-mono text-xs text-violet-400 font-black">10.10.10.1</span>
+                       <span className="font-mono text-xs text-violet-400 font-black">
+                         {routerData.connectivity_mode === 'vpn_sstp' ? '10.10.20.1' : '10.10.10.1'}
+                       </span>
                        <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
                     </div>
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">MikroTik Gateway</span>
@@ -637,7 +639,7 @@ export default function RouterDetailPage() {
                     disabled={!isEditingRadius}
                     className="h-10 text-xs font-bold bg-slate-50 border-slate-200 text-slate-700 focus:bg-white"
                   />
-                  <span className="absolute right-2.5 top-2.5 text-[9px] font-bold text-slate-400">SEC</span>
+                  <span className="absolute right-2.5 top-2.5 text-[9px] font-bold text-slate-400">HRS</span>
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -663,7 +665,7 @@ export default function RouterDetailPage() {
                   <p className="text-[9px] font-black text-indigo-900 uppercase tracking-tighter">Performance Insight</p>
                   <p className="text-[9px] text-indigo-700 font-medium leading-normal italic">
                     60s Interim updates ensure precise bandwidth tracking. 
-                    Idle timeout prevents stale user sessions.
+                    Idle timeout (hours) prevents stale user sessions.
                   </p>
                 </div>
               </div>
