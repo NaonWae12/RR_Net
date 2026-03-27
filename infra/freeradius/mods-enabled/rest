@@ -12,11 +12,7 @@ rest {
 		method = 'post'
 		body = 'json'
 		data = '{ "User-Name": "0x%{hex:User-Name}", "User-Password": "0x%{hex:User-Password}", "NAS-IP-Address": "%{jsquote:%{NAS-IP-Address}}", "NAS-Identifier": "%{jsquote:%{NAS-Identifier}}", "NAS-Port-Id": "%{jsquote:%{NAS-Port-Id}}", "Calling-Station-Id": "%{jsquote:%{Calling-Station-Id}}", "Called-Station-Id": "%{jsquote:%{Called-Station-Id}}" }'
-		# Send the secret header directly in the authenticate block
-		# If this causes 'no data', we'll try moving it to the global http block
-		header {
-			X-RRNET-RADIUS-SECRET = "dev-radius-rest-secret"
-		}
+		header = "X-RRNET-RADIUS-SECRET: dev-radius-rest-secret"
 	}
 
 	# Accounting: Start/Interim/Stop
