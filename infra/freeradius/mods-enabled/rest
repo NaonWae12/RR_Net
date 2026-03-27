@@ -12,6 +12,9 @@ rest {
 		method = 'post'
 		body = 'json'
 		data = '{ "User-Name": "%{jsquote:%{User-Name}}", "User-Password": "%{jsquote:%{User-Password}}", "NAS-IP-Address": "%{jsquote:%{NAS-IP-Address}}", "NAS-Identifier": "%{jsquote:%{NAS-Identifier}}", "NAS-Port-Id": "%{jsquote:%{NAS-Port-Id}}", "Calling-Station-Id": "%{jsquote:%{Calling-Station-Id}}", "Called-Station-Id": "%{jsquote:%{Called-Station-Id}}" }'
+		header {
+			X-RRNET-RADIUS-SECRET = "dev-radius-rest-secret"
+		}
 	}
 
 	# Accounting: Start/Interim/Stop
@@ -20,6 +23,9 @@ rest {
 		method = 'post'
 		body = 'json'
 		data = '{ "Acct-Status-Type": "%{Acct-Status-Type}", "Acct-Session-Id": "%{Acct-Session-Id}", "User-Name": "%{User-Name}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Framed-IP-Address": "%{Framed-IP-Address}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}", "Acct-Session-Time": "%{Acct-Session-Time}", "Acct-Input-Octets": "%{Acct-Input-Octets}", "Acct-Output-Octets": "%{Acct-Output-Octets}", "Acct-Input-Packets": "%{Acct-Input-Packets}", "Acct-Output-Packets": "%{Acct-Output-Packets}", "Acct-Terminate-Cause": "%{Acct-Terminate-Cause}" }'
+		header {
+			X-RRNET-RADIUS-SECRET = "dev-radius-rest-secret"
+		}
 	}
 }
 
