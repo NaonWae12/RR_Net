@@ -21,11 +21,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 
 	// 1. Check if a RR-NET RADIUS entry already exists (keyed by comment).
 	repl, err := client.Run("/radius/print", "?comment=RR-NET")
-	if err != nil {
-		return fmt.Errorf("failed to check radius: %w", err)
-	}
-
-	if len(repl.Re) > 0 {
+	if err == nil && len(repl.Re) > 0 {
 		// Update existing entry (Found by comment)
 		id := repl.Re[0].Map[".id"]
 		args := []string{
@@ -39,7 +35,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			args = append(args, "=nas-identifier="+nasIdentifier)
 		}
 		if _, err = client.Run(args...); err != nil {
-			return fmt.Errorf("failed to update radius by comment: %w", err)
+			return fmt.Errorf("radius: failed to update by comment: %w", err)
 		}
 	} else {
 		// Fallback: Check if radius entry with SAME IP already exists (but different comment)
@@ -58,7 +54,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 				args = append(args, "=nas-identifier="+nasIdentifier)
 			}
 			if _, err = client.Run(args...); err != nil {
-				return fmt.Errorf("failed to update radius by address: %w", err)
+				return fmt.Errorf("radius: failed to update by address: %w", err)
 			}
 		} else {
 			// Add new entry
@@ -73,7 +69,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 				args = append(args, "=nas-identifier="+nasIdentifier)
 			}
 			if _, err = client.Run(args...); err != nil {
-				return fmt.Errorf("failed to add radius: %w", err)
+				return fmt.Errorf("radius: failed to add new entry: %w", err)
 			}
 		}
 	}
