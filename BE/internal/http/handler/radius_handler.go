@@ -207,7 +207,8 @@ func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP 
 		// Try to find a router whose name (lowercase, no spaces) matches nasIdentifier
 		routers, errList := h.routerRepo.ListAll(ctx) // Note: Replace with specific fuzzy query if scale is large
 		if errList == nil {
-			slugID := strings.ReplaceAll(strings.ToLower(nasIdentifier), "_", "-")
+			// Slugify identifier exactly like the name slug (replace space/underscore with dash)
+			slugID := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(nasIdentifier), " ", "-"), "_", "-")
 			for i := range routers {
 				r := routers[i]
 				nameSlug := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(r.Name), " ", "-"), "_", "-")
