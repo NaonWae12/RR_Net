@@ -1823,6 +1823,18 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 		gatewayIP = "10.10.20.1" // SSTP Gateway
 	}
 
+	// Dynamic fallback for script display (Fixes old Routers with empty/UUID data)
+	radiusSec := router.RadiusSecret
+	if radiusSec == "" {
+		radiusSec = "rrnet-dev-radius-secret"
+	}
+
+	nasID := router.NASIdentifier
+	// If it's a UUID (36 chars) or empty, let's use the router name for the script display
+	if len(nasID) == 36 || nasID == "" {
+		nasID = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-")
+	}
+
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
 %s
 /ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc pfs-group=none
@@ -1840,7 +1852,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ppp aaa set use-radius=yes
-`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, router.RadiusSecret, router.NASIdentifier)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, radiusSec, nasID)
 
 	return script
 }
