@@ -602,6 +602,10 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	if req.RadiusSecret != "" {
 		router.RadiusSecret = req.RadiusSecret
 	}
+	// Healing logic: if secret is still empty after update (e.g. from old DB entry), set default
+	if router.RadiusSecret == "" {
+		router.RadiusSecret = "rrnet-dev-radius-secret"
+	}
 	if req.VPNUsername != "" {
 		router.VPNUsername = req.VPNUsername
 	}

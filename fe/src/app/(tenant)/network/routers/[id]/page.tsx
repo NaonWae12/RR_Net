@@ -125,7 +125,8 @@ export default function RouterDetailPage() {
   useEffect(() => {
     if (routerData) {
       setRadiusEnabled(routerData.radius_enabled);
-      setRadiusSecret(routerData.radius_secret || "");
+      // Auto-prefill with the default secret if empty
+      setRadiusSecret(routerData.radius_secret || "rrnet-dev-radius-secret");
       setIdleTimeout(routerData.idle_timeout || 48);
       setInterimInterval(routerData.interim_interval || 60);
     }
@@ -503,7 +504,7 @@ export default function RouterDetailPage() {
                     onClick={() => {
                       setIsEditingRadius(false);
                       setRadiusEnabled(routerData.radius_enabled);
-                      setRadiusSecret(routerData.radius_secret || "");
+                      setRadiusSecret(routerData.radius_secret || "rrnet-dev-radius-secret");
                     }}
                   >
                     Cancel
