@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -73,13 +74,18 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// DECODE HEX PASSWORD (if present)
-	// FreeRADIUS sends binary attributes as 0xHEXSTRING via hex:%{Attribute}
-	if strings.HasPrefix(req.UserPassword, "0x") {
-		hexStr := req.UserPassword[2:]
-		decoded, err := hex.DecodeString(hexStr)
-		if err == nil {
+	// SMART PASSWORD DECODER
+	// Try Base64 first (Our new standard), then HEX (Legacy), then raw
+	if req.UserPassword != "" {
+		// 1. Try Base64 (Standard for binary transmission)
+		if decoded, err := base64.StdEncoding.DecodeString(req.UserPassword); err == nil {
 			req.UserPassword = string(decoded)
+		} else if strings.HasPrefix(req.UserPassword, "0x") {
+			// 2. Fallback to HEX if prefixed with 0x
+			hexStr := req.UserPassword[2:]
+			if decoded, err := hex.DecodeString(hexStr); err == nil {
+				req.UserPassword = string(decoded)
+			}
 		}
 	}
 
@@ -104,7 +110,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Password check (Backup style: pure string)
+	// Password check
 	if v.Password != "" {
 		if strings.TrimSpace(v.Password) != strings.TrimSpace(req.UserPassword) {
 			zslog.Warn().Str("expected", v.Password).Str("got", req.UserPassword).Msg("[radius_auth] Password mismatch")
@@ -128,7 +134,6 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		"Reply-Message": "Voucher accepted",
 	}
 
-	// Apply Rate Limit / Class based on Package
 	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
 		if pkg.RateLimitMode == "full_radius" {
 			response["Mikrotik-Rate-Limit"] = fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
@@ -189,7 +194,6 @@ func (h *RadiusHandler) logAuthReject(w http.ResponseWriter, r *http.Request, te
 }
 
 func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
-	// Simple Acct (Return 204)
 	w.WriteHeader(http.StatusNoContent)
 }
 
