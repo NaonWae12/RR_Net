@@ -261,10 +261,11 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 	response["Acct-Interim-Interval"] = interimInterval
 	
-	// Use router-specific IdleTimeout if set, otherwise default to 600s
-	idleTimeout := 600
+	// 🕰️ IDLE TIMEOUT: Convert HOURS (Router setting) to SECONDS (RADIUS expect)
+	// Default to 48 hours (172800 seconds) if not set
+	idleTimeout := 48 * 3600
 	if router.IdleTimeout > 0 {
-		idleTimeout = router.IdleTimeout
+		idleTimeout = router.IdleTimeout * 3600
 	}
 	response["Idle-Timeout"] = idleTimeout
 
