@@ -83,8 +83,7 @@ export default function RouterDetailPage() {
   const [showSecret, setShowSecret] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+
   
   // Remote User Setup State
   const [remoteUsername, setRemoteUsername] = useState("");
