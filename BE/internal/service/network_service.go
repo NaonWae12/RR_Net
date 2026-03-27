@@ -321,6 +321,33 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		return nil, fmt.Errorf("failed to create router: %w", err)
 	}
 
+	// If Radius is enabled on creation, push config to MikroTik immediately.
+	// Same logic as UpdateRouter — runs async so it doesn't block the HTTP response.
+	if router.RadiusEnabled && router.Type == network.RouterTypeMikroTik && router.Host != "" {
+		radiusIP := "10.10.10.1" // Default L2TP Gateway
+		if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
+			radiusIP = "10.10.20.1" // SSTP Gateway
+		}
+		// Capture locals to avoid race with HTTP handler zeroing out passwords
+		host := router.Host
+		apiPort := router.APIPort
+		tls := router.APIUseTLS
+		user := router.Username
+		pass := router.Password
+		rSec := router.RadiusSecret
+		rId := router.ID.String()
+		nasId := router.NASIdentifier
+
+		go func() {
+			addr := net.JoinHostPort(host, strconv.Itoa(apiPort))
+			if err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId); err != nil {
+				log.Error().Err(err).Str("router_id", rId).Msg("[CreateRouter] Failed to setup RADIUS on MikroTik")
+			} else {
+				log.Info().Str("router_id", rId).Msg("[CreateRouter] RADIUS configured on MikroTik")
+			}
+		}()
+	}
+
 	// Trigger initial connection check in background
 	s.checkAndUpdateStatusAsync(router)
 
@@ -1796,13 +1823,13 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /ip service set ssh port=22
 /ip service set telnet disabled=yes
 /ip service set ftp disabled=yes
-/system identity set name="RR-%s"
+# NOTE: Identity is left untouched — NAS-Identifier is set directly in /radius entry below.
 
 ## RADIUS & HOTSPOT SETUP
-/radius add address=%s secret=%s service=hotspot comment="RR-NET RADIUS" nas-identifier=%s
+/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
-/ip hotspot user profile set [ find default=yes ] address-pool=none
-`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, router.Name, gatewayIP, radiusSecret, router.NASIdentifier)
+/ppp aaa set use-radius=yes
+`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, radiusSecret, router.NASIdentifier)
 
 	return script
 }

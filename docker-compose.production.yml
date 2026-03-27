@@ -182,7 +182,11 @@ services:
       # Use 127.0.0.1:8080 since backend is on host network
       RRNET_RADIUS_REST_BASE: "http://127.0.0.1:8080/api/v1/radius"
       RRNET_RADIUS_REST_SECRET: ${RRNET_RADIUS_REST_SECRET:-dev-radius-rest-secret}
-    command: ["freeradius", "-X"]
+    # Production mode: no -X debug flag.
+    # freeradius starts in foreground (-f) with log to stdout (-l stdout)
+    # and log level set to 2 (Warning+Error only, no per-request noise).
+    # To debug: temporarily add -X; remove again after fix.
+    command: ["freeradius", "-f", "-l", "stdout"]
     network_mode: host
     depends_on:
       - backend

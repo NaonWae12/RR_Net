@@ -5,7 +5,13 @@ import (
 	"fmt"
 )
 
-// SetupRadius configures the router to use ERP-NET RADIUS server
+// SetupRadius configures the router to use ERP-NET RADIUS server.
+//
+// NAS identification strategy:
+//   - We store nas-identifier directly in the /radius entry (not via /system/identity).
+//   - This keeps the router's system identity untouched (operator-owned).
+//   - ERP resolves the router via NAS-Identifier sent by FreeRADIUS on every
+//     Auth/Acct packet, falling back to NAS-IP-Address.
 func SetupRadius(ctx context.Context, addr string, useTLS bool, username, password string, radiusServerIP string, secret string, nasIdentifier string) error {
 	client, err := GetClient(addr, useTLS, username, password)
 	if err != nil {
@@ -13,50 +19,53 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 	}
 	defer ReleaseClient(client)
 
-	// 1. Check if RADIUS already exists
+	// 1. Check if a RR-NET RADIUS entry already exists (keyed by comment).
 	repl, err := client.Run("/radius/print", "?comment=RR-NET")
 	if err != nil {
 		return fmt.Errorf("failed to check radius: %w", err)
 	}
 
 	if len(repl.Re) > 0 {
-		// Update existing
+		// Update existing entry
 		id := repl.Re[0].Map[".id"]
-		_, err = client.Run("/radius/set", 
-			"=.id="+id, 
-			"=address="+radiusServerIP, 
-			"=secret="+secret, 
+		args := []string{
+			"/radius/set",
+			"=.id=" + id,
+			"=address=" + radiusServerIP,
+			"=secret=" + secret,
 			"=service=hotspot,ppp",
-		)
+		}
+		if nasIdentifier != "" {
+			args = append(args, "=nas-identifier="+nasIdentifier)
+		}
+		if _, err = client.Run(args...); err != nil {
+			return fmt.Errorf("failed to update radius: %w", err)
+		}
 	} else {
-		// Add new
-		_, err = client.Run("/radius/add", 
-			"=address="+radiusServerIP, 
-			"=secret="+secret, 
-			"=service=hotspot,ppp", 
+		// Add new entry
+		args := []string{
+			"/radius/add",
+			"=address=" + radiusServerIP,
+			"=secret=" + secret,
+			"=service=hotspot,ppp",
 			"=comment=RR-NET",
-		)
-	}
-	if err != nil {
-		return fmt.Errorf("failed to set radius: %w", err)
-	}
-
-	// 1.5. Set System Identity as NAS-Identifier (MikroTik uses system identity for NAS-Identifier)
-	if nasIdentifier != "" {
-		_, err = client.Run("/system/identity/set", "=name="+nasIdentifier)
-		if err != nil {
-			return fmt.Errorf("failed to set system identity to nas-identifier: %w", err)
+		}
+		if nasIdentifier != "" {
+			args = append(args, "=nas-identifier="+nasIdentifier)
+		}
+		if _, err = client.Run(args...); err != nil {
+			return fmt.Errorf("failed to add radius: %w", err)
 		}
 	}
 
-	// 2. Enable RADIUS in Hotspot Profile (Default)
-	repl, err = client.Run("/ip/hotspot/profile/print", "?default=true")
-	if err == nil && len(repl.Re) > 0 {
-		id := repl.Re[0].Map[".id"]
+	// 2. Enable RADIUS in Hotspot Profile (Default).
+	// Silently ignore errors — hotspot may not be configured on this router.
+	if repl2, err2 := client.Run("/ip/hotspot/profile/print", "?default=true"); err2 == nil && len(repl2.Re) > 0 {
+		id := repl2.Re[0].Map[".id"]
 		_, _ = client.Run("/ip/hotspot/profile/set", "=.id="+id, "=use-radius=yes")
 	}
 
-	// 3. Enable RADIUS in PPP (for PPPoE)
+	// 3. Enable RADIUS in PPP AAA (for PPPoE).
 	_, _ = client.Run("/ppp/aaa/set", "=use-radius=yes")
 
 	return nil
