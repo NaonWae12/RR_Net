@@ -662,6 +662,14 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 		return nil, fmt.Errorf("failed to update router: %w", err)
 	}
 
+	// Debug log to see why Radius setup might be skipped
+	log.Info().
+		Bool("radius_enabled", router.RadiusEnabled).
+		Str("router_type", string(router.Type)).
+		Str("router_host", router.Host).
+		Str("router_id", router.ID.String()).
+		Msg("Network Service: Checking if RADIUS setup should be triggered")
+
 	// If Radius is enabled, ensure MikroTik is configured
 	if router.RadiusEnabled && router.Type == network.RouterTypeMikroTik && router.Host != "" {
 		radiusIP := "10.10.10.1" // Default VPN Gateway IP for Radius
