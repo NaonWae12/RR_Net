@@ -2027,6 +2027,17 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 	// Build MikroTik API address
 	addr := fmt.Sprintf("%s:%d", router.Host, router.APIPort)
 
+	// Try to fetch from cache first
+	cacheKey := fmt.Sprintf("router:%s:isolir_status", routerID.String())
+	if s.redis != nil {
+		if cached, err := s.redis.Get(ctx, cacheKey).Result(); err == nil {
+			var status IsolirStatus
+			if err := json.Unmarshal([]byte(cached), &status); err == nil {
+				return &status, nil
+			}
+		}
+	}
+
 	// Check firewall status
 	status, err := mikrotik.CheckIsolirFirewall(ctx, addr, router.APIUseTLS, router.Username, router.Password)
 	if err != nil {
@@ -2038,15 +2049,7 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 		return nil, fmt.Errorf("failed to check isolir firewall status: %w", err)
 	}
 
-	log.Info().
-		Str("router_name", router.Name).
-		Bool("installed", status.Installed).
-		Int("rule_count", status.RuleCount).
-		Bool("has_nat", status.HasNAT).
-		Bool("has_filter", status.HasFilter).
-		Msg("Isolir status check result")
-
-	return &IsolirStatus{
+	isolirStatus := &IsolirStatus{
 		FirewallInstalled: status.Installed,
 		RouterID:          router.ID.String(),
 		RouterName:        router.Name,
@@ -2054,7 +2057,22 @@ func (s *NetworkService) GetIsolirStatus(ctx context.Context, routerID uuid.UUID
 		HotspotIP:         status.HotspotIP,
 		HasNAT:            status.HasNAT,
 		HasFilter:         status.HasFilter,
-	}, nil
+	}
+
+	// Save to cache
+	if s.redis != nil {
+		if data, err := json.Marshal(isolirStatus); err == nil {
+			// Cache for 30 seconds
+			_ = s.redis.Set(ctx, cacheKey, data, 30*time.Second)
+		}
+	}
+
+	log.Info().
+		Str("router_name", router.Name).
+		Bool("installed", status.Installed).
+		Msg("Isolir status check result (and cached)")
+
+	return isolirStatus, nil
 }
 func (s *NetworkService) GetRouterLogs(ctx context.Context, id uuid.UUID) ([]map[string]string, error) {
 	// Try to fetch from cache first
