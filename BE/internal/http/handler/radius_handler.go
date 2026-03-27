@@ -73,12 +73,45 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decode JSON body (User-Password is already plaintext from FreeRADIUS)
-	var req AuthRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		zslog.Debug().Msgf("[radius_auth] ERROR: JSON decode failed: %v", err)
+	// Read raw body for debugging on failure
+	bodyBytes, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	// Decode into map first to handle raw attributes flexibly
+	var raw map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		zslog.Error().Err(err).Str("body", string(bodyBytes)).Msg("[radius_auth] ERROR: JSON unmarshal failed")
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
+	}
+
+	// Helper to extract string from potential array/string
+	getString := func(key string) string {
+		val, ok := raw[key]
+		if !ok || val == nil {
+			return ""
+		}
+		// If it's a slice (FreeRADIUS often sends arrays), take the first element
+		if slice, ok := val.([]interface{}); ok && len(slice) > 0 {
+			if s, ok := slice[0].(string); ok {
+				return s
+			}
+		}
+		// If it's already a string
+		if s, ok := val.(string); ok {
+			return s
+		}
+		return fmt.Sprintf("%v", val)
+	}
+
+	req := AuthRequest{
+		UserName:         getString("User-Name"),
+		UserPassword:     getString("User-Password"),
+		NASIdentifier:    getString("NAS-Identifier"),
+		NASIPAddress:     getString("NAS-IP-Address"),
+		NASPortID:        getString("NAS-Port-Id"),
+		CallingStationID: getString("Calling-Station-Id"),
+		CalledStationID:  getString("Called-Station-Id"),
 	}
 
 	// Detect if this is a Router VPN connection instead of a Client Voucher
