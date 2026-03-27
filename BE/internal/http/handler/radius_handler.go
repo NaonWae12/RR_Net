@@ -75,13 +75,10 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// SMART PASSWORD DECODER
-	// Try Base64 first (Our new standard), then HEX (Legacy), then raw
 	if req.UserPassword != "" {
-		// 1. Try Base64 (Standard for binary transmission)
 		if decoded, err := base64.StdEncoding.DecodeString(req.UserPassword); err == nil {
 			req.UserPassword = string(decoded)
 		} else if strings.HasPrefix(req.UserPassword, "0x") {
-			// 2. Fallback to HEX if prefixed with 0x
 			hexStr := req.UserPassword[2:]
 			if decoded, err := hex.DecodeString(hexStr); err == nil {
 				req.UserPassword = string(decoded)
@@ -95,10 +92,14 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve router (for Hotspot/Voucher)
+	// Resolve router (Enhanced logic)
 	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
-		zslog.Warn().Str("username", req.UserName).Str("nas_ip", req.NASIPAddress).Str("nas_id", req.NASIdentifier).Msg("[radius_auth] Router not found")
+		zslog.Warn().
+			Str("username", req.UserName).
+			Str("nas_ip", req.NASIPAddress).
+			Str("nas_id", req.NASIdentifier).
+			Msg("[radius_auth] Router definitely not found")
 		http.Error(w, `{"error":"NAS not registered"}`, http.StatusForbidden)
 		return
 	}
@@ -127,13 +128,10 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Success response
-	zslog.Info().Str("username", req.UserName).Msg("[radius_auth] ACCEPT (Hotspot)")
+	zslog.Info().Str("username", req.UserName).Str("router", router.Name).Msg("[radius_auth] ACCEPT (Hotspot)")
 	h.logAuthAttempt(ctx, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "")
 
-	response := map[string]interface{}{
-		"Reply-Message": "Voucher accepted",
-	}
-
+	response := map[string]interface{}{}
 	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
 		if pkg.RateLimitMode == "full_radius" {
 			response["Mikrotik-Rate-Limit"] = fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
@@ -153,8 +151,6 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 
 func (h *RadiusHandler) handleVPNAuth(w http.ResponseWriter, r *http.Request, req AuthRequest) {
 	ctx := r.Context()
-	
-	// Lookup in routers table by vpn_username
 	router, err := h.routerRepo.GetByVPNUsername(ctx, req.UserName)
 	if err != nil {
 		zslog.Warn().Str("username", req.UserName).Msg("[radius_auth] VPN User not found")
@@ -162,7 +158,6 @@ func (h *RadiusHandler) handleVPNAuth(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
-	// Verify VPN Password
 	if strings.TrimSpace(router.VPNPassword) != strings.TrimSpace(req.UserPassword) {
 		zslog.Warn().Str("username", req.UserName).Msg("[radius_auth] VPN Password mismatch")
 		h.logAuthAttempt(ctx, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, radius.AuthResultReject, "VPN password mismatch")
@@ -170,13 +165,10 @@ func (h *RadiusHandler) handleVPNAuth(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
-	// Success VPN
 	zslog.Info().Str("username", req.UserName).Str("router", router.Name).Msg("[radius_auth] ACCEPT (VPN)")
 	h.logAuthAttempt(ctx, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "VPN authenticated")
 
-	response := map[string]interface{}{
-		"Reply-Message": "VPN Authenticated",
-	}
+	response := map[string]interface{}{"Reply-Message": "VPN Authenticated"}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -199,14 +191,40 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 
 func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP string) (*network.Router, error) {
 	var router *network.Router
-	var err error
+
+	// 1. Try by NAS-Identifier (The proper way)
 	if nasIdentifier != "" {
-		router, err = h.routerRepo.GetByNASIdentifier(ctx, nasIdentifier)
+		router, _ = h.routerRepo.GetByNASIdentifier(ctx, nasIdentifier)
 	}
+
+	// 2. Try by NAS-IP (Self-healing fallback)
+	if router == nil && nasIP != "" {
+		router, _ = h.routerRepo.GetByNASIP(ctx, nasIP)
+	}
+
+	// 3. Try by Name fallback (Fuzzy match if NAS-ID was misconfigured)
+	if router == nil && nasIdentifier != "" {
+		// Try to find a router whose name (lowercase, no spaces) matches nasIdentifier
+		routers, errList := h.routerRepo.ListAll(ctx) // Note: Replace with specific fuzzy query if scale is large
+		if errList == nil {
+			slugID := strings.ReplaceAll(strings.ToLower(nasIdentifier), "_", "-")
+			for i := range routers {
+				r := routers[i]
+				nameSlug := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(r.Name), " ", "-"), "_", "-")
+				// Check for direct match or "RR-" prefix
+				if nameSlug == slugID || "rr-"+nameSlug == slugID || nameSlug == "rr-"+slugID {
+					router = r
+					// Best practice: Update its NAS Identifier in DB for next time!
+					r.NASIdentifier = nasIdentifier
+					_ = h.routerRepo.Update(ctx, r)
+					zslog.Info().Str("router", r.Name).Str("nas_id", nasIdentifier).Msg("[radius_auth] Self-healing: Updated NAS-Identifier from Fuzzy Match")
+					break
+				}
+			}
+		}
+	}
+
 	if router == nil {
-		router, err = h.routerRepo.GetByNASIP(ctx, nasIP)
-	}
-	if err != nil || router == nil {
 		return nil, fmt.Errorf("router not found")
 	}
 	return router, nil
