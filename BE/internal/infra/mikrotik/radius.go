@@ -26,7 +26,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 	}
 
 	if len(repl.Re) > 0 {
-		// Update existing entry
+		// Update existing entry (Found by comment)
 		id := repl.Re[0].Map[".id"]
 		args := []string{
 			"/radius/set",
@@ -39,22 +39,42 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			args = append(args, "=nas-identifier="+nasIdentifier)
 		}
 		if _, err = client.Run(args...); err != nil {
-			return fmt.Errorf("failed to update radius: %w", err)
+			return fmt.Errorf("failed to update radius by comment: %w", err)
 		}
 	} else {
-		// Add new entry
-		args := []string{
-			"/radius/add",
-			"=address=" + radiusServerIP,
-			"=secret=" + secret,
-			"=service=hotspot,ppp",
-			"=comment=RR-NET",
-		}
-		if nasIdentifier != "" {
-			args = append(args, "=nas-identifier="+nasIdentifier)
-		}
-		if _, err = client.Run(args...); err != nil {
-			return fmt.Errorf("failed to add radius: %w", err)
+		// Fallback: Check if radius entry with SAME IP already exists (but different comment)
+		repl2, err2 := client.Run("/radius/print", "?address="+radiusServerIP)
+		if err2 == nil && len(repl2.Re) > 0 {
+			// Update the entry by ID
+			id := repl2.Re[0].Map[".id"]
+			args := []string{
+				"/radius/set",
+				"=.id=" + id,
+				"=comment=RR-NET",
+				"=secret=" + secret,
+				"=service=hotspot,ppp",
+			}
+			if nasIdentifier != "" {
+				args = append(args, "=nas-identifier="+nasIdentifier)
+			}
+			if _, err = client.Run(args...); err != nil {
+				return fmt.Errorf("failed to update radius by address: %w", err)
+			}
+		} else {
+			// Add new entry
+			args := []string{
+				"/radius/add",
+				"=address=" + radiusServerIP,
+				"=secret=" + secret,
+				"=service=hotspot,ppp",
+				"=comment=RR-NET",
+			}
+			if nasIdentifier != "" {
+				args = append(args, "=nas-identifier="+nasIdentifier)
+			}
+			if _, err = client.Run(args...); err != nil {
+				return fmt.Errorf("failed to add radius: %w", err)
+			}
 		}
 	}
 
