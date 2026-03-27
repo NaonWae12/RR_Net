@@ -1846,13 +1846,13 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /ip service set ssh port=22
 /ip service set telnet disabled=yes
 /ip service set ftp disabled=yes
-# NOTE: Identity is left untouched — NAS-Identifier is set directly in /radius entry below.
+/system identity set name="RR-%s"
 
 ## RADIUS & HOTSPOT SETUP
 /radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET RADIUS" nas-identifier=%s
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ppp aaa set use-radius=yes
-`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, radiusSec, nasID)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, gatewayIP, router.Name, radiusSec, nasID)
 
 	return script
 }
