@@ -192,3 +192,12 @@ func FormatSpeed(kbps int) string {
 	}
 	return fmt.Sprintf("%d Kbps", kbps)
 }
+type DecommissionPreview struct {
+	PPPoECount     int      `json:"pppoe_count"`
+	VoucherCount   int      `json:"voucher_count"`
+	PPPoEUsernames []string `json:"pppoe_usernames"`
+	VoucherCodes   []string `json:"voucher_codes"`
+}
+
+// RouterDeletePreview is an alias for UI clarity
+type RouterDeletePreview = DecommissionPreview

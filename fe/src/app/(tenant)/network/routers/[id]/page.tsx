@@ -16,11 +16,13 @@ import {
   Settings,
   Activity,
   Network,
-  Save, 
   RefreshCw, 
   Eye, 
   EyeOff,
-  Terminal
+  Terminal,
+  AlertCircle,
+  Info,
+  ChevronRight,
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { format } from "date-fns";
@@ -44,18 +46,29 @@ import { AlertTriangle } from "lucide-react";
 export default function RouterDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { router: routerData, loading, error, fetchRouter, deleteRouter, clearRouter } = useNetworkStore();
+  const { router: routerData, loading, error, fetchRouter, deleteRouter, clearRouter, getDeletePreview } = useNetworkStore();
   const { showToast } = useNotificationStore();
   const [currentHost, setCurrentHost] = useState("");
   const [isolirStatus, setIsolirStatus] = useState<{
     firewall_installed: boolean;
-    router_id: string;
-    router_name: string;
     rule_count: number;
-    hotspot_ip?: string;
     has_nat: boolean;
     has_filter: boolean;
   } | null>(null);
+  
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<{
+    preview: {
+      pppoe_count: number;
+      voucher_count: number;
+      pppoe_usernames: string[];
+      voucher_codes: string[];
+    };
+    status: string;
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [cleanupRemote, setCleanupRemote] = useState(false);
   const [installingFirewall, setInstallingFirewall] = useState(false);
   const [uninstallingFirewall, setUninstallingFirewall] = useState(false);
   const [hotspotIP, setHotspotIP] = useState("");
@@ -147,11 +160,30 @@ export default function RouterDetailPage() {
     return () => clearInterval(interval);
   }, [id, routerData?.status]);
 
+  const openDeleteDialog = async () => {
+    if (!routerData) return;
+    setIsDeleteDialogOpen(true);
+    setPreviewLoading(true);
+    setDeletePreview(null);
+    setCleanupRemote(false);
+    try {
+      const data = await getDeletePreview(routerData.id);
+      setDeletePreview(data);
+      if (data.status === 'online') {
+        setCleanupRemote(true);
+      }
+    } catch (err) {
+      console.error("Failed to fetch delete preview", err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!routerData) return;
     setIsDeleting(true);
     try {
-      await deleteRouter(routerData.id);
+      await deleteRouter(routerData.id, cleanupRemote);
       showToast({
         title: "Router deleted",
         description: `Router "${routerData.name}" has been successfully deleted.`,
@@ -275,7 +307,7 @@ export default function RouterDetailPage() {
             variant="destructive" 
             size="sm"
             className="h-10 px-4 font-bold text-xs uppercase shadow-lg shadow-red-100"
-            onClick={() => setIsDeleteDialogOpen(true)}
+            onClick={openDeleteDialog}
           >
             <Trash2 className="h-3.5 w-3.5 mr-2" />
             Terminate
@@ -850,72 +882,150 @@ export default function RouterDetailPage() {
     </div>
 
     {/* Delete Confirmation Modal */}
-    <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-      <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden border-none shadow-[0_32px_64px_-16px_rgba(0,0,0,0.35)] rounded-[24px]">
-        <div className="bg-gradient-to-b from-[#dc2626] to-[#991b1b] p-8 flex flex-col items-center text-center text-white space-y-5 relative">
+    <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => !isDeleting && setIsDeleteDialogOpen(open)}>
+      <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-[0_32px_64px_-16px_rgba(0,0,0,0.35)] rounded-[24px]">
+        <div className="bg-gradient-to-b from-rose-600 to-rose-900 p-8 flex flex-col items-center text-center text-white space-y-4 relative">
           <div className="absolute top-0 inset-x-0 h-px bg-white/20"></div>
           <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
-            <AlertTriangle className="h-10 w-10 text-white animate-pulse" />
+            <Trash2 className="h-8 w-8 text-white" />
           </div>
           <div className="space-y-1">
-            <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white drop-shadow-sm">Critical Warning</DialogTitle>
-            <DialogDescription className="text-[10px] font-black text-red-100/70 uppercase tracking-[0.2em]">Destructive Action Required</DialogDescription>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white italic">Matrix Termination</DialogTitle>
+            <DialogDescription className="text-[10px] font-bold text-rose-100/70 uppercase tracking-[0.2em] leading-relaxed">
+              Permanent Infrastructure Purge
+            </DialogDescription>
           </div>
         </div>
         
-        <div className="p-8 space-y-6 bg-white">
-          <div className="space-y-3 text-center">
-            <p className="text-sm text-slate-500 font-medium leading-relaxed">
-              You are officially authorizing the terminal decommission of infrastructure 
-              <span className="block text-lg font-black text-slate-900 mt-1 italic">"{routerData?.name}"</span>
-            </p>
-          </div>
-
-          <div className="bg-[#fff1f2] p-5 rounded-2xl border border-[#fecdd3] space-y-3 shadow-sm">
-            <div className="flex items-center gap-2">
-               <div className="w-1.5 h-1.5 rounded-full bg-[#e11d48]" />
-               <p className="text-[10px] font-black text-[#9f1239] uppercase tracking-widest">Permanent Impact Analysis</p>
+        <div className="p-8 space-y-6 bg-white max-h-[70vh] overflow-y-auto custom-scrollbar">
+          {previewLoading ? (
+            <div className="py-12 flex flex-col items-center justify-center space-y-4">
+              <RefreshCw className="h-10 w-10 animate-spin text-rose-500" />
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic animate-pulse">Scanning Grid Dependencies...</p>
             </div>
-            <ul className="text-[10px] text-[#be123c] font-bold space-y-2 pl-2">
-              <li className="flex items-start gap-2">
-                <span className="opacity-50 mt-1">•</span>
-                <span>Immediate blackout for all connected network nodes</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="opacity-50 mt-1">•</span>
-                <span>Irreversible erasure of security certificates & API keys</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="opacity-50 mt-1">•</span>
-                <span>Automatic termination of active pppoe/hotspot sessions</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="flex flex-col gap-3 pt-2">
-            <Button 
-              variant="destructive" 
-              className="w-full h-14 bg-[#e11d48] hover:bg-[#be123c] text-white font-black uppercase text-xs tracking-widest shadow-[0_8px_24px_-4px_rgba(225,29,72,0.4)] rounded-xl transition-all active:scale-[0.98] border-b-4 border-[#9f1239] hover:border-[#881337]"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <div className="flex items-center gap-3">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span>Purging Matrix...</span>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    You are certifying the total removal of node <span className="font-black text-slate-900 leading-tight italic">"{routerData?.name}"</span>. 
+                  </p>
                 </div>
-              ) : "Execute Termination"}
-            </Button>
-            <DialogClose asChild>
-              <Button 
-                variant="ghost" 
-                className="w-full h-12 text-slate-400 hover:text-slate-900 font-black uppercase text-[10px] tracking-[0.2em] transition-colors"
-                disabled={isDeleting}
-              >
-                Cancel & Return
-              </Button>
-            </DialogClose>
-          </div>
+
+                {deletePreview && (deletePreview.preview.pppoe_count > 0 || deletePreview.preview.voucher_count > 0) && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-amber-100 rounded-xl text-amber-600">
+                        <AlertTriangle className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-amber-900 uppercase">Dependency Warning</p>
+                        <p className="text-[10px] text-amber-700 font-medium">Clients connected to this node will lose access.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {deletePreview.preview.pppoe_count > 0 && (
+                        <div className="space-y-1.5 pl-1 border-l-2 border-amber-100">
+                          <p className="text-[10px] font-black text-amber-800 uppercase tracking-tight flex items-center gap-1.5">
+                            PPPoE Secrets ({deletePreview.preview.pppoe_count})
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {deletePreview.preview.pppoe_usernames.slice(0, 10).map(u => (
+                              <span key={u} className="text-[9px] bg-white text-amber-700 px-2 py-0.5 rounded-lg font-bold border border-amber-200 shadow-sm transition-all hover:scale-105">@{u}</span>
+                            ))}
+                            {deletePreview.preview.pppoe_count > 10 && <span className="text-[9px] text-amber-400 font-bold italic ml-1">+{deletePreview.preview.pppoe_count - 10} others</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      {deletePreview.preview.voucher_count > 0 && (
+                        <div className="space-y-1.5 pl-1 border-l-2 border-amber-100">
+                          <p className="text-[10px] font-black text-amber-800 uppercase tracking-tight flex items-center gap-1.5">
+                            Hotspot Vouchers ({deletePreview.preview.voucher_count})
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {deletePreview.preview.voucher_codes.slice(0, 10).map(v => (
+                              <span key={v} className="text-[9px] bg-white text-amber-700 px-2 py-0.5 rounded-lg font-bold border border-amber-200 shadow-sm transition-all hover:scale-105">{v}</span>
+                            ))}
+                            {deletePreview.preview.voucher_count > 10 && <span className="text-[9px] text-amber-400 font-bold italic ml-1">+{deletePreview.preview.voucher_count - 10} others</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="cleanup-remote-detail" className="text-xs font-black text-slate-900 uppercase tracking-tight cursor-pointer">Wipe Configuration</Label>
+                      <p className="text-[10px] text-slate-500 font-medium">Remove RR-NET rules from MikroTik</p>
+                    </div>
+                    <Switch 
+                      id="cleanup-remote-detail" 
+                      checked={cleanupRemote} 
+                      onCheckedChange={setCleanupRemote}
+                      disabled={isDeleting}
+                    />
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border flex items-start gap-3 transition-colors ${
+                    !cleanupRemote ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 
+                    deletePreview?.status === 'online' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'
+                  }`}>
+                    {!cleanupRemote ? (
+                      <>
+                        <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <p className="text-[9px] font-bold leading-relaxed uppercase tracking-tight">
+                          <span className="font-black">Soft Delete (Safe)</span>: We only wipe the ERP database. The MikroTik unit won't be touched. Ideal if the router is permanently dead or stolen.
+                        </p>
+                      </>
+                    ) : deletePreview?.status === 'online' ? (
+                      <>
+                        <Activity className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <p className="text-[9px] font-bold leading-relaxed uppercase tracking-tight">
+                          <span className="font-black">Full Purge (Recommended)</span>: Router is reachable. We will attempt a remote uninstall of all scripts and rules automatically.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <p className="text-[9px] font-bold leading-relaxed uppercase tracking-tight">
+                          <span className="font-black italic">Unreachable Host</span>: You requested a full purge but the router is <span className="font-black">OFFLINE</span>. Elimination will proceed after a 3s timeout.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2">
+                <Button 
+                  variant="destructive" 
+                  className="w-full h-14 bg-rose-600 hover:bg-rose-700 text-white font-black uppercase text-xs tracking-widest shadow-lg shadow-rose-200 rounded-2xl transition-all active:scale-[0.98] border-b-4 border-rose-800"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <div className="flex items-center gap-3">
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Purging Matrix...</span>
+                    </div>
+                  ) : "Execute Termination"}
+                </Button>
+                <DialogClose asChild>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full h-11 text-slate-400 hover:text-slate-900 font-black uppercase text-[10px] tracking-widest"
+                    disabled={isDeleting}
+                  >
+                    Abort Action
+                  </Button>
+                </DialogClose>
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

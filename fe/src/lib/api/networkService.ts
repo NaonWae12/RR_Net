@@ -62,8 +62,21 @@ export const networkService = {
     return response.data;
   },
 
-  async deleteRouter(id: string): Promise<void> {
-    await apiClient.delete(`/network/routers/${id}`);
+  async deleteRouter(id: string, cleanupRemote: boolean = false): Promise<void> {
+    await apiClient.delete(`/network/routers/${id}${cleanupRemote ? "?cleanup_remote=true" : ""}`);
+  },
+
+  async getDeletePreview(id: string): Promise<{ 
+    preview: { 
+      pppoe_count: number; 
+      voucher_count: number; 
+      pppoe_usernames: string[]; 
+      voucher_codes: string[]; 
+    }; 
+    status: string;
+  }> {
+    const response = await apiClient.get<any>(`/network/routers/${id}/delete-preview`);
+    return response.data;
   },
 
   async disconnectRouter(id: string): Promise<{ ok: boolean }> {

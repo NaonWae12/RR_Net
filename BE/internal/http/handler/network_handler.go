@@ -170,12 +170,42 @@ func (h *NetworkHandler) DeleteRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.networkService.DeleteRouter(r.Context(), id); err != nil {
+	// Optional query param: cleanup_remote=true
+	cleanupRemote := r.URL.Query().Get("cleanup_remote") == "true"
+
+	if err := h.networkService.DeleteRouter(r.Context(), id, cleanupRemote); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *NetworkHandler) GetDeletePreview(w http.ResponseWriter, r *http.Request) {
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	preview, err := h.decommissionService.GetDecommissionPreview(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Also get current router status for the "must be online" warning
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"preview": preview,
+		"status":  router.Status,
+	})
 }
 
 // TestRouterConnection attempts to connect/login to the router's management API.

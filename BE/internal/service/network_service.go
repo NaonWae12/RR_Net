@@ -652,7 +652,7 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	return router, nil
 }
 
-func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
+func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID, cleanupRemote bool) error {
 	router, err := s.routerRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -666,10 +666,11 @@ func (s *NetworkService) DeleteRouter(ctx context.Context, id uuid.UUID) error {
 
 	// 2. Cleanup Router Configuration (Best Effort)
 	// Try to remove RR-NET settings from the actual hardware while VPN is still up
-	// Only attempt if we have valid connection details and the router is not in a broken state
-	if router.Type == network.RouterTypeMikroTik && router.Host != "" && router.Username != "" && router.APIPort > 0 {
+	// Only attempt if user requested cleanup AND we have valid connection details
+	if cleanupRemote && router.Type == network.RouterTypeMikroTik && router.Host != "" && router.Username != "" && router.APIPort > 0 {
 		addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 		// Use a much shorter timeout for cleanup so we don't hang if the router is offline
+		// 3s is plenty for a simple uninstall command
 		cleanupCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 

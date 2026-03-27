@@ -25,7 +25,16 @@ interface NetworkActions {
   fetchRouter: (id: string) => Promise<void>;
   createRouter: (data: CreateRouterRequest) => Promise<Router>;
   updateRouter: (id: string, data: UpdateRouterRequest) => Promise<Router>;
-  deleteRouter: (id: string) => Promise<void>;
+  deleteRouter: (id: string, cleanupRemote?: boolean) => Promise<void>;
+  getDeletePreview: (id: string) => Promise<{ 
+    preview: { 
+      pppoe_count: number; 
+      voucher_count: number; 
+      pppoe_usernames: string[]; 
+      voucher_codes: string[]; 
+    }; 
+    status: string;
+  }>;
   testRouterConnection: (id: string) => Promise<{ ok: boolean; identity?: string; latency_ms?: number; error?: string }>;
   disconnectRouter: (id: string) => Promise<void>;
   toggleRemoteAccess: (id: string, enabled: boolean) => Promise<Router>;
@@ -122,10 +131,10 @@ export const useNetworkStore = create<NetworkState & NetworkActions>((set, get) 
     }
   },
 
-  deleteRouter: async (id: string) => {
+  deleteRouter: async (id: string, cleanupRemote: boolean = false) => {
     set({ loading: true, error: null });
     try {
-      await networkService.deleteRouter(id);
+      await networkService.deleteRouter(id, cleanupRemote);
       set((state) => ({
         routers: state.routers.filter((r) => r.id !== id),
         router: state.router?.id === id ? null : state.router,
@@ -133,6 +142,15 @@ export const useNetworkStore = create<NetworkState & NetworkActions>((set, get) 
       }));
     } catch (err) {
       set({ error: toApiError(err).message, loading: false });
+      throw err;
+    }
+  },
+
+  getDeletePreview: async (id: string) => {
+    try {
+      return await networkService.getDeletePreview(id);
+    } catch (err) {
+      set({ error: toApiError(err).message });
       throw err;
     }
   },

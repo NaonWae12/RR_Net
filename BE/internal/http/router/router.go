@@ -1749,6 +1749,11 @@ func New(deps Dependencies) http.Handler {
 					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetRouterLogs)).ServeHTTP(w, r)
 					return
 				}
+			case "delete-preview":
+				if r.Method == http.MethodGet {
+					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetDeletePreview)).ServeHTTP(w, r)
+					return
+				}
 			case "decommission":
 				if r.Method == http.MethodPost {
 					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.DecommissionRouter)).ServeHTTP(w, r)

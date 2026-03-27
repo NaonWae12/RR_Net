@@ -796,8 +796,11 @@ func (h *SuperAdminHandler) DecommissionRouter(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// For Super Admin, we force decommission (soft delete & cleanup)
-	if err := h.networkService.DeleteRouter(r.Context(), routerID); err != nil {
+	// Super Admin can choose via query param, defaults to true for "Decommission"
+	cleanupRemote := r.URL.Query().Get("cleanup_remote") != "false"
+
+	// For Super Admin, we decommission (soft delete & optional cleanup)
+	if err := h.networkService.DeleteRouter(r.Context(), routerID, cleanupRemote); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}

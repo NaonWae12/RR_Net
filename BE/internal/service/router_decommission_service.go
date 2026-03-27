@@ -226,3 +226,31 @@ func (s *RouterDecommissionService) GetProgress(ctx context.Context, routerID uu
 	return s.syncRepo.GetRouterProgress(ctx, routerID)
 }
 
+func (s *RouterDecommissionService) GetDecommissionPreview(ctx context.Context, routerID uuid.UUID) (*network.DecommissionPreview, error) {
+	pppoes, err := s.pppoeRepo.ListByRouter(ctx, routerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pppoe: %w", err)
+	}
+
+	vouchers, err := s.voucherRepo.ListByRouter(ctx, routerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list vouchers: %w", err)
+	}
+
+	pppoeUsernames := make([]string, 0, len(pppoes))
+	for _, p := range pppoes {
+		pppoeUsernames = append(pppoeUsernames, p.Username)
+	}
+
+	voucherCodes := make([]string, 0, len(vouchers))
+	for _, v := range vouchers {
+		voucherCodes = append(voucherCodes, v.Code)
+	}
+
+	return &network.DecommissionPreview{
+		PPPoECount:     len(pppoes),
+		VoucherCount:   len(vouchers),
+		PPPoEUsernames: pppoeUsernames,
+		VoucherCodes:   voucherCodes,
+	}, nil
+}
