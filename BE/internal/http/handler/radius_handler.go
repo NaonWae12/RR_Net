@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -73,11 +74,10 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read raw body for debugging on failure
+	// 1. Decode into map and extract strings (as implemented before)
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-	// Decode into map first to handle raw attributes flexibly
 	var raw map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
 		zslog.Error().Err(err).Str("body", string(bodyBytes)).Msg("[radius_auth] ERROR: JSON unmarshal failed")
@@ -85,28 +85,36 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Helper to extract string from potential array/string
 	getString := func(key string) string {
 		val, ok := raw[key]
 		if !ok || val == nil {
 			return ""
 		}
-		// If it's a slice (FreeRADIUS often sends arrays), take the first element
 		if slice, ok := val.([]interface{}); ok && len(slice) > 0 {
 			if s, ok := slice[0].(string); ok {
 				return s
 			}
 		}
-		// If it's already a string
 		if s, ok := val.(string); ok {
 			return s
 		}
 		return fmt.Sprintf("%v", val)
 	}
 
+	// Helper to decode 0xHEX values
+	tryDecodeHex := func(s string) string {
+		if strings.HasPrefix(s, "0x") {
+			decoded, err := hex.DecodeString(s[2:])
+			if err == nil {
+				return string(decoded)
+			}
+		}
+		return s
+	}
+
 	req := AuthRequest{
-		UserName:         getString("User-Name"),
-		UserPassword:     getString("User-Password"),
+		UserName:         tryDecodeHex(getString("User-Name")), // Decode HEX!
+		UserPassword:     tryDecodeHex(getString("User-Password")), // Decode HEX!
 		NASIdentifier:    getString("NAS-Identifier"),
 		NASIPAddress:     getString("NAS-IP-Address"),
 		NASPortID:        getString("NAS-Port-Id"),
