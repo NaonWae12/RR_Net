@@ -179,16 +179,21 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 	newID := uuid.New()
 
 	// 0. Enforce Uniqueness of NAS-Identifier (Anti-Duplication)
-	// Use provided NASIdentifier or auto-generate UUID if not provided
-	// Ensure NASIdentifier is never empty/null
 	nasIdentifier := strings.TrimSpace(req.NASIdentifier)
 	if nasIdentifier == "" {
-		nasIdentifier = newID.String() // Auto-generate if not provided
+		// Use Router Name (Slugified) instead of UUID — cleaner in logs
+		nasIdentifier = strings.ReplaceAll(strings.ToLower(req.Name), " ", "-")
+	}
+
+	// Safety check: ensure NAS-Identifier is NEVER empty
+	if nasIdentifier == "" {
+		nasIdentifier = newID.String() // Fallback only if name is empty
 	}
 
 	// Check uniqueness of the actual NASIdentifier
-	if existing, err := s.routerRepo.GetByNASIdentifier(ctx, nasIdentifier); err == nil && existing != nil {
-		return nil, fmt.Errorf("NAS-Identifier already exists: %s", nasIdentifier)
+	if _, err := s.routerRepo.GetByNASIdentifier(ctx, nasIdentifier); err == nil {
+		// Target found? Append short UID fragment to ensure uniqueness
+		nasIdentifier = fmt.Sprintf("%s-%s", nasIdentifier, newID.String()[:4])
 	}
 
 	router := &network.Router{
