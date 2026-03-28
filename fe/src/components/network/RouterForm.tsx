@@ -56,6 +56,16 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
   const [isVerifying, setIsVerifying] = useState(false);
   const [isVerified, setIsVerified] = useState(!!initialData?.host);
   const [step, setStep] = useState(initialData?.host ? 3 : 1);
+  const [osVersion, setOsVersion] = useState<'v6' | 'v7'>('v7');
+
+  const getProcessedScript = () => {
+    if (!provisioningData?.vpn_script) return "";
+    let script = provisioningData.vpn_script;
+    if (osVersion === 'v7') {
+      script = script.replace(/connect-to=([^:\s]+):([0-9]+)/g, "connect-to=$1 port=$2");
+    }
+    return script;
+  };
 
   const {
     register,
@@ -158,9 +168,10 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
   };
 
   const copyScript = () => {
-    if (provisioningData?.vpn_script) {
-      navigator.clipboard.writeText(provisioningData.vpn_script);
-      toast.success("Script copied to clipboard!");
+    const script = getProcessedScript();
+    if (script) {
+      navigator.clipboard.writeText(script);
+      toast.success(`Script (versi ${osVersion.toUpperCase()}) disalin ke clipboard!`);
     }
   };
 
@@ -242,18 +253,38 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
           <div className="bg-indigo-600 p-2 rounded-lg">
             <Terminal className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h3 className="text-base font-bold text-indigo-900">Step 2: Jalankan Script di MikroTik</h3>
-            <p className="text-xs text-indigo-700">Script ini akan menghubungkan MikroTik ke VPN Server secara otomatis.</p>
+          <div className="flex-1">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-bold text-indigo-900">Step 2: Jalankan Script di MikroTik</h3>
+                <p className="text-xs text-indigo-700">Script ini menghubungkan MikroTik ke VPN. Pilih versi OS ruter Anda:</p>
+              </div>
+              <div className="flex border border-indigo-200 bg-white rounded-lg overflow-hidden shrink-0 shadow-sm">
+                <button 
+                  type="button" 
+                  onClick={() => setOsVersion('v6')} 
+                  className={cn("px-4 py-1.5 text-[11px] font-bold transition-colors border-r border-indigo-100", osVersion === 'v6' ? "bg-indigo-600 text-white" : "text-indigo-600 hover:bg-indigo-50")}
+                >
+                  RouterOS &lt; v7
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setOsVersion('v7')} 
+                  className={cn("px-4 py-1.5 text-[11px] font-bold transition-colors", osVersion === 'v7' ? "bg-indigo-600 text-white" : "text-indigo-600 hover:bg-indigo-50")}
+                >
+                  RouterOS v7+
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="relative group">
-          <div className="absolute -top-3 left-4 bg-indigo-600 text-[10px] text-white px-2 py-0.5 rounded font-bold z-10">
-            MIKROTIK TERMINAL SCRIPT
+        <div className="relative group mt-2">
+          <div className="absolute -top-3 left-4 bg-indigo-600 text-[10px] text-white px-2 py-0.5 rounded font-bold z-10 transition-colors">
+            MIKROTIK TERMINAL SCRIPT ({osVersion.toUpperCase()})
           </div>
           <pre className="bg-slate-950 text-emerald-400 p-5 rounded-lg text-[10px] font-mono overflow-auto max-h-[250px] border-2 border-indigo-200 group-hover:border-indigo-400 transition-colors">
-            {provisioningData?.vpn_script}
+            {getProcessedScript()}
           </pre>
           <Button
             type="button"

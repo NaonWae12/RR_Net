@@ -1811,10 +1811,6 @@ func removeVPNUser(username string) error {
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
 	vpnHost := s.getVPNHost()
-	// Bypass DNS delays on Mikrotik V7 by translating domain to explicit IP
-	if ips, err := net.LookupIP(vpnHost); err == nil && len(ips) > 0 {
-		vpnHost = ips[0].String()
-	}
 	psk := s.getIPsecPSK()
 	radiusSecret := os.Getenv("RRNET_RADIUS_REST_SECRET")
 	if radiusSecret == "" {
@@ -1857,7 +1853,6 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 	}
 
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
-/ip dns set servers=8.8.8.8,1.1.1.1
 %s
 /ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc pfs-group=none
 /ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
