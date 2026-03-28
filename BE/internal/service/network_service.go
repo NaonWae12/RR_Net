@@ -482,7 +482,6 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 	script := s.generateMikrotikVPNScript(router)
 	radiusScript := s.generateMikrotikRadiusScript(router)
 	router.VPNScript = script
-	router.RadiusScript = radiusScript
 
 	if err := s.routerRepo.Create(ctx, router); err != nil {
 		return nil, fmt.Errorf("failed to pre-save provisioning router: %w", err)

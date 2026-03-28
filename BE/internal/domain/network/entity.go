@@ -66,7 +66,6 @@ type Router struct {
 	VPNUsername         string                 `json:"vpn_username,omitempty"`
 	VPNPassword         string                 `json:"vpn_password,omitempty"`
 	VPNScript           string                 `json:"vpn_script,omitempty"`
-	RadiusScript        string                 `json:"radius_script,omitempty"`
 	DNSName             string                 `json:"dns_name,omitempty"`
 	IdleTimeout         int                    `json:"idle_timeout"`
 	InterimInterval     int                    `json:"interim_interval"`
