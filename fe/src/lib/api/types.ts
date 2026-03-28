@@ -351,6 +351,7 @@ export interface ProvisionResponse {
   vpn_password: string;
   vpn_ipsec_psk: string;
   vpn_script: string;
+  radius_script: string; // NEW: Manual copy-paste script
   remote_access_port: number;
   tunnel_ip: string;
   public_ip: string;

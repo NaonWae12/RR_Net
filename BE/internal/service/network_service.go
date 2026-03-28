@@ -380,6 +380,7 @@ type ProvisionRouterResponse struct {
 	RemoteAccessPort int       `json:"remote_access_port"`
 	TunnelIP         string    `json:"tunnel_ip"`
 	PublicIP         string    `json:"public_ip"`
+	RADIUSScript     string    `json:"radius_script"` // NEW: Manual copy-paste script
 }
 
 func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID, name string, mode network.RouterConnectivityMode) (*ProvisionRouterResponse, error) {
@@ -477,8 +478,9 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		UpdatedAt:           now,
 	}
 
-	// Generate script for this router
+	// Generate scripts for this router
 	script := s.generateMikrotikVPNScript(router)
+	radiusScript := s.generateMikrotikRadiusScript(router)
 	router.VPNScript = script
 
 	if err := s.routerRepo.Create(ctx, router); err != nil {
@@ -499,6 +501,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		VPNPassword:      vpnPass,
 		VPNIPsecPSK:      psk,
 		VPNScript:        script,
+		RADIUSScript:     radiusScript, // Return this for Step 4
 		RemoteAccessPort: assignedPort,
 		TunnelIP:         assignedIP,
 		PublicIP:         vpnHost,
@@ -862,10 +865,9 @@ func (s *NetworkService) GetGlobalNetworkStats(ctx context.Context) (*GlobalNetw
 }
 
 type RouterConnectionTestResult struct {
-	OK              bool   `json:"ok"`
-	Identity        string `json:"identity,omitempty"`
-	LatencyMS       int64  `json:"latency_ms,omitempty"`
-	RadiusInstalled bool   `json:"radius_installed"`
+	OK        bool   `json:"ok"`
+	Identity  string `json:"identity,omitempty"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
 }
 
 func (s *NetworkService) TestRouterConnection(ctx context.Context, router *network.Router) (*RouterConnectionTestResult, error) {
@@ -901,39 +903,10 @@ func (s *NetworkService) TestRouterConnection(ctx context.Context, router *netwo
 		return nil, fmt.Errorf("connection successful but failed to update status: %w", err)
 	}
 
-	// NEW: Automatic RADIUS Provisioning on first successful connection test!
-	// This fulfills the "Zero-Config" promise.
-	radiusInstalled := false
-	if router.RadiusEnabled {
-		// Only try this once or on status change if we want to be efficient
-		// But for now, ensuring it's always pushed on test is very robust.
-		
-		// Run in same thread for simple response or goroutine if we want to be fast
-		// We use same thread so we can report "Radius Installed: OK" to the UI.
-		
-		radiusIP := "10.10.10.1"
-		if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
-			radiusIP = "10.10.20.1"
-		}
-		
-		nasId := router.NASIdentifier
-		if nasId == "" {
-			nasId = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-") + "-" + router.ID.String()[:4]
-		}
-		
-		if err := mikrotik.SetupRadius(ctx, addr, router.APIUseTLS, router.Username, router.Password, radiusIP, router.RadiusSecret, nasId); err == nil {
-			radiusInstalled = true
-			log.Info().Str("router_id", router.ID.String()).Msg("Auto-Setup RADIUS during connection test successful")
-		} else {
-			log.Warn().Err(err).Str("router_id", router.ID.String()).Msg("Auto-Setup RADIUS during connection test failed")
-		}
-	}
-
 	return &RouterConnectionTestResult{
-		OK:              true,
-		Identity:        out.Identity,
-		LatencyMS:       out.LatencyMS,
-		RadiusInstalled: radiusInstalled,
+		OK:        true,
+		Identity:  out.Identity,
+		LatencyMS: out.LatencyMS,
 	}, nil
 }
 
@@ -1053,32 +1026,10 @@ func (s *NetworkService) TestRouterConfig(ctx context.Context, req TestRouterCon
 		return nil, err
 	}
 
-	// SUCCESS: Connection is good. Now, can we also auto-setup RADIUS here?
-	radiusInstalled := false
-	if req.RouterID != nil {
-		router, err := s.routerRepo.GetByID(ctx, *req.RouterID)
-		if err == nil && router.RadiusEnabled {
-			radiusIP := "10.10.10.1"
-			if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
-				radiusIP = "10.10.20.1"
-			}
-			nasId := router.NASIdentifier
-			if nasId == "" {
-				nasId = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-") + "-" + router.ID.String()[:4]
-			}
-			
-			if err := mikrotik.SetupRadius(ctx, addr, req.APIUseTLS, req.Username, req.Password, radiusIP, router.RadiusSecret, nasId); err == nil {
-				radiusInstalled = true
-				log.Info().Str("router_id", router.ID.String()).Msg("Auto-Setup RADIUS during config test (Wizard) successful")
-			}
-		}
-	}
-
 	return &RouterConnectionTestResult{
-		OK:              true,
-		Identity:        out.Identity,
-		LatencyMS:       out.LatencyMS,
-		RadiusInstalled: radiusInstalled,
+		OK:        true,
+		Identity:  out.Identity,
+		LatencyMS: out.LatencyMS,
 	}, nil
 }
 
@@ -2020,6 +1971,31 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 `, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, router.Name)
 
 	return script
+}
+
+func (s *NetworkService) generateMikrotikRadiusScript(router *network.Router) string {
+	radiusIP := "10.10.10.1"
+	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
+		radiusIP = "10.10.20.1"
+	}
+
+	nasId := router.NASIdentifier
+	if nasId == "" {
+		nasId = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-") + "-" + router.ID.String()[:4]
+	}
+
+	rSec := router.RadiusSecret
+	if rSec == "" {
+		rSec = "rrnet-dev-radius-secret"
+	}
+
+	return fmt.Sprintf(`## RADIUS & HOTSPOT SETUP
+/radius remove [ find comment="RR-NET" ]
+/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET" nas-identifier="%s"
+/ip hotspot profile set [ find name="default" ] login-by=http-chap,mschapv2 use-radius=yes
+/ip hotspot profile add name="RR-NET" hotspot-address=0.0.0.0 login-by=http-chap,mschapv2 use-radius=yes
+/ppp aaa set use-radius=yes
+`, radiusIP, rSec, nasId)
 }
 
 func (s *NetworkService) getIPsecPSK() string {

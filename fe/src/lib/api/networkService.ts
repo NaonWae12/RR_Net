@@ -38,8 +38,8 @@ export const networkService = {
 
   async testRouterConnection(
     id: string,
-  ): Promise<{ ok: boolean; identity?: string; latency_ms?: number; error?: string; radius_installed?: boolean }> {
-    const response = await apiClient.post<{ ok: boolean; identity?: string; latency_ms?: number; error?: string; radius_installed?: boolean }>(
+  ): Promise<{ ok: boolean; identity?: string; latency_ms?: number; error?: string }> {
+    const response = await apiClient.post<{ ok: boolean; identity?: string; latency_ms?: number; error?: string }>(
       `/network/routers/${id}/test-connection`,
     );
     return response.data;
@@ -55,8 +55,8 @@ export const networkService = {
       password: string;
       router_id?: string;
     },
-  ): Promise<{ ok: boolean; identity?: string; latency_ms?: number; error?: string; radius_installed?: boolean }> {
-    const response = await apiClient.post<{ ok: boolean; identity?: string; latency_ms?: number; error?: string; radius_installed?: boolean }>(
+  ): Promise<{ ok: boolean; identity?: string; latency_ms?: number; error?: string }> {
+    const response = await apiClient.post<{ ok: boolean; identity?: string; latency_ms?: number; error?: string }>(
       "/network/routers/test-config",
       data,
     );

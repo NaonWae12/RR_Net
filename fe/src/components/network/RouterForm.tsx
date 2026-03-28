@@ -159,12 +159,9 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
 
       if (res.ok) {
         setIsVerified(true);
-        if (res.radius_installed) {
-          toast.success(`✅ Connected! MikroTik "${res.identity || 'Unknown'}" & RADIUS provisioning complete!`);
-        } else {
-          toast.success(`✅ Connected! MikroTik "${res.identity || 'Unknown'}" identified.`);
-          toast.warning(`⚠️ RADIUS setup skipped or failed. You can re-sync later from the dashboard.`);
-        }
+        toast.success(`✅ Connected! MikroTik "${res.identity || 'Unknown'}" identified.`);
+        // After verification successful, reveal step 4 for RADIUS manual setup
+        setStep(4);
       } else {
         toast.error("Connection failed. Check your credentials and ensure MikroTik is reachable.");
       }
@@ -436,17 +433,78 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
     </div>
   );
 
+  const renderStep4 = () => (
+    <div className="space-y-4">
+      <div className="bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-sm transition-all duration-300 animate-in fade-in slide-in-from-bottom-2">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-amber-600 p-2 rounded-lg shadow-md shadow-amber-200">
+            <Radio className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-amber-900">Step 4: Konfigurasi RADIUS (Manual)</h3>
+            <p className="text-xs text-amber-700 font-medium">Koneksi OK! Sekarang paste script ini ke terminal MikroTik untuk mengaktifkan voucher & hotspot.</p>
+          </div>
+        </div>
+
+        <div className="relative group">
+          <div className="absolute right-3 top-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(provisioningData?.radius_script || "");
+                toast.success("RADIUS script copied to clipboard!");
+              }}
+              className="bg-white/90 hover:bg-white shadow-sm border h-8 px-3 text-xs"
+            >
+              <Copy className="h-3.5 w-3.5 mr-1 text-slate-600" />
+              Copy Script
+            </Button>
+          </div>
+          <textarea
+            readOnly
+            value={provisioningData?.radius_script || ""}
+            placeholder="# Script RADIUS akan muncul di sini setelah provisioning..."
+            className="w-full h-48 p-4 font-mono text-xs bg-slate-900 text-amber-400 rounded-xl border border-slate-800 shadow-inner focus:outline-none"
+          />
+        </div>
+
+        <div className="mt-4 p-3 bg-amber-100/50 border border-amber-200 rounded-lg flex items-start gap-3">
+          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <p className="text-xs font-semibold text-amber-800 leading-relaxed">
+            Penting: Pastikan VPN (Step 2) sudah status <span className="text-amber-900 border-b border-amber-400 font-bold">"R" (Running)</span> di MikroTik sebelum mempaste script ini agar RADIUS bisa terhubung ke backend.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center pt-4">
+        <Button type="button" variant="ghost" onClick={() => setStep(3)} className="text-slate-500 hover:text-slate-800 transition-colors">
+          &larr; Cek Koneksi Lagi
+        </Button>
+        <Button
+          type="submit"
+          disabled={isLoading}
+          className="bg-slate-900 hover:bg-black text-white px-10 h-12 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+        >
+          {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+          {isLoading ? "Saving Data..." : "Selesai & Tutup Wizard"}
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-8 px-4">
-        {[1, 2, 3].map((s) => (
+      <div className="flex items-center justify-between mb-10 px-4">
+        {[1, 2, 3, 4].map((s) => (
           <div key={s} className="flex items-center">
-            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${step === s ? "bg-indigo-600 text-white" :
-              step > s ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500"
+            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === s ? "bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-100" :
+              step > s ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500 shadow-inner"
               }`}>
-              {step > s ? <CheckCircle2 className="h-5 w-5" /> : s}
+              {step > s ? <CheckCircle2 className="h-4 w-4" /> : s}
             </div>
-            {s < 3 && <div className={`h-1 w-16 md:w-24 mx-2 rounded ${step > s ? "bg-emerald-500" : "bg-slate-200"}`} />}
+            {s < 4 && <div className={`h-1 w-10 md:w-16 mx-2 rounded-full transition-all duration-500 ${step > s ? "bg-emerald-500" : "bg-slate-200"}`} />}
           </div>
         ))}
       </div>
@@ -473,6 +531,7 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
         {step === 3 && renderStep3()}
+        {step === 4 && renderStep4()}
       </form>
     </div>
   );
