@@ -226,6 +226,27 @@ export default function RouterDetailPage() {
     }
   };
 
+  const handleSyncRadius = async () => {
+    if (!routerData) return;
+    setUpdatingRadius(true);
+    try {
+      await useNetworkStore.getState().pushRadius(routerData.id);
+      showToast({
+        title: "RADIUS Synced",
+        description: "Configuration has been pushed to MikroTik.",
+        variant: "success",
+      });
+    } catch (err: any) {
+      showToast({
+        title: "Sync Failed",
+        description: err?.message || "Ensure router is online and VPN is connected.",
+        variant: "error",
+      });
+    } finally {
+      setUpdatingRadius(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -510,14 +531,25 @@ export default function RouterDetailPage() {
                  </Button>
                </div>
             ) : (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-7 text-[10px] font-bold uppercase text-slate-500 hover:text-slate-700 hover:bg-slate-50 relative z-10"
-                  onClick={() => setIsEditingRadius(true)}
-                >
-                  Configure
-                </Button>
+                <div className="flex items-center gap-1.5 relative z-10">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 px-2 text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border border-indigo-100/50"
+                    onClick={handleSyncRadius}
+                    disabled={updatingRadius}
+                  >
+                    {updatingRadius ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />} Force Sync
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 px-2 text-[10px] font-bold uppercase text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                    onClick={() => setIsEditingRadius(true)}
+                  >
+                    Configure
+                  </Button>
+                </div>
             )}
           </CardHeader>
           <CardContent className="space-y-4 pt-4 relative">

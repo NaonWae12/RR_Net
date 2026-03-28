@@ -39,6 +39,7 @@ interface NetworkActions {
   disconnectRouter: (id: string) => Promise<void>;
   toggleRemoteAccess: (id: string, enabled: boolean) => Promise<Router>;
   setupRemoteUser: (id: string, data: any) => Promise<void>;
+  pushRadius: (id: string) => Promise<{ ok: boolean; message: string }>;
   
   // Profile actions
   fetchProfiles: () => Promise<void>;
@@ -207,6 +208,18 @@ export const useNetworkStore = create<NetworkState & NetworkActions>((set, get) 
     try {
       await networkService.setupRemoteUser(id, data);
       set({ loading: false });
+    } catch (err) {
+      set({ error: toApiError(err).message, loading: false });
+      throw err;
+    }
+  },
+
+  pushRadius: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await networkService.pushRadius(id);
+      set({ loading: false });
+      return result;
     } catch (err) {
       set({ error: toApiError(err).message, loading: false });
       throw err;

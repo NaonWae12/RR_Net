@@ -713,13 +713,24 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 					log.Error().Interface("panic", r).Str("router_id", rId).Msg("[UpdateRouter] Panic recovered during mikrotik API setup")
 				}
 			}()
+			
 			addr := net.JoinHostPort(host, strconv.Itoa(apiPort))
-			err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId) // Pass nasId
-			if err != nil {
-				log.Error().Err(err).Str("router_id", rId).Msg("Failed to setup RADIUS on MikroTik")
-			} else {
-				log.Info().Str("router_id", rId).Msg("RADIUS setup successfully on MikroTik")
+			
+			// Retry Logic: Try setup up to 10 times (every 30s) if the router is provisioning/offline.
+			// This handles the case where the user just pasted the script and the VPN is still establishing.
+			maxRetries := 10
+			for i := 0; i < maxRetries; i++ {
+				err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId) 
+				if err == nil {
+					log.Info().Str("router_id", rId).Int("attempt", i+1).Msg("RADIUS configuration pushed successfully")
+					return
+				}
+				
+				log.Warn().Err(err).Str("router_id", rId).Int("attempt", i+1).Msg("Failed to push RADIUS configuration, retrying in 30s...")
+				time.Sleep(30 * time.Second)
 			}
+			
+			log.Error().Str("router_id", rId).Msg("Exhausted retries for RADIUS configuration push")
 		}()
 	}
 
@@ -1921,7 +1932,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 	var vpnInterfaceCmd string
 	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
 		// SSTP (TCP 4443)
-		vpnInterfaceCmd = fmt.Sprintf("/interface sstp-client add connect-to=%s:4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no",
+		vpnInterfaceCmd = fmt.Sprintf("/interface sstp-client add connect-to=%s port=4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no",
 			vpnHost, router.VPNUsername, router.VPNPassword)
 	} else {
 		// L2TP/IPsec (Standard)
@@ -1961,6 +1972,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /system identity set name="%s"
 
 ## RADIUS & HOTSPOT SETUP
+/radius remove [ find comment="RR-NET" ]
 /radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET" nas-identifier="%s"
 /ip hotspot profile set [ find default=yes ] use-radius=yes radius-accounting=yes
 /ppp aaa set use-radius=yes

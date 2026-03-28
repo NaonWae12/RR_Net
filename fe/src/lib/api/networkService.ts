@@ -169,4 +169,9 @@ export const networkService = {
     }>(`/network/routers/${routerId}/isolir-status`);
     return response.data;
   },
+
+  async pushRadius(id: string): Promise<{ ok: boolean; message: string }> {
+    const response = await apiClient.post<{ ok: boolean; message: string }>(`/network/routers/${id}/push-radius`);
+    return response.data;
+  },
 };
