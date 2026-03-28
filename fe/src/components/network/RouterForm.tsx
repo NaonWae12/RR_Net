@@ -62,7 +62,9 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
     if (!provisioningData?.vpn_script) return "";
     let script = provisioningData.vpn_script;
     if (osVersion === 'v7') {
+      // For V7: explicitly map port and remove nas-identifier attribute which is no longer supported
       script = script.replace(/connect-to=([^:\s]+):([0-9]+)/g, "connect-to=$1 port=$2");
+      script = script.replace(/\s+nas-identifier="[^"]*"/g, "");
     }
     return script;
   };
