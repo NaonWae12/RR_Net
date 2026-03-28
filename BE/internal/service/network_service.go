@@ -865,9 +865,10 @@ func (s *NetworkService) GetGlobalNetworkStats(ctx context.Context) (*GlobalNetw
 }
 
 type RouterConnectionTestResult struct {
-	OK        bool   `json:"ok"`
-	Identity  string `json:"identity,omitempty"`
-	LatencyMS int64  `json:"latency_ms,omitempty"`
+	OK           bool   `json:"ok"`
+	Identity     string `json:"identity,omitempty"`
+	LatencyMS    int64  `json:"latency_ms,omitempty"`
+	RadiusScript string `json:"radius_script,omitempty"`
 }
 
 func (s *NetworkService) TestRouterConnection(ctx context.Context, router *network.Router) (*RouterConnectionTestResult, error) {
@@ -904,9 +905,10 @@ func (s *NetworkService) TestRouterConnection(ctx context.Context, router *netwo
 	}
 
 	return &RouterConnectionTestResult{
-		OK:        true,
-		Identity:  out.Identity,
-		LatencyMS: out.LatencyMS,
+		OK:           true,
+		Identity:     out.Identity,
+		LatencyMS:    out.LatencyMS,
+		RadiusScript: s.generateMikrotikRadiusScript(router),
 	}, nil
 }
 
@@ -1026,10 +1028,19 @@ func (s *NetworkService) TestRouterConfig(ctx context.Context, req TestRouterCon
 		return nil, err
 	}
 
+	var radiusScript string
+	if req.RouterID != nil {
+		router, err := s.routerRepo.GetByID(ctx, *req.RouterID)
+		if err == nil {
+			radiusScript = s.generateMikrotikRadiusScript(router)
+		}
+	}
+
 	return &RouterConnectionTestResult{
-		OK:        true,
-		Identity:  out.Identity,
-		LatencyMS: out.LatencyMS,
+		OK:           true,
+		Identity:     out.Identity,
+		LatencyMS:    out.LatencyMS,
+		RadiusScript: radiusScript,
 	}, nil
 }
 

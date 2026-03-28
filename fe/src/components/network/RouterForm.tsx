@@ -160,6 +160,14 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
       if (res.ok) {
         setIsVerified(true);
         toast.success(`✅ Connected! MikroTik "${res.identity || 'Unknown'}" identified.`);
+        
+        if (res.radius_script) {
+          setProvisioningData((prev) => ({
+            ...(prev as ProvisionResponse),
+            radius_script: res.radius_script!
+          }));
+        }
+
         // After verification successful, reveal step 4 for RADIUS manual setup
         setStep(4);
       } else {
