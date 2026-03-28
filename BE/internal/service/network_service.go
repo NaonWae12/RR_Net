@@ -350,6 +350,11 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		nasId := router.NASIdentifier
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Str("router_id", rId).Msg("[CreateRouter] Panic recovered during mikrotik API setup")
+				}
+			}()
 			addr := net.JoinHostPort(host, strconv.Itoa(apiPort))
 			if err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId); err != nil {
 				log.Error().Err(err).Str("router_id", rId).Msg("[CreateRouter] Failed to setup RADIUS on MikroTik")
@@ -694,6 +699,11 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 		nasId := router.NASIdentifier // CAPTURE NAS-Identifier
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Str("router_id", rId).Msg("[UpdateRouter] Panic recovered during mikrotik API setup")
+				}
+			}()
 			addr := net.JoinHostPort(host, strconv.Itoa(apiPort))
 			err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId) // Pass nasId
 			if err != nil {
@@ -925,6 +935,11 @@ func (s *NetworkService) TestRouterConfig(ctx context.Context, req TestRouterCon
 
 func (s *NetworkService) checkAndUpdateStatusAsync(router *network.Router) {
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("panic", r).Str("router_id", router.ID.String()).Msg("[checkAndUpdateStatusAsync] Panic recovered")
+			}
+		}()
 		// Create a detached context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -999,6 +1014,11 @@ func (s *NetworkService) CreateProfile(ctx context.Context, tenantID uuid.UUID, 
 	// Auto-sync profile to all tenant routers (non-blocking)
 	// This ensures profile exists on routers before it can be used
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Interface("panic", r).Str("profile", profile.ID.String()).Msg("[ProfileSync] Panic recovered")
+			}
+		}()
 		syncCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
