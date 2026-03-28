@@ -154,11 +154,13 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
         api_use_tls: watch("api_use_tls"),
         username: watch("username") || "admin",
         password: watch("password") || "",
+        router_id: provisionedId || undefined,
       });
 
       if (res.ok) {
         setIsVerified(true);
-        toast.success(`✅ Connected! MikroTik Identity: ${res.identity || 'Unknown'}`);
+        const radiusMsg = res.radius_installed ? " & RADIUS installed!" : "";
+        toast.success(`✅ Connected! MikroTik: ${res.identity || 'Unknown'}${radiusMsg}`);
       } else {
         toast.error("Connection failed. Check your credentials and ensure MikroTik is reachable.");
       }
