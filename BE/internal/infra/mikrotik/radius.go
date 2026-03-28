@@ -65,9 +65,11 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 				"=address=" + radiusServerIP,
 				"=secret=" + secret,
 				"=comment=RR-NET",
+				"=service=hotspot,ppp",
 			}
-			// Just one service first for maximum safety
-			args = append(args, "=service=hotspot")
+			if nasIdentifier != "" {
+				args = append(args, "=nas-identifier="+nasIdentifier)
+			}
 
 			if _, err = client.Run(args...); err != nil {
 				return fmt.Errorf("radius: failed to add new entry: %w", err)

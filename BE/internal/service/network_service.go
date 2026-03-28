@@ -469,7 +469,8 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		Host:                assignedIP,
 		RemoteAccessPort:    assignedPort,
 		RemoteAccessEnabled: true,
-		NASIdentifier:       newID.String(),
+		NASIdentifier:       strings.ReplaceAll(strings.ToLower(name), " ", "-"), // Slugified identity
+		RadiusSecret:        "rrnet-dev-radius-secret", // Default shared secret
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
@@ -565,6 +566,8 @@ type UpdateRouterRequest struct {
 	DNSName            string                         `json:"dns_name,omitempty"`
 	RemoteAccessPort   int                            `json:"remote_access_port,omitempty"`
 	EnableRemoteAccess *bool                          `json:"enable_remote_access,omitempty"`
+	IdleTimeout        int                            `json:"idle_timeout,omitempty"`
+	InterimInterval    int                            `json:"interim_interval,omitempty"`
 }
 
 func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req UpdateRouterRequest) (*network.Router, error) {
@@ -633,6 +636,12 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	}
 	if req.EnableRemoteAccess != nil {
 		router.RemoteAccessEnabled = *req.EnableRemoteAccess
+	}
+	if req.IdleTimeout > 0 {
+		router.IdleTimeout = req.IdleTimeout
+	}
+	if req.InterimInterval > 0 {
+		router.InterimInterval = req.InterimInterval
 	}
 	// Transition status from provisioning to online if we're completing the setup
 	if router.Status == network.RouterStatusProvisioning {
@@ -886,6 +895,72 @@ func (s *NetworkService) DisconnectRouter(ctx context.Context, id uuid.UUID) err
 	}
 	return nil
 }
+
+// PushRadius manually (re-)pushes the RADIUS configuration to a MikroTik router.
+// This replaces the old "Configure Server RADIUS" panel — RADIUS is now always
+// auto-configured on CreateRouter and UpdateRouter. This method is a safety net
+// for existing routers that were created before the auto-push feature, or for
+// operators who want to force a re-sync after changing the VPN gateway.
+//
+// Returns an error only if the router is not reachable or not a MikroTik.
+func (s *NetworkService) PushRadius(ctx context.Context, routerID uuid.UUID) (map[string]interface{}, error) {
+	router, err := s.routerRepo.GetByID(ctx, routerID)
+	if err != nil {
+		return nil, fmt.Errorf("router not found: %w", err)
+	}
+
+	if router.Type != network.RouterTypeMikroTik {
+		return nil, fmt.Errorf("RADIUS push is only supported for MikroTik routers")
+	}
+	if router.Host == "" {
+		return nil, fmt.Errorf("router has no host configured — complete the setup first")
+	}
+	if router.Username == "" || router.Password == "" {
+		return nil, fmt.Errorf("router credentials are missing — update credentials first")
+	}
+
+	// Resolve the correct RADIUS server IP based on connectivity mode
+	radiusServerIP := "10.10.10.1" // L2TP/IPsec gateway
+	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
+		radiusServerIP = "10.10.20.1" // SSTP gateway
+	}
+
+	// Ensure we have a RadiusSecret
+	radiusSecret := router.RadiusSecret
+	if radiusSecret == "" {
+		radiusSecret = "rrnet-dev-radius-secret"
+	}
+
+	// Ensure NASIdentifier is set and readable
+	nasID := router.NASIdentifier
+	if nasID == "" || len(nasID) == 36 { // UUID fallback
+		nasID = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-")
+	}
+
+	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+	if err := mikrotik.SetupRadius(ctx, addr, router.APIUseTLS, router.Username, router.Password, radiusServerIP, radiusSecret, nasID); err != nil {
+		log.Error().Err(err).Str("router_id", routerID.String()).Str("router_name", router.Name).Msg("[PushRadius] Failed to push RADIUS config")
+		return nil, fmt.Errorf("failed to configure RADIUS on MikroTik: %w", err)
+	}
+
+	// Update NASIdentifier in DB if it was sanitized
+	if nasID != router.NASIdentifier {
+		router.NASIdentifier = nasID
+		router.UpdatedAt = time.Now()
+		_ = s.routerRepo.Update(ctx, router)
+	}
+
+	log.Info().Str("router_id", routerID.String()).Str("router_name", router.Name).Str("radius_ip", radiusServerIP).Str("nas_id", nasID).Msg("[PushRadius] RADIUS configured successfully")
+
+	return map[string]interface{}{
+		"ok":               true,
+		"router_name":      router.Name,
+		"nas_identifier":   nasID,
+		"radius_server_ip": radiusServerIP,
+		"message":          "RADIUS configured on MikroTik successfully",
+	}, nil
+}
+
 
 // TestRouterConfigRequest is used for testing connection with temporary config (before saving)
 type TestRouterConfigRequest struct {
@@ -1887,7 +1962,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 
 ## RADIUS & HOTSPOT SETUP
 /radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET" nas-identifier="%s"
-/ip hotspot profile set [ find default=yes ] use-radius=yes
+/ip hotspot profile set [ find default=yes ] use-radius=yes radius-accounting=yes
 /ppp aaa set use-radius=yes
 `, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, router.Name, gatewayIP, radiusSec, nasID)
 

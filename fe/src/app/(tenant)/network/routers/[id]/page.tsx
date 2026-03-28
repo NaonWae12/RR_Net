@@ -17,8 +17,8 @@ import {
   Activity,
   Network,
   Save, 
-  RefreshCw, 
-  Eye, 
+  RefreshCw,
+  Eye,
   EyeOff,
   Terminal,
   AlertCircle,
@@ -75,13 +75,10 @@ export default function RouterDetailPage() {
   const [hotspotIP, setHotspotIP] = useState("");
   const [isUpdateMode, setIsUpdateMode] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
-  const [radiusEnabled, setRadiusEnabled] = useState(false);
-  const [radiusSecret, setRadiusSecret] = useState("");
-  const [idleTimeout, setIdleTimeout] = useState(48); // Default 48 Hours
+  const [idleTimeout, setIdleTimeout] = useState(48);
   const [interimInterval, setInterimInterval] = useState(60);
   const [updatingRadius, setUpdatingRadius] = useState(false);
   const [isEditingRadius, setIsEditingRadius] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
@@ -89,6 +86,7 @@ export default function RouterDetailPage() {
   // Remote User Setup State
   const [remoteUsername, setRemoteUsername] = useState("");
   const [remotePassword, setRemotePassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isSettingUpRemoteUser, setIsSettingUpRemoteUser] = useState(false);
   const [showRemoteUserDialog, setShowRemoteUserDialog] = useState(false);
 
@@ -121,12 +119,10 @@ export default function RouterDetailPage() {
     }
   }, [id, routerData?.status]); // Re-run only when status changes
 
+
   // 3. Sync Local States with Router Data
   useEffect(() => {
     if (routerData) {
-      setRadiusEnabled(routerData.radius_enabled);
-      // Auto-prefill with the default secret if empty
-      setRadiusSecret(routerData.radius_secret || "rrnet-dev-radius-secret");
       setIdleTimeout(routerData.idle_timeout || 48);
       setInterimInterval(routerData.interim_interval || 60);
     }
@@ -203,26 +199,26 @@ export default function RouterDetailPage() {
     }
   };
 
+
+
   const handleUpdateRadius = async () => {
     if (!routerData) return;
     setUpdatingRadius(true);
     try {
       await useNetworkStore.getState().updateRouter(routerData.id, {
-        radius_enabled: radiusEnabled,
-        radius_secret: radiusSecret,
         idle_timeout: Number(idleTimeout),
         interim_interval: Number(interimInterval),
       });
       showToast({
-        title: "Radius Updated",
-        description: "Radius configuration has been updated successfully.",
+        title: "Radius Controls Updated",
+        description: "Idle Timeout and Interim Interval updated successfully.",
         variant: "success",
       });
       setIsEditingRadius(false);
     } catch (err: any) {
       showToast({
         title: "Update Failed",
-        description: err?.message || "Failed to update Radius configuration.",
+        description: err?.message || "Failed to update Radius controls.",
         variant: "error",
       });
     } finally {
@@ -482,118 +478,6 @@ export default function RouterDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Card: Radius Server */}
-        <Card className={cn(
-          "transition-all duration-300 border-2 shadow-sm", 
-          radiusEnabled ? "border-violet-200 bg-gradient-to-br from-white to-violet-50/20" : "border-slate-100 bg-slate-50/10 grayscale-[0.5]"
-        )}>
-          <CardHeader className="pb-3 border-b border-slate-100/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className={cn("p-1.5 rounded-lg", radiusEnabled ? "bg-violet-100 text-violet-600" : "bg-slate-200 text-slate-500")}>
-                  <Globe className="h-4 w-4" />
-                </div>
-                <CardTitle className="text-sm font-black text-slate-800 uppercase tracking-wider">Radius Server</CardTitle>
-              </div>
-              <div className="flex items-center gap-2">
-                {isEditingRadius ? (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[10px] font-bold uppercase text-slate-400" 
-                    onClick={() => {
-                      setIsEditingRadius(false);
-                      setRadiusEnabled(routerData.radius_enabled);
-                      setRadiusSecret(routerData.radius_secret || "rrnet-dev-radius-secret");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                ) : (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-7 text-[10px] font-bold uppercase text-violet-600 hover:text-violet-700 hover:bg-violet-50"
-                    onClick={() => setIsEditingRadius(true)}
-                  >
-                    Configure
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-5 space-y-4">
-            <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm transition-all hover:border-violet-200">
-              <div className="space-y-0.5">
-                <Label className="text-xs font-black text-slate-700 uppercase tracking-tight">Status Authorization</Label>
-                <p className="text-[9px] text-slate-500 uppercase font-bold opacity-60">Hotspot & PPPoE Auth</p>
-              </div>
-              <Switch 
-                checked={radiusEnabled} 
-                onCheckedChange={(val) => {
-                  setRadiusEnabled(val);
-                  if (!isEditingRadius) setIsEditingRadius(true);
-                }} 
-                disabled={updatingRadius}
-                className="bg-slate-300 data-[state=checked]:bg-violet-600"
-              />
-            </div>
-
-            {radiusEnabled && (
-              <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                <div className="space-y-1">
-                  <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Server IP Address</Label>
-                   <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                       <span className="font-mono text-xs text-violet-400 font-black">
-                         {routerData.connectivity_mode === 'vpn_sstp' ? '10.10.20.1' : '10.10.10.1'}
-                       </span>
-                       <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
-                    </div>
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">MikroTik Gateway</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Shared Secret Key</Label>
-                  <div className="relative flex items-center">
-                    <Input
-                      type={showSecret ? "text" : "password"}
-                      placeholder="Radius shared secret"
-                      value={radiusSecret}
-                      onChange={(e) => setRadiusSecret(e.target.value)}
-                      disabled={!isEditingRadius || updatingRadius}
-                      className="font-mono text-xs h-9 bg-white pr-10 border-slate-200 focus:border-violet-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSecret(!showSecret)}
-                      className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {isEditingRadius && (
-              <Button 
-                className="w-full h-9 bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-100 text-xs font-bold uppercase tracking-wider" 
-                onClick={handleUpdateRadius}
-                disabled={updatingRadius}
-              >
-                {updatingRadius ? (
-                  <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
-                ) : (
-                  <Save className="w-3.5 h-3.5 mr-2" />
-                )}
-                Commit Changes
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Card: Advanced RADIUS Settings */}
         <Card className="border-slate-100 bg-white shadow-sm flex flex-col justify-between overflow-hidden relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50/50 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
@@ -602,7 +486,7 @@ export default function RouterDetailPage() {
               <Settings className="w-4 h-4 text-slate-400" />
               RADIUS Controls
             </CardTitle>
-            {isEditingRadius && (
+            {isEditingRadius ? (
                <div className="flex gap-1.5">
                  <Button 
                    size="sm" 
@@ -610,21 +494,30 @@ export default function RouterDetailPage() {
                    className="h-6 px-2 text-[9px] font-black uppercase text-slate-400"
                    onClick={() => {
                       setIsEditingRadius(false);
-                      setIdleTimeout(routerData.idle_timeout || 600);
-                      setInterimInterval(routerData.interim_interval || 60);
+                      setIdleTimeout(routerData?.idle_timeout || 48);
+                      setInterimInterval(routerData?.interim_interval || 60);
                    }}
                  >
                    Clear
                  </Button>
                  <Button 
                    size="sm" 
-                   className="h-6 px-2 text-[9px] font-black uppercase bg-slate-800 hover:bg-slate-900"
+                   className="h-6 px-2 text-[9px] font-black uppercase bg-slate-800 hover:bg-slate-900 text-white"
                    onClick={handleUpdateRadius}
                    disabled={updatingRadius}
                  >
-                   Save
+                   {updatingRadius ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />} Save
                  </Button>
                </div>
+            ) : (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-7 text-[10px] font-bold uppercase text-slate-500 hover:text-slate-700 hover:bg-slate-50 relative z-10"
+                  onClick={() => setIsEditingRadius(true)}
+                >
+                  Configure
+                </Button>
             )}
           </CardHeader>
           <CardContent className="space-y-4 pt-4 relative">
@@ -1063,17 +956,17 @@ export default function RouterDetailPage() {
               <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Access Password</Label>
               <div className="relative">
                 <Input 
-                  type={showSecret ? "text" : "password"}
+                  type={showPassword ? "text" : "password"}
                   value={remotePassword} 
                   onChange={(e) => setRemotePassword(e.target.value)}
                   className="h-10 text-xs font-mono font-bold border-slate-200 focus:border-indigo-500 rounded-xl pr-10"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowSecret(!showSecret)}
+                  onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                 >
-                  {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
             </div>

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +54,26 @@ type AuthRequest struct {
 	NASPortID        string `json:"NAS-Port-Id"`
 	CallingStationID string `json:"Calling-Station-Id"`
 	CalledStationID  string `json:"Called-Station-Id"`
+}
+
+// AcctRequest represents FreeRADIUS rlm_rest JSON body for Accounting-Request
+type AcctRequest struct {
+	UserName           string `json:"User-Name"`
+	NASIdentifier      string `json:"NAS-Identifier"`
+	NASIPAddress       string `json:"NAS-IP-Address"`
+	NASPortID          string `json:"NAS-Port-Id"`
+	AcctStatusType     string `json:"Acct-Status-Type"` // Start, Interim-Update, Stop
+	AcctSessionID      string `json:"Acct-Session-Id"`
+	AcctUniqueID       string `json:"Acct-Unique-Id"`
+	AcctSessionTime    string `json:"Acct-Session-Time"`
+	AcctInputOctets    string `json:"Acct-Input-Octets"`
+	AcctOutputOctets   string `json:"Acct-Output-Octets"`
+	AcctInputPackets   string `json:"Acct-Input-Packets"`
+	AcctOutputPackets  string `json:"Acct-Output-Packets"`
+	AcctTerminateCause string `json:"Acct-Terminate-Cause"`
+	FramedIPAddress    string `json:"Framed-IP-Address"`
+	CallingStationID   string `json:"Calling-Station-Id"`
+	CalledStationID    string `json:"Called-Station-Id"`
 }
 
 // Auth handles RADIUS Access-Request (REST-only, NO PAP)
@@ -140,6 +161,19 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Apply RADIUS interval and timeout controls based on router config
+	interim := router.InterimInterval
+	if interim <= 0 {
+		interim = 60 // Default 60 seconds
+	}
+	response["Acct-Interim-Interval"] = strconv.Itoa(interim)
+
+	idleHrs := router.IdleTimeout
+	if idleHrs <= 0 {
+		idleHrs = 48 // Default 48 hours
+	}
+	response["Idle-Timeout"] = strconv.Itoa(idleHrs * 3600) // Convert hours to seconds
+
 	if v.Isolated {
 		response["Mikrotik-Rate-Limit"] = "1k/1k"
 		response["Mikrotik-Address-List"] = "isolated"
@@ -186,6 +220,99 @@ func (h *RadiusHandler) logAuthReject(w http.ResponseWriter, r *http.Request, te
 }
 
 func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req AcctRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		zslog.Error().Err(err).Msg("[radius_acct] JSON decode failed")
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 1. Resolve router
+	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
+	if err != nil {
+		zslog.Warn().Str("nas_ip", req.NASIPAddress).Msg("[radius_acct] Router not found for accounting")
+		w.WriteHeader(http.StatusNoContent) // Still return 204 to FreeRADIUS to prevent backlog
+		return
+	}
+
+	// 2. Resolve voucher/user
+	var voucherID *uuid.UUID
+	v, err := h.voucherService.GetVoucherByCode(ctx, router.TenantID, req.UserName)
+	if err == nil && v != nil {
+		voucherID = &v.ID
+	}
+
+	// 3. Find existing or create new session
+	session, _ := h.radiusRepo.GetSessionByAcctSessionID(ctx, req.AcctSessionID)
+	now := time.Now()
+
+	if session == nil {
+		session = &radius.Session{
+			ID:            uuid.New(),
+			TenantID:      router.TenantID,
+			RouterID:      &router.ID,
+			VoucherID:     voucherID,
+			AcctSessionID: req.AcctSessionID,
+			AcctUniqueID:  req.AcctUniqueID,
+			Username:      req.UserName,
+			CreatedAt:     now,
+		}
+	}
+
+	// 4. Update session stats
+	session.NASIPAddress = req.NASIPAddress
+	session.NASPortID = req.NASPortID
+	session.FramedIPAddress = req.FramedIPAddress
+	session.CallingStationID = req.CallingStationID
+	session.CalledStationID = req.CalledStationID
+	session.UpdatedAt = now
+
+	// Parse numeric values (FreeRADIUS often sends them as strings)
+	if val, err := strconv.Atoi(req.AcctSessionTime); err == nil {
+		session.AcctSessionTime = &val
+	}
+	if val, err := strconv.ParseInt(req.AcctInputOctets, 10, 64); err == nil {
+		session.AcctInputOctets = val
+	}
+	if val, err := strconv.ParseInt(req.AcctOutputOctets, 10, 64); err == nil {
+		session.AcctOutputOctets = val
+	}
+	if val, err := strconv.ParseInt(req.AcctInputPackets, 10, 64); err == nil {
+		session.AcctInputPackets = val
+	}
+	if val, err := strconv.ParseInt(req.AcctOutputPackets, 10, 64); err == nil {
+		session.AcctOutputPackets = val
+	}
+
+	// 5. Handle Status Type
+	switch strings.ToLower(req.AcctStatusType) {
+	case "start":
+		session.SessionStatus = radius.SessionStatusActive
+		session.AcctStartTime = &now
+	case "stop":
+		session.SessionStatus = radius.SessionStatusStopped
+		session.AcctStopTime = &now
+		session.AcctTerminateCause = req.AcctTerminateCause
+	default:
+		session.SessionStatus = radius.SessionStatusActive
+	}
+
+	// 6. Save to DB (This also updates voucher totals)
+	if err := h.radiusRepo.UpsertSession(ctx, session); err != nil {
+		zslog.Error().Err(err).Str("session_id", req.AcctSessionID).Msg("[radius_acct] Failed to upsert session")
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	zslog.Info().
+		Str("type", req.AcctStatusType).
+		Str("username", req.UserName).
+		Str("router", router.Name).
+		Int("uptime", *session.AcctSessionTime).
+		Msg("[radius_acct] Processed")
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

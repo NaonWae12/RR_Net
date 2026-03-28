@@ -1772,6 +1772,15 @@ func New(deps Dependencies) http.Handler {
 					requireCapability(rbac.CapNetworkView)(http.HandlerFunc(networkHandler.GetDecommissionProgress)).ServeHTTP(w, r)
 					return
 				}
+			case "push-radius":
+				// POST /api/v1/network/routers/{id}/push-radius
+				// Replaces the old "Configure Server RADIUS" panel.
+				// RADIUS is now auto-configured on Create/Update.
+				// This is a manual re-push for legacy routers.
+				if r.Method == http.MethodPost {
+					requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(networkHandler.PushRadius)).ServeHTTP(w, r)
+					return
+				}
 			}
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return

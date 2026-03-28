@@ -368,6 +368,46 @@ func (h *NetworkHandler) SetupRemoteUser(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// PushRadius forces RADIUS configuration onto a MikroTik router.
+// This is the replacement for the old "Configure Server RADIUS" panel.
+// On all new routers, RADIUS is configured automatically on Create/Update.
+// This endpoint exists as a manual re-push for existing/legacy routers.
+func (h *NetworkHandler) PushRadius(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	id, ok := getUUIDParam(r, "id")
+	if !ok {
+		http.Error(w, `{"error":"Invalid router ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Verify router belongs to tenant
+	router, err := h.networkService.GetRouter(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+	if router.TenantID != tenantID {
+		http.Error(w, `{"error":"Router not found"}`, http.StatusNotFound)
+		return
+	}
+
+	result, err := h.networkService.PushRadius(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+
+
 // ========== Network Profile Handlers ==========
 
 func (h *NetworkHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
