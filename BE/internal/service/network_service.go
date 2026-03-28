@@ -1811,6 +1811,10 @@ func removeVPNUser(username string) error {
 
 func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) string {
 	vpnHost := s.getVPNHost()
+	// Bypass DNS delays on Mikrotik V7 by translating domain to explicit IP
+	if ips, err := net.LookupIP(vpnHost); err == nil && len(ips) > 0 {
+		vpnHost = ips[0].String()
+	}
 	psk := s.getIPsecPSK()
 	radiusSecret := os.Getenv("RRNET_RADIUS_REST_SECRET")
 	if radiusSecret == "" {
