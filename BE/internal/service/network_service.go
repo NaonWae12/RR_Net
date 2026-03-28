@@ -2001,10 +2001,8 @@ func (s *NetworkService) generateMikrotikRadiusScript(router *network.Router) st
 	}
 
 	return fmt.Sprintf(`## RADIUS & HOTSPOT SETUP
-/radius remove [ find comment="RR-NET" ]
-/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET" nas-identifier="%s"
-/ip hotspot profile set [ find name="default" ] login-by=http-chap,mschapv2 use-radius=yes
-/ip hotspot profile add name="RR-NET" hotspot-address=0.0.0.0 login-by=http-chap,mschapv2 use-radius=yes
+/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET" nas-identifier=%s
+/ip hotspot profile set [ find default=yes ] use-radius=yes
 /ppp aaa set use-radius=yes
 `, radiusIP, rSec, nasId)
 }
