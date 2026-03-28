@@ -470,7 +470,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		Host:                assignedIP,
 		RemoteAccessPort:    assignedPort,
 		RemoteAccessEnabled: true,
-		NASIdentifier:       strings.ReplaceAll(strings.ToLower(name), " ", "-"), // Slugified identity
+		NASIdentifier:       strings.ReplaceAll(strings.ToLower(name), " ", "-") + "-" + newID.String()[:4], // Readable + Unique suffix
 		RadiusSecret:        "rrnet-dev-radius-secret", // Default shared secret
 		CreatedAt:           now,
 		UpdatedAt:           now,
@@ -952,8 +952,9 @@ func (s *NetworkService) PushRadius(ctx context.Context, routerID uuid.UUID) (ma
 
 	// Ensure NASIdentifier is set and readable
 	nasID := router.NASIdentifier
-	if nasID == "" || len(nasID) == 36 { // UUID fallback
-		nasID = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-")
+	// Healing logic: If it's empty or doesn't have our suffix format (e.g. from old data)
+	if nasID == "" || !strings.Contains(nasID, "-") || len(nasID) < 6 {
+		nasID = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-") + "-" + router.ID.String()[:4]
 	}
 
 	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
@@ -1961,9 +1962,9 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 	}
 
 	nasID := router.NASIdentifier
-	// If it's a UUID (36 chars) or empty, let's use the router name for the script display
-	if len(nasID) == 36 || nasID == "" {
-		nasID = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-")
+	// Fallback if missing (very rare)
+	if nasID == "" {
+		nasID = strings.ReplaceAll(strings.ToLower(router.Name), " ", "-") + "-" + router.ID.String()[:4]
 	}
 
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
