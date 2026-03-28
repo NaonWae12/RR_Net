@@ -11,7 +11,7 @@ import { useState } from "react";
 import React from "react";
 import { networkService } from "@/lib/api/networkService";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle2, Loader2, Copy, Terminal, ShieldCheck, Activity } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Copy, Terminal, ShieldCheck, Activity, Radio } from "lucide-react";
 const routerFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
