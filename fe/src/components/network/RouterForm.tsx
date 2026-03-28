@@ -159,8 +159,12 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
 
       if (res.ok) {
         setIsVerified(true);
-        const radiusMsg = res.radius_installed ? " & RADIUS installed!" : "";
-        toast.success(`✅ Connected! MikroTik: ${res.identity || 'Unknown'}${radiusMsg}`);
+        if (res.radius_installed) {
+          toast.success(`✅ Connected! MikroTik "${res.identity || 'Unknown'}" & RADIUS provisioning complete!`);
+        } else {
+          toast.success(`✅ Connected! MikroTik "${res.identity || 'Unknown'}" identified.`);
+          toast.warning(`⚠️ RADIUS setup skipped or failed. You can re-sync later from the dashboard.`);
+        }
       } else {
         toast.error("Connection failed. Check your credentials and ensure MikroTik is reachable.");
       }

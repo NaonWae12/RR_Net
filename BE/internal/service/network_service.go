@@ -472,6 +472,7 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		RemoteAccessEnabled: true,
 		NASIdentifier:       strings.ReplaceAll(strings.ToLower(name), " ", "-") + "-" + newID.String()[:4], // Readable + Unique suffix
 		RadiusSecret:        "rrnet-dev-radius-secret", // Default shared secret
+		RadiusEnabled:       true,                      // ENABLED BY DEFAULT FOR AUTOMATION
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
