@@ -1853,6 +1853,7 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 	}
 
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
+/ip dns set servers=8.8.8.8,1.1.1.1
 %s
 /ip ipsec proposal set [ find default=yes ] auth-algorithms=sha256 enc-algorithms=aes-256-cbc pfs-group=none
 /ip firewall filter add action=accept chain=input comment="Allow ERP Access from VPN" src-address=%s dst-port=8728,8291 protocol=tcp place-before=0
@@ -1863,13 +1864,13 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 /ip service set ssh port=22
 /ip service set telnet disabled=yes
 /ip service set ftp disabled=yes
-/system identity set name="RR-%s"
+/system identity set name="%s"
 
 ## RADIUS & HOTSPOT SETUP
-/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET" nas-identifier=%s
+/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET"
 /ip hotspot profile set [ find default=yes ] use-radius=yes
 /ppp aaa set use-radius=yes
-`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, router.Name, gatewayIP, radiusSec, nasID)
+`, router.Name, vpnInterfaceCmd, vpnSubnet, vpnSubnet, router.Name, gatewayIP, radiusSec)
 
 	return script
 }
