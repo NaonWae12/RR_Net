@@ -472,8 +472,8 @@ func (s *NetworkService) ProvisionRouter(ctx context.Context, tenantID uuid.UUID
 		RemoteAccessPort:    assignedPort,
 		RemoteAccessEnabled: true,
 		NASIdentifier:       strings.ReplaceAll(strings.ToLower(name), " ", "-") + "-" + newID.String()[:4], // Readable + Unique suffix
-		RadiusSecret:        "rrnet-dev-radius-secret", // Default shared secret
-		RadiusEnabled:       true,                      // ENABLED BY DEFAULT FOR AUTOMATION
+		RadiusSecret:        "rrnet-dev-radius-secret",                                                      // Default shared secret
+		RadiusEnabled:       true,                                                                           // ENABLED BY DEFAULT FOR AUTOMATION
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
@@ -725,23 +725,23 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 					log.Error().Interface("panic", r).Str("router_id", rId).Msg("[UpdateRouter] Panic recovered during mikrotik API setup")
 				}
 			}()
-			
+
 			addr := net.JoinHostPort(host, strconv.Itoa(apiPort))
-			
+
 			// Retry Logic: Try setup up to 10 times (every 30s) if the router is provisioning/offline.
 			// This handles the case where the user just pasted the script and the VPN is still establishing.
 			maxRetries := 10
 			for i := 0; i < maxRetries; i++ {
-				err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId) 
+				err := mikrotik.SetupRadius(context.Background(), addr, tls, user, pass, radiusIP, rSec, nasId)
 				if err == nil {
 					log.Info().Str("router_id", rId).Int("attempt", i+1).Msg("RADIUS configuration pushed successfully")
 					return
 				}
-				
+
 				log.Warn().Err(err).Str("router_id", rId).Int("attempt", i+1).Msg("Failed to push RADIUS configuration, retrying in 30s...")
 				time.Sleep(30 * time.Second)
 			}
-			
+
 			log.Error().Str("router_id", rId).Msg("Exhausted retries for RADIUS configuration push")
 		}()
 	}
@@ -986,7 +986,6 @@ func (s *NetworkService) PushRadius(ctx context.Context, routerID uuid.UUID) (ma
 		"message":          "RADIUS configured on MikroTik successfully",
 	}, nil
 }
-
 
 // TestRouterConfigRequest is used for testing connection with temporary config (before saving)
 type TestRouterConfigRequest struct {
@@ -1964,8 +1963,6 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 		vpnInterfaceCmd = fmt.Sprintf("/interface l2tp-client add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet password=%s user=%s use-ipsec=yes ipsec-secret=%s",
 			vpnHost, router.VPNPassword, router.VPNUsername, psk)
 	}
-
-
 
 	script := fmt.Sprintf(`## RR-NET SETUP - %s
 %s

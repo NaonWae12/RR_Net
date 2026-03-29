@@ -216,6 +216,7 @@ func (h *RadiusHandler) logAuthReject(w http.ResponseWriter, r *http.Request, te
 		"reply":   map[string]interface{}{"Reply-Message": []string{"Voucher/Password invalid"}},
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
 	json.NewEncoder(w).Encode(response)
 }
 
