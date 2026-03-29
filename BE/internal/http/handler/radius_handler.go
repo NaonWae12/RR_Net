@@ -307,11 +307,16 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	uptime := 0
+	if session.AcctSessionTime != nil {
+		uptime = *session.AcctSessionTime
+	}
+
 	zslog.Info().
 		Str("type", req.AcctStatusType).
 		Str("username", req.UserName).
 		Str("router", router.Name).
-		Int("uptime", *session.AcctSessionTime).
+		Int("uptime", uptime).
 		Msg("[radius_acct] Processed")
 
 	w.WriteHeader(http.StatusNoContent)
