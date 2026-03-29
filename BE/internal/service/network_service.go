@@ -2001,10 +2001,10 @@ func (s *NetworkService) generateMikrotikRadiusScript(router *network.Router) st
 	}
 
 	return fmt.Sprintf(`## RADIUS & HOTSPOT SETUP
-/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET" nas-identifier=%s
-/ip hotspot profile set [ find default=yes ] use-radius=yes
-/ppp aaa set use-radius=yes
-`, radiusIP, rSec, nasId)
+/radius add address=%s secret=%s service=hotspot,ppp comment="RR-NET"
+/ip hotspot profile set [ find default=yes ] use-radius=yes radius-accounting=yes
+/ppp aaa set use-radius=yes accounting=yes
+`, radiusIP, rSec)
 }
 
 func (s *NetworkService) getIPsecPSK() string {
