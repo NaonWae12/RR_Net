@@ -1955,9 +1955,9 @@ func (s *NetworkService) generateMikrotikVPNScript(router *network.Router) strin
 	// Choose VPN Interface Command
 	var vpnInterfaceCmd string
 	if router.ConnectivityMode == network.RouterConnectivityModeVPNSSTP {
-		// Version-Agnostic SSTP Setup (Supports ROS v6/v7)
-		vpnInterfaceCmd = fmt.Sprintf(":if ([:len [/interface sstp-client find name=sstp-rrnet]] = 0) do={ :if ([:pick [/system resource get version] 0 1] = \"7\") do={ /interface sstp-client add connect-to=%s port=4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no } else={ /interface sstp-client add connect-to=%s:4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no } }",
-			vpnHost, router.VPNUsername, router.VPNPassword, vpnHost, router.VPNUsername, router.VPNPassword)
+		// Raw command without :if wrapper. The UI handles ROS v7 formatting.
+		vpnInterfaceCmd = fmt.Sprintf("/interface sstp-client add connect-to=%s:4443 user=%s password=%s profile=default-encryption name=sstp-rrnet disabled=no add-default-route=no certificate=none verify-server-address=no verify-server-certificate=no",
+			vpnHost, router.VPNUsername, router.VPNPassword)
 	} else {
 		// L2TP/IPsec (Standard)
 		vpnInterfaceCmd = fmt.Sprintf("/interface l2tp-client add add-default-route=no connect-to=%s disabled=no name=l2tp-rrnet password=%s user=%s use-ipsec=yes ipsec-secret=%s",
@@ -2040,7 +2040,7 @@ func (s *NetworkService) applyRemoteAccessRules(router *network.Router) error {
 	// Ensure Masquerade for VPN subnet (critical for return path)
 	vpnSubnet := os.Getenv("VPN_SUBNET")
 	if vpnSubnet == "" {
-		vpnSubnet = "10.10.10.0/24"
+		vpnSubnet = "10.10.0.0/16"
 	}
 
 	// We use -C to check if rule exists first to avoid duplicates

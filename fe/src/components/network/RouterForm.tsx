@@ -272,22 +272,24 @@ export function RouterForm({ initialData, onSubmit, onCancel, isLoading }: Route
                 <h3 className="text-base font-bold text-indigo-900">Step 2: Jalankan Script di MikroTik</h3>
                 <p className="text-xs text-indigo-700">Script ini menghubungkan MikroTik ke VPN. Pilih versi OS ruter Anda:</p>
               </div>
-              <div className="flex border border-indigo-200 bg-white rounded-lg overflow-hidden shrink-0 shadow-sm">
-                <button 
-                  type="button" 
-                  onClick={() => setOsVersion('v6')} 
-                  className={cn("px-4 py-1.5 text-[11px] font-bold transition-colors border-r border-indigo-100", osVersion === 'v6' ? "bg-indigo-600 text-white" : "text-indigo-600 hover:bg-indigo-50")}
-                >
-                  RouterOS &lt; v7
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setOsVersion('v7')} 
-                  className={cn("px-4 py-1.5 text-[11px] font-bold transition-colors", osVersion === 'v7' ? "bg-indigo-600 text-white" : "text-indigo-600 hover:bg-indigo-50")}
-                >
-                  RouterOS v7+
-                </button>
-              </div>
+              {connectivityMode === 'vpn_sstp' && (
+                <div className="flex border border-indigo-200 bg-white rounded-lg overflow-hidden shrink-0 shadow-sm transition-all duration-300 animate-in fade-in zoom-in-95">
+                  <button 
+                    type="button" 
+                    onClick={() => setOsVersion('v6')} 
+                    className={cn("px-4 py-1.5 text-[11px] font-bold transition-colors border-r border-indigo-100", osVersion === 'v6' ? "bg-indigo-600 text-white" : "text-indigo-600 hover:bg-indigo-50")}
+                  >
+                    RouterOS &lt; v7
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setOsVersion('v7')} 
+                    className={cn("px-4 py-1.5 text-[11px] font-bold transition-colors", osVersion === 'v7' ? "bg-indigo-600 text-white" : "text-indigo-600 hover:bg-indigo-50")}
+                  >
+                    RouterOS v7+
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
