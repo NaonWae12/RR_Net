@@ -51,16 +51,17 @@ func (s *VoucherService) VoucherRepo() *repository.VoucherRepository {
 // ========== Voucher Packages ==========
 
 type CreateVoucherPackageRequest struct {
-	Name          string  `json:"name"`
-	Description   string  `json:"description,omitempty"`
-	DownloadSpeed int     `json:"download_speed"`
-	UploadSpeed   int     `json:"upload_speed"`
-	DurationHours *int    `json:"duration_hours,omitempty"`
-	Validity      string  `json:"validity,omitempty"` // Mikhmon format: 2H, 1J, etc.
-	QuotaMB       *int    `json:"quota_mb,omitempty"`
-	Price         float64 `json:"price"`
-	Currency      string  `json:"currency,omitempty"`
-	RateLimitMode string  `json:"rate_limit_mode,omitempty"` // full_radius or radius_auth_only
+	Name           string  `json:"name"`
+	Description    string  `json:"description,omitempty"`
+	DownloadSpeed  int     `json:"download_speed"`
+	UploadSpeed    int     `json:"upload_speed"`
+	DurationHours  *int    `json:"duration_hours,omitempty"`
+	Validity       string  `json:"validity,omitempty"` // Mikhmon format: 1j, 1h, 1d, etc.
+	QuotaMB        *int    `json:"quota_mb,omitempty"`
+	Price          float64 `json:"price"`
+	Currency       string  `json:"currency,omitempty"`
+	RateLimitMode  string  `json:"rate_limit_mode,omitempty"`  // full_radius or radius_auth_only
+	ExpirationMode string  `json:"expiration_mode,omitempty"` // wall_clock or uptime_limit
 }
 
 func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, req CreateVoucherPackageRequest) (*voucher.VoucherPackage, error) {
@@ -85,21 +86,37 @@ func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, 
 		return nil, fmt.Errorf("invalid rate_limit_mode: %s (must be 'full_radius' or 'radius_auth_only')", rateLimitMode)
 	}
 
+	// Set expiration mode (default: wall_clock)
+	expirationMode := req.ExpirationMode
+	if expirationMode == "" {
+		expirationMode = "wall_clock"
+	}
+
+	// If uptime_limit mode, MaxUptimeSeconds = DurationHours * 3600
+	// ExpiresAt will NOT be set by accounting (timer only counts online time)
+	var maxUptimeSeconds *int
+	if expirationMode == "uptime_limit" && durationHours != nil {
+		m := (*durationHours) * 3600
+		maxUptimeSeconds = &m
+	}
+
 	pkg := &voucher.VoucherPackage{
-		ID:            uuid.New(),
-		TenantID:      tenantID,
-		Name:          req.Name,
-		Description:   req.Description,
-		DownloadSpeed: req.DownloadSpeed,
-		UploadSpeed:   req.UploadSpeed,
-		DurationHours: durationHours,
-		QuotaMB:       req.QuotaMB,
-		Price:         req.Price,
-		Currency:      req.Currency,
-		RateLimitMode: rateLimitMode,
-		IsActive:      true,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:               uuid.New(),
+		TenantID:         tenantID,
+		Name:             req.Name,
+		Description:      req.Description,
+		DownloadSpeed:    req.DownloadSpeed,
+		UploadSpeed:      req.UploadSpeed,
+		DurationHours:    durationHours,
+		QuotaMB:          req.QuotaMB,
+		Price:            req.Price,
+		Currency:         req.Currency,
+		RateLimitMode:    rateLimitMode,
+		ExpirationMode:   expirationMode,
+		MaxUptimeSeconds: maxUptimeSeconds,
+		IsActive:         true,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	if pkg.Currency == "" {
@@ -134,17 +151,18 @@ func (s *VoucherService) ListPackages(ctx context.Context, tenantID uuid.UUID, a
 }
 
 type UpdateVoucherPackageRequest struct {
-	Name          string  `json:"name,omitempty"`
-	Description   string  `json:"description,omitempty"`
-	DownloadSpeed int     `json:"download_speed,omitempty"`
-	UploadSpeed   int     `json:"upload_speed,omitempty"`
-	DurationHours *int    `json:"duration_hours,omitempty"`
-	Validity      string  `json:"validity,omitempty"`
-	QuotaMB       *int    `json:"quota_mb,omitempty"`
-	Price         float64 `json:"price,omitempty"`
-	Currency      string  `json:"currency,omitempty"`
-	RateLimitMode string  `json:"rate_limit_mode,omitempty"`
-	IsActive      *bool   `json:"is_active,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	Description    string  `json:"description,omitempty"`
+	DownloadSpeed  int     `json:"download_speed,omitempty"`
+	UploadSpeed    int     `json:"upload_speed,omitempty"`
+	DurationHours  *int    `json:"duration_hours,omitempty"`
+	Validity       string  `json:"validity,omitempty"`
+	QuotaMB        *int    `json:"quota_mb,omitempty"`
+	Price          float64 `json:"price,omitempty"`
+	Currency       string  `json:"currency,omitempty"`
+	RateLimitMode  string  `json:"rate_limit_mode,omitempty"`
+	ExpirationMode string  `json:"expiration_mode,omitempty"` // wall_clock or uptime_limit
+	IsActive       *bool   `json:"is_active,omitempty"`
 }
 
 func (s *VoucherService) UpdatePackage(ctx context.Context, id uuid.UUID, req UpdateVoucherPackageRequest) (*voucher.VoucherPackage, error) {
@@ -194,6 +212,19 @@ func (s *VoucherService) UpdatePackage(ctx context.Context, id uuid.UUID, req Up
 		}
 		pkg.RateLimitMode = req.RateLimitMode
 	}
+	
+	if req.ExpirationMode != "" {
+		pkg.ExpirationMode = req.ExpirationMode
+	}
+	
+	// Recalculate MaxUptimeSeconds if mode is uptime_limit
+	if pkg.ExpirationMode == "uptime_limit" && pkg.DurationHours != nil {
+		m := (*pkg.DurationHours) * 3600
+		pkg.MaxUptimeSeconds = &m
+	} else {
+		pkg.MaxUptimeSeconds = nil
+	}
+
 	if req.IsActive != nil {
 		pkg.IsActive = *req.IsActive
 	}

@@ -27,12 +27,14 @@ func (r *VoucherRepository) CreatePackage(ctx context.Context, pkg *voucher.Vouc
 	query := `
 		INSERT INTO voucher_packages (
 			id, tenant_id, name, description, download_speed, upload_speed,
-			duration_hours, quota_mb, price, currency, rate_limit_mode, is_active, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			duration_hours, quota_mb, price, currency, rate_limit_mode,
+			max_uptime_seconds, expiration_mode, is_active, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	_, err := r.db.Exec(ctx, query,
 		pkg.ID, pkg.TenantID, pkg.Name, pkg.Description, pkg.DownloadSpeed, pkg.UploadSpeed,
-		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.RateLimitMode, pkg.IsActive,
+		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.RateLimitMode,
+		pkg.MaxUptimeSeconds, pkg.ExpirationMode, pkg.IsActive,
 		pkg.CreatedAt, pkg.UpdatedAt,
 	)
 	return err
@@ -96,12 +98,15 @@ func (r *VoucherRepository) UpdatePackage(ctx context.Context, pkg *voucher.Vouc
 		UPDATE voucher_packages SET
 			name = $2, description = $3, download_speed = $4, upload_speed = $5,
 			duration_hours = $6, quota_mb = $7, price = $8, currency = $9,
-			rate_limit_mode = $10, is_active = $11, updated_at = $12
+			rate_limit_mode = $10, is_active = $11,
+			max_uptime_seconds = $12, expiration_mode = $13,
+			updated_at = $14
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query,
 		pkg.ID, pkg.Name, pkg.Description, pkg.DownloadSpeed, pkg.UploadSpeed,
-		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.RateLimitMode, pkg.IsActive, pkg.UpdatedAt,
+		pkg.DurationHours, pkg.QuotaMB, pkg.Price, pkg.Currency, pkg.RateLimitMode, pkg.IsActive,
+		pkg.MaxUptimeSeconds, pkg.ExpirationMode, pkg.UpdatedAt,
 	)
 	return err
 }
