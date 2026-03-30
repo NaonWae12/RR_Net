@@ -91,10 +91,21 @@ func GetLogs(ctx context.Context, addr string, useTLS bool, username, password s
 		if re == nil || re.Map == nil {
 			continue
 		}
+		
+		// Guard against missing keys in RouterOS API map response
+		timeVal := ""
+		if v, ok := re.Map["time"]; ok { timeVal = v }
+		
+		msgVal := ""
+		if v, ok := re.Map["message"]; ok { msgVal = v }
+		
+		topicVal := ""
+		if v, ok := re.Map["topics"]; ok { topicVal = v }
+
 		logEntry := map[string]string{
-			"time":    re.Map["time"],
-			"message": re.Map["message"],
-			"topics":  re.Map["topics"],
+			"time":    timeVal,
+			"message": msgVal,
+			"topics":  topicVal,
 		}
 		logs = append(logs, logEntry)
 	}
