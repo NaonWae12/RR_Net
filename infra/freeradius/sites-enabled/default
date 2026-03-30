@@ -17,15 +17,9 @@ server default {
 
 	authorize {
 		preprocess
-		#
-		# Set Auth-Type := REST directly (NO PAP)
-		# FreeRADIUS does NOT decode/validate password
-		# Backend handles all password validation
-		#
-		if (&User-Password) {
-			update control {
-				Auth-Type := REST
-			}
+		# Force all auth requests (PAP/CHAP/v7) to our Backend REST
+		update control {
+			Auth-Type := REST
 		}
 	}
 
