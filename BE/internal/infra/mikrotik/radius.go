@@ -29,14 +29,22 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 			"=.id=" + id,
 			"=address=" + radiusServerIP,
 			"=secret=" + secret,
-			"=service=hotspot",
-			"=service=ppp",
+			"=service=hotspot,ppp",
 		}
+		
+		// Attempt with nas-identifier first
+		fullArgs := append(args, "=nas-identifier="+nasIdentifier)
 		if nasIdentifier != "" {
-			args = append(args, "=nas-identifier="+nasIdentifier)
-		}
-		if _, err = client.Run(args...); err != nil {
-			return fmt.Errorf("radius: failed to update by comment: %w", err)
+			if _, err = client.Run(fullArgs...); err != nil {
+				// Fallback for ROS v7: retry without nas-identifier if property is unknown
+				if _, err = client.Run(args...); err != nil {
+					return fmt.Errorf("radius: failed to update by comment: %w", err)
+				}
+			}
+		} else {
+			if _, err = client.Run(args...); err != nil {
+				return fmt.Errorf("radius: failed to update by comment: %w", err)
+			}
 		}
 	} else {
 		// Fallback: Check if radius entry with SAME IP already exists (but different comment)
@@ -49,14 +57,21 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 				"=.id=" + id,
 				"=comment=RR-NET",
 				"=secret=" + secret,
-				"=service=hotspot",
-				"=service=ppp",
+				"=service=hotspot,ppp",
 			}
+			
+			fullArgs := append(args, "=nas-identifier="+nasIdentifier)
 			if nasIdentifier != "" {
-				args = append(args, "=nas-identifier="+nasIdentifier)
-			}
-			if _, err = client.Run(args...); err != nil {
-				return fmt.Errorf("radius: failed to update by address: %w", err)
+				if _, err = client.Run(fullArgs...); err != nil {
+					// Fallback for ROS v7
+					if _, err = client.Run(args...); err != nil {
+						return fmt.Errorf("radius: failed to update by address: %w", err)
+					}
+				}
+			} else {
+				if _, err = client.Run(args...); err != nil {
+					return fmt.Errorf("radius: failed to update by address: %w", err)
+				}
 			}
 		} else {
 			// Add new entry
@@ -67,12 +82,19 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 				"=comment=RR-NET",
 				"=service=hotspot,ppp",
 			}
+			
+			fullArgs := append(args, "=nas-identifier="+nasIdentifier)
 			if nasIdentifier != "" {
-				args = append(args, "=nas-identifier="+nasIdentifier)
-			}
-
-			if _, err = client.Run(args...); err != nil {
-				return fmt.Errorf("radius: failed to add new entry: %w", err)
+				if _, err = client.Run(fullArgs...); err != nil {
+					// Fallback for ROS v7
+					if _, err = client.Run(args...); err != nil {
+						return fmt.Errorf("radius: failed to add new entry: %w", err)
+					}
+				}
+			} else {
+				if _, err = client.Run(args...); err != nil {
+					return fmt.Errorf("radius: failed to add new entry: %w", err)
+				}
 			}
 		}
 	}
