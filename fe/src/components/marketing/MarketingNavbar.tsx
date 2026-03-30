@@ -46,17 +46,29 @@ export const MarketingNavbar = ({
   const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (href.startsWith("#")) {
       e.preventDefault();
-      const element = document.querySelector(href);
-      if (element) {
-        const offset = 80; // height of fixed navbar
-        const elementPosition = element.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset - offset;
+      
+      // Nutup menu dulu biar layout stabil
+      setMobileMenuOpen(false);
 
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: "smooth"
-        });
-      }
+      // Kasih delay dikit biar animasi nutup menu gak ganggu kalkulasi scroll
+      setTimeout(() => {
+        const id = href.replace("#", "");
+        const element = document.getElementById(id);
+        if (element) {
+          const offset = 80; // tinggi navbar fixed
+          const bodyRect = document.body.getBoundingClientRect().top;
+          const elementRect = element.getBoundingClientRect().top;
+          const elementPosition = elementRect - bodyRect;
+          const offsetPosition = elementPosition - offset;
+
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: "smooth"
+          });
+        }
+      }, 100);
+    } else {
+      // Untuk regular link, tutup menu dulu
       setMobileMenuOpen(false);
     }
   };
@@ -65,8 +77,8 @@ export const MarketingNavbar = ({
     <nav
       className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b",
-        isScrolled 
-          ? "bg-background/80 backdrop-blur-md border-border py-3" 
+        (isScrolled || mobileMenuOpen)
+          ? "bg-background/95 backdrop-blur-xl border-border py-3 shadow-lg" 
           : "bg-transparent border-transparent py-5"
       )}
     >
@@ -137,33 +149,39 @@ export const MarketingNavbar = ({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-background border-b"
+            className="md:hidden bg-background/98 backdrop-blur-xl border-b overflow-hidden"
           >
-            <div className="container mx-auto px-4 py-6 flex flex-col gap-4">
+            <div className="container mx-auto px-4 py-8 flex flex-col gap-4">
               {navLinks.map((link) => (
                 <Link
                   key={link.label}
                   href={link.href}
                   onClick={(e) => scrollToSection(e, link.href)}
-                  className="flex items-center gap-3 text-lg font-medium p-2 hover:bg-accent rounded-lg"
+                  className="flex items-center gap-4 text-xl font-semibold p-3 hover:bg-accent rounded-xl transition-colors"
                 >
-                  <link.icon className="w-5 h-5 text-purple-600" />
+                  <div className="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
+                    <link.icon className="w-5 h-5 text-purple-600" />
+                  </div>
                   {link.label}
                 </Link>
               ))}
-              <div className="h-px bg-border my-2" />
-              <Link 
-                href="/login" 
-                className="text-center py-3 font-medium hover:bg-accent rounded-lg"
-              >
-                Log in
-              </Link>
-              <Link 
-                href="/register" 
-                className="bg-gradient-to-r from-purple-600 to-cyan-500 text-white text-center py-4 rounded-xl font-bold shadow-lg shadow-purple-500/20"
-              >
-                Start for Free
-              </Link>
+              <div className="h-px bg-border my-4" />
+              <div className="grid grid-cols-1 gap-3">
+                <Link 
+                  href="/login" 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-center py-4 font-bold hover:bg-accent rounded-xl border border-border"
+                >
+                  Log in
+                </Link>
+                <Link 
+                  href={registerHref} 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="bg-gradient-to-r from-purple-600 to-cyan-500 text-white text-center py-4 rounded-xl font-bold shadow-lg shadow-purple-500/20 active:scale-[0.98] transition-transform"
+                >
+                  {registerLabel}
+                </Link>
+              </div>
             </div>
           </motion.div>
         )}
