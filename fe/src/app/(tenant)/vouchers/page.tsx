@@ -67,18 +67,28 @@ function formatDuration(seconds: number = 0) {
 }
 
 function calculateUptime(v: Voucher) {
-  // If wall_clock mode and used, calculate elapsed time since first login
+  // If wall_clock mode, calculate elapsed time since first login
   if (v.expiration_mode === 'wall_clock' && v.used_at) {
     const usedAt = new Date(v.used_at).getTime();
-    const now = new Date().getTime();
-    const elapsedSeconds = Math.floor((now - usedAt) / 1000);
-    
-    // Cap it at whatever the expiry was supposed to be (if we have it)
-    // For now, just return elapsed. If it's expired, it will show accurately.
+
+    // If voucher is expired or has an expires_at in the past,
+    // cap the uptime at (expires_at - used_at) so the clock STOPS.
+    if (v.expires_at) {
+      const expiresAt = new Date(v.expires_at).getTime();
+      const isExpired = v.status === 'expired' || Date.now() >= expiresAt;
+      if (isExpired) {
+        // Show exactly how long the session lasted (capped at validity window)
+        const cappedSeconds = Math.floor((expiresAt - usedAt) / 1000);
+        return cappedSeconds > 0 ? cappedSeconds : 0;
+      }
+    }
+
+    // Voucher still active → show live elapsed time
+    const elapsedSeconds = Math.floor((Date.now() - usedAt) / 1000);
     return elapsedSeconds > 0 ? elapsedSeconds : 0;
   }
-  
-  // Otherwise return the actual session uptime (Play/Pause)
+
+  // uptime_limit mode → always use the frozen value from DB (accounting freeze)
   return v.total_uptime_seconds || 0;
 }
 
