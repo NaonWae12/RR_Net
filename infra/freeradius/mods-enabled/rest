@@ -1,17 +1,19 @@
 rest {
-	# Authenticate: Access-Request (REST-only, NO PAP)
-	# NOTE: Send User-Password as-is (backend will handle decoding/validation)
-	# Backend is single source of truth for password validation
-	# 
-	# Backend REST API URL (hardcoded for simplicity)
-	# Default: http://127.0.0.1:8080/api/v1/radius (localhost)
-	# To change: edit URI below to match your backend server
+	# Authorize: Pindah ke sini biar PAP, CHAP, dan v7 semua masuk kuali
+	authorize {
+		uri = "http://127.0.0.1:8080/api/v1/radius/auth"
+		method = 'post'
+		body = 'json'
+		# Kirim semua atribut penting, termasuk CHAP buat v7
+		data = '{ "User-Name": "%{User-Name}", "User-Password": "%{User-Password}", "CHAP-Password": "%{CHAP-Password}", "CHAP-Challenge": "%{CHAP-Challenge}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}" }'
+	}
 
+	# Maintain compatibility with authenticate section just in case
 	authenticate {
 		uri = "http://127.0.0.1:8080/api/v1/radius/auth"
 		method = 'post'
 		body = 'json'
-		data = '{ "User-Name": "%{User-Name}", "User-Password": "%{User-Password}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}" }'
+		data = '{ "User-Name": "%{User-Name}", "User-Password": "%{User-Password}", "CHAP-Password": "%{CHAP-Password}", "CHAP-Challenge": "%{CHAP-Challenge}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}" }'
 	}
 
 	# Accounting: Start/Interim/Stop
@@ -22,5 +24,3 @@ rest {
 		data = '{ "Acct-Status-Type": "%{Acct-Status-Type}", "Acct-Session-Id": "%{Acct-Session-Id}", "User-Name": "%{User-Name}", "NAS-IP-Address": "%{NAS-IP-Address}", "NAS-Identifier": "%{NAS-Identifier}", "NAS-Port-Id": "%{NAS-Port-Id}", "Framed-IP-Address": "%{Framed-IP-Address}", "Calling-Station-Id": "%{Calling-Station-Id}", "Called-Station-Id": "%{Called-Station-Id}", "Acct-Session-Time": "%{Acct-Session-Time}", "Acct-Input-Octets": "%{Acct-Input-Octets}", "Acct-Output-Octets": "%{Acct-Output-Octets}", "Acct-Input-Packets": "%{Acct-Input-Packets}", "Acct-Output-Packets": "%{Acct-Output-Packets}", "Acct-Terminate-Cause": "%{Acct-Terminate-Cause}" }'
 	}
 }
-
-
