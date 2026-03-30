@@ -21,7 +21,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 
 	// 1. Check if a RR-NET RADIUS entry already exists (keyed by comment).
 	repl, err := client.Run("/radius/print", "?comment=RR-NET")
-	if err == nil && repl != nil && len(repl.Re) > 0 && repl.Re[0].Map != nil {
+	if err == nil && repl != nil && len(repl.Re) > 0 && repl.Re[0] != nil && repl.Re[0].Map != nil {
 		// Update existing entry (Found by comment)
 		id := repl.Re[0].Map[".id"]
 		if id == "" {
@@ -52,7 +52,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 	} else {
 		// Fallback: Check if radius entry with SAME IP already exists (but different comment)
 		repl2, err2 := client.Run("/radius/print", "?address="+radiusServerIP)
-		if err2 == nil && repl2 != nil && len(repl2.Re) > 0 && repl2.Re[0].Map != nil {
+		if err2 == nil && repl2 != nil && len(repl2.Re) > 0 && repl2.Re[0] != nil && repl2.Re[0].Map != nil {
 			// Update the entry by ID
 			id := repl2.Re[0].Map[".id"]
 			if id == "" {
@@ -107,7 +107,7 @@ func SetupRadius(ctx context.Context, addr string, useTLS bool, username, passwo
 
 	// 2. Enable RADIUS in Hotspot Profile (Default).
 	// Silently ignore errors — hotspot may not be configured on this router.
-	if replS, errS := client.Run("/ip/hotspot/profile/print", "?default=true"); errS == nil && replS != nil && len(replS.Re) > 0 && replS.Re[0].Map != nil {
+	if replS, errS := client.Run("/ip/hotspot/profile/print", "?default=true"); errS == nil && replS != nil && len(replS.Re) > 0 && replS.Re[0] != nil && replS.Re[0].Map != nil {
 		id := replS.Re[0].Map[".id"]
 		if id != "" {
 			_, _ = client.Run("/ip/hotspot/profile/set", "=.id="+id, "=use-radius=yes")

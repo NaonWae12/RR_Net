@@ -67,13 +67,16 @@ func RemoveFromIsolatedList(ctx context.Context, addr string, useTLS bool, usern
 
 	// Remove all matching entries
 	for _, re := range reply.Re {
+		if re == nil || re.Map == nil {
+			continue
+		}
 		if id, ok := re.Map[".id"]; ok {
 			_, err = client.Run(
 				"/ip/firewall/address-list/remove",
 				fmt.Sprintf("=.id=%s", id),
 			)
 			if err != nil {
-				return fmt.Errorf("failed to remove isolated entry: %w", err)
+				fmt.Printf("Warning: failed to remove isolated entry: %v\n", err)
 			}
 		}
 	}
@@ -100,6 +103,9 @@ func DisconnectHotspotUser(ctx context.Context, addr string, useTLS bool, userna
 
 	// 1. Remove from active sessions
 	for _, re := range reply.Re {
+		if re == nil || re.Map == nil {
+			continue
+		}
 		if id, ok := re.Map[".id"]; ok {
 			_, _ = client.Run("/ip/hotspot/active/remove", fmt.Sprintf("=.id=%s", id))
 		}
@@ -110,8 +116,11 @@ func DisconnectHotspotUser(ctx context.Context, addr string, useTLS bool, userna
 		"/ip/hotspot/cookie/print",
 		fmt.Sprintf("?user=%s", hotspotUsername),
 	)
-	if err == nil {
+	if err == nil && cookieReply != nil {
 		for _, re := range cookieReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
 			if id, ok := re.Map[".id"]; ok {
 				_, _ = client.Run("/ip/hotspot/cookie/remove", fmt.Sprintf("=.id=%s", id))
 			}
@@ -232,8 +241,11 @@ func UninstallIsolirFirewall(ctx context.Context, addr string, useTLS bool, user
 func removeIsolirRules(client *routeros.Client) error {
 	// 1. Remove NAT rules
 	natReply, err := client.Run("/ip/firewall/nat/print")
-	if err == nil {
+	if err == nil && natReply != nil {
 		for _, re := range natReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
 			comment := re.Map["comment"]
 			if strings.Contains(strings.ToLower(comment), "isolir-") {
 				if id, ok := re.Map[".id"]; ok {
@@ -245,8 +257,11 @@ func removeIsolirRules(client *routeros.Client) error {
 
 	// 2. Remove filter rules
 	filterReply, err := client.Run("/ip/firewall/filter/print")
-	if err == nil {
+	if err == nil && filterReply != nil {
 		for _, re := range filterReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
 			comment := re.Map["comment"]
 			if strings.Contains(strings.ToLower(comment), "isolir-") {
 				if id, ok := re.Map[".id"]; ok {
@@ -258,8 +273,11 @@ func removeIsolirRules(client *routeros.Client) error {
 
 	// 3. Remove Walled Garden rules
 	wgReply, err := client.Run("/ip/hotspot/walled-garden/print")
-	if err == nil {
+	if err == nil && wgReply != nil {
 		for _, re := range wgReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
 			comment := re.Map["comment"]
 			if strings.Contains(strings.ToLower(comment), "isolir-") {
 				if id, ok := re.Map[".id"]; ok {
@@ -294,8 +312,11 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 	// 1. Check NAT rules (Get all and filter in Go for reliability)
 	// We use .proplist to retrieve ONLY needed properties, saving huge CPU & bandwidth!
 	natReply, err := client.Run("/ip/firewall/nat/print", "=.proplist=.id,comment,to-addresses")
-	if err == nil {
+	if err == nil && natReply != nil {
 		for _, re := range natReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
 			comment := re.Map["comment"]
 			if strings.Contains(strings.ToLower(comment), "isolir-") {
 				status.HasNAT = true
@@ -309,8 +330,11 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 
 	// 2. Check Filter rules
 	filterReply, err := client.Run("/ip/firewall/filter/print", "=.proplist=.id,comment")
-	if err == nil {
+	if err == nil && filterReply != nil {
 		for _, re := range filterReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
 			comment := re.Map["comment"]
 			if strings.Contains(strings.ToLower(comment), "isolir-") {
 				status.HasFilter = true
@@ -322,8 +346,11 @@ func CheckIsolirFirewall(ctx context.Context, addr string, useTLS bool, username
 	// 3. Check Walled Garden
 	wgReply, err := client.Run("/ip/hotspot/walled-garden/print", "=.proplist=.id,comment")
 	hasWG := false
-	if err == nil {
+	if err == nil && wgReply != nil {
 		for _, re := range wgReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
 			comment := re.Map["comment"]
 			if strings.Contains(strings.ToLower(comment), "isolir-") {
 				hasWG = true
@@ -356,7 +383,7 @@ func GetHotspotUserIP(ctx context.Context, addr string, useTLS bool, username, p
 	}
 
 	// Get IP from first matching session
-	if len(reply.Re) > 0 {
+	if len(reply.Re) > 0 && reply.Re[0] != nil && reply.Re[0].Map != nil {
 		if ip, ok := reply.Re[0].Map["address"]; ok {
 			return ip, nil
 		}

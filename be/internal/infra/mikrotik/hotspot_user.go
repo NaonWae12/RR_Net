@@ -68,7 +68,7 @@ func FindHotspotUser(ctx context.Context, addr string, useTLS bool, routerUserna
 		return false, fmt.Errorf("failed to query Hotspot user: %w", err)
 	}
 
-	return len(reply.Re) > 0, nil
+	return reply != nil && len(reply.Re) > 0, nil
 }
 
 // RemoveHotspotUser removes a Hotspot user from MikroTik router by name
@@ -91,11 +91,10 @@ func RemoveHotspotUser(ctx context.Context, addr string, useTLS bool, routerUser
 		return fmt.Errorf("failed to query Hotspot user: %w", err)
 	}
 
-	if len(reply.Re) == 0 {
-		return fmt.Errorf("Hotspot user not found: %s", username)
-	}
-
 	// Get the .id field from the first result
+	if reply == nil || len(reply.Re) == 0 || reply.Re[0] == nil || reply.Re[0].Map == nil {
+		return fmt.Errorf("Hotspot user not found or invalid response: %s", username)
+	}
 	userID, ok := reply.Re[0].Map[".id"]
 	if !ok {
 		return fmt.Errorf("user ID not found in response")

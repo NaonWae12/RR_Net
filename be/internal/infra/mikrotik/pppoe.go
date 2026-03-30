@@ -209,8 +209,8 @@ func RemovePPPoESecret(ctx context.Context, addr string, useTLS bool, routerUser
 		return fmt.Errorf("failed to find PPPoE secret: %w", err)
 	}
 
-	if len(reply.Re) == 0 {
-		return fmt.Errorf("PPPoE secret not found: %s", username)
+	if reply == nil || len(reply.Re) == 0 || reply.Re[0] == nil || reply.Re[0].Map == nil {
+		return fmt.Errorf("PPPoE secret not found or invalid response: %s", username)
 	}
 
 	secretID := reply.Re[0].Map[".id"]
@@ -247,7 +247,13 @@ func ListPPPoEActive(ctx context.Context, addr string, useTLS bool, routerUserna
 	}
 
 	var connections []ActivePPPoEConnection
+	if reply == nil {
+		return connections, nil
+	}
 	for _, re := range reply.Re {
+		if re == nil || re.Map == nil {
+			continue
+		}
 		conn := ActivePPPoEConnection{
 			ID:       re.Map[".id"],
 			Username: re.Map["name"],
@@ -317,8 +323,8 @@ func FindPPPoESecretID(ctx context.Context, addr string, useTLS bool, routerUser
 		return "", fmt.Errorf("failed to find PPPoE secret: %w", err)
 	}
 
-	if len(reply.Re) == 0 {
-		return "", fmt.Errorf("PPPoE secret not found: %s", username)
+	if reply == nil || len(reply.Re) == 0 || reply.Re[0] == nil || reply.Re[0].Map == nil {
+		return "", fmt.Errorf("PPPoE secret not found or invalid response: %s", username)
 	}
 
 	secretID := reply.Re[0].Map[".id"]
@@ -344,7 +350,13 @@ func ListPPPoEProfiles(ctx context.Context, addr string, useTLS bool, routerUser
 	}
 
 	var profiles []PPPoEProfile
+	if reply == nil {
+		return profiles, nil
+	}
 	for _, re := range reply.Re {
+		if re == nil || re.Map == nil {
+			continue
+		}
 		profile := PPPoEProfile{
 			Name:          re.Map["name"],
 			LocalAddress:  re.Map["local-address"],
@@ -385,8 +397,8 @@ func FindPPPoEProfileID(ctx context.Context, addr string, useTLS bool, routerUse
 		return "", fmt.Errorf("failed to find PPPoE profile: %w", err)
 	}
 
-	if len(reply.Re) == 0 {
-		return "", fmt.Errorf("PPPoE profile not found: %s", profileName)
+	if reply == nil || len(reply.Re) == 0 || reply.Re[0] == nil || reply.Re[0].Map == nil {
+		return "", fmt.Errorf("PPPoE profile not found or invalid response: %s", profileName)
 	}
 
 	profileID := reply.Re[0].Map[".id"]
@@ -543,9 +555,14 @@ func GetPPPoEServerLocalAddress(ctx context.Context, addr string, useTLS bool, u
 	}
 
 	// Look for local-address in server configuration
-	for _, re := range reply.Re {
-		if localAddr, ok := re.Map["local-address"]; ok && localAddr != "" {
-			return localAddr, nil
+	if reply != nil {
+		for _, re := range reply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
+			if localAddr, ok := re.Map["local-address"]; ok && localAddr != "" {
+				return localAddr, nil
+			}
 		}
 	}
 
@@ -557,13 +574,18 @@ func GetPPPoEServerLocalAddress(ctx context.Context, addr string, useTLS bool, u
 	}
 
 	// Return first non-loopback IP address
-	for _, re := range ipReply.Re {
-		if addrStr, ok := re.Map["address"]; ok && addrStr != "" {
-			// Parse CIDR format (e.g., "192.168.1.1/24")
-			ipStr := strings.Split(addrStr, "/")[0]
-			ip := net.ParseIP(ipStr)
-			if ip != nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
-				return ipStr, nil
+	if ipReply != nil {
+		for _, re := range ipReply.Re {
+			if re == nil || re.Map == nil {
+				continue
+			}
+			if addrStr, ok := re.Map["address"]; ok && addrStr != "" {
+				// Parse CIDR format (e.g., "192.168.1.1/24")
+				ipStr := strings.Split(addrStr, "/")[0]
+				ip := net.ParseIP(ipStr)
+				if ip != nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
+					return ipStr, nil
+				}
 			}
 		}
 	}

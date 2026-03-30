@@ -179,11 +179,10 @@ func FindHotspotUserProfileID(ctx context.Context, addr string, useTLS bool, rou
 		return "", fmt.Errorf("failed to query Hotspot user profile: %w", err)
 	}
 
-	if len(reply.Re) == 0 {
-		return "", fmt.Errorf("Hotspot user profile not found: %s", profileName)
-	}
-
 	// Get the .id field from the first result
+	if reply == nil || len(reply.Re) == 0 || reply.Re[0] == nil || reply.Re[0].Map == nil {
+		return "", fmt.Errorf("Hotspot user profile not found or invalid response: %s", profileName)
+	}
 	profileID, ok := reply.Re[0].Map[".id"]
 	if !ok {
 		return "", fmt.Errorf("profile ID not found in response")
@@ -207,7 +206,13 @@ func ListHotspotUserProfiles(ctx context.Context, addr string, useTLS bool, rout
 	}
 
 	var profiles []HotspotUserProfile
+	if reply == nil {
+		return profiles, nil
+	}
 	for _, re := range reply.Re {
+		if re == nil || re.Map == nil {
+			continue
+		}
 		profile := HotspotUserProfile{}
 
 		if name, ok := re.Map["name"]; ok {
@@ -254,11 +259,14 @@ func RemoveHotspotActiveByUser(ctx context.Context, addr string, useTLS bool, us
 		return fmt.Errorf("failed to find active Hotspot session: %w", err)
 	}
 
-	if len(reply.Re) == 0 {
+	if reply == nil || len(reply.Re) == 0 {
 		return nil // No active session to remove
 	}
 
 	for _, re := range reply.Re {
+		if re == nil || re.Map == nil {
+			continue
+		}
 		activeID := re.Map[".id"]
 		if activeID != "" {
 			// Remove the active session
