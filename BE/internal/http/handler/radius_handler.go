@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/hex"
@@ -80,23 +79,33 @@ type AcctRequest struct {
 func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// DEBUG: Always allow secret for now
+	// DEBUG: Always log secret for now
 	secret := r.Header.Get("X-RRNET-RADIUS-SECRET")
 	zslog.Info().Str("received_secret", secret).Msg("[radius_auth] Received request")
 
-	// Decode directly
 	var req AuthRequest
-	bodyBytes, _ := io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		zslog.Error().Err(err).Str("body", string(bodyBytes)).Msg("[radius_auth] JSON decode failed")
-		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+	// 1. Read and sanitize body because MikroTik/FreeRADIUS sometimes send binary in JSON body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		zslog.Error().Err(err).Msg("[radius_auth] Failed to read request body")
+		h.logAuthReject(w, r, uuid.Nil, nil, "", "", "READ_FAILED")
+		return
+	}
+
+	// Internal JSON Sanitizer: Remove or escape non-printable characters 
+	// that cause 'invalid character in string escape code' but keep it valid JSON.
+	sanitizedBody := sanitizeJSON(bodyBytes)
+
+	if err := json.Unmarshal(sanitizedBody, &req); err != nil {
+		zslog.Error().Err(err).Str("body", string(sanitizedBody)).Msg("[radius_auth] JSON decode failed")
+		h.logAuthReject(w, r, uuid.Nil, nil, "", "", "JSON_DECODE_FAILED")
 		return
 	}
 
 	// SMART PASSWORD DECODER
 	if req.UserPassword != "" {
+		// Handle potential base64 or hex from FreeRADIUS mapping
 		if decoded, err := base64.StdEncoding.DecodeString(req.UserPassword); err == nil {
 			req.UserPassword = string(decoded)
 		} else if strings.HasPrefix(req.UserPassword, "0x") {
@@ -113,7 +122,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve router (Enhanced logic)
+	// Resolve router (Enhanced logic: prioritize IP then Identifier)
 	router, err := h.resolveRouter(ctx, req.NASIdentifier, req.NASIPAddress)
 	if err != nil {
 		zslog.Warn().
@@ -121,7 +130,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			Str("nas_ip", req.NASIPAddress).
 			Str("nas_id", req.NASIdentifier).
 			Msg("[radius_auth] Router definitely not found")
-		http.Error(w, `{"error":"NAS not registered"}`, http.StatusForbidden)
+		h.logAuthReject(w, r, uuid.Nil, nil, req.UserName, req.NASIPAddress, "router not found")
 		return
 	}
 
@@ -325,22 +334,21 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP string) (*network.Router, error) {
 	var router *network.Router
 
-	// 1. Try by NAS-Identifier (The proper way)
-	if nasIdentifier != "" {
-		router, _ = h.routerRepo.GetByNASIdentifier(ctx, nasIdentifier)
-	}
-
-	// 2. Try by NAS-IP (Self-healing fallback)
-	if router == nil && nasIP != "" {
+	// 1. Try by NAS-IP first (Most reliable for VPN-connected routers like RouterOS v7)
+	if nasIP != "" {
 		router, _ = h.routerRepo.GetByNASIP(ctx, nasIP)
 	}
 
-	// 3. Try by Name fallback (Fuzzy match if NAS-ID was misconfigured)
+	// 2. Try by NAS-Identifier (If IP didn't work and identifier is set)
+	if router == nil && nasIdentifier != "" {
+		router, _ = h.routerRepo.GetByNASIdentifier(ctx, nasIdentifier)
+	}
+
+	// 3. Try by Name fallback (Fuzzy match if NAS-ID was misconfigured/autofilled by MT)
 	if router == nil && nasIdentifier != "" {
 		// Try to find a router whose name (lowercase, no spaces) matches nasIdentifier
-		routers, errList := h.routerRepo.ListAll(ctx) // Note: Replace with specific fuzzy query if scale is large
+		routers, errList := h.routerRepo.ListAll(ctx)
 		if errList == nil {
-			// Slugify identifier exactly like the name slug (replace space/underscore with dash)
 			slugID := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(nasIdentifier), " ", "-"), "_", "-")
 			for i := range routers {
 				r := routers[i]
@@ -359,7 +367,7 @@ func (h *RadiusHandler) resolveRouter(ctx context.Context, nasIdentifier, nasIP 
 	}
 
 	if router == nil {
-		return nil, fmt.Errorf("router not found")
+		return nil, fmt.Errorf("router not found for NAS-IP: %s, NAS-ID: %s", nasIP, nasIdentifier)
 	}
 	return router, nil
 }
@@ -381,3 +389,52 @@ func (h *RadiusHandler) logAuthAttempt(ctx context.Context, tenantID uuid.UUID, 
 func (h *RadiusHandler) StartStaleSessionCleaner(ctx context.Context) {}
 func (h *RadiusHandler) ListAuthAttempts(w http.ResponseWriter, r *http.Request) {}
 func (h *RadiusHandler) ListActiveSessions(w http.ResponseWriter, r *http.Request) {}
+
+// sanitizeJSON removes or escapes invalid characters for Go's JSON decoder.
+// This handles binary passwords sent incorrectly by FreeRADIUS mapping.
+func sanitizeJSON(data []byte) []byte {
+	if len(data) == 0 {
+		return data
+	}
+
+	// This is a simple but effective approach:
+	// Find the User-Password value and escape any problematic bytes (\, ", or non-printable)
+	// But actually, Go's json.Unmarshal fails primarily on \ followed by non-valid escape code.
+	// We'll replace non-printable/invalid bytes with escaped hex representation or just strip them.
+	
+	// A more robust way:
+	result := make([]byte, 0, len(data))
+	for i := 0; i < len(data); i++ {
+		b := data[i]
+		
+		// If we see a backslash, we MUST ensure the next character is a valid escape character
+		// or we escape the backslash itself.
+		if b == '\\' {
+			if i+1 < len(data) {
+				next := data[i+1]
+				// Valid JSON escapes: ", \, /, b, f, n, r, t, u
+				if next != '"' && next != '\\' && next != '/' && next != 'b' && 
+				   next != 'f' && next != 'n' && next != 'r' && next != 't' && next != 'u' {
+					// Invalid escape! Escape the backslash itself to prevent decoder crash
+					result = append(result, '\\', '\\')
+					continue
+				}
+			} else {
+				// Trailing backslash
+				result = append(result, '\\', '\\')
+				continue
+			}
+		}
+		
+		// Handle non-printable characters (except common ones)
+		if b < 32 && b != '\n' && b != '\r' && b != '\t' {
+			// Replace with hex escape or space to keep JSON valid
+			result = append(result, ' ')
+			continue
+		}
+		
+		result = append(result, b)
+	}
+	
+	return result
+}
