@@ -1,6 +1,5 @@
 # RRNET - FreeRADIUS config (REST-only relay, NO password validation)
 # FreeRADIUS = relay only, Backend = single source of truth
-# User-Password sent as-is to backend (backend handles all validation)
 
 server default {
 	listen {
@@ -17,29 +16,36 @@ server default {
 
 	authorize {
 		preprocess
-		# Force all auth requests (PAP/CHAP/v7) to our Backend REST
+		
+		# Panggil Backend ERP di sesi Authorize biar PAP, CHAP, dan v7 semua masuk kuali
 		update control {
-			Auth-Type := REST
+			&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
+		}
+
+		rest
+		
+		# Jika Backend bilang ACCEPT (200 OK) atau ngasih Atribut (Updated)
+		if (ok || updated) {
+			# Paksa sukses biar gak butuh Auth-Type lain
+			update control {
+				Auth-Type := Accept
+			}
+		}
+		# Jika Backend bilang REJECT (403/401)
+		elsif (userlock || reject) {
+			update control {
+				Auth-Type := Reject
+			}
 		}
 	}
 
 	authenticate {
-		Auth-Type REST {
-			update control {
-				# RADIUS shared secret — read from ENV at container startup
-				# Must match RRNET_RADIUS_REST_SECRET in docker-compose.production.yml
-				&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
-			}
-
-			rest
-			#
-			# rlm_rest returns:
-			# - ok      → HTTP 2xx with no reply attrs
-			# - updated → reply attrs set
-			#
-			if (ok || updated) {
-				ok
-			}
+		# Kosongin aja karena pemeriksaan udah beres di Authorize
+		Auth-Type Accept {
+			ok
+		}
+		Auth-Type Reject {
+			reject
 		}
 	}
 
@@ -49,11 +55,8 @@ server default {
 
 	accounting {
 		update control {
-			# RADIUS shared secret — read from ENV at container startup
-			# Must match RRNET_RADIUS_REST_SECRET in docker-compose.production.yml
 			&REST-HTTP-Header += "X-RRNET-RADIUS-SECRET: $ENV{RRNET_RADIUS_REST_SECRET}"
 		}
-
 		rest
 	}
 }
