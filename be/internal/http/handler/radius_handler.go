@@ -204,6 +204,18 @@ AuthSuccess:
 	}
 	response["Idle-Timeout"] = strconv.Itoa(idleHrs * 3600) // Convert hours to seconds
 
+	// Calculate Session-Timeout (Remaining time in seconds)
+	if v.ExpiresAt != nil {
+		remaining := int(time.Until(*v.ExpiresAt).Seconds())
+		if remaining < 0 {
+			remaining = 0
+		}
+		// Only set Session-Timeout if it's less than 30 days (standard safety limit)
+		if remaining < 2592000 {
+			response["Session-Timeout"] = strconv.Itoa(remaining)
+		}
+	}
+
 	if v.Isolated {
 		response["Mikrotik-Rate-Limit"] = "1k/1k"
 		response["Mikrotik-Address-List"] = "isolated"
@@ -272,6 +284,13 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 	var voucherID *uuid.UUID
 	v, err := h.voucherService.GetVoucherByCode(ctx, router.TenantID, req.UserName)
 	if err == nil && v != nil {
+		// CRITICAL: If voucher is already EXPIRED, don't update its session anymore
+		// This ensures Uptime on dashboard remains Frozen at the moment of expiration
+		if v.Status == "expired" || (v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt)) {
+			zslog.Warn().Str("username", req.UserName).Msg("[radius_acct] Dropping update for expired voucher")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		voucherID = &v.ID
 	}
 
