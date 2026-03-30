@@ -60,7 +60,7 @@ services:
   # Database Migration
   migrate:
     build:
-      context: ./BE
+      context: ./be
       dockerfile: Dockerfile
     container_name: rrnet-migrate-prod
     environment:
@@ -74,7 +74,7 @@ services:
   # Backend API
   backend:
     build:
-      context: ./BE
+      context: ./be
       dockerfile: Dockerfile
       network: host
     container_name: rrnet-backend-prod
