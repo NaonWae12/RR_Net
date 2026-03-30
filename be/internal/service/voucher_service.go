@@ -70,9 +70,10 @@ func (s *VoucherService) CreatePackage(ctx context.Context, tenantID uuid.UUID, 
 	durationHours := req.DurationHours
 	if req.Validity != "" {
 		parsed, err := ParseMikhmonDuration(req.Validity)
-		if err == nil {
-			durationHours = &parsed
+		if err != nil {
+			return nil, fmt.Errorf("format Batas Waktu (validity) tidak valid: %s (contoh: 1h, 1j, 1d, 1w)", req.Validity)
 		}
+		durationHours = &parsed
 	}
 
 	// Set default rate limit mode if not provided
@@ -171,9 +172,10 @@ func (s *VoucherService) UpdatePackage(ctx context.Context, id uuid.UUID, req Up
 
 	if req.Validity != "" {
 		parsed, err := ParseMikhmonDuration(req.Validity)
-		if err == nil {
-			pkg.DurationHours = &parsed
+		if err != nil {
+			return nil, fmt.Errorf("format Batas Waktu (validity) tidak valid: %v", err)
 		}
+		pkg.DurationHours = &parsed
 	} else if req.DurationHours != nil {
 		pkg.DurationHours = req.DurationHours
 	}
@@ -1018,33 +1020,42 @@ func generateRandomFromCharset(charset string, length int) (string, error) {
 	return string(b), nil
 }
 
-// ParseMikhmonDuration converts string formats like 2h, 2H, 2j, 2M, 2B to hours
+// ParseMikhmonDuration converts string formats like 1j, 1h, 1jam, 1hari, 1d, 1w to hours
 func ParseMikhmonDuration(d string) (int, error) {
-	d = strings.TrimSpace(strings.ToUpper(d))
+	d = strings.TrimSpace(strings.ToLower(d))
 	if d == "" {
 		return 0, fmt.Errorf("empty duration")
 	}
 
-	re := regexp.MustCompile(`^(\d+)([HJMB])$`)
+	// Pattern for <number><unit>
+	re := regexp.MustCompile(`^(\d+)\s*(.*)$`)
 	matches := re.FindStringSubmatch(d)
 	if len(matches) != 3 {
-		return 0, fmt.Errorf("invalid duration format")
+		return 0, fmt.Errorf("format durasi tidak dikenali")
 	}
 
 	value, _ := strconv.Atoi(matches[1])
 	unit := matches[2]
 
 	switch unit {
-	case "J": // Jam (Hour)
+	case "j", "jam", "h", "hour", "hours":
 		return value, nil
-	case "H": // Hari (Day)
+	case "d", "hari", "day", "days":
 		return value * 24, nil
-	case "M": // Minggu (Week)
+	case "m", "minggu", "w", "week", "weeks":
 		return value * 24 * 7, nil
-	case "B": // Bulan (Month)
+	case "b", "bulan", "mo", "month", "months":
 		return value * 24 * 30, nil
 	default:
-		return value, nil
+		// Fallback for legacy H/J/M/B uppercase if needed
+		unitUpper := strings.ToUpper(unit)
+		switch unitUpper {
+		case "J": return value, nil
+		case "H": return value * 24, nil
+		case "M": return value * 24 * 7, nil
+		case "B": return value * 24 * 30, nil
+		}
+		return 0, fmt.Errorf("unit durasi tidak dikenal: %s", unit)
 	}
 }
 

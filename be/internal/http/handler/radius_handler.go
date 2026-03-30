@@ -319,12 +319,23 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 		// CRITICAL: If voucher is already EXPIRED, don't update its session anymore
 		// This ensures Uptime/Usage on dashboard remains Frozen at the moment of expiration.
 		// We check: Status, Wall-Clock Expiration, and Uptime Limit.
-		isExpired := v.Status == "expired" || 
-			(v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt)) ||
-			(pkg != nil && pkg.MaxUptimeSeconds != nil && v.TotalUptimeSeconds >= *pkg.MaxUptimeSeconds)
+		isExpired := v.Status == "expired"
+		if isExpired {
+			zslog.Info().Str("username", req.UserName).Msg("[radius_acct] Voucher already has 'expired' status")
+		}
+
+		if !isExpired && v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt) {
+			isExpired = true
+			zslog.Info().Str("username", req.UserName).Time("expires_at", *v.ExpiresAt).Msg("[radius_acct] Voucher wall-clock limit reached")
+		}
+
+		if !isExpired && pkg != nil && pkg.MaxUptimeSeconds != nil && v.TotalUptimeSeconds >= *pkg.MaxUptimeSeconds {
+			isExpired = true
+			zslog.Info().Str("username", req.UserName).Int("max", *pkg.MaxUptimeSeconds).Int("current", v.TotalUptimeSeconds).Msg("[radius_acct] Voucher uptime limit reached")
+		}
 
 		if isExpired {
-			zslog.Warn().Str("username", req.UserName).Msg("[radius_acct] Dropping update for expired or limit-reached voucher")
+			zslog.Warn().Str("username", req.UserName).Msg("[radius_acct] Dropping update for EXPIRED or LIMIT-REACHED voucher")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
