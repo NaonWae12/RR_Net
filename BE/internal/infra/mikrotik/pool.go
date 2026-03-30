@@ -72,12 +72,11 @@ func GetClient(addr string, useTLS bool, username, password string) (*routeros.C
 	conn.mu.Unlock()
 	
 	if client == nil {
-		// This happens if the first dialer failed, and we just acquired the lock after it.
-		// Or another edge case. Best to force reconnect.
-		return nil, fmt.Errorf("mikrotik client is nil")
+		conn.mu.Unlock()
+		return nil, fmt.Errorf("mikrotik client is nil (unexpected in pool)")
 	}
 
-	// Quick health check
+	// Quick health check (Safe call: check if client is still usable)
 	_, err := client.Run("/system/identity/print")
 	if err != nil {
 		client.Close()
@@ -104,9 +103,15 @@ func GetClient(addr string, useTLS bool, username, password string) (*routeros.C
 
 	conn.mu.Lock()
 	conn.lastUsed = time.Now()
+	// Ensure we don't return nil!
+	finalClient := conn.client
 	conn.mu.Unlock()
 
-	return client, nil
+	if finalClient == nil {
+		return nil, fmt.Errorf("failed to maintain valid mikrotik connection in pool")
+	}
+
+	return finalClient, nil
 }
 
 // ReleaseClient is called via defer. For a pool, it does nothing so the connection stays open.
