@@ -183,7 +183,8 @@ AuthSuccess:
 	h.logAuthAttempt(ctx, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, radius.AuthResultAccept, "")
 
 	response := map[string]interface{}{}
-	if pkg, err := h.voucherService.GetPackage(ctx, v.PackageID); err == nil && pkg != nil {
+	pkg, _ := h.voucherService.GetPackage(ctx, v.PackageID)
+	if pkg != nil {
 		if pkg.RateLimitMode == "full_radius" {
 			response["Mikrotik-Rate-Limit"] = fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
 		} else {
@@ -205,15 +206,43 @@ AuthSuccess:
 	response["Idle-Timeout"] = strconv.Itoa(idleHrs * 3600) // Convert hours to seconds
 
 	// Calculate Session-Timeout (Remaining time in seconds)
+	// We take the minimum of:
+	// 1. Remaining Validity (Wall-clock time)
+	// 2. Remaining Uptime (Play time)
+	remaining := 2592000 // Default 30 days safety limit
+
+	// 1. Wall-Clock Limit
 	if v.ExpiresAt != nil {
-		remaining := int(time.Until(*v.ExpiresAt).Seconds())
-		if remaining < 0 {
-			remaining = 0
+		wallRemaining := int(time.Until(*v.ExpiresAt).Seconds())
+		if wallRemaining < remaining {
+			remaining = wallRemaining
 		}
-		// Only set Session-Timeout if it's less than 30 days (standard safety limit)
-		if remaining < 2592000 {
-			response["Session-Timeout"] = strconv.Itoa(remaining)
+	}
+
+	// 2. Uptime Limit (Play/Pause)
+	if pkg != nil && pkg.MaxUptimeSeconds != nil {
+		uptimeRemaining := *pkg.MaxUptimeSeconds - v.TotalUptimeSeconds
+		if uptimeRemaining < remaining {
+			remaining = uptimeRemaining
 		}
+	}
+
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	// Always set Session-Timeout to force MikroTik to enforce the calculated limit
+	response["Session-Timeout"] = strconv.Itoa(remaining)
+
+	// 3. Quota Enforcement (if applicable)
+	if pkg != nil && pkg.QuotaMB != nil {
+		quotaBytes := int64(*pkg.QuotaMB) * 1024 * 1024
+		remainingQuota := quotaBytes - v.TotalBytesUsed
+		if remainingQuota < 0 {
+			remainingQuota = 0
+		}
+		// Mikrotik-Total-Limit provides total transfer limit (In + Out)
+		response["Mikrotik-Total-Limit"] = strconv.FormatInt(remainingQuota, 10)
 	}
 
 	if v.Isolated {
@@ -284,10 +313,18 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 	var voucherID *uuid.UUID
 	v, err := h.voucherService.GetVoucherByCode(ctx, router.TenantID, req.UserName)
 	if err == nil && v != nil {
+		// Load package for limits
+		pkg, _ := h.voucherService.GetPackage(ctx, v.PackageID)
+
 		// CRITICAL: If voucher is already EXPIRED, don't update its session anymore
-		// This ensures Uptime on dashboard remains Frozen at the moment of expiration
-		if v.Status == "expired" || (v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt)) {
-			zslog.Warn().Str("username", req.UserName).Msg("[radius_acct] Dropping update for expired voucher")
+		// This ensures Uptime/Usage on dashboard remains Frozen at the moment of expiration.
+		// We check: Status, Wall-Clock Expiration, and Uptime Limit.
+		isExpired := v.Status == "expired" || 
+			(v.ExpiresAt != nil && time.Now().After(*v.ExpiresAt)) ||
+			(pkg != nil && pkg.MaxUptimeSeconds != nil && v.TotalUptimeSeconds >= *pkg.MaxUptimeSeconds)
+
+		if isExpired {
+			zslog.Warn().Str("username", req.UserName).Msg("[radius_acct] Dropping update for expired or limit-reached voucher")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
