@@ -326,6 +326,8 @@ func New(deps Dependencies) http.Handler {
 
 	// Protected routes
 	mux.Handle("/api/v1/auth/me", requireAuth(methodHandler("GET", authHandler.Me)))
+	mux.Handle("/api/v1/my/affiliate-join", requireAuth(methodHandler("POST", affiliateHandler.JoinProgram)))
+	mux.Handle("/api/v1/my/affiliate-status", requireAuth(methodHandler("GET", affiliateHandler.GetMyStatus)))
 	mux.Handle("/api/v1/affiliate/dashboard", requireAuth(methodHandler("GET", affiliateHandler.GetDashboard)))
 	mux.Handle("/api/v1/affiliate/withdrawals", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

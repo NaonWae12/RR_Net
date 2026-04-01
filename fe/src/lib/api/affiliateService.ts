@@ -142,6 +142,16 @@ export const affiliateService = {
     return response.data;
   },
 
+  joinProgram: async (): Promise<Affiliate> => {
+    const response = await apiClient.post<Affiliate>('/my/affiliate-join');
+    return response.data;
+  },
+
+  getMyStatus: async (): Promise<{ status: string, id?: string }> => {
+    const response = await apiClient.get<{ status: string, id?: string }>('/my/affiliate-status');
+    return response.data;
+  },
+
   getCampaign: async (id: string): Promise<AffiliateCampaign> => {
     const response = await apiClient.get<AffiliateCampaign>(`/superadmin/affiliates/campaigns/${id}`);
     return response.data;

@@ -36,6 +36,42 @@ func (h *AffiliateHandler) Register(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusCreated, aff)
 }
 
+// JoinProgram handles POST /api/v1/my/affiliate-join
+func (h *AffiliateHandler) JoinProgram(w http.ResponseWriter, r *http.Request) {
+	// Get User ID from JWT context
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Token tidak valid atau kadaluarsa")
+		return
+	}
+
+	aff, err := h.affiliateService.JoinProgram(r.Context(), userID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, aff)
+}
+
+// GetMyStatus handles GET /api/v1/my/affiliate-status
+func (h *AffiliateHandler) GetMyStatus(w http.ResponseWriter, r *http.Request) {
+	// Get User ID from JWT context
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Token tidak valid atau kadaluarsa")
+		return
+	}
+
+	data, err := h.affiliateService.GetMyStatus(r.Context(), userID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, data)
+}
+
 // GetDashboard handles GET /api/v1/affiliate/dashboard
 func (h *AffiliateHandler) GetDashboard(w http.ResponseWriter, r *http.Request) {
 	// Get User ID from JWT context

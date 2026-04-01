@@ -16,12 +16,12 @@ export default function AffiliateLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     // SECURITY: Only enforce role checks for the dashboard area
     if (ready && user && isDashboard) {
-      if (user.role !== "affiliate" && user.role !== "super_admin") {
+      const allowedRoles = ["affiliate", "super_admin", "owner", "tenant_admin"];
+      
+      if (!allowedRoles.includes(user.role)) {
         // Redirect non-affiliates to their correct system entry points
         if (user.role === "client") {
           router.replace("/portal/dashboard");
-        } else if (user.role === "super_admin") {
-          router.replace("/superadmin");
         } else {
           router.replace("/dashboard");
         }

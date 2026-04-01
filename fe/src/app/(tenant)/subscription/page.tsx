@@ -6,14 +6,17 @@ import { subscriptionService, PlatformInvoice, PlatformAddon, TenantAddon } from
 import { LoadingSpinner } from "@/components/utilities";
 import { useAuthStore } from "@/stores/authStore";
 import { useDashboardStore } from "@/stores/dashboardStore";
+import { useNotificationStore } from "@/stores/notificationStore";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CreditCard, History, Package, AlertCircle, CheckCircle2, Zap, Users, Shield, ArrowRight, MessageSquare, Bot, Globe, MessageCircle } from "lucide-react";
+import { CreditCard, History, Package, AlertCircle, CheckCircle2, Zap, Users, Shield, ArrowRight, MessageSquare, Bot, Globe, MessageCircle, Rocket, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SubscriptionPaymentModal from "@/components/subscription/SubscriptionPaymentModal";
 import ChangePlanModal from "@/components/subscription/ChangePlanModal";
+import { affiliateService } from "@/lib/api/affiliateService";
 
 export default function SubscriptionPage() {
   const { tenant } = useAuthStore();
@@ -27,6 +30,11 @@ export default function SubscriptionPage() {
   const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState<{ id: string, name: string, price: number, currency: string } | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
+  const [joiningAffiliate, setJoiningAffiliate] = useState(false);
+  const [affiliateStatus, setAffiliateStatus] = useState<string>("unregistered");
+
+  const { showToast } = useNotificationStore();
+  const router = useRouter();
 
   const refreshInvoices = async () => {
     try {
@@ -49,18 +57,33 @@ export default function SubscriptionPage() {
     setIsPaymentModalOpen(true);
   };
 
+  const handleJoinAffiliate = async () => {
+    try {
+      setJoiningAffiliate(true);
+      await affiliateService.joinProgram();
+      showToast({ title: "Berhasil!", description: "Permintaan bergabung telah diajukan. Menunggu persetujuan admin.", variant: "success" });
+      setAffiliateStatus("pending");
+    } catch (error: any) {
+      showToast({ title: "Gagal", description: error.response?.data?.error || "Terjadi kesalahan", variant: "error" });
+    } finally {
+      setJoiningAffiliate(false);
+    }
+  };
+
   useEffect(() => {
     fetchBootstrapData();
     const fetchData = async () => {
       try {
-        const [invData, availData, myData] = await Promise.all([
+        const [invData, availData, myData, affStatus] = await Promise.all([
           subscriptionService.getMyInvoices(),
           subscriptionService.getAvailableAddons(),
-          subscriptionService.getMyAddons()
+          subscriptionService.getMyAddons(),
+          affiliateService.getMyStatus()
         ]);
         setInvoices(invData);
         setAvailableAddons(availData);
         setMyAddons(myData);
+        setAffiliateStatus(affStatus.status);
       } catch (error) {
         console.error("Failed to fetch subscription data:", error);
       } finally {
@@ -211,6 +234,81 @@ export default function SubscriptionPage() {
             </Card>
           </div>
         )}
+
+        {/* Affiliate Promotion Banner */}
+        <Card className={cn(
+          "border-none text-white shadow-lg overflow-hidden relative",
+          affiliateStatus === 'active' ? "bg-linear-to-r from-indigo-500 to-purple-600" :
+          affiliateStatus === 'pending' ? "bg-linear-to-r from-amber-500 to-orange-600" :
+          affiliateStatus === 'suspended' || affiliateStatus === 'rejected' ? "bg-linear-to-r from-rose-500 to-red-600" :
+          "bg-linear-to-r from-emerald-500 to-teal-600"
+        )}>
+          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-40 h-40 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <CardContent className="p-8 md:flex items-center justify-between gap-6 relative z-10">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className={cn(
+                  "p-1.5 rounded-lg",
+                  affiliateStatus === 'active' ? "bg-indigo-400/30" :
+                  affiliateStatus === 'pending' ? "bg-amber-400/30" :
+                  "bg-emerald-400/30"
+                )}>
+                  {affiliateStatus === 'active' ? <Rocket className="h-5 w-5 text-indigo-100 fill-current" /> :
+                   affiliateStatus === 'pending' ? <Clock className="h-5 w-5 text-amber-100 fill-current" /> :
+                   <Zap className="h-5 w-5 text-emerald-100 fill-current" />}
+                </div>
+                <span className="text-xs font-black uppercase tracking-widest text-white/80">
+                  {affiliateStatus === 'active' ? "Affiliate Partner" : 
+                   affiliateStatus === 'pending' ? "Pendaftaran Diproses" : 
+                   "Passive Income"}
+                </span>
+              </div>
+              <h3 className="text-3xl font-black tracking-tight">
+                {affiliateStatus === 'active' ? "Anda Adalah Partner Kami!" : 
+                 affiliateStatus === 'pending' ? "Pendaftaran Sedang Ditinjau" : 
+                 affiliateStatus === 'suspended' || affiliateStatus === 'rejected' ? "Pendaftaran Ditangguhkan" :
+                 "Program Kemitraan Affiliasi"}
+              </h3>
+              <p className="text-white/90 max-w-xl text-lg leading-relaxed font-medium">
+                {affiliateStatus === 'active' ? "Terima kasih telah menjadi bagian dari ekosistem RR-Net. Mari terus tumbuh bersama dan raih komisi maksimal setiap bulannya." :
+                 affiliateStatus === 'pending' ? "Permintaan Anda sedang dalam antrian peninjauan oleh Super Admin. Kami akan memprosesnya dalam waktu maksimal 1x24 jam." :
+                 affiliateStatus === 'suspended' || affiliateStatus === 'rejected' ? "Mohon maaf, saat ini pendaftaran Anda ditangguhkan. Silakan hubungi dukungan pelanggan untuk informasi lebih lanjut." :
+                 "Rekomendasikan layanan kami ke partner RT/RW Net Anda dan dapatkan komisi recurring hingga 35% setiap bulannya."}
+              </p>
+            </div>
+            <div className="mt-8 md:mt-0 shrink-0">
+              {affiliateStatus === 'active' ? (
+                <Button 
+                  onClick={() => router.push('/affiliate/dashboard')}
+                  className="bg-white text-indigo-700 hover:bg-slate-50 px-8 py-7 font-black rounded-2xl text-lg shadow-2xl hover:-translate-y-1 transition-all w-full md:w-auto"
+                >
+                  Buka Dashboard Affiliasi
+                </Button>
+              ) : affiliateStatus === 'pending' ? (
+                <Button 
+                  disabled
+                  className="bg-white/20 text-white border border-white/30 px-8 py-7 font-black rounded-2xl text-lg w-full md:w-auto cursor-not-allowed"
+                >
+                  <Clock className="h-5 w-5 mr-2" /> Menunggu Approval
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleJoinAffiliate}
+                  disabled={joiningAffiliate || affiliateStatus === 'suspended' || affiliateStatus === 'rejected'}
+                  className="bg-white text-emerald-700 hover:bg-emerald-50 px-8 py-7 font-black rounded-2xl text-lg shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all w-full md:w-auto overflow-hidden group"
+                >
+                  {joiningAffiliate ? (
+                    <span className="flex items-center gap-2"><LoadingSpinner className="h-5 w-5 border-emerald-700" /> Memproses...</span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Rocket className="h-6 w-6 group-hover:animate-bounce" /> {affiliateStatus === 'suspended' || affiliateStatus === 'rejected' ? "Pendaftaran Ditutup" : "Bergabung Sekarang"}
+                    </span>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Addons Section */}
         <div className="space-y-4 pt-4">

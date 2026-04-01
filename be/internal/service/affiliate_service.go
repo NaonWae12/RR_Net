@@ -128,6 +128,64 @@ func (s *AffiliateService) Register(ctx context.Context, req *RegisterAffiliateR
 	return aff, nil
 }
 
+// JoinProgram allows an existing user to become an affiliate
+func (s *AffiliateService) JoinProgram(ctx context.Context, userID uuid.UUID) (*affiliate.Affiliate, error) {
+	// 1. Check if user already has an affiliate profile
+	existingAff, err := s.affiliateRepo.GetByUserID(ctx, userID)
+	if err == nil && existingAff != nil {
+		return existingAff, nil // Already joined
+	}
+
+	// 2. Get current active campaign for new partner
+	campaign, err := s.affiliateRepo.GetCurrentCampaign(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed fetching current campaign for new affiliate")
+	}
+
+	// 3. Create Affiliate Profile
+	aff := &affiliate.Affiliate{
+		ID:            uuid.New(),
+		UserID:        userID,
+		Code:          s.generateReferralCode(),
+		Tier:          affiliate.TierSilver,
+		Status:        affiliate.StatusPending, // Awaiting admin approval
+		JoinedCampaignID: nil,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	if campaign != nil && !campaign.IsDefault {
+		aff.JoinedCampaignID = &campaign.ID
+	}
+
+	if err := s.affiliateRepo.Create(ctx, aff); err != nil {
+		return nil, fmt.Errorf("gagal membuat profil affiliate: %w", err)
+	}
+
+	// 4. Increment campaign count if using a promo
+	if campaign != nil && !campaign.IsDefault {
+		_ = s.affiliateRepo.IncrementCampaignCount(ctx, campaign.ID)
+	}
+
+	return aff, nil
+}
+
+
+
+// GetMyStatus checks an existing user's affiliate profile status
+func (s *AffiliateService) GetMyStatus(ctx context.Context, userID uuid.UUID) (map[string]interface{}, error) {
+	aff, err := s.affiliateRepo.GetByUserID(ctx, userID)
+	if err != nil {
+		// If affiliate isn't found, it means they haven't registered
+		return map[string]interface{}{"status": "unregistered"}, nil
+	}
+	
+	return map[string]interface{}{
+		"status": aff.Status,
+		"id":     aff.ID,
+	}, nil
+}
+
 // GetDashboard returns summary data for the affiliate portal
 func (s *AffiliateService) GetDashboard(ctx context.Context, userID uuid.UUID) (map[string]interface{}, error) {
 	aff, err := s.affiliateRepo.GetByUserID(ctx, userID)
