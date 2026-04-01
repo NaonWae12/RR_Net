@@ -6,11 +6,21 @@ import { voucherService, VoucherPackage, Voucher } from "@/lib/api/voucherServic
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Printer, Ticket, Calendar } from "lucide-react";
+import { ArrowLeft, Printer, Ticket, Calendar, Settings2, Tag, ChevronDown, Monitor } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useNetworkStore } from "@/stores/networkStore";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 export default function VoucherPrintPage() {
   const router = useRouter();
@@ -24,6 +34,30 @@ export default function VoucherPrintPage() {
   const { tenant } = useAuth();
   const { routers, fetchRouters } = useNetworkStore();
 
+  const [brandingSource, setBrandingSource] = useState<'tenant' | 'package' | 'dns' | 'label'>('tenant');
+  const [selectedBrandingValue, setSelectedBrandingValue] = useState<string>("");
+
+  // Aggregate all available DNS and Labels from all routers
+  const allAvailableDNS = Array.from(new Set(
+    routers.flatMap(r => [
+      ...(r.dns_name ? [r.dns_name] : []),
+      ...(r.branding_config?.dns_names || [])
+    ])
+  ));
+
+  const allAvailableLabels = Array.from(new Set(
+    routers.flatMap(r => r.branding_config?.labels || [])
+  ));
+
+  // Reset or set default branding value when source changes
+  useEffect(() => {
+    if (brandingSource === 'dns' && allAvailableDNS.length > 0 && !selectedBrandingValue) {
+      setSelectedBrandingValue(allAvailableDNS[0]);
+    } else if (brandingSource === 'label' && allAvailableLabels.length > 0 && !selectedBrandingValue) {
+      setSelectedBrandingValue(allAvailableLabels[0]);
+    }
+  }, [brandingSource, allAvailableDNS, allAvailableLabels]);
+
   // Group vouchers by created_at (generation batch) since vouchers generated together share the exact same timestamp
   const batchGroups = vouchers.reduce((acc, v) => {
     const key = v.created_at || 'UNKNOWN_TIME';
@@ -31,7 +65,8 @@ export default function VoucherPrintPage() {
       acc[key] = {
         vouchers: [],
         notes: v.notes || 'Tanpa Catatan',
-        timestamp: v.created_at
+        timestamp: v.created_at,
+        routerId: v.router_id
       };
     }
     acc[key].vouchers.push(v);
@@ -54,9 +89,8 @@ export default function VoucherPrintPage() {
         voucherService.listPackages(),
       ]);
       
-      if (routers.length === 0) {
-        await fetchRouters();
-      }
+      // Always fetch fresh router data to ensure we have branding_config
+      await fetchRouters();
 
       const safeVouchers = Array.isArray(vres?.data) ? vres.data : [];
       const safePkgs = Array.isArray(pkgs) ? pkgs : [];
@@ -119,7 +153,11 @@ export default function VoucherPrintPage() {
               <label className="text-sm font-medium text-slate-700">Pilih Batch Print</label>
               <select
                 value={selectedBatchKey}
-                onChange={(e) => setSelectedBatchKey(e.target.value)}
+                onChange={(e) => {
+                  setSelectedBatchKey(e.target.value);
+                  setBrandingSource('tenant');
+                  setSelectedBrandingValue("");
+                }}
                 className="w-full h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-purple-500 outline-none text-slate-900 border-slate-200"
               >
                 <option value="">-- Pilih Batch Waktu Generate --</option>
@@ -189,6 +227,119 @@ export default function VoucherPrintPage() {
             </Button>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 pt-6 border-t border-slate-100">
+            {/* Header Branding Selection */}
+            {(() => {
+              const currentBatch = batchGroups[selectedBatchKey];
+              const isGlobal = !currentBatch?.routerId;
+              
+              // Robust UUID matching (case-insensitive)
+              const selectedRouter = routers.find(r => 
+                r.id.toLowerCase() === currentBatch?.routerId?.toLowerCase()
+              );
+              
+              const routerDNSNames = isGlobal ? [] : Array.from(new Set([
+                ...(selectedRouter?.dns_name ? [selectedRouter.dns_name] : []),
+                ...(selectedRouter?.branding_config?.dns_names || [])
+              ]));
+
+              // Aggregate ALL labels from ALL routers so user can use them anywhere
+              const allAvailableLabels = Array.from(new Set(
+                routers.flatMap(r => r.branding_config?.labels || [])
+              ));
+
+              return (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-purple-600" />
+                    Voucher Header Branding
+                  </label>
+                  <div className="flex gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full justify-between font-semibold border-slate-200">
+                          <span className="capitalize">
+                            {brandingSource === 'tenant' ? 'Account Name' : 
+                             brandingSource === 'package' ? 'Package Name' : 
+                             brandingSource === 'dns' ? 'DNS Name' : 'Voucher Label'}
+                          </span>
+                          <ChevronDown className="w-4 h-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56 bg-white">
+                        <DropdownMenuLabel>Pilih Sumber Label</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuRadioGroup value={brandingSource} onValueChange={(v: any) => {
+                          setBrandingSource(v);
+                          setSelectedBrandingValue(""); 
+                        }}>
+                          <DropdownMenuRadioItem value="tenant">Account Name ({tenant?.name || 'User'})</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="package">Package Name</DropdownMenuRadioItem>
+                          {!isGlobal && (
+                            <DropdownMenuRadioItem value="dns">DNS Name (Router Specific)</DropdownMenuRadioItem>
+                          )}
+                          <DropdownMenuRadioItem value="label">Voucher Label (All Available)</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Sub-selector for DNS (STRICTLY FILTERED) */}
+                    {!isGlobal && brandingSource === 'dns' && (
+                      <div className="flex-1 flex gap-2">
+                        <select
+                          value={selectedBrandingValue}
+                          onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                          className="flex-1 h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-purple-500 outline-none text-slate-900 border-slate-200 font-bold"
+                        >
+                          <option value="">-- Pilih DNS --</option>
+                          {routerDNSNames.map(dns => (
+                            <option key={dns} value={dns}>{dns}</option>
+                          ))}
+                        </select>
+                        <input 
+                          type="text"
+                          placeholder="Manual DNS..."
+                          value={selectedBrandingValue}
+                          onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                          className="w-32 h-10 border rounded-md px-3 text-xs border-slate-200"
+                        />
+                      </div>
+                    )}
+
+                    {/* Sub-selector for Labels (GLOBALLY AVAILABLE) */}
+                    {brandingSource === 'label' && (
+                      <div className="flex-1 flex gap-2">
+                        <select
+                          value={selectedBrandingValue}
+                          onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                          className="flex-1 h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-purple-500 outline-none text-slate-900 border-slate-200 font-bold"
+                        >
+                          <option value="">-- Pilih Label --</option>
+                          {allAvailableLabels.map(lbl => (
+                            <option key={lbl} value={lbl}>{lbl}</option>
+                          ))}
+                        </select>
+                        <input 
+                          type="text"
+                          placeholder="Manual Label..."
+                          value={selectedBrandingValue}
+                          onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                          className="w-32 h-10 border rounded-md px-3 text-xs border-slate-200 font-bold text-purple-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic">
+                    {brandingSource === 'dns' 
+                      ? `DNS khusus untuk router ini agar portal hotspot tidak salah alamat.` 
+                      : `Label kustom bersifat umum dan bisa digunakan untuk semua batch.`}
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
+
+
           {/* Batch Info */}
           {selectedBatchKey && batchGroups[selectedBatchKey] && filteredVouchers.length > 0 && (
             <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -236,7 +387,12 @@ export default function VoucherPrintPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between items-start">
                         <span className="text-xs font-bold text-slate-400">#{String(idx + 1).padStart(3, '0')}</span>
-                        <Badge variant="outline" className="text-xs">{pkg?.name || 'Unknown'}</Badge>
+                        <Badge variant="outline" className="text-xs uppercase">
+                          {brandingSource === 'tenant' ? (tenant?.name || "WIFI") :
+                           brandingSource === 'package' ? (pkg?.name || "WIFI") :
+                           brandingSource === 'dns' ? (selectedBrandingValue || "WIFI") :
+                           (selectedBrandingValue || "WIFI")}
+                        </Badge>
                       </div>
                       <div className="border-t border-slate-200 pt-2">
                         <div className="space-y-1">
@@ -276,7 +432,12 @@ export default function VoucherPrintPage() {
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <Ticket className="w-4 h-4" />
-                          <span className="font-bold text-sm">WIFI VOUCHER</span>
+                          <span className="font-bold text-sm uppercase">
+                            {brandingSource === 'tenant' ? (tenant?.name || "WIFI VOUCHER") :
+                             brandingSource === 'package' ? (pkg?.name || "WIFI VOUCHER") :
+                             brandingSource === 'dns' ? (selectedBrandingValue || "hotspot.net") :
+                             (selectedBrandingValue || "WIFI VOUCHER")}
+                          </span>
                         </div>
                         <span className="text-xs font-bold opacity-80">#{String(idx + 1).padStart(3, '0')}</span>
                       </div>
@@ -325,13 +486,17 @@ export default function VoucherPrintPage() {
                 return filteredVouchers.map((v, idx) => {
                   const pkg = packages.find(p => p.id === v.package_id);
                   const router = routers.find(r => r.id === v.router_id);
-                  const displayDns = useOrgName ? orgName : (router?.dns_name || "hotspot.net");
+                  
+                  const headerTitle = brandingSource === 'tenant' ? (tenant?.name || "WIFI VOUCHER") :
+                                     brandingSource === 'package' ? (pkg?.name || "WIFI VOUCHER") :
+                                     brandingSource === 'dns' ? (selectedBrandingValue || "hotspot.net") :
+                                     (selectedBrandingValue || "WIFI VOUCHER");
                   
                   return (
                     <div key={v.id} className="print-card bg-white border-2 border-black p-2 text-[10px] font-bold text-black w-full max-w-[160px] shadow-sm uppercase min-h-[100px] flex flex-col justify-between">
                       <div>
                         <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-1.5 px-1">
-                          <span className="truncate max-w-[90px] font-bold normal-case">{displayDns}</span>
+                          <span className="truncate max-w-[90px] font-bold normal-case">{headerTitle}</span>
                           <span>[{idx + 1}]</span>
                         </div>
                         <div className="flex text-[9px] text-center mb-1 leading-none">

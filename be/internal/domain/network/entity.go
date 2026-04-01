@@ -40,6 +40,12 @@ const (
 	RouterConnectivityModeVPNSSTP      RouterConnectivityMode = "vpn_sstp" // SSTP (Port 443/4443)
 )
 
+// BrandingConfig holds custom labels and DNS names for voucher design
+type BrandingConfig struct {
+	DNSNames []string `json:"dns_names"`
+	Labels   []string `json:"labels"`
+}
+
 // Router represents a network router device
 type Router struct {
 	ID                  uuid.UUID              `json:"id"`
@@ -67,6 +73,7 @@ type Router struct {
 	VPNPassword         string                 `json:"vpn_password,omitempty"`
 	VPNScript           string                 `json:"vpn_script,omitempty"`
 	DNSName             string                 `json:"dns_name,omitempty"`
+	BrandingConfig      *BrandingConfig        `json:"branding_config,omitempty"`
 	IdleTimeout         int                    `json:"idle_timeout"`
 	InterimInterval     int                    `json:"interim_interval"`
 	CreatedAt           time.Time              `json:"created_at"`

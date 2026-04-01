@@ -36,7 +36,9 @@ import {
   Sparkles,
   CreditCard,
   MoreVertical,
-  Settings2
+  Settings2,
+  Tag,
+  X
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Badge } from "@/components/ui/badge";
@@ -134,14 +136,24 @@ export default function VouchersPage() {
   // Tab state
   const [activeTab, setActiveTab] = useState<'packages' | 'generate' | 'vouchers' | 'cards'>('packages');
 
-  const [dnsDialog, setDnsDialog] = useState<{
+  const [brandingDialog, setBrandingDialog] = useState<{
     isOpen: boolean;
     routerId: string;
-    dnsName: string;
+    dnsNames: string[];
+    labels: string[];
   }>({
     isOpen: false,
     routerId: "",
+    dnsNames: [],
+    labels: [],
+  });
+
+  const [selectedBranding, setSelectedBranding] = useState<{
+    dnsName: string;
+    label: string;
+  }>({
     dnsName: "",
+    label: "",
   });
 
   const [packages, setPackages] = useState<VoucherPackage[]>([]);
@@ -518,18 +530,31 @@ export default function VouchersPage() {
     }
   };
 
-  const handleSaveDNSName = async () => {
+  const handleSaveBranding = async () => {
     try {
-      if (!dnsDialog.routerId || !dnsDialog.dnsName) {
-        showToast({ title: "Gagal", description: "Router dan DNS Name harus diisi", variant: "error" });
+      if (!brandingDialog.routerId) {
+        showToast({ title: "Gagal", description: "Router harus dipilih", variant: "error" });
         return;
       }
       setLoading(true);
-      await updateRouter(dnsDialog.routerId, { dns_name: dnsDialog.dnsName });
-      showToast({ title: "Berhasil", description: "DNS Name berhasil disimpan", variant: "success" });
-      setDnsDialog({ ...dnsDialog, isOpen: false });
+      await updateRouter(brandingDialog.routerId, { 
+        branding_config: {
+          dns_names: brandingDialog.dnsNames,
+          labels: brandingDialog.labels
+        }
+      });
+      showToast({ title: "Branding disimpan", description: "Konfigurasi branding berhasil diperbarui", variant: "success" });
+      setBrandingDialog(prev => ({ ...prev, isOpen: false }));
+      
+      // Update preview immediately if no selection was made
+      if (!selectedBranding.dnsName && brandingDialog.dnsNames.length > 0) {
+        setSelectedBranding(prev => ({ ...prev, dnsName: brandingDialog.dnsNames[0] }));
+      }
+      if (!selectedBranding.label && brandingDialog.labels.length > 0) {
+        setSelectedBranding(prev => ({ ...prev, label: brandingDialog.labels[0] }));
+      }
     } catch (error: any) {
-      showToast({ title: "Gagal", description: error.message || "Gagal menyimpan DNS Name", variant: "error" });
+      showToast({ title: "Gagal menyimpan", description: error.message || "Error", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -1268,17 +1293,18 @@ export default function VouchersPage() {
                 <Button
                   onClick={() => {
                     const defaultRouter = routers.find(r => r.is_default) || routers[0];
-                    setDnsDialog({
+                    setBrandingDialog({
                       isOpen: true,
                       routerId: defaultRouter?.id || "",
-                      dnsName: defaultRouter?.dns_name || "",
+                      dnsNames: defaultRouter?.branding_config?.dns_names || (defaultRouter?.dns_name ? [defaultRouter.dns_name] : []),
+                      labels: defaultRouter?.branding_config?.labels || [],
                     });
                   }}
                   variant="outline"
                   className="rounded-xl border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 h-[38px] gap-2 px-4 font-bold text-xs"
                 >
                   <Plus className="w-4 h-4" />
-                  Add DNS Name
+                  Manage Branding
                 </Button>
               </div>
             </div>
@@ -1369,20 +1395,25 @@ export default function VouchersPage() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((idx) => {
-                      const selectedRouter = routers.find(r => r.id === dnsDialog.routerId) || routers[0];
-                      const dnsNames = Array.from(new Set(routers.map(r => r.dns_name).filter(Boolean)));
-                      const useOrgName = routers.length > 1 || dnsNames.length > 1;
-                      const dnsName = useOrgName ? (tenant?.name || "WIFI VOUCHER") : (selectedRouter?.dns_name || "hotspot.net");
+                      const selectedRouter = routers.find(r => r.id === brandingDialog.routerId) || routers[0];
+                      
+                      // Priority logic for preview Label/DNS:
+                      // 1. Manually selected branding via state
+                      // 2. First index of branding_config
+                      // 3. Fallback to old legacy logic
+                      const displayLabel = selectedBranding.label || selectedRouter?.branding_config?.labels?.[0] || tenant?.name || "WIFI VOUCHER";
+                      const displayDNS = selectedBranding.dnsName || selectedRouter?.branding_config?.dns_names?.[0] || selectedRouter?.dns_name || "hotspot.net";
                       
                       return (
-                        <div key={idx} className="bg-white border-2 border-black p-2 text-[10px] font-bold text-black w-full max-w-[160px] shadow-sm uppercase min-h-[100px] flex flex-col justify-between">
+                        <div key={idx} className="bg-white border-2 border-black p-2 text-[10px] font-bold text-black w-full max-w-[160px] shadow-sm uppercase min-h-[120px] flex flex-col justify-between">
                           <div>
-                            <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-1.5 px-1">
-                              <span className="truncate max-w-[90px] font-bold normal-case">{dnsName}</span>
-                              <span>[{idx}]</span>
+                            <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-1 px-1">
+                              <span className="truncate max-w-[90px] font-black text-[11px] normal-case tracking-tight">{displayLabel}</span>
+                              <span className="text-[8px] opacity-60">[{idx}]</span>
                             </div>
-                            <div className="flex text-[9px] text-center mb-1 leading-none">
-                              <div className="flex-1">User</div>
+                            <div className="text-center text-[8px] mb-1.5 opacity-80 lowercase italic font-normal">{displayDNS}</div>
+                            <div className="flex text-[9px] text-center mb-0.5 leading-none opacity-50">
+                              <div className="flex-1">UserID</div>
                               <div className="flex-1">Pass</div>
                             </div>
                             <div className="flex gap-1 mb-2">
@@ -1756,39 +1787,41 @@ export default function VouchersPage() {
         }
       `}} />
 
-      {/* DNS Name Management Dialog */}
-      <Dialog open={dnsDialog.isOpen} onOpenChange={(open) => setDnsDialog(prev => ({ ...prev, isOpen: open }))}>
-        <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden rounded-[28px] border-none shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)]">
-          <div className="bg-gradient-to-b from-[#f8fafc] to-white">
+      {/* Branding & Label Management Dialog */}
+      <Dialog open={brandingDialog.isOpen} onOpenChange={(open) => setBrandingDialog(prev => ({ ...prev, isOpen: open }))}>
+        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-[28px] border-none shadow-2xl bg-white">
+          <div className="bg-gradient-to-b from-slate-50 to-white">
             <DialogHeader className="p-8 pb-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-100">
-                  <RouterIcon className="w-6 h-6" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-100">
+                  <Tag className="w-6 h-6" />
                 </div>
                 <div>
-                  <DialogTitle className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-                    Konfigurasi DNS Name
+                  <DialogTitle className="text-xl font-extrabold text-slate-900 tracking-tight">
+                    Router Branding Config
                   </DialogTitle>
-                  <DialogDescription className="text-[#64748b] text-sm font-medium mt-1">
-                    Atur alamat portal Hotspot per router
+                  <DialogDescription className="text-slate-500 text-sm font-medium mt-1">
+                    Kelola label voucher dan DNS portal per router
                   </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
 
-            <div className="px-8 py-4 space-y-6">
+            <div className="px-8 py-4 space-y-6 max-h-[60vh] overflow-y-auto">
+              {/* Router Selector */}
               <div className="space-y-2.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] ml-1">Pilih Router</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Pilih Router</label>
                 <div className="relative group">
                   <select
-                    className="w-full flex h-12 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-2 text-sm font-semibold text-[#334155] appearance-none focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all cursor-pointer hover:border-indigo-300"
-                    value={dnsDialog.routerId}
+                    className="w-full flex h-12 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 appearance-none focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all cursor-pointer hover:border-purple-300"
+                    value={brandingDialog.routerId}
                     onChange={(e) => {
                       const r = routers.find(router => router.id === e.target.value);
-                      setDnsDialog(prev => ({
+                      setBrandingDialog(prev => ({
                         ...prev,
                         routerId: e.target.value,
-                        dnsName: r?.dns_name || "",
+                        dnsNames: r?.branding_config?.dns_names || (r?.dns_name ? [r.dns_name] : []),
+                        labels: r?.branding_config?.labels || [],
                       }));
                     }}
                   >
@@ -1799,53 +1832,143 @@ export default function VouchersPage() {
                       </option>
                     ))}
                   </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#94a3b8]">
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <Settings2 className="w-4 h-4" />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] ml-1">DNS Name / URL Portal</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-slate-50 text-[#94a3b8] group-focus-within:text-indigo-500 transition-colors">
-                    <LayoutGrid className="w-4 h-4" />
-                  </div>
-                  <Input
-                    className="pl-12 rounded-2xl border-[#e2e8f0] bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 h-12 text-sm font-semibold text-[#334155] placeholder:text-[#cbd5e1] placeholder:font-normal transition-all"
-                    placeholder="Contoh: hotspot.net"
-                    value={dnsDialog.dnsName}
-                    onChange={(e) => setDnsDialog(prev => ({ ...prev, dnsName: e.target.value }))}
-                  />
+              {/* Voucher Labels Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">List Voucher Labels</label>
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-100">{brandingDialog.labels.length} Label</Badge>
                 </div>
-                <div className="flex gap-2 p-3 rounded-xl bg-orange-50/50 border border-orange-100/50 mt-2">
-                  <Sparkles className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-orange-700/80 leading-relaxed font-medium">
-                    DNS Name ini akan tercetak otomatis pada kartu voucher (Template Branded) sebagai instruksi login bagi pelanggan.
-                  </p>
+                
+                <div className="flex gap-2">
+                  <Input 
+                    id="new-label-input"
+                    placeholder="Contoh: WiFi Warkop barokah" 
+                    className="h-11 rounded-xl border-slate-200 focus:ring-purple-500/10"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const val = e.currentTarget.value.trim();
+                        if (val) {
+                          setBrandingDialog(prev => ({ ...prev, labels: [...prev.labels, val] }));
+                          e.currentTarget.value = "";
+                        }
+                      }
+                    }}
+                  />
+                  <Button 
+                    className="h-11 w-11 p-0 rounded-xl bg-purple-600 hover:bg-purple-700 shrink-0"
+                    onClick={() => {
+                      const input = document.getElementById('new-label-input') as HTMLInputElement;
+                      if (input.value.trim()) {
+                        setBrandingDialog(prev => ({ ...prev, labels: [...prev.labels, input.value.trim()] }));
+                        input.value = "";
+                      }
+                    }}
+                  >
+                    <Plus className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 min-h-[44px] p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  {brandingDialog.labels.length === 0 ? (
+                    <span className="text-[10px] text-slate-400 italic font-medium p-1">Belum ada label marketing...</span>
+                  ) : (
+                    brandingDialog.labels.map((lbl, i) => (
+                      <Badge key={i} className="bg-white text-slate-700 border-slate-200 px-2 py-1 pr-1 gap-1 group hover:border-purple-300 transition-colors">
+                        <span className="text-xs font-bold">{lbl}</span>
+                        <button 
+                          onClick={() => setBrandingDialog(prev => ({ ...prev, labels: prev.labels.filter((_, idx) => idx !== i) }))}
+                          className="p-0.5 rounded-md hover:bg-red-50 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* DNS Names Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">List DNS Hotspot</label>
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-100">{brandingDialog.dnsNames.length} DNS</Badge>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Input 
+                    id="new-dns-input"
+                    placeholder="Contoh: portal.net" 
+                    className="h-11 rounded-xl border-slate-200 focus:ring-indigo-500/10"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const val = e.currentTarget.value.trim();
+                        if (val) {
+                          setBrandingDialog(prev => ({ ...prev, dnsNames: [...prev.dnsNames, val] }));
+                          e.currentTarget.value = "";
+                        }
+                      }
+                    }}
+                  />
+                  <Button 
+                    className="h-11 w-11 p-0 rounded-xl bg-indigo-600 hover:bg-indigo-700 shrink-0"
+                    onClick={() => {
+                      const input = document.getElementById('new-dns-input') as HTMLInputElement;
+                      if (input.value.trim()) {
+                        setBrandingDialog(prev => ({ ...prev, dnsNames: [...prev.dnsNames, input.value.trim()] }));
+                        input.value = "";
+                      }
+                    }}
+                  >
+                    <Plus className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 min-h-[44px] p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  {brandingDialog.dnsNames.length === 0 ? (
+                    <span className="text-[10px] text-slate-400 italic font-medium p-1">Belum ada list DNS name...</span>
+                  ) : (
+                    brandingDialog.dnsNames.map((dns, i) => (
+                      <Badge key={i} className="bg-white text-slate-700 border-slate-200 px-2 py-1 pr-1 gap-1 group hover:border-indigo-300 transition-colors">
+                        <span className="text-xs font-bold">{dns}</span>
+                        <button 
+                          onClick={() => setBrandingDialog(prev => ({ ...prev, dnsNames: prev.dnsNames.filter((_, idx) => idx !== i) }))}
+                          className="p-0.5 rounded-md hover:bg-red-50 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
 
-            <DialogFooter className="p-8 pt-2 grid grid-cols-2 gap-3 pb-8">
+            <DialogFooter className="p-8 pt-2 grid grid-cols-2 gap-3 pb-8 bg-slate-50 border-t border-slate-100">
               <Button
                 variant="ghost"
-                onClick={() => setDnsDialog(prev => ({ ...prev, isOpen: false }))}
-                className="rounded-2xl h-12 font-bold text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#334155] transition-all"
+                onClick={() => setBrandingDialog(prev => ({ ...prev, isOpen: false }))}
+                className="rounded-2xl h-12 font-bold text-slate-500 hover:bg-white hover:text-slate-800 transition-all"
               >
                 Batal
               </Button>
               <Button
-                onClick={handleSaveDNSName}
+                onClick={handleSaveBranding}
                 disabled={loading}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-[0_12px_24px_-8px_rgba(79,70,229,0.4)] h-12 font-bold transition-all active:scale-[0.98]"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-xl shadow-indigo-100 h-12 font-bold transition-all active:scale-[0.98]"
               >
-                {loading ? <LoadingSpinner /> : "Update DNS"}
+                {loading ? <LoadingSpinner /> : "Simpan Branding"}
               </Button>
             </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

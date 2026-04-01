@@ -161,9 +161,10 @@ type CreateRouterRequest struct {
 	VPNUsername        string                         `json:"vpn_username,omitempty"`
 	VPNPassword        string                         `json:"vpn_password,omitempty"`
 	VPNScript          string                         `json:"vpn_script,omitempty"`
-	DNSName            string                         `json:"dns_name,omitempty"`
-	RemoteAccessPort   int                            `json:"remote_access_port,omitempty"`
-	EnableRemoteAccess bool                           `json:"enable_remote_access"`
+	DNSName            string                  `json:"dns_name,omitempty"`
+	BrandingConfig     *network.BrandingConfig `json:"branding_config,omitempty"`
+	RemoteAccessPort   int                     `json:"remote_access_port,omitempty"`
+	EnableRemoteAccess bool                    `json:"enable_remote_access"`
 }
 
 func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, req CreateRouterRequest) (*network.Router, error) {
@@ -217,6 +218,7 @@ func (s *NetworkService) CreateRouter(ctx context.Context, tenantID uuid.UUID, r
 		RadiusSecret:     req.RadiusSecret,
 		NASIdentifier:    nasIdentifier,
 		DNSName:          req.DNSName,
+		BrandingConfig:   req.BrandingConfig,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -568,11 +570,12 @@ type UpdateRouterRequest struct {
 	VPNUsername        string                         `json:"vpn_username,omitempty"`
 	VPNPassword        string                         `json:"vpn_password,omitempty"`
 	VPNScript          string                         `json:"vpn_script,omitempty"`
-	DNSName            string                         `json:"dns_name,omitempty"`
-	RemoteAccessPort   int                            `json:"remote_access_port,omitempty"`
-	EnableRemoteAccess *bool                          `json:"enable_remote_access,omitempty"`
-	IdleTimeout        int                            `json:"idle_timeout,omitempty"`
-	InterimInterval    int                            `json:"interim_interval,omitempty"`
+	DNSName            string                  `json:"dns_name,omitempty"`
+	BrandingConfig     *network.BrandingConfig `json:"branding_config,omitempty"`
+	RemoteAccessPort   int                     `json:"remote_access_port,omitempty"`
+	EnableRemoteAccess *bool                   `json:"enable_remote_access,omitempty"`
+	IdleTimeout        int                     `json:"idle_timeout,omitempty"`
+	InterimInterval    int                     `json:"interim_interval,omitempty"`
 }
 
 func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req UpdateRouterRequest) (*network.Router, error) {
@@ -635,6 +638,9 @@ func (s *NetworkService) UpdateRouter(ctx context.Context, id uuid.UUID, req Upd
 	}
 	if req.DNSName != "" {
 		router.DNSName = req.DNSName
+	}
+	if req.BrandingConfig != nil {
+		router.BrandingConfig = req.BrandingConfig
 	}
 	if req.RemoteAccessPort > 0 {
 		router.RemoteAccessPort = req.RemoteAccessPort

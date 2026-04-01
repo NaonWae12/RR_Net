@@ -248,6 +248,11 @@ export type RouterType = "mikrotik" | "cisco" | "ubiquiti" | "other";
 export type RouterStatus = "online" | "offline" | "maintenance" | "provisioning";
 export type RouterConnectivityMode = "direct_public" | "vpn";
 
+export interface BrandingConfig {
+  dns_names: string[];
+  labels: string[];
+}
+
 export interface Router {
   id: string;
   tenant_id: string;
@@ -272,6 +277,7 @@ export interface Router {
   vpn_password?: string;
   vpn_script?: string;
   dns_name?: string;
+  branding_config?: BrandingConfig;
   idle_timeout: number;
   interim_interval: number;
   created_at: string;
@@ -315,6 +321,7 @@ export interface CreateRouterRequest {
   radius_enabled?: boolean;
   radius_secret?: string;
   dns_name?: string;
+  branding_config?: BrandingConfig;
   auto_create_vpn?: boolean;
   enable_remote_access?: boolean;
 }
@@ -335,6 +342,7 @@ export interface UpdateRouterRequest {
   radius_enabled?: boolean;
   radius_secret?: string;
   dns_name?: string;
+  branding_config?: BrandingConfig;
   remote_access_enabled?: boolean;
   idle_timeout?: number;
   interim_interval?: number;
