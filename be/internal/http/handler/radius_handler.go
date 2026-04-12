@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -86,7 +85,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	zslog.Info().Str("received_secret", secret).Msg("[radius_auth] Received request")
 
 	var req AuthRequest
-	
+
 	// 1. Read and sanitize body because MikroTik/FreeRADIUS sometimes send binary in JSON body
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -95,7 +94,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Internal JSON Sanitizer: Remove or escape non-printable characters 
+	// Internal JSON Sanitizer: Remove or escape non-printable characters
 	// that cause 'invalid character in string escape code' but keep it valid JSON.
 	sanitizedBody := sanitizeJSON(bodyBytes)
 
@@ -157,7 +156,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 			// standard MikroTik CHAP: MD5(ID + Password + Challenge)
 			// (Note: we use a simplified version for now or handle hex decoding)
 			zslog.Info().Str("username", req.UserName).Msg("[radius_auth] Handing off to CHAP validation (v7)")
-			// For now, let's treat it as successful if we received both CHAP attributes and username matches, 
+			// For now, let's treat it as successful if we received both CHAP attributes and username matches,
 			// assuming the v7 router has already pre-validated or we'll add full MD5 logic in next step.
 			// Actually, let's just log and accept for proof of concept or implement the MD5.
 			goto AuthSuccess
@@ -280,7 +279,7 @@ func (h *RadiusHandler) handleVPNAuth(w http.ResponseWriter, r *http.Request, re
 func (h *RadiusHandler) logAuthReject(w http.ResponseWriter, r *http.Request, tenantID uuid.UUID, routerID *uuid.UUID, username, nasIP, reason string) {
 	zslog.Warn().Str("username", username).Str("reason", reason).Msg("[radius_auth] REJECT")
 	h.logAuthAttempt(r.Context(), tenantID, routerID, username, nasIP, radius.AuthResultReject, reason)
-	
+
 	response := map[string]interface{}{
 		"control": map[string]interface{}{"Auth-Type": []string{"Reject"}},
 		"reply":   map[string]interface{}{"Reply-Message": []string{"Voucher/Password invalid"}},
@@ -473,8 +472,8 @@ func (h *RadiusHandler) logAuthAttempt(ctx context.Context, tenantID uuid.UUID, 
 	_ = h.radiusRepo.CreateAuthAttempt(ctx, attempt)
 }
 
-func (h *RadiusHandler) StartStaleSessionCleaner(ctx context.Context) {}
-func (h *RadiusHandler) ListAuthAttempts(w http.ResponseWriter, r *http.Request) {}
+func (h *RadiusHandler) StartStaleSessionCleaner(ctx context.Context)              {}
+func (h *RadiusHandler) ListAuthAttempts(w http.ResponseWriter, r *http.Request)   {}
 func (h *RadiusHandler) ListActiveSessions(w http.ResponseWriter, r *http.Request) {}
 
 // sanitizeJSON removes or escapes invalid characters for Go's JSON decoder.
@@ -488,20 +487,20 @@ func sanitizeJSON(data []byte) []byte {
 	// Find the User-Password value and escape any problematic bytes (\, ", or non-printable)
 	// But actually, Go's json.Unmarshal fails primarily on \ followed by non-valid escape code.
 	// We'll replace non-printable/invalid bytes with escaped hex representation or just strip them.
-	
+
 	// A more robust way:
 	result := make([]byte, 0, len(data))
 	for i := 0; i < len(data); i++ {
 		b := data[i]
-		
+
 		// If we see a backslash, we MUST ensure the next character is a valid escape character
 		// or we escape the backslash itself.
 		if b == '\\' {
 			if i+1 < len(data) {
 				next := data[i+1]
 				// Valid JSON escapes: ", \, /, b, f, n, r, t, u
-				if next != '"' && next != '\\' && next != '/' && next != 'b' && 
-				   next != 'f' && next != 'n' && next != 'r' && next != 't' && next != 'u' {
+				if next != '"' && next != '\\' && next != '/' && next != 'b' &&
+					next != 'f' && next != 'n' && next != 'r' && next != 't' && next != 'u' {
 					// Invalid escape! Escape the backslash itself to prevent decoder crash
 					result = append(result, '\\', '\\')
 					continue
@@ -512,16 +511,16 @@ func sanitizeJSON(data []byte) []byte {
 				continue
 			}
 		}
-		
+
 		// Handle non-printable characters (except common ones)
 		if b < 32 && b != '\n' && b != '\r' && b != '\t' {
 			// Replace with hex escape or space to keep JSON valid
 			result = append(result, ' ')
 			continue
 		}
-		
+
 		result = append(result, b)
 	}
-	
+
 	return result
 }
