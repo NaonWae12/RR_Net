@@ -37,6 +37,8 @@ type Tenant struct {
 	BillingStatus BillingStatus          `json:"billing_status"`
 	TrialEndsAt   *time.Time             `json:"trial_ends_at,omitempty"`
 	Settings      map[string]interface{} `json:"settings"`
+	DefaultVoucherDesignSlug  string  `json:"default_voucher_design_slug"`
+	ResellerVoucherDesignSlug string  `json:"reseller_voucher_design_slug"`
 	CreatedAt     time.Time              `json:"created_at"`
 	UpdatedAt     time.Time              `json:"updated_at"`
 	DeletedAt     *time.Time             `json:"deleted_at,omitempty"`

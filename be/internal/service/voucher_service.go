@@ -701,6 +701,77 @@ func (s *VoucherService) ListVouchers(ctx context.Context, tenantID uuid.UUID, l
 	return s.voucherRepo.ListVouchersByTenant(ctx, tenantID, limit, offset, status, search)
 }
 
+func (s *VoucherService) DeleteBatch(ctx context.Context, tenantID uuid.UUID, createdAt time.Time) error {
+	// 1. Get vouchers in this batch to clean up from MikroTik if needed
+	// Use ListVouchers with large limit to find exactly this batch
+	vouchers, _, err := s.voucherRepo.ListVouchersByTenant(ctx, tenantID, 1000, 0, "", "")
+	if err != nil {
+		return err
+	}
+
+	var batchVouchers []*voucher.Voucher
+	for _, v := range vouchers {
+		if v.CreatedAt.Equal(createdAt) {
+			batchVouchers = append(batchVouchers, v)
+		}
+	}
+
+	if len(batchVouchers) == 0 {
+		return fmt.Errorf("batch not found or already deleted")
+	}
+
+	// 2. Cleanup MikroTik if needed
+	pkg, err := s.voucherRepo.GetPackageByID(ctx, batchVouchers[0].PackageID)
+	if err == nil && pkg.RateLimitMode == "radius_auth_only" {
+		// Group by router for efficiency
+		routerVouchers := make(map[uuid.UUID][]string)
+		hasGlobal := false
+		
+		for _, v := range batchVouchers {
+			if v.RouterID != nil {
+				routerVouchers[*v.RouterID] = append(routerVouchers[*v.RouterID], v.Code)
+			} else {
+				hasGlobal = true
+			}
+		}
+
+		// Cleanup specific routers
+		for rid, codes := range routerVouchers {
+			router, err := s.routerRepo.GetByID(ctx, rid)
+			if err != nil || router.Status != network.RouterStatusOnline {
+				continue
+			}
+			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+			for _, code := range codes {
+				uCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, code)
+				cancel()
+			}
+		}
+
+		// Cleanup global vouchers
+		if hasGlobal {
+			routers, _ := s.routerRepo.ListByTenant(ctx, tenantID)
+			for _, router := range routers {
+				if _, ok := routerVouchers[router.ID]; ok || router.Status != network.RouterStatusOnline {
+					continue
+				}
+				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+				for _, v := range batchVouchers {
+					if v.RouterID == nil {
+						uCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+						_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, v.Code)
+						cancel()
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Delete from DB
+	return s.voucherRepo.DeleteVouchersByCreatedAt(ctx, tenantID, createdAt)
+}
+
 func (s *VoucherService) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
 	return s.voucherRepo.GetVoucherByCode(ctx, tenantID, strings.TrimSpace(code))
 }

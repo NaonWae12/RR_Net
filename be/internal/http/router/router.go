@@ -136,6 +136,11 @@ func New(deps Dependencies) http.Handler {
 	waTemplateService := service.NewWATemplateService(waTemplateRepo)
 	waLogRepo := repository.NewWALogRepository(deps.DB)
 	waLogService := service.NewWALogService(waLogRepo)
+	
+	// Voucher Design Store
+	voucherDesignRepo := repository.NewVoucherDesignRepository(deps.DB)
+	voucherDesignService := service.NewVoucherDesignService(voucherDesignRepo, tenantRepo)
+	voucherDesignHandler := handler.NewVoucherDesignHandler(voucherDesignService)
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService, oauthManager)
@@ -1953,6 +1958,16 @@ func New(deps Dependencies) http.Handler {
 			return
 		}
 
+		// Check for delete-batch action: /api/v1/vouchers/delete-batch?created_at=xxx
+		if path == "delete-batch" {
+			if r.Method == http.MethodDelete {
+				voucherHandler.DeleteBatch(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
 		// Check for toggle-status action: /api/v1/vouchers/{id}/toggle-status
 		parts := strings.Split(path, "/")
 		if len(parts) == 2 && parts[1] == "toggle-status" {
@@ -1979,14 +1994,50 @@ func New(deps Dependencies) http.Handler {
 		// Single ID route: /api/v1/vouchers/{id}
 		r = setPathParam(r, "id", path)
 		switch r.Method {
-		case http.MethodPut:
-			voucherHandler.UpdateVoucher(w, r)
-		case http.MethodDelete:
-			voucherHandler.DeleteVoucher(w, r)
-		default:
-			log.Warn().Str("method", r.Method).Msg("Voucher method not allowed")
+			case http.MethodPut:
+				voucherHandler.UpdateVoucher(w, r)
+			case http.MethodDelete:
+				voucherHandler.DeleteVoucher(w, r)
+			default:
+				log.Warn().Str("method", r.Method).Msg("Voucher method not allowed")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		})))
+
+	// Voucher Design Store routes
+	mux.Handle("/api/v1/voucher-designs", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			voucherDesignHandler.ListAll(w, r)
+		} else {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
+	})))
+
+	mux.Handle("/api/v1/voucher-designs/owned", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			voucherDesignHandler.ListOwned(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/voucher-designs/settings", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			voucherDesignHandler.UpdateSettings(w, r)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/api/v1/voucher-designs/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/voucher-designs/")
+		if strings.HasSuffix(path, "/purchase") {
+			if r.Method == http.MethodPost {
+				voucherDesignHandler.Purchase(w, r)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	})))
 
 	// RADIUS audit routes (Protected, tenant-scoped)

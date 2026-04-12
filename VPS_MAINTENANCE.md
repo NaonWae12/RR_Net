@@ -87,11 +87,14 @@ docker logs --tail 50 rrnet-backend-prod
 docker logs -f rrnet-backend-prod
 ```
 
-### Hapus Image & Container Lama (Cleanup)
-Jika disk penuh atau mau build dari nol:
+### Hapus Image Lama (Cleanup)
+Jika disk penuh atau mau membersihkan cache build setelah update:
 ```bash
-docker system prune -a --volumes
+# Menghapus image yang sudah tidak terpakai (aman untuk data volume)
+docker image prune -a -f
 ```
+*Jangan tambahkan flag `--volumes` karena akan menghapus database jika container sedang mati.*
+
 
 ---
 
@@ -110,6 +113,31 @@ Jika ada perubahan kode di lokal dan sudah dipush ke Git:
    docker compose -f docker-compose.production.yml up -d --build
    ```
    *Proses `--build` akan mendeteksi perubahan file dan otomatis menjalankan migrasi DB yang baru.*
+
+---
+
+## ⏪ 5. Rollback Procedure (Jika Update Error)
+
+Jika setelah melakukan update (`git pull`) sistem malah bermasalah atau error, lakukan langkah darurat ini untuk mengembalikan ke versi sebelumnya:
+
+1. **Undo Git Pull:**
+   Balikkan kode ke posisi sebelum pull terakhir dilakukan.
+   ```bash
+   cd /opt/rrnet
+   git reset --hard HEAD@{1}
+   ```
+
+2. **Re-deploy Code Lama:**
+   Build ulang container menggunakan kode lama yang sudah di-rollback.
+   ```bash
+   docker compose -f docker-compose.production.yml up -d --build
+   ```
+
+3. **Verifikasi:**
+   Cek logs untuk memastikan service sudah stabil kembali:
+   ```bash
+   docker logs --tail 50 rrnet-backend-prod
+   ```
 
 ---
 

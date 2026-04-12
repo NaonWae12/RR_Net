@@ -312,6 +312,12 @@ func (r *VoucherRepository) DeleteVouchersByPurchase(ctx context.Context, purcha
 	return err
 }
 
+func (r *VoucherRepository) DeleteVouchersByCreatedAt(ctx context.Context, tenantID uuid.UUID, createdAt time.Time) error {
+	query := `DELETE FROM vouchers WHERE tenant_id = $1 AND created_at = $2`
+	_, err := r.db.Exec(ctx, query, tenantID, createdAt)
+	return err
+}
+
 // ConsumeVoucherAtomic atomically marks a voucher as used
 // Only updates if status is 'active', preventing race conditions
 // Returns the updated voucher or error if voucher not found or already used

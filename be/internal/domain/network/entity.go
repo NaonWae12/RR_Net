@@ -42,8 +42,9 @@ const (
 
 // BrandingConfig holds custom labels and DNS names for voucher design
 type BrandingConfig struct {
-	DNSNames []string `json:"dns_names"`
-	Labels   []string `json:"labels"`
+	DNSNames           []string `json:"dns_names"`
+	Labels             []string `json:"labels"`
+	SelectedDesignSlug string   `json:"selected_design_slug"`
 }
 
 // Router represents a network router device

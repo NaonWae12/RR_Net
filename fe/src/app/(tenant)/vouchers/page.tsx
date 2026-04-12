@@ -38,8 +38,17 @@ import {
   MoreVertical,
   Settings2,
   Tag,
-  X
+  X,
+  Filter,
+  Download,
+  Edit2,
+  Share2,
+  MoreHorizontal,
+  Check,
+  ShoppingBag
 } from "lucide-react";
+import { VoucherDesign } from "@/lib/api/types";
+import { VOUCHER_TEMPLATES, getTemplateBySlug } from '@/components/vouchers/templates/registry';
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
@@ -135,18 +144,23 @@ export default function VouchersPage() {
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'packages' | 'generate' | 'vouchers' | 'cards'>('packages');
+  const [cardDesignMode, setCardDesignMode] = useState<string>('simple');
+  const [ownedDesigns, setOwnedDesigns] = useState<VoucherDesign[]>([]);
 
   const [brandingDialog, setBrandingDialog] = useState<{
     isOpen: boolean;
     routerId: string;
     dnsNames: string[];
     labels: string[];
+    selectedDesignSlug: string;
   }>({
     isOpen: false,
     routerId: "",
     dnsNames: [],
     labels: [],
+    selectedDesignSlug: "simple",
   });
+
 
   const [selectedBranding, setSelectedBranding] = useState<{
     dnsName: string;
@@ -296,7 +310,6 @@ export default function VouchersPage() {
   });
 
   const [lastGenerated, setLastGenerated] = useState<Voucher[]>([]);
-  const [cardDesignMode, setCardDesignMode] = useState<'simple' | 'branded' | 'mikhmon'>('simple');
   const [successDialog, setSuccessDialog] = useState<{
     open: boolean;
     count: number;
@@ -307,39 +320,45 @@ export default function VouchersPage() {
   // O(1) router lookup — hindari O(n×m) routers.find() per baris tabel
   const routerMap = useMemo(() => new Map(routers.map(r => [r.id, r])), [routers]);
 
-  const load = async () => {
-    if (!isAuthenticated) return;
-
+  const loadAllData = async () => {
     setLoading(true);
     try {
-      await fetchRouters();
-      const [pkgs, vres] = await Promise.all([
+      const [vData, pData, owned] = await Promise.all([
+        voucherService.listVouchers({ limit: vouchers.length || 10 }),
         voucherService.listPackages(),
-        voucherService.listVouchers({ 
-          limit: 100, 
-          offset: 0, 
-          status: statusFilter === 'all' ? undefined : statusFilter,
-          search: debouncedSearch || undefined,
-        }),
+        voucherService.listOwnedDesigns(),
       ]);
-
-      const safePkgs = Array.isArray(pkgs) ? pkgs : [];
-      const safeVouchers = Array.isArray(vres?.data) ? vres.data : [];
-
-      setPackages(safePkgs);
-      setVouchers(safeVouchers);
-      setVoucherTotal(vres?.total || 0);
-      setVoucherPage(1);
-
-      if (!genForm.package_id && safePkgs[0]) {
-        setGenForm((g) => ({ ...g, package_id: safePkgs[0].id }));
-      }
-    } catch (err: any) {
-      showToast({ title: "Load failed", description: err?.message || "Error", variant: "error" });
+      setVouchers(vData.data || []);
+      setVoucherTotal(vData.total || 0);
+      setPackages(pData || []);
+      setOwnedDesigns(owned);
+    } catch (error) {
+      showToast({ title: "Gagal memuat data", variant: "error" });
     } finally {
       setLoading(false);
     }
   };
+
+  const load = async () => {
+    if (!isAuthenticated) return;
+    await loadAllData();
+  };
+
+  // Sync cardDesignMode with tenant default if it's currently 'simple' or not in defaults
+  useEffect(() => {
+    if (tenant?.default_voucher_design_slug) {
+      const defaults = Array.isArray(tenant.default_voucher_design_slug) 
+        ? tenant.default_voucher_design_slug 
+        : [tenant.default_voucher_design_slug as unknown as string];
+      
+      if (defaults.length > 0) {
+        // If current mode is 'simple' (default state) or not in the allowed list, pick the first one
+        if (cardDesignMode === 'simple' || !defaults.includes(cardDesignMode)) {
+          setCardDesignMode(defaults[0]);
+        }
+      }
+    }
+  }, [tenant?.default_voucher_design_slug, cardDesignMode]);
 
   useEffect(() => {
     load();
@@ -537,14 +556,22 @@ export default function VouchersPage() {
         return;
       }
       setLoading(true);
+
+      const router = routers.find(r => r.id === brandingDialog.routerId);
+      const newBrandingConfig = {
+        ...router?.branding_config,
+        dns_names: brandingDialog.dnsNames,
+        labels: brandingDialog.labels,
+        selected_design_slug: brandingDialog.selectedDesignSlug,
+      };
+
       await updateRouter(brandingDialog.routerId, { 
-        branding_config: {
-          dns_names: brandingDialog.dnsNames,
-          labels: brandingDialog.labels
-        }
+        branding_config: newBrandingConfig
       });
+
       showToast({ title: "Branding disimpan", description: "Konfigurasi branding berhasil diperbarui", variant: "success" });
       setBrandingDialog(prev => ({ ...prev, isOpen: false }));
+      await fetchRouters();
       
       // Update preview immediately if no selection was made
       if (!selectedBranding.dnsName && brandingDialog.dnsNames.length > 0) {
@@ -1259,36 +1286,58 @@ export default function VouchersPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setCardDesignMode('simple')}
-                  className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                    cardDesignMode === 'simple'
-                      ? 'bg-purple-600 text-white shadow-md'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mr-2">
+                  {(() => {
+                    const designSlugs = Array.isArray(tenant?.default_voucher_design_slug)
+                      ? tenant.default_voucher_design_slug
+                      : (tenant?.default_voucher_design_slug ? [tenant.default_voucher_design_slug as unknown as string] : []);
+                    
+                    if (designSlugs.length > 0) {
+                      return designSlugs.map(slug => {
+                        const design = ownedDesigns.find(d => d.slug === slug);
+                        return (
+                          <button
+                            key={slug}
+                            onClick={() => setCardDesignMode(slug)}
+                            className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                              cardDesignMode === slug
+                                ? 'bg-white text-purple-700 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            {design?.name || slug}
+                          </button>
+                        );
+                      });
+                    }
+
+                    // Fallback to owned designs or defaults if nothing selected
+                    const fallbackSource = ownedDesigns.length > 0 ? ownedDesigns.map(d => ({id: d.id, slug: d.slug, name: d.name})) : Object.values(VOUCHER_TEMPLATES).slice(0, 3).map(t => ({id: t.id, slug: t.id, name: t.name}));
+                    
+                    return fallbackSource.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => setCardDesignMode(item.slug)}
+                        className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                          cardDesignMode === item.slug
+                            ? 'bg-white text-purple-700 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {item.name}
+                      </button>
+                    ));
+                  })()}
+                </div>
+
+                <Button 
+                  variant="outline" 
+                  className="rounded-2xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold gap-2 px-6 h-12 shadow-sm shadow-amber-200/50"
+                  onClick={() => router.push('/vouchers/design')}
                 >
-                  Simple
-                </button>
-                <button
-                  onClick={() => setCardDesignMode('branded')}
-                  className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                    cardDesignMode === 'branded'
-                      ? 'bg-purple-600 text-white shadow-md'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Branded
-                </button>
-                <button
-                  onClick={() => setCardDesignMode('mikhmon')}
-                  className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                    cardDesignMode === 'mikhmon'
-                      ? 'bg-purple-600 text-white shadow-md'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Mikhmon
-                </button>
+                  <ShoppingBag className="w-5 h-5" />
+                  Design Management
+                </Button>
                 <div className="w-[1px] h-6 bg-slate-200 mx-1 self-center" />
                 <Button
                   onClick={() => {
@@ -1313,130 +1362,52 @@ export default function VouchersPage() {
             <Card className="border-slate-200">
               <CardHeader className="bg-slate-50/50 border-b border-slate-200">
                 <CardTitle className="text-lg">
-                  Preview Template - {
-                    cardDesignMode === 'simple' ? 'Simple' : 
-                    cardDesignMode === 'branded' ? 'Branded' : 'Mikhmon'
-                  }
+                  Preview Template - {getTemplateBySlug(cardDesignMode).name}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
-                {cardDesignMode === 'simple' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[1, 2, 3].map((idx) => (
-                      <div key={idx} className="border-2 border-dashed border-slate-300 rounded-lg p-4 bg-white">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold text-slate-400">#{String(idx).padStart(3, '0')}</span>
-                            <Badge variant="outline" className="text-xs">PROMO 2 JAM</Badge>
-                          </div>
-                          <div className="border-t border-slate-200 pt-2">
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-xs">
-                                <span className="text-slate-500 font-medium">Username:</span>
-                                <span className="font-mono font-bold text-slate-900">ABC{idx}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-slate-500 font-medium">Password:</span>
-                                <span className="font-mono font-bold text-slate-900">123{idx}</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-slate-500 font-medium">Harga:</span>
-                                <span className="font-bold text-emerald-600">Rp 5.000</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-slate-500 font-medium">Masa Aktif:</span>
-                                <span className="font-bold text-slate-700">2 Jam</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                 {(() => {
+                    const template = getTemplateBySlug(cardDesignMode);
+                    const TemplateComponent = template.component;
+                    const gridCols = template.gridCols || 3;
+                    const gridClass = gridCols === 5 
+                      ? "grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2" 
+                      : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+
+                    // Realistic random codes for preview
+                    const generateRandomCode = (len = 4) => Math.random().toString(36).substring(2, 2 + len).toUpperCase();
+
+                    return (
+                      <div className={gridClass}>
+                        {Array.from({ length: gridCols === 5 ? 8 : 3 }).map((_, idx) => {
+                          const code = generateRandomCode(4);
+                          return (
+                            <TemplateComponent 
+                              key={idx}
+                              voucher={{
+                                id: `dummy-${idx}`,
+                                code: code,
+                                password: code, // most common case same as code
+                                package_id: "pkg-1",
+                              } as Voucher}
+                              index={idx}
+                              pkg={{
+                                name: "PROMO 2 JAM",
+                                price: 5000,
+                                duration_hours: 2,
+                              } as VoucherPackage}
+                              headerTitle="WIFI VOUCHER"
+                            />
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
-                ) : cardDesignMode === 'branded' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[1, 2, 3].map((idx) => (
-                      <div key={idx} className="border-2 border-dashed border-indigo-300 rounded-lg overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50">
-                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-3 text-white">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <Ticket className="w-4 h-4" />
-                              <span className="font-bold text-sm">WIFI VOUCHER</span>
-                            </div>
-                            <span className="text-xs font-bold opacity-80">#{String(idx).padStart(3, '0')}</span>
-                          </div>
-                        </div>
-                        <div className="p-4 space-y-2">
-                          <div className="text-center mb-2">
-                            <Badge className="bg-indigo-600 text-white font-bold">PROMO 2 JAM</Badge>
-                          </div>
-                          <div className="space-y-1 bg-white rounded-lg p-3 border border-indigo-200">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-slate-500 font-medium">Username:</span>
-                              <span className="font-mono font-bold text-indigo-700">ABC{idx}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-slate-500 font-medium">Password:</span>
-                              <span className="font-mono font-bold text-purple-700">123{idx}</span>
-                            </div>
-                            <div className="flex justify-between text-xs pt-2 border-t border-slate-200">
-                              <span className="text-slate-500 font-medium">Harga:</span>
-                              <span className="font-bold text-emerald-600">Rp 5.000</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-slate-500 font-medium">Masa Aktif:</span>
-                              <span className="font-bold text-slate-700">2 Jam</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((idx) => {
-                      const selectedRouter = routers.find(r => r.id === brandingDialog.routerId) || routers[0];
-                      
-                      // Priority logic for preview Label/DNS:
-                      // 1. Manually selected branding via state
-                      // 2. First index of branding_config
-                      // 3. Fallback to old legacy logic
-                      const displayLabel = selectedBranding.label || selectedRouter?.branding_config?.labels?.[0] || tenant?.name || "WIFI VOUCHER";
-                      const displayDNS = selectedBranding.dnsName || selectedRouter?.branding_config?.dns_names?.[0] || selectedRouter?.dns_name || "hotspot.net";
-                      
-                      return (
-                        <div key={idx} className="bg-white border-2 border-black p-2 text-[10px] font-bold text-black w-full max-w-[160px] shadow-sm uppercase min-h-[120px] flex flex-col justify-between">
-                          <div>
-                            <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-1 px-1">
-                              <span className="truncate max-w-[90px] font-black text-[11px] normal-case tracking-tight">{displayLabel}</span>
-                              <span className="text-[8px] opacity-60">[{idx}]</span>
-                            </div>
-                            <div className="text-center text-[8px] mb-1.5 opacity-80 lowercase italic font-normal">{displayDNS}</div>
-                            <div className="flex text-[9px] text-center mb-0.5 leading-none opacity-50">
-                              <div className="flex-1">UserID</div>
-                              <div className="flex-1">Pass</div>
-                            </div>
-                            <div className="flex gap-1 mb-2">
-                              <div className="flex-1 border-2 border-black py-1 px-1 text-center font-semibold text-[13px] leading-none normal-case">
-                                X{idx}F
-                              </div>
-                              <div className="flex-1 border-2 border-black py-1 px-1 text-center font-semibold text-[13px] leading-none normal-case">
-                                9{idx}2
-                              </div>
-                            </div>
-                          </div>
-                          <div className="border-2 border-black py-1 px-1 text-center text-[11px] font-black leading-none bg-slate-50">
-                            2j Rp 5rb
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                    );
+                 })()}
               </CardContent>
             </Card>
           </div>
         )}
+
       </div>
 
       {/* Dialogs (unchanged) */}
@@ -1822,6 +1793,7 @@ export default function VouchersPage() {
                         routerId: e.target.value,
                         dnsNames: r?.branding_config?.dns_names || (r?.dns_name ? [r.dns_name] : []),
                         labels: r?.branding_config?.labels || [],
+                        selectedDesignSlug: r?.branding_config?.selected_design_slug || "simple",
                       }));
                     }}
                   >
@@ -1834,6 +1806,31 @@ export default function VouchersPage() {
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <Settings2 className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Template Selection */}
+              <div className="space-y-2.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Desain Kartu Voucher</label>
+                <div className="relative group">
+                  <select
+                    className="w-full flex h-12 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 appearance-none focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all cursor-pointer hover:border-purple-300"
+                    value={brandingDialog.selectedDesignSlug}
+                    onChange={(e) => setBrandingDialog(prev => ({ ...prev, selectedDesignSlug: e.target.value }))}
+                  >
+                    {ownedDesigns.length > 0 ? (
+                      ownedDesigns.map((d) => (
+                        <option key={d.id} value={d.slug}>{d.name}</option>
+                      ))
+                    ) : (
+                      Object.values(VOUCHER_TEMPLATES).map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))
+                    )}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <CreditCard className="w-4 h-4" />
                   </div>
                 </div>
               </div>

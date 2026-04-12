@@ -4,7 +4,7 @@ import { toApiError } from "../utils/errors";
 import type { LoginRequest } from "../api/types";
 
 export function useAuth() {
-  const { user, tenant, tenantSlug, token, refreshToken, isLoading, error, login, logout, refresh, setAuth, ready } =
+  const { user, tenant, tenantSlug, token, refreshToken, isLoading, error, login, logout, refresh, setAuth, ready, refreshTenant } =
     useAuthStore();
 
   const loginSafe = useCallback(
@@ -44,5 +44,6 @@ export function useAuth() {
     setAuth,
     isAuthenticated,
     ready,
+    refreshTenant,
   };
 }

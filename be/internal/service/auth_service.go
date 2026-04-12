@@ -15,6 +15,7 @@ import (
 	"rrnet/internal/infra/wa_gateway"
 	"rrnet/internal/rbac"
 	"rrnet/internal/repository"
+	"strings"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -86,10 +87,12 @@ type UserDTO struct {
 
 // TenantDTO represents tenant data for API responses
 type TenantDTO struct {
-	ID     uuid.UUID `json:"id"`
-	Name   string    `json:"name"`
-	Slug   string    `json:"slug"`
-	Status string    `json:"status"`
+	ID                        uuid.UUID `json:"id"`
+	Name                      string    `json:"name"`
+	Slug                      string    `json:"slug"`
+	Status                    string    `json:"status"`
+	DefaultVoucherDesignSlug  []string  `json:"default_voucher_design_slug"`
+	ResellerVoucherDesignSlug []string  `json:"reseller_voucher_design_slug"`
 }
 
 // Login authenticates a user and returns tokens
@@ -179,11 +182,23 @@ func (s *AuthService) Login(ctx context.Context, tenantID *uuid.UUID, req *Login
 	}
 
 	if t != nil {
+		var defaultSlugs []string
+		if t.DefaultVoucherDesignSlug != "" {
+			defaultSlugs = strings.Split(t.DefaultVoucherDesignSlug, ",")
+		}
+		
+		var resellerSlugs []string
+		if t.ResellerVoucherDesignSlug != "" {
+			resellerSlugs = strings.Split(t.ResellerVoucherDesignSlug, ",")
+		}
+		
 		response.Tenant = &TenantDTO{
-			ID:     t.ID,
-			Name:   t.Name,
-			Slug:   t.Slug,
-			Status: string(t.Status),
+			ID:                        t.ID,
+			Name:                      t.Name,
+			Slug:                      t.Slug,
+			Status:                    string(t.Status),
+			DefaultVoucherDesignSlug:  defaultSlugs,
+			ResellerVoucherDesignSlug: resellerSlugs,
 		}
 	}
 
@@ -253,11 +268,23 @@ func (s *AuthService) OAuthLogin(ctx context.Context, oauthUser *auth.OAuthUser)
 	}
 
 	if t != nil {
+		var defaultSlugs []string
+		if t.DefaultVoucherDesignSlug != "" {
+			defaultSlugs = strings.Split(t.DefaultVoucherDesignSlug, ",")
+		}
+		
+		var resellerSlugs []string
+		if t.ResellerVoucherDesignSlug != "" {
+			resellerSlugs = strings.Split(t.ResellerVoucherDesignSlug, ",")
+		}
+
 		res.Tenant = &TenantDTO{
-			ID:     t.ID,
-			Name:   t.Name,
-			Slug:   t.Slug,
-			Status: string(t.Status),
+			ID:                        t.ID,
+			Name:                      t.Name,
+			Slug:                      t.Slug,
+			Status:                    string(t.Status),
+			DefaultVoucherDesignSlug:  defaultSlugs,
+			ResellerVoucherDesignSlug: resellerSlugs,
 		}
 	}
 
@@ -419,11 +446,23 @@ func (s *AuthService) GetProfile(ctx context.Context, userID uuid.UUID) (*Profil
 	if u.TenantID != nil {
 		t, err := s.tenantRepo.GetByID(ctx, *u.TenantID)
 		if err == nil {
+			var defaultSlugs []string
+			if t.DefaultVoucherDesignSlug != "" {
+				defaultSlugs = strings.Split(t.DefaultVoucherDesignSlug, ",")
+			}
+			
+			var resellerSlugs []string
+			if t.ResellerVoucherDesignSlug != "" {
+				resellerSlugs = strings.Split(t.ResellerVoucherDesignSlug, ",")
+			}
+
 			res.Tenant = &TenantDTO{
-				ID:     t.ID,
-				Name:   t.Name,
-				Slug:   t.Slug,
-				Status: string(t.Status),
+				ID:                        t.ID,
+				Name:                      t.Name,
+				Slug:                      t.Slug,
+				Status:                    string(t.Status),
+				DefaultVoucherDesignSlug:  defaultSlugs,
+				ResellerVoucherDesignSlug: resellerSlugs,
 			}
 		}
 	}

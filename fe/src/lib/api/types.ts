@@ -18,6 +18,8 @@ export interface Tenant {
   slug: string;
   status: string;
   billing_status?: string;
+  default_voucher_design_slug?: string[];
+  reseller_voucher_design_slug?: string[];
 }
 
 export interface LoginRequest {
@@ -251,6 +253,20 @@ export type RouterConnectivityMode = "direct_public" | "vpn";
 export interface BrandingConfig {
   dns_names: string[];
   labels: string[];
+  selected_design_slug?: string;
+}
+
+export interface VoucherDesign {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  preview_url?: string;
+  price: number;
+  is_free: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Router {
@@ -941,6 +957,8 @@ export interface SuperAdminTenant {
   owner_phone?: string;
   plan_code?: string;
   plan_name?: string;
+  default_voucher_design_slug?: string;
+  reseller_voucher_design_slug?: string;
   plan_price?: number;
   usage_stats?: ResourceUsage[];
   is_compliant?: boolean;

@@ -1,5 +1,5 @@
 import { apiClient } from "./apiClient";
-import { Voucher, VoucherPackage } from "./types";
+import { Voucher, VoucherPackage, VoucherDesign } from "./types";
 
 export interface CreateVoucherPackageRequest {
   name: string;
@@ -84,6 +84,29 @@ export const voucherService = {
     const res = await apiClient.put<Voucher>(`/vouchers/${id}`, req);
     return res.data;
   },
+
+  async listDesigns(): Promise<VoucherDesign[]> {
+    const res = await apiClient.get<VoucherDesign[]>("/voucher-designs");
+    return res.data;
+  },
+
+  async listOwnedDesigns(): Promise<VoucherDesign[]> {
+    const res = await apiClient.get<VoucherDesign[]>("/voucher-designs/owned");
+    return res.data;
+  },
+
+  async purchaseDesign(designId: string): Promise<void> {
+    await apiClient.post(`/voucher-designs/${designId}/purchase`);
+  },
+
+  async updateDesignSettings(defaultSlugs: string[], resellerSlugs: string[]): Promise<void> {
+    await apiClient.put('/voucher-designs/settings', {
+      default_voucher_design_slug: defaultSlugs,
+      reseller_voucher_design_slug: resellerSlugs,
+    });
+  },
+
+  async deleteBatch(createdAt: string): Promise<void> {
+    await apiClient.delete(`/vouchers/delete-batch?created_at=${encodeURIComponent(createdAt)}`);
+  },
 };
-
-

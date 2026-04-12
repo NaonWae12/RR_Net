@@ -29,11 +29,11 @@ func NewTenantRepository(db *pgxpool.Pool) *TenantRepository {
 // Create creates a new tenant
 func (r *TenantRepository) Create(ctx context.Context, t *tenant.Tenant) error {
 	query := `
-		INSERT INTO tenants (id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO tenants (id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, default_voucher_design_slug, reseller_voucher_design_slug, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	_, err := r.db.Exec(ctx, query,
-		t.ID, t.Name, t.CompanyName, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings, t.CreatedAt, t.UpdatedAt,
+		t.ID, t.Name, t.CompanyName, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings, t.DefaultVoucherDesignSlug, t.ResellerVoucherDesignSlug, t.CreatedAt, t.UpdatedAt,
 	)
 	return err
 }
@@ -41,13 +41,13 @@ func (r *TenantRepository) Create(ctx context.Context, t *tenant.Tenant) error {
 // GetByID retrieves a tenant by ID
 func (r *TenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*tenant.Tenant, error) {
 	query := `
-		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
+		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, default_voucher_design_slug, reseller_voucher_design_slug, created_at, updated_at, deleted_at
 		FROM tenants
 		WHERE id = $1
 	`
 	var t tenant.Tenant
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+		&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.DefaultVoucherDesignSlug, &t.ResellerVoucherDesignSlug, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -61,13 +61,13 @@ func (r *TenantRepository) GetByID(ctx context.Context, id uuid.UUID) (*tenant.T
 // GetBySlug retrieves a tenant by slug (subdomain)
 func (r *TenantRepository) GetBySlug(ctx context.Context, slug string) (*tenant.Tenant, error) {
 	query := `
-		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, created_at, updated_at, deleted_at
+		SELECT id, name, company_name, slug, domain, status, plan_id, billing_status, trial_ends_at, settings, default_voucher_design_slug, reseller_voucher_design_slug, created_at, updated_at, deleted_at
 		FROM tenants
 		WHERE slug = $1 AND deleted_at IS NULL
 	`
 	var t tenant.Tenant
 	err := r.db.QueryRow(ctx, query, slug).Scan(
-		&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+		&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, &t.TrialEndsAt, &t.Settings, &t.DefaultVoucherDesignSlug, &t.ResellerVoucherDesignSlug, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -82,11 +82,11 @@ func (r *TenantRepository) GetBySlug(ctx context.Context, slug string) (*tenant.
 func (r *TenantRepository) Update(ctx context.Context, t *tenant.Tenant) error {
 	query := `
 		UPDATE tenants
-		SET name = $2, company_name = $3, slug = $4, domain = $5, status = $6, plan_id = $7, billing_status = $8, trial_ends_at = $9, settings = $10, updated_at = NOW()
+		SET name = $2, company_name = $3, slug = $4, domain = $5, status = $6, plan_id = $7, billing_status = $8, trial_ends_at = $9, settings = $10, default_voucher_design_slug = $11, reseller_voucher_design_slug = $12, updated_at = NOW()
 		WHERE id = $1
 	`
 	result, err := r.db.Exec(ctx, query,
-		t.ID, t.Name, t.CompanyName, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings,
+		t.ID, t.Name, t.CompanyName, t.Slug, t.Domain, t.Status, t.PlanID, t.BillingStatus, t.TrialEndsAt, t.Settings, t.DefaultVoucherDesignSlug, t.ResellerVoucherDesignSlug,
 	)
 	if err != nil {
 		return err
@@ -114,12 +114,29 @@ func (r *TenantRepository) UpdateSettings(ctx context.Context, tenantID uuid.UUI
 	return nil
 }
 
+// UpdateDesignSettings updates only the global design settings.
+func (r *TenantRepository) UpdateDesignSettings(ctx context.Context, tenantID uuid.UUID, defaultSlug, resellerSlug string) error {
+	query := `
+		UPDATE tenants
+		SET default_voucher_design_slug = $2, reseller_voucher_design_slug = $3, updated_at = NOW()
+		WHERE id = $1
+	`
+	res, err := r.db.Exec(ctx, query, tenantID, defaultSlug, resellerSlug)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return ErrTenantNotFound
+	}
+	return nil
+}
+
 // ListAll retrieves all tenants with their plan details (for super admin)
 func (r *TenantRepository) ListAll(ctx context.Context) ([]*tenant.Tenant, error) {
 	query := `
 		SELECT 
 			t.id, t.name, t.company_name, t.slug, t.domain, t.status, t.plan_id, t.billing_status, 
-			t.trial_ends_at, t.settings, t.created_at, t.updated_at, t.deleted_at,
+			t.trial_ends_at, t.settings, t.default_voucher_design_slug, t.reseller_voucher_design_slug, t.created_at, t.updated_at, t.deleted_at,
 			p.code as plan_code, p.name as plan_name
 		FROM tenants t
 		LEFT JOIN plans p ON t.plan_id = p.id
@@ -137,7 +154,7 @@ func (r *TenantRepository) ListAll(ctx context.Context) ([]*tenant.Tenant, error
 		var t tenant.Tenant
 		err := rows.Scan(
 			&t.ID, &t.Name, &t.CompanyName, &t.Slug, &t.Domain, &t.Status, &t.PlanID, &t.BillingStatus, 
-			&t.TrialEndsAt, &t.Settings, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+			&t.TrialEndsAt, &t.Settings, &t.DefaultVoucherDesignSlug, &t.ResellerVoucherDesignSlug, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 			&t.PlanCode, &t.PlanName,
 		)
 		if err != nil {

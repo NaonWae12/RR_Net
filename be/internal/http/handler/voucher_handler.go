@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -298,6 +299,49 @@ func (h *VoucherHandler) DeleteVoucher(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.voucherService.DeleteVoucher(r.Context(), id); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *VoucherHandler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"No tenant context"}`, http.StatusBadRequest)
+		return
+	}
+
+	createdAtStr := r.URL.Query().Get("created_at")
+	if createdAtStr == "" {
+		http.Error(w, `{"error":"created_at query param is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Try multiple time formats
+	var createdAt time.Time
+	var err error
+	
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02 15:04:05",
+	}
+
+	for _, fmtStr := range formats {
+		createdAt, err = time.Parse(fmtStr, createdAtStr)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		http.Error(w, `{"error":"Invalid format for created_at: `+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.voucherService.DeleteBatch(r.Context(), tenantID, createdAt); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
