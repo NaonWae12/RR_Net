@@ -76,8 +76,13 @@ func main() {
 	var pendingMigrations []migration
 	for _, f := range files {
 		if !f.IsDir() && strings.HasSuffix(f.Name(), ".up.sql") {
+			// Extract exactly the numeric part before the first underscore
+			parts := strings.SplitN(f.Name(), "_", 2)
+			if len(parts) < 2 {
+				continue
+			}
 			var version int64
-			_, err := fmt.Sscanf(f.Name(), "%06d", &version)
+			_, err := fmt.Sscanf(parts[0], "%d", &version)
 			if err != nil {
 				continue
 			}
