@@ -106,15 +106,14 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// SMART PASSWORD DECODER
-	if req.UserPassword != "" {
-		// Handle potential base64 or hex from FreeRADIUS mapping
-		if decoded, err := base64.StdEncoding.DecodeString(req.UserPassword); err == nil {
+	// We no longer blindly attempt base64 decoding because 4-digit pins (like "4893")
+	// are perfectly valid Base64 strings and get corrupted into binary bytes!
+	// MikroTik sends User-Password in plain-text over REST anyway.
+	if req.UserPassword != "" && strings.HasPrefix(req.UserPassword, "0x") {
+		// Only handle hex decoding if explicitly requested (0x prefix)
+		hexStr := req.UserPassword[2:]
+		if decoded, err := hex.DecodeString(hexStr); err == nil {
 			req.UserPassword = string(decoded)
-		} else if strings.HasPrefix(req.UserPassword, "0x") {
-			hexStr := req.UserPassword[2:]
-			if decoded, err := hex.DecodeString(hexStr); err == nil {
-				req.UserPassword = string(decoded)
-			}
 		}
 	}
 
