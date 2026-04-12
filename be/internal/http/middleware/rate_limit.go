@@ -124,8 +124,8 @@ func (rl *RateLimiter) RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		// Skip rate limiting for health check and version endpoints
-		if r.URL.Path == "/health" || r.URL.Path == "/version" {
+		// Skip rate limiting for health check, version, and RADIUS endpoints
+		if r.URL.Path == "/health" || r.URL.Path == "/version" || strings.HasPrefix(r.URL.Path, "/api/v1/radius") {
 			next.ServeHTTP(w, r)
 			return
 		}
