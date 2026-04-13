@@ -211,9 +211,9 @@ export default function VoucherPrintPage() {
           <CardTitle className="text-purple-900 text-lg">Filter & Pengaturan Print</CardTitle>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+          <div className="flex flex-col lg:flex-row flex-wrap gap-6 lg:items-end">
             {/* Batch Selection */}
-            <div className="space-y-2">
+            <div className="space-y-2 flex-grow min-w-[280px]">
               <label className="text-sm font-medium text-slate-700">Pilih Batch Print</label>
               <div className="flex gap-2">
                 <select
@@ -258,9 +258,9 @@ export default function VoucherPrintPage() {
 
             {/* Template Selection - HIDDEN for Resellers if forced */}
             {tenant?.role !== 'reseller' && (
-              <div className="space-y-2">
+              <div className="space-y-2 flex-shrink-0">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Template:</label>
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-sm md:max-w-md no-scrollbar">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full no-scrollbar">
                   {(() => {
                     const isReseller = tenant?.role === 'reseller';
                     
@@ -316,7 +316,7 @@ export default function VoucherPrintPage() {
             <Button
               onClick={() => window.print()}
               disabled={filteredVouchers.length === 0}
-              className="bg-purple-600 hover:bg-purple-700 h-10 gap-2"
+              className="bg-purple-600 hover:bg-purple-700 h-10 gap-2 flex-shrink-0 sm:w-auto w-full"
             >
               <Printer className="w-4 h-4" />
               Print {filteredVouchers.length} Voucher

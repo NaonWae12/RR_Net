@@ -58,19 +58,22 @@ const ModernTemplate: React.FC<VoucherTemplateProps> = ({ voucher, index = 0, pk
 
           {/* Username Row */}
           <div className="flex-[1.2] flex border-b border-slate-200 items-center justify-between px-1.5 relative z-10 leading-none">
-            <span className="text-[10px] font-black text-black font-mono tracking-tighter">{voucher.code}</span>
+            <span className="text-[16px] font-bold text-black font-mono tracking-tighter">{voucher.code}</span>
             <span className="rotate-180 [writing-mode:vertical-lr] text-[5px] font-black text-slate-400 uppercase">User</span>
           </div>
 
           {/* Password Row */}
           <div className="flex-[1.2] flex border-b border-slate-200 items-center justify-between px-1.5 relative z-10 leading-none">
-            <span className="text-[10px] font-black text-black font-mono tracking-tighter">{voucher.password || voucher.code}</span>
+            <span className="text-[16px] font-bold text-black font-mono tracking-tighter">{voucher.password || voucher.code}</span>
             <span className="rotate-180 [writing-mode:vertical-lr] text-[4px] font-black text-slate-400 uppercase tracking-tighter">Pass</span>
           </div>
 
           {/* Price Row */}
           <div className="flex-1 flex items-center justify-between px-1.5 bg-slate-50/50 relative z-10 leading-none">
-            <span className="text-[9px] font-black text-black tracking-tighter leading-none">RP {pkg?.price ? pkg.price.toLocaleString('id-ID') : '0'}</span>
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-[8px] font-bold text-black tracking-tighter">Rp</span>
+              <span className="text-[13px] font-bold text-black tracking-tighter leading-none">{pkg?.price ? pkg.price.toLocaleString('id-ID') : '0'}</span>
+            </div>
             <span className="rotate-180 [writing-mode:vertical-lr] text-[4px] font-black text-slate-400 uppercase tracking-tighter">Price</span>
           </div>
         </div>
