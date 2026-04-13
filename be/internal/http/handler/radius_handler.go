@@ -193,7 +193,7 @@ AuthSuccess:
 	// Apply RADIUS interval and timeout controls based on router config
 	interim := router.InterimInterval
 	if interim <= 0 {
-		interim = 60 // Default 60 seconds
+		interim = 300 // Default 300 seconds (5 minutes) for production stability
 	}
 	response["Acct-Interim-Interval"] = strconv.Itoa(interim)
 
@@ -364,6 +364,7 @@ func (h *RadiusHandler) Acct(w http.ResponseWriter, r *http.Request) {
 	session.CallingStationID = req.CallingStationID
 	session.CalledStationID = req.CalledStationID
 	session.UpdatedAt = now
+
 
 	// Parse numeric values (FreeRADIUS often sends them as strings)
 	if val, err := strconv.Atoi(req.AcctSessionTime); err == nil {

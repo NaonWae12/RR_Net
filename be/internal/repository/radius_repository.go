@@ -95,38 +95,69 @@ func (r *RadiusRepository) UpsertSession(ctx context.Context, session *radius.Se
 			session_status = EXCLUDED.session_status,
 			updated_at = EXCLUDED.updated_at
 	`
-	_, err = tx.Exec(ctx, upsertQuery,
-		session.ID, session.TenantID, session.RouterID, session.VoucherID,
-		session.AcctSessionID, session.AcctUniqueID, session.Username,
-		session.NASIPAddress, session.NASPortID, session.FramedIPAddress,
-		session.CallingStationID, session.CalledStationID, session.AcctStartTime,
-		session.AcctStopTime, session.AcctSessionTime, session.AcctInputOctets,
-		session.AcctOutputOctets, session.AcctInputPackets, session.AcctOutputPackets,
-		session.AcctTerminateCause, session.SessionStatus, session.CreatedAt, session.UpdatedAt,
-	)
-	if err != nil {
-		return err
-	}
-
-	// If linked to a voucher, update the voucher's denormalized stats
+	// If linked to a voucher, update the voucher's denormalized stats incrementally.
+	// We calculate the delta (change) in usage and add it to the voucher's total.
 	if session.VoucherID != nil {
-		updateVoucherQuery := `
-			UPDATE vouchers v
-			SET 
-				total_uptime_seconds = COALESCE((
-					SELECT SUM(COALESCE(acct_session_time, 0))
-					FROM radius_sessions
-					WHERE voucher_id = $1
-				), 0),
-				total_bytes_used = COALESCE((
-					SELECT SUM(COALESCE(acct_input_octets, 0) + COALESCE(acct_output_octets, 0))
-					FROM radius_sessions
-					WHERE voucher_id = $1
-				), 0),
-				updated_at = NOW()
-			WHERE v.id = $1
-		`
-		_, err = tx.Exec(ctx, updateVoucherQuery, *session.VoucherID)
+		// 1. Get current stats for this session to calculate the delta
+		var oldTime int
+		var oldInput, oldOutput int64
+		err = tx.QueryRow(ctx, `
+			SELECT COALESCE(acct_session_time, 0), acct_input_octets, acct_output_octets
+			FROM radius_sessions WHERE acct_session_id = $1 FOR UPDATE
+		`, session.AcctSessionID).Scan(&oldTime, &oldInput, &oldOutput)
+
+		if err != nil && err != pgx.ErrNoRows {
+			return err
+		}
+
+		// 2. Perform the Session Upsert
+		// (The query below is the same as before, but kept inside the logic flow)
+		_, err = tx.Exec(ctx, upsertQuery,
+			session.ID, session.TenantID, session.RouterID, session.VoucherID,
+			session.AcctSessionID, session.AcctUniqueID, session.Username,
+			session.NASIPAddress, session.NASPortID, session.FramedIPAddress,
+			session.CallingStationID, session.CalledStationID, session.AcctStartTime,
+			session.AcctStopTime, session.AcctSessionTime, session.AcctInputOctets,
+			session.AcctOutputOctets, session.AcctInputPackets, session.AcctOutputPackets,
+			session.AcctTerminateCause, session.SessionStatus, session.CreatedAt, session.UpdatedAt,
+		)
+		if err != nil {
+			return err
+		}
+
+		// 3. Calculate deltas
+		newTime := 0
+		if session.AcctSessionTime != nil {
+			newTime = *session.AcctSessionTime
+		}
+		
+		deltaSeconds := newTime - oldTime
+		deltaBytes := (session.AcctInputOctets + session.AcctOutputOctets) - (oldInput + oldOutput)
+
+		// 4. Atomic update to voucher
+		if deltaSeconds != 0 || deltaBytes != 0 {
+			_, err = tx.Exec(ctx, `
+				UPDATE vouchers 
+				SET total_uptime_seconds = total_uptime_seconds + $1,
+					total_bytes_used = total_bytes_used + $2,
+					updated_at = NOW()
+				WHERE id = $3
+			`, deltaSeconds, deltaBytes, *session.VoucherID)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// No voucher linked, just do the session upsert
+		_, err = tx.Exec(ctx, upsertQuery,
+			session.ID, session.TenantID, session.RouterID, session.VoucherID,
+			session.AcctSessionID, session.AcctUniqueID, session.Username,
+			session.NASIPAddress, session.NASPortID, session.FramedIPAddress,
+			session.CallingStationID, session.CalledStationID, session.AcctStartTime,
+			session.AcctStopTime, session.AcctSessionTime, session.AcctInputOctets,
+			session.AcctOutputOctets, session.AcctInputPackets, session.AcctOutputPackets,
+			session.AcctTerminateCause, session.SessionStatus, session.CreatedAt, session.UpdatedAt,
+		)
 		if err != nil {
 			return err
 		}
