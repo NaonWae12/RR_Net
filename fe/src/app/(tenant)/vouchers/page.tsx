@@ -64,7 +64,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-type VoucherColumnKey = 'username' | 'password' | 'package' | 'uptime' | 'usage' | 'notes' | 'router' | 'status' | 'actions';
+type VoucherColumnKey = 'username' | 'password' | 'package' | 'uptime' | 'usage' | 'notes' | 'router' | 'status' | 'created_at' | 'actions';
 const VOUCHER_COLUMNS_KEY = 'vouchers_table_columns_v1';
 
 function formatDuration(seconds: number = 0) {
@@ -186,6 +186,7 @@ export default function VouchersPage() {
     notes: true,
     router: true,
     status: true,
+    created_at: true,
     actions: true,
   });
 
@@ -196,8 +197,8 @@ export default function VouchersPage() {
   // Mikhmon-ish state
   const [pkgForm, setPkgForm] = useState<{
     name: string;
-    download_speed: number;
-    upload_speed: number;
+    download_speed: number | "";
+    upload_speed: number | "";
     validity: string;
     price: number | "";
     rate_limit_mode: string;
@@ -208,7 +209,7 @@ export default function VouchersPage() {
     upload_speed: 1024,
     validity: "2h",
     price: "",
-    rate_limit_mode: "radius_auth_only", // Default to MVP mode
+    rate_limit_mode: "full_radius",
     expiration_mode: "wall_clock",
   });
 
@@ -243,8 +244,8 @@ export default function VouchersPage() {
   }>({ open: false, pkg: null });
   const [editPkgForm, setEditPkgForm] = useState<{
     name: string;
-    download_speed: number;
-    upload_speed: number;
+    download_speed: number | "";
+    upload_speed: number | "";
     validity: string;
     price: number | "";
     rate_limit_mode: string;
@@ -255,7 +256,7 @@ export default function VouchersPage() {
     upload_speed: 1024,
     validity: "2h",
     price: "",
-    rate_limit_mode: "radius_auth_only",
+    rate_limit_mode: "full_radius",
     expiration_mode: "wall_clock",
   });
 
@@ -299,7 +300,15 @@ export default function VouchersPage() {
     }
   };
 
-  const [genForm, setGenForm] = useState({
+  const [genForm, setGenForm] = useState<{
+    package_id: string;
+    router_id: string;
+    quantity: number | "";
+    expires_at: string;
+    user_mode: string;
+    character_mode: string;
+    code_length: number | "";
+  }>({
     package_id: "",
     router_id: "all",
     quantity: 1,
@@ -324,7 +333,11 @@ export default function VouchersPage() {
     setLoading(true);
     try {
       const [vData, pData, owned] = await Promise.all([
-        voucherService.listVouchers({ limit: vouchers.length || 10 }),
+        voucherService.listVouchers({ 
+          limit: Math.max(vouchers.length, 10),
+          status: statusFilter === 'all' ? undefined : statusFilter,
+          search: debouncedSearch || undefined,
+        }),
         voucherService.listPackages(),
         voucherService.listOwnedDesigns(),
       ]);
@@ -426,7 +439,7 @@ export default function VouchersPage() {
         rate_limit_mode: pkgForm.rate_limit_mode,
       });
       showToast({ title: "Paket dibuat", description: "Paket voucher berhasil ditambahkan", variant: "success" });
-      setPkgForm({ name: "", download_speed: 2048, upload_speed: 1024, validity: "2h", price: "", rate_limit_mode: "radius_auth_only" });
+      setPkgForm({ name: "", download_speed: 2048, upload_speed: 1024, validity: "2h", price: "", rate_limit_mode: "full_radius", expiration_mode: "wall_clock" });
       await load();
     } catch (err: any) {
       showToast({ title: "Gagal", description: err?.message || "Error", variant: "error" });
@@ -442,7 +455,7 @@ export default function VouchersPage() {
       upload_speed: pkg.upload_speed,
       validity: pkg.validity || "2h",
       price: pkg.price || "",
-      rate_limit_mode: pkg.rate_limit_mode || "radius_auth_only",
+      rate_limit_mode: pkg.rate_limit_mode || "full_radius",
       expiration_mode: pkg.expiration_mode || "wall_clock",
     });
     setEditPackageDialog({ open: true, pkg });
@@ -497,11 +510,11 @@ export default function VouchersPage() {
       const res = await voucherService.generate({
         package_id: genForm.package_id,
         router_id: genForm.router_id === "all" ? undefined : genForm.router_id,
-        quantity: Number(genForm.quantity),
+        quantity: Number(genForm.quantity) || 1,
         expires_at: genForm.expires_at || undefined,
         user_mode: genForm.user_mode,
         character_mode: genForm.character_mode,
-        code_length: Number(genForm.code_length),
+        code_length: Number(genForm.code_length) || 4,
       });
       const gen = Array.isArray(res?.data) ? res.data : [];
       setLastGenerated(gen);
@@ -765,13 +778,13 @@ export default function VouchersPage() {
                     label="Download (Kbps)"
                     type="number"
                     value={pkgForm.download_speed}
-                    onChange={(e) => setPkgForm({ ...pkgForm, download_speed: Number(e.target.value) })}
+                    onChange={(e) => setPkgForm({ ...pkgForm, download_speed: e.target.value === "" ? "" : Number(e.target.value) })}
                   />
                   <Input
                     label="Upload (Kbps)"
                     type="number"
                     value={pkgForm.upload_speed}
-                    onChange={(e) => setPkgForm({ ...pkgForm, upload_speed: Number(e.target.value) })}
+                    onChange={(e) => setPkgForm({ ...pkgForm, upload_speed: e.target.value === "" ? "" : Number(e.target.value) })}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -950,7 +963,7 @@ export default function VouchersPage() {
                   max={20}
                   className="h-10 border-slate-200"
                   value={genForm.code_length}
-                  onChange={(e) => setGenForm({ ...genForm, code_length: Number(e.target.value) })}
+                  onChange={(e) => setGenForm({ ...genForm, code_length: e.target.value === "" ? "" : Number(e.target.value) })}
                 />
 
                 <div className="space-y-1.5">
@@ -988,7 +1001,7 @@ export default function VouchersPage() {
                   max={1000}
                   className="h-10 border-slate-200"
                   value={genForm.quantity}
-                  onChange={(e) => setGenForm({ ...genForm, quantity: Number(e.target.value) })}
+                  onChange={(e) => setGenForm({ ...genForm, quantity: e.target.value === "" ? "" : Number(e.target.value) })}
                 />
 
                 <div className="lg:col-span-2">
@@ -1026,6 +1039,7 @@ export default function VouchersPage() {
                       notes: 'Notes',
                       router: 'Router',
                       status: 'Status',
+                      created_at: 'Tgl Generate',
                       actions: 'Aksi'
                     }) as [VoucherColumnKey, string][]).map(([key, label]) => (
                       <DropdownMenuCheckboxItem
@@ -1089,6 +1103,7 @@ export default function VouchersPage() {
                     {visibleColumns.notes && <th className="px-6 py-4 text-center font-semibold">Notes</th>}
                     {visibleColumns.router && <th className="px-6 py-4 text-center font-semibold">Router</th>}
                     {visibleColumns.status && <th className="px-6 py-4 text-center font-semibold">Status</th>}
+                    {visibleColumns.created_at && <th className="px-6 py-4 text-center font-semibold">Tgl Generate</th>}
                     {visibleColumns.actions && <th className="px-6 py-4 text-right font-semibold">Aksi</th>}
                   </tr>
                 </thead>
@@ -1160,6 +1175,13 @@ export default function VouchersPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                      )}
+                      {visibleColumns.created_at && (
+                        <td className="px-6 py-4 text-center text-slate-500 font-mono text-xs">
+                          {v.created_at ? new Date(v.created_at).toLocaleDateString("id-ID", {
+                            day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                          }) : "-"}
                         </td>
                       )}
                       {visibleColumns.actions && (
@@ -1663,13 +1685,13 @@ export default function VouchersPage() {
                 label="Download (Kbps)"
                 type="number"
                 value={editPkgForm.download_speed}
-                onChange={(e) => setEditPkgForm({ ...editPkgForm, download_speed: Number(e.target.value) })}
+                onChange={(e) => setEditPkgForm({ ...editPkgForm, download_speed: e.target.value === "" ? "" : Number(e.target.value) })}
               />
               <Input
                 label="Upload (Kbps)"
                 type="number"
                 value={editPkgForm.upload_speed}
-                onChange={(e) => setEditPkgForm({ ...editPkgForm, upload_speed: Number(e.target.value) })}
+                onChange={(e) => setEditPkgForm({ ...editPkgForm, upload_speed: e.target.value === "" ? "" : Number(e.target.value) })}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
