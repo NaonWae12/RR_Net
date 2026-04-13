@@ -1140,23 +1140,15 @@ func ParseMikhmonDuration(d string) (int, error) {
 	unit := matches[2]
 
 	switch unit {
-	case "j", "jam", "h", "hour", "hours":
+	case "j", "jam", "hour", "hours":
 		return value, nil
-	case "d", "hari", "day", "days":
+	case "h", "hari", "d", "day", "days":
 		return value * 24, nil
 	case "m", "minggu", "w", "week", "weeks":
 		return value * 24 * 7, nil
 	case "b", "bulan", "mo", "month", "months":
 		return value * 24 * 30, nil
 	default:
-		// Fallback for legacy H/J/M/B uppercase if needed
-		unitUpper := strings.ToUpper(unit)
-		switch unitUpper {
-		case "J": return value, nil
-		case "H": return value * 24, nil
-		case "M": return value * 24 * 7, nil
-		case "B": return value * 24 * 30, nil
-		}
 		return 0, fmt.Errorf("unit durasi tidak dikenal: %s", unit)
 	}
 }
