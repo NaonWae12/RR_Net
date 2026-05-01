@@ -570,11 +570,12 @@ func (s *AuthService) RequestProfileUpdateOTP(ctx context.Context, userID uuid.U
 	otpCode := fmt.Sprintf("%06d", rand.Intn(1000000))
 
 	// 2. Send OTP
-	if method == "email" {
+	switch method {
+	case "email":
 		if err := s.SendOTPEmail(ctx, value, otpCode); err != nil {
 			return err
 		}
-	} else if method == "whatsapp" {
+	case "whatsapp":
 		if s.waGateway == nil {
 			return errors.New("WhatsApp gateway not configured")
 		}

@@ -130,7 +130,8 @@ func (s *AddonService) Create(ctx context.Context, req *CreateAddonRequest) (*Ad
 	}
 
 	// Sync relational fields from Value
-	if req.Type == addon.AddonTypeLimitBoost {
+	switch req.Type {
+	case addon.AddonTypeLimitBoost:
 		a.LimitsMap = make(map[string]int)
 		for k, v := range req.Value {
 			if val, ok := v.(float64); ok {
@@ -139,7 +140,7 @@ func (s *AddonService) Create(ctx context.Context, req *CreateAddonRequest) (*Ad
 				a.LimitsMap[k] = val
 			}
 		}
-	} else if req.Type == addon.AddonTypeFeature {
+	case addon.AddonTypeFeature:
 		if feat, ok := req.Value["feature"].(string); ok && feat != "" {
 			a.FeaturesList = []string{feat}
 		}
@@ -313,10 +314,11 @@ func (s *AddonService) PurchaseAddon(ctx context.Context, tenantID, addonID uuid
 	}
 
 	var expiresAt *time.Time
-	if a.BillingCycle == addon.BillingCycleMonthly {
+	switch a.BillingCycle {
+	case addon.BillingCycleMonthly:
 		t := time.Now().AddDate(0, 1, 0)
 		expiresAt = &t
-	} else if a.BillingCycle == addon.BillingCycleYearly {
+	case addon.BillingCycleYearly:
 		t := time.Now().AddDate(1, 0, 0)
 		expiresAt = &t
 	}
