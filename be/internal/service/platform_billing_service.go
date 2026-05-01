@@ -360,10 +360,11 @@ func (s *PlatformBillingService) VerifyPayment(ctx context.Context, paymentID uu
 					var expiresAt *time.Time
 					addonData, err := s.addonRepo.GetByID(ctx, *inv.AddonID)
 					if err == nil {
-						if addonData.BillingCycle == "monthly" {
+						switch addonData.BillingCycle {
+						case "monthly":
 							t := time.Now().AddDate(0, 1, 0)
 							expiresAt = &t
-						} else if addonData.BillingCycle == "yearly" {
+						case "yearly":
 							t := time.Now().AddDate(1, 0, 0)
 							expiresAt = &t
 						}

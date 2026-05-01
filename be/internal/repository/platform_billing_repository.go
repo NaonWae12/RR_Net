@@ -47,7 +47,7 @@ func (r *PlatformBillingRepository) GetInvoiceByID(ctx context.Context, id uuid.
 			i.paid_amount, i.paid_at, i.notes, i.created_at, i.updated_at
 		FROM platform_invoices i
 		JOIN tenants t ON i.tenant_id = t.id
-		JOIN plans p ON i.plan_id = p.id
+		LEFT JOIN plans p ON i.plan_id = p.id
 		LEFT JOIN addons a ON i.addon_id = a.id
 		WHERE i.id = $1
 	`
@@ -85,7 +85,7 @@ func (r *PlatformBillingRepository) ListInvoices(ctx context.Context, tenantID *
 			i.paid_amount, i.paid_at, i.notes, i.created_at, i.updated_at
 		FROM platform_invoices i
 		JOIN tenants t ON i.tenant_id = t.id
-		JOIN plans p ON i.plan_id = p.id
+		LEFT JOIN plans p ON i.plan_id = p.id
 		LEFT JOIN addons a ON i.addon_id = a.id
 	`
 	args := []interface{}{}

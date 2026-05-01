@@ -2868,7 +2868,8 @@ func handleAPIRoot(w http.ResponseWriter, r *http.Request) {
 // method wraps a handler func to enforce HTTP method.
 func method(expected string, fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != expected {
+		// Standard HTTP: HEAD should be allowed if GET is allowed
+		if r.Method != expected && !(expected == http.MethodGet && r.Method == http.MethodHead) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
