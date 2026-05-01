@@ -202,13 +202,14 @@ export default function AddonsPage() {
       title: "",
       align: "right",
       render: (_, row) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100">
-              <MoreVertical size={16} className="text-slate-400" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 p-1 rounded-xl shadow-xl border-slate-100">
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100">
+                  <MoreVertical size={16} className="text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 p-1 rounded-xl shadow-xl border-slate-100">
             <DropdownMenuItem 
               className="flex items-center gap-2 py-2 px-3 rounded-lg focus:bg-slate-50 cursor-pointer"
               onClick={() => router.push(`/superadmin/addons/${row.id}`)}
@@ -237,7 +238,8 @@ export default function AddonsPage() {
               <span className="text-xs font-bold">Destroy Addon</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenu>
+          </div>
       ),
     },
   ];

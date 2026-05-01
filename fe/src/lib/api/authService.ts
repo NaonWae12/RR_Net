@@ -36,8 +36,8 @@ export const authService = {
     setAccessToken(null);
   },
 
-  async forgotPassword(email: string): Promise<{ message: string; phone: string }> {
-    const res = await apiClient.post("/auth/forgot-password", { email });
+  async forgotPassword(email: string, method: "whatsapp" | "email" = "email"): Promise<{ message: string; info: string }> {
+    const res = await apiClient.post("/auth/forgot-password", { email, method });
     return res.data;
   },
 
@@ -53,6 +53,14 @@ export const authService = {
 
   async changePassword(data: { current_password?: string; password: string; password_confirmation: string }): Promise<void> {
     await apiClient.post("/auth/change-password", data);
+  },
+  
+  async updateProfile(data: { name: string; email?: string; phone?: string; otp?: string }): Promise<void> {
+    await apiClient.patch("/auth/profile", data);
+  },
+  
+  async requestProfileUpdateOTP(method: "email" | "whatsapp", value: string): Promise<void> {
+    await apiClient.post("/auth/profile/request-otp", { method, value });
   },
 };
 

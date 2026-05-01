@@ -165,19 +165,24 @@ func (r *LimitResolver) calculateAddonBoosts(tenantAddons []*addon.TenantAddon, 
 			continue
 		}
 
+		qty := ta.Quantity
+		if qty <= 0 {
+			qty = 1
+		}
+
 		switch limitName {
 		case "max_routers":
-			total += boostVal.AddRouters
+			total += boostVal.AddRouters * qty
 		case "max_clients":
-			total += boostVal.AddClients
+			total += boostVal.AddClients * qty
 		case "max_vouchers":
-			total += boostVal.AddVouchers
+			total += boostVal.AddVouchers * qty
 		case "max_odc":
-			total += boostVal.AddODC
+			total += boostVal.AddODC * qty
 		case "max_odp":
-			total += boostVal.AddODP
+			total += boostVal.AddODP * qty
 		case "wa_quota_monthly":
-			total += boostVal.AddWAQuota
+			total += boostVal.AddWAQuota * qty
 		}
 	}
 

@@ -11,7 +11,6 @@ import (
 
 	"rrnet/internal/auth"
 	"rrnet/internal/domain/billing"
-	"rrnet/internal/http/middleware"
 	"rrnet/internal/repository"
 	"rrnet/internal/service"
 )
@@ -132,15 +131,14 @@ func (h *PlanHandler) Update(w http.ResponseWriter, r *http.Request) {
 			sendError(w, http.StatusNotFound, "Plan not found")
 			return
 		}
-		// Check if error is a validation error (e.g., invalid feature codes)
-		// Validation errors should return 400 Bad Request, not 500 Internal Server Error
+		
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "invalid feature codes") {
 			sendError(w, http.StatusBadRequest, errMsg)
 			return
 		}
-		// Log error for debugging
-		log.Error().Err(err).Str("request_id", middleware.GetRequestID(r.Context())).Msg("Failed to update plan in service")
+		
+		log.Error().Err(err).Str("plan_id", id.String()).Msg("Failed to update plan")
 		sendError(w, http.StatusInternalServerError, "Failed to update plan")
 		return
 	}

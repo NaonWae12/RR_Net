@@ -28,6 +28,7 @@ export default function ForgotPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [maskedPhone, setMaskedPhone] = useState("");
   const [timer, setTimer] = useState(0);
+  const [otpMethod, setOtpMethod] = useState<"whatsapp" | "email">("email");
 
   useEffect(() => {
     let interval: any;
@@ -45,9 +46,9 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      const res = await authService.forgotPassword(email);
-      setMaskedPhone(res.phone);
-      toast.success("OTP sent to your WhatsApp!");
+      const res = await authService.forgotPassword(email, otpMethod);
+      setMaskedPhone(res.info);
+      toast.success(`OTP telah dikirim via ${otpMethod === "whatsapp" ? "WhatsApp" : "Email"}!`);
       setStep(2);
       setTimer(60);
     } catch (err: any) {
@@ -121,7 +122,7 @@ export default function ForgotPasswordPage() {
                 <div className="space-y-2">
                   <h1 className="text-3xl font-black italic tracking-tighter">LUPA PASSWORD?</h1>
                   <p className="text-sm text-white/50 leading-relaxed font-medium">
-                    Masukkan email akun Anda. Kami akan mengirimkan kode verifikasi OTP ke nomor WhatsApp yang terdaftar.
+                    Masukkan email akun Anda. Kami akan mengirimkan kode verifikasi OTP ke Email & WhatsApp yang terdaftar.
                   </p>
                 </div>
 
@@ -138,6 +139,37 @@ export default function ForgotPasswordPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                       />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-white/40 ml-1">Metode Pengiriman OTP</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setOtpMethod("email")}
+                        className={cn(
+                          "py-3 rounded-2xl border text-xs font-bold transition-all flex items-center justify-center gap-2",
+                          otpMethod === "email" 
+                            ? "bg-purple-500/20 border-purple-500 text-purple-400" 
+                            : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
+                        )}
+                      >
+                        <Mail className="w-4 h-4" />
+                        Email
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOtpMethod("whatsapp")}
+                        className={cn(
+                          "py-3 rounded-2xl border text-xs font-bold transition-all flex items-center justify-center gap-2",
+                          otpMethod === "whatsapp" 
+                            ? "bg-emerald-500/20 border-emerald-500 text-emerald-400" 
+                            : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
+                        )}
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        WhatsApp
+                      </button>
                     </div>
                   </div>
 
@@ -173,9 +205,9 @@ export default function ForgotPasswordPage() {
                     <MessageSquare className="w-8 h-8 text-white" />
                   </div>
                   <div className="space-y-2">
-                    <h2 className="text-2xl font-black italic tracking-tighter uppercase">Verifikasi WhatsApp</h2>
+                    <h2 className="text-2xl font-black italic tracking-tighter uppercase">Verifikasi OTP</h2>
                     <p className="text-xs text-white/50 leading-relaxed font-medium">
-                      Kami telah mengirimkan 6 digit kode OTP ke nomor <span className="text-emerald-400 font-bold">{maskedPhone}</span>
+                      Kami telah mengirimkan 6 digit kode OTP ke <span className={cn("font-bold", otpMethod === "whatsapp" ? "text-emerald-400" : "text-purple-400")}>{maskedPhone}</span> Anda.
                     </p>
                   </div>
                 </div>

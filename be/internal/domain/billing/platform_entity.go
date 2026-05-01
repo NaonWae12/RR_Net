@@ -36,6 +36,9 @@ type PlatformInvoice struct {
 	Subtotal       int64                 `json:"subtotal"`
 	DiscountAmount int64                 `json:"discount_amount"`
 	DiscountID     *uuid.UUID            `json:"discount_id,omitempty"`
+	AddonID        *uuid.UUID            `json:"addon_id,omitempty"`
+	AddonQuantity  *int                  `json:"addon_quantity,omitempty"`
+	AddonName      *string               `json:"addon_name,omitempty"`
 	Amount         int64                 `json:"amount"`
 	PaidAmount     int64                 `json:"paid_amount"`
 	Currency       string                `json:"currency"`

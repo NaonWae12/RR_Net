@@ -20,6 +20,7 @@ import (
 	"rrnet/internal/http/handler"
 	"rrnet/internal/http/middleware"
 	asynqInfra "rrnet/internal/infra/asynq"
+	"rrnet/internal/infra/mail"
 	wagw "rrnet/internal/infra/wa_gateway"
 	"rrnet/internal/metrics"
 	"rrnet/internal/rbac"
@@ -36,6 +37,7 @@ type Dependencies struct {
 	Redis     *redis.Client
 	Asynq     *asynq.Client
 	WAGateway *wagw.Client
+	Mail      mail.MailProvider
 }
 
 // New creates the HTTP router with all routes and middlewares.
@@ -92,16 +94,22 @@ func New(deps Dependencies) http.Handler {
 		waGatewayClient = wagw.NewClient(deps.Config.WAGateway.URL, deps.Config.WAGateway.AdminToken)
 	}
 
+	// Mail Provider
+	mailProvider := deps.Mail
+	if mailProvider == nil {
+		mailProvider = mail.NewResendProvider(deps.Config.Mail.ResendAPIKey, deps.Config.Mail.FromEmail)
+	}
+
 	// Services
-	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager, deps.Redis, waGatewayClient)
-	platformBillingService := service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo)
+	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager, deps.Redis, waGatewayClient, mailProvider)
+	platformBillingService := service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo, addonRepo)
 	platformDiscountService := service.NewPlatformDiscountService(platformDiscountRepo)
 
 	// Affiliate management
 	affiliateService := service.NewAffiliateService(userRepo, affiliateRepo, siteSettingRepo)
 	platformBillingService.SetAffiliateService(affiliateService)
 
-	tenantService := service.NewTenantService(tenantRepo, userRepo, planRepo, jwtManager, deps.Redis, waGatewayClient, platformBillingService, affiliateService)
+	tenantService := service.NewTenantService(tenantRepo, userRepo, planRepo, jwtManager, deps.Redis, waGatewayClient, platformBillingService, affiliateService, mailProvider)
 	planService := service.NewPlanService(planRepo, tenantRepo)
 	addonService := service.NewAddonService(addonRepo, planRepo, tenantRepo)
 	featureResolver := service.NewFeatureResolver(planRepo, addonRepo, featureRepo)
@@ -142,11 +150,10 @@ func New(deps Dependencies) http.Handler {
 	voucherDesignService := service.NewVoucherDesignService(voucherDesignRepo, tenantRepo)
 	voucherDesignHandler := handler.NewVoucherDesignHandler(voucherDesignService)
 
-	// Handlers
 	authHandler := handler.NewAuthHandler(authService, oauthManager)
 	tenantHandler := handler.NewTenantHandler(tenantService)
 	planHandler := handler.NewPlanHandler(planService, featureResolver, limitResolver, platformBillingService)
-	addonHandler := handler.NewAddonHandler(addonService)
+	addonHandler := handler.NewAddonHandler(addonService, platformBillingService)
 	clientHandler := handler.NewClientHandler(clientService)
 	featureHandler := handler.NewFeatureHandler(featureRepo)
 	networkService := service.NewNetworkService(routerRepo, profileRepo, limitResolver, deps.Redis)
@@ -331,6 +338,8 @@ func New(deps Dependencies) http.Handler {
 
 	// Protected routes
 	mux.Handle("/api/v1/auth/me", requireAuth(methodHandler("GET", authHandler.Me)))
+	mux.Handle("/api/v1/auth/profile", requireAuth(methodHandler("PATCH", authHandler.UpdateProfile)))
+	mux.Handle("/api/v1/auth/profile/request-otp", requireAuth(methodHandler("POST", authHandler.RequestProfileUpdateOTP)))
 	mux.Handle("/api/v1/my/affiliate-join", requireAuth(methodHandler("POST", affiliateHandler.JoinProgram)))
 	mux.Handle("/api/v1/my/affiliate-status", requireAuth(methodHandler("GET", affiliateHandler.GetMyStatus)))
 	mux.Handle("/api/v1/affiliate/dashboard", requireAuth(methodHandler("GET", affiliateHandler.GetDashboard)))
@@ -692,7 +701,33 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/my/plan/pending", requireAuth(methodHandler("GET", planHandler.GetPendingPlanChange)))
 	mux.Handle("/api/v1/my/features", requireAuth(methodHandler("GET", planHandler.GetTenantFeatures)))
 	mux.Handle("/api/v1/my/limits", requireAuth(methodHandler("GET", planHandler.GetTenantLimits)))
-	mux.Handle("/api/v1/my/addons", requireAuth(methodHandler("GET", addonHandler.GetTenantAddons)))
+	mux.Handle("/api/v1/my/addons", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			addonHandler.GetTenantAddons(w, r)
+		case http.MethodPost:
+			// Handle purchase
+			addonHandler.HandlePurchase(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/my/addons/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if len(path) > len("/api/v1/my/addons/") && path[len(path)-len("/cancel"):] == "/cancel" {
+			if r.Method == http.MethodPost {
+				// We don't have a good path parser here, so we extract addon_id
+				// Path format: /api/v1/my/addons/{addon_id}/cancel
+				addonIDStr := path[len("/api/v1/my/addons/"):len(path)-len("/cancel")]
+				r.SetPathValue("addon_id", addonIDStr) // Assuming Go 1.22+ standard mux or chi doesn't matter, we'll just extract it directly in handler or set it in context if using standard mux.
+				// Oh wait, `getPathParam` in the project is actually using `r.PathValue` for Go 1.22!
+				r.SetPathValue("addon_id", addonIDStr)
+				addonHandler.HandleCancelRenewal(w, r)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})))
 	mux.Handle("/api/v1/check/feature", requireAuth(methodHandler("GET", planHandler.CheckFeature)))
 	mux.Handle("/api/v1/check/limit", requireAuth(methodHandler("GET", planHandler.CheckLimit)))
 

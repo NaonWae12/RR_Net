@@ -60,6 +60,19 @@ func (m *MockAuthService) ChangePassword(ctx context.Context, userID uuid.UUID, 
 	return args.Error(0)
 }
 
+func (m *MockAuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *service.UpdateUserProfileRequest) (*service.UserDTO, error) {
+	args := m.Called(ctx, userID, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.UserDTO), args.Error(1)
+}
+
+func (m *MockAuthService) RequestProfileUpdateOTP(ctx context.Context, userID uuid.UUID, method, value string) error {
+	args := m.Called(ctx, userID, method, value)
+	return args.Error(0)
+}
+
 func (m *MockAuthService) OAuthLogin(ctx context.Context, oauthUser *auth.OAuthUser) (*service.LoginResponse, error) {
 	args := m.Called(ctx, oauthUser)
 	if args.Get(0) == nil {
@@ -68,8 +81,8 @@ func (m *MockAuthService) OAuthLogin(ctx context.Context, oauthUser *auth.OAuthU
 	return args.Get(0).(*service.LoginResponse), args.Error(1)
 }
 
-func (m *MockAuthService) RequestPasswordResetOTP(ctx context.Context, email string) (string, error) {
-	args := m.Called(ctx, email)
+func (m *MockAuthService) RequestPasswordResetOTP(ctx context.Context, email, method string) (string, error) {
+	args := m.Called(ctx, email, method)
 	return args.String(0), args.Error(1)
 }
 

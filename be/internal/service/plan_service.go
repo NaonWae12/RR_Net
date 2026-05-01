@@ -123,21 +123,24 @@ func (s *PlanService) Create(ctx context.Context, req *CreatePlanRequest) (*Plan
 	}
 
 	p := &plan.Plan{
-		ID:           uuid.New(),
-		Code:         req.Code,
-		Name:         req.Name,
-		Description:  desc,
-		PriceMonthly: req.PriceMonthly,
-		PriceYearly:  req.PriceYearly,
-		Currency:     currency,
-		Limits:         limitsJSON,
-		Features:       featuresJSON,
-		HiddenFeatures: hiddenFeaturesJSON,
-		IsActive:       req.IsActive,
-		IsPublic:       req.IsPublic,
-		SortOrder:      req.SortOrder,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:                 uuid.New(),
+		Code:               req.Code,
+		Name:               req.Name,
+		Description:        desc,
+		PriceMonthly:       req.PriceMonthly,
+		PriceYearly:        req.PriceYearly,
+		Currency:           currency,
+		Limits:             limitsJSON,
+		Features:           featuresJSON,
+		HiddenFeatures:     hiddenFeaturesJSON,
+		IsActive:           req.IsActive,
+		IsPublic:           req.IsPublic,
+		SortOrder:          req.SortOrder,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		FeaturesList:       req.Features,
+		HiddenFeaturesList: req.HiddenFeatures,
+		LimitsMap:          req.Limits,
 	}
 
 	if err := s.planRepo.Create(ctx, p); err != nil {
@@ -220,6 +223,7 @@ func (s *PlanService) Update(ctx context.Context, id uuid.UUID, req *UpdatePlanR
 			return nil, ErrInvalidPlanLimits
 		}
 		p.Limits = limitsJSON
+		p.LimitsMap = req.Limits
 	}
 	if req.Features != nil {
 		// Validate feature codes before updating
@@ -228,10 +232,12 @@ func (s *PlanService) Update(ctx context.Context, id uuid.UUID, req *UpdatePlanR
 		}
 		featuresJSON, _ := json.Marshal(req.Features)
 		p.Features = featuresJSON
+		p.FeaturesList = req.Features
 	}
 	if req.HiddenFeatures != nil {
 		hiddenFeaturesJSON, _ := json.Marshal(req.HiddenFeatures)
 		p.HiddenFeatures = hiddenFeaturesJSON
+		p.HiddenFeaturesList = req.HiddenFeatures
 	}
 	p.IsActive = req.IsActive
 	p.IsPublic = req.IsPublic

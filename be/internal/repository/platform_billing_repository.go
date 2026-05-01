@@ -21,16 +21,20 @@ func NewPlatformBillingRepository(db *pgxpool.Pool) *PlatformBillingRepository {
 	return &PlatformBillingRepository{db: db}
 }
 
+func (r *PlatformBillingRepository) GetDB() *pgxpool.Pool {
+	return r.db
+}
+
 func (r *PlatformBillingRepository) CreateInvoice(ctx context.Context, inv *billing.PlatformInvoice) error {
 	query := `
 		INSERT INTO platform_invoices (
 			id, tenant_id, plan_id, invoice_number, period_start, period_end, due_date,
-			subtotal, discount_amount, discount_id, amount, currency, status, paid_amount, notes, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			subtotal, discount_amount, discount_id, addon_id, addon_quantity, amount, currency, status, paid_amount, notes, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 	_, err := r.db.Exec(ctx, query,
 		inv.ID, inv.TenantID, inv.PlanID, inv.InvoiceNumber, inv.PeriodStart, inv.PeriodEnd, inv.DueDate,
-		inv.Subtotal, inv.DiscountAmount, inv.DiscountID, inv.Amount, inv.Currency, inv.Status, inv.PaidAmount, inv.Notes, inv.CreatedAt, inv.UpdatedAt,
+		inv.Subtotal, inv.DiscountAmount, inv.DiscountID, inv.AddonID, inv.AddonQuantity, inv.Amount, inv.Currency, inv.Status, inv.PaidAmount, inv.Notes, inv.CreatedAt, inv.UpdatedAt,
 	)
 	return err
 }
@@ -39,18 +43,19 @@ func (r *PlatformBillingRepository) GetInvoiceByID(ctx context.Context, id uuid.
 	query := `
 		SELECT 
 			i.id, i.tenant_id, t.name as tenant_name, i.plan_id, p.name as plan_name, p.price_monthly as plan_price, i.invoice_number, 
-			i.period_start, i.period_end, i.due_date, i.subtotal, i.discount_amount, i.discount_id, i.amount, i.currency, i.status, 
+			i.period_start, i.period_end, i.due_date, i.subtotal, i.discount_amount, i.discount_id, i.addon_id, i.addon_quantity, a.name as addon_name, i.amount, i.currency, i.status, 
 			i.paid_amount, i.paid_at, i.notes, i.created_at, i.updated_at
 		FROM platform_invoices i
 		JOIN tenants t ON i.tenant_id = t.id
 		JOIN plans p ON i.plan_id = p.id
+		LEFT JOIN addons a ON i.addon_id = a.id
 		WHERE i.id = $1
 	`
 	var inv billing.PlatformInvoice
 	var planPrice float64
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&inv.ID, &inv.TenantID, &inv.TenantName, &inv.PlanID, &inv.PlanName, &planPrice, &inv.InvoiceNumber,
-		&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate, &inv.Subtotal, &inv.DiscountAmount, &inv.DiscountID, &inv.Amount, &inv.Currency, &inv.Status,
+		&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate, &inv.Subtotal, &inv.DiscountAmount, &inv.DiscountID, &inv.AddonID, &inv.AddonQuantity, &inv.AddonName, &inv.Amount, &inv.Currency, &inv.Status,
 		&inv.PaidAmount, &inv.PaidAt, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt,
 	)
 	if err != nil {
@@ -61,7 +66,7 @@ func (r *PlatformBillingRepository) GetInvoiceByID(ctx context.Context, id uuid.
 	}
 
 	// Self-healing: Update subtotal if it's zero but plan has a price
-	if inv.Subtotal == 0 && planPrice > 0 {
+	if inv.Subtotal == 0 && planPrice > 0 && inv.AddonID == nil {
 		inv.Subtotal = int64(planPrice)
 		// If amount is also 0, update it too
 		if inv.Amount == 0 {
@@ -76,11 +81,12 @@ func (r *PlatformBillingRepository) ListInvoices(ctx context.Context, tenantID *
 	query := `
 		SELECT 
 			i.id, i.tenant_id, t.name as tenant_name, i.plan_id, p.name as plan_name, i.invoice_number, 
-			i.period_start, i.period_end, i.due_date, i.subtotal, i.discount_amount, i.discount_id, i.amount, i.currency, i.status, 
+			i.period_start, i.period_end, i.due_date, i.subtotal, i.discount_amount, i.discount_id, i.addon_id, i.addon_quantity, a.name as addon_name, i.amount, i.currency, i.status, 
 			i.paid_amount, i.paid_at, i.notes, i.created_at, i.updated_at
 		FROM platform_invoices i
 		JOIN tenants t ON i.tenant_id = t.id
 		JOIN plans p ON i.plan_id = p.id
+		LEFT JOIN addons a ON i.addon_id = a.id
 	`
 	args := []interface{}{}
 	if tenantID != nil {
@@ -100,7 +106,7 @@ func (r *PlatformBillingRepository) ListInvoices(ctx context.Context, tenantID *
 		var inv billing.PlatformInvoice
 		err := rows.Scan(
 			&inv.ID, &inv.TenantID, &inv.TenantName, &inv.PlanID, &inv.PlanName, &inv.InvoiceNumber,
-			&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate, &inv.Subtotal, &inv.DiscountAmount, &inv.DiscountID, &inv.Amount, &inv.Currency, &inv.Status,
+			&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate, &inv.Subtotal, &inv.DiscountAmount, &inv.DiscountID, &inv.AddonID, &inv.AddonQuantity, &inv.AddonName, &inv.Amount, &inv.Currency, &inv.Status,
 			&inv.PaidAmount, &inv.PaidAt, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt,
 		)
 		if err != nil {

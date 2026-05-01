@@ -17,6 +17,7 @@ type PlatformBillingService struct {
 	tenantRepo       *repository.TenantRepository
 	planRepo         *repository.PlanRepository
 	discountRepo     *repository.PlatformDiscountRepository
+	addonRepo        *repository.AddonRepository
 	affiliateService *AffiliateService
 }
 
@@ -25,12 +26,14 @@ func NewPlatformBillingService(
 	tenantRepo *repository.TenantRepository,
 	planRepo *repository.PlanRepository,
 	discountRepo *repository.PlatformDiscountRepository,
+	addonRepo *repository.AddonRepository,
 ) *PlatformBillingService {
 	return &PlatformBillingService{
 		repo:         repo,
 		tenantRepo:   tenantRepo,
 		planRepo:     planRepo,
 		discountRepo: discountRepo,
+		addonRepo:    addonRepo,
 	}
 }
 
@@ -101,6 +104,31 @@ func (s *PlatformBillingService) GenerateTenantInvoices(ctx context.Context) err
 		}
 
 		invNum, _ := s.repo.GenerateInvoiceNumber(ctx)
+		
+		// Calculate add-ons
+		var addonTotal float64
+		var addonNotes string
+		
+		tenantAddons, err := s.addonRepo.GetTenantAddons(ctx, t.ID)
+		if err == nil {
+			for _, ta := range tenantAddons {
+				if ta.Status == "active" && ta.CancelledAt == nil {
+					addonData, err := s.addonRepo.GetByID(ctx, ta.AddonID)
+					if err == nil {
+						price := addonData.Price * float64(ta.Quantity)
+						addonTotal += price
+						addonNotes += fmt.Sprintf("Add-on: %s (x%d) - %.0f %s\n", addonData.Name, ta.Quantity, price, addonData.Currency)
+					}
+				}
+			}
+		}
+
+		totalAmount := int64(plan.PriceMonthly) + int64(addonTotal)
+		notes := ""
+		if addonNotes != "" {
+			notes = "Includes active Add-ons:\n" + addonNotes
+		}
+
 		inv := &billing.PlatformInvoice{
 			ID:            uuid.New(),
 			TenantID:      t.ID,
@@ -109,10 +137,11 @@ func (s *PlatformBillingService) GenerateTenantInvoices(ctx context.Context) err
 			PeriodStart:   periodStart,
 			PeriodEnd:     periodEnd,
 			DueDate:       dueDate,
-			Subtotal:      int64(plan.PriceMonthly),
-			Amount:        int64(plan.PriceMonthly), // Assuming PriceMonthly is in cents or similar fixed unit
+			Subtotal:      totalAmount,
+			Amount:        totalAmount,
 			Currency:      plan.Currency,
 			Status:        billing.PlatformInvoiceStatusPending,
+			Notes:         notes,
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		}
@@ -184,6 +213,65 @@ func (s *PlatformBillingService) CreateInitialInvoice(ctx context.Context, tenan
 	return inv, nil
 }
 
+func (s *PlatformBillingService) CreateAddonInvoice(ctx context.Context, tenantID uuid.UUID, addonID uuid.UUID, quantity int) (*billing.PlatformInvoice, error) {
+	if quantity <= 0 {
+		quantity = 1
+	}
+
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if tenant.PlanID == nil {
+		return nil, fmt.Errorf("tenant must have an active plan to purchase an addon")
+	}
+
+	// We need the addon price. To avoid circular dependency with addon_service, we fetch it here
+	// Or we can just let AddonService handle the price and pass it.
+	// But let's assume we can query it directly using pgx since we have repo
+	var addonPrice float64
+	var addonCurrency string
+	err = s.repo.GetDB().QueryRow(ctx, "SELECT price, currency FROM addons WHERE id = $1", addonID).Scan(&addonPrice, &addonCurrency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get addon details: %v", err)
+	}
+
+	invNum, _ := s.repo.GenerateInvoiceNumber(ctx)
+	now := time.Now()
+
+	// Initial period: from now until end of month
+	periodStart := now
+	periodEnd := now.AddDate(0, 1, 0)
+
+	// Due Date: immediate or 1 day
+	dueDate := now.AddDate(0, 0, 1)
+
+	totalPrice := addonPrice * float64(quantity)
+
+	inv := &billing.PlatformInvoice{
+		ID:            uuid.New(),
+		TenantID:      tenantID,
+		PlanID:        *tenant.PlanID, // Associate with current plan
+		AddonID:       &addonID,
+		AddonQuantity: &quantity,
+		InvoiceNumber: invNum,
+		PeriodStart:   periodStart,
+		PeriodEnd:     periodEnd,
+		DueDate:       dueDate,
+		Subtotal:      int64(totalPrice),
+		Amount:        int64(totalPrice),
+		Currency:      addonCurrency,
+		Status:        billing.PlatformInvoiceStatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := s.repo.CreateInvoice(ctx, inv); err != nil {
+		return nil, err
+	}
+
+	return inv, nil
+}
 
 func (s *PlatformBillingService) GetTenantInvoices(ctx context.Context, tenantID uuid.UUID) ([]*billing.PlatformInvoice, error) {
 	return s.repo.ListInvoices(ctx, &tenantID)
@@ -258,19 +346,42 @@ func (s *PlatformBillingService) VerifyPayment(ctx context.Context, paymentID uu
 				}
 			}
 
-			// If this invoice was for a plan change (has PlanID), update the tenant's plan
 			inv, err := s.repo.GetInvoiceByID(ctx, payment.PlatformInvoiceID)
-			if err == nil && inv.PlanID != uuid.Nil {
-				log.Info().
-					Str("tenant_id", inv.TenantID.String()).
-					Str("plan_id", inv.PlanID.String()).
-					Msg("Updating tenant plan after verified payment")
-				
-				t, err := s.tenantRepo.GetByID(ctx, inv.TenantID)
-				if err == nil {
-					t.PlanID = &inv.PlanID
-					t.UpdatedAt = now
-					s.tenantRepo.Update(ctx, t)
+			
+			if err == nil {
+				// If this invoice was for an addon purchase, assign the addon
+				if inv.AddonID != nil && inv.AddonQuantity != nil {
+					log.Info().
+						Str("tenant_id", inv.TenantID.String()).
+						Str("addon_id", inv.AddonID.String()).
+						Int("quantity", *inv.AddonQuantity).
+						Msg("Assigning addon to tenant after verified payment")
+					
+					var expiresAt *time.Time
+					addonData, err := s.addonRepo.GetByID(ctx, *inv.AddonID)
+					if err == nil {
+						if addonData.BillingCycle == "monthly" {
+							t := time.Now().AddDate(0, 1, 0)
+							expiresAt = &t
+						} else if addonData.BillingCycle == "yearly" {
+							t := time.Now().AddDate(1, 0, 0)
+							expiresAt = &t
+						}
+						s.addonRepo.AssignAddonToTenant(ctx, inv.TenantID, *inv.AddonID, expiresAt, *inv.AddonQuantity)
+					}
+				} else if inv.PlanID != uuid.Nil {
+					// If this invoice was for a plan change (has PlanID), update the tenant's plan
+					log.Info().
+						Str("tenant_id", inv.TenantID.String()).
+						Str("plan_id", inv.PlanID.String()).
+						Msg("Updating tenant plan after verified payment")
+					
+					t, err := s.tenantRepo.GetByID(ctx, inv.TenantID)
+					if err == nil {
+						t.PlanID = &inv.PlanID
+						t.UpdatedAt = now
+						s.tenantRepo.Update(ctx, t)
+					}
 				}
 			}
 		}

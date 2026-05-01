@@ -215,7 +215,9 @@ export default function SubscriptionPaymentModal({
             </div>
             <div className="text-right">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Summary</p>
-              <p className="text-[10px] font-bold text-slate-600">{currentInvoice ? "Reference Due" : planData?.name}</p>
+              <p className="text-[10px] font-bold text-slate-600 truncate max-w-[120px]">
+                {currentInvoice ? (currentInvoice.addon_name ? `Add-on: ${currentInvoice.addon_name}` : currentInvoice.plan_name || "Reference Due") : planData?.name}
+              </p>
             </div>
           </div>
 

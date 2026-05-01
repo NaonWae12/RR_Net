@@ -16,6 +16,7 @@ import { CreditCard, History, Package, AlertCircle, CheckCircle2, Zap, Users, Sh
 import { cn } from "@/lib/utils";
 import SubscriptionPaymentModal from "@/components/subscription/SubscriptionPaymentModal";
 import ChangePlanModal from "@/components/subscription/ChangePlanModal";
+import AddonPurchaseDialog from "@/components/subscription/AddonPurchaseDialog";
 import { affiliateService } from "@/lib/api/affiliateService";
 
 export default function SubscriptionPage() {
@@ -32,6 +33,8 @@ export default function SubscriptionPage() {
   const [isChangePlanModalOpen, setIsChangePlanModalOpen] = useState(false);
   const [joiningAffiliate, setJoiningAffiliate] = useState(false);
   const [affiliateStatus, setAffiliateStatus] = useState<string>("unregistered");
+  const [selectedAddonForPurchase, setSelectedAddonForPurchase] = useState<PlatformAddon | null>(null);
+  const [addonPurchaseData, setAddonPurchaseData] = useState<{ addon: PlatformAddon; quantity: number } | null>(null);
 
   const { showToast } = useNotificationStore();
   const router = useRouter();
@@ -67,6 +70,64 @@ export default function SubscriptionPage() {
       showToast({ title: "Gagal", description: error.response?.data?.error || "Terjadi kesalahan", variant: "error" });
     } finally {
       setJoiningAffiliate(false);
+    }
+  };
+
+  // Open purchase dialog when tenant clicks Install
+  const handleInstallAddon = (addon: PlatformAddon) => {
+    setSelectedAddonForPurchase(addon);
+  };
+
+  // After quantity confirmed in purchase dialog → open payment modal
+  const handleAddonPurchaseConfirm = async (addon: PlatformAddon, quantity: number) => {
+    setSelectedAddonForPurchase(null); // close purchase dialog
+    setAddonPurchaseData({ addon, quantity });
+
+    try {
+      setLoading(true);
+      // Create addon purchase (creates invoice, does NOT activate yet)
+      const invoice = await subscriptionService.purchaseAddon(addon.id, quantity);
+      
+      // Select the new invoice and open payment modal
+      setSelectedInvoice(invoice);
+      setIsPaymentModalOpen(true);
+
+      // Refresh invoices list so the new one shows up
+      const invData = await subscriptionService.getMyInvoices();
+      setInvoices(invData);
+      
+    } catch (error: any) {
+      showToast({
+        title: "Gagal",
+        description: error.response?.data?.error || "Gagal membuat tagihan add-on",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+      setAddonPurchaseData(null);
+    }
+  };
+
+  const handleCancelRenewal = async (addonId: string) => {
+    try {
+      setLoading(true);
+      await subscriptionService.cancelAddonRenewal(addonId);
+      showToast({
+        title: "Berhasil",
+        description: "Perpanjangan Add-on berhasil dibatalkan.",
+        variant: "success",
+      });
+      // Refresh My Addons
+      const myData = await subscriptionService.getMyAddons();
+      setMyAddons(myData);
+    } catch (error: any) {
+      showToast({
+        title: "Gagal",
+        description: error.response?.data?.error || "Gagal membatalkan perpanjangan add-on",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -327,7 +388,9 @@ export default function SubscriptionPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {availableAddons.map((addon) => {
-                const isInstalled = myAddons.some(ma => ma.addon_id === addon.id);
+                const installedAddon = myAddons.find(ma => ma.addon_id === addon.id);
+                const isInstalled = !!installedAddon;
+                const quantity = installedAddon?.quantity || 0;
                 
                 // Helper to get icon based on code
                 const getIcon = (code: string) => {
@@ -351,7 +414,7 @@ export default function SubscriptionPage() {
                           {getIcon(addon.code)}
                         </div>
                         {isInstalled && (
-                          <Badge className="bg-indigo-500 hover:bg-indigo-600">Active</Badge>
+                          <Badge className="bg-indigo-500 hover:bg-indigo-600">Active ({quantity}x)</Badge>
                         )}
                       </div>
                       <CardTitle className="text-lg font-bold mt-4">{addon.name}</CardTitle>
@@ -370,16 +433,40 @@ export default function SubscriptionPage() {
                             <span className="text-[10px] font-normal text-slate-400">/{addon.billing_cycle === 'monthly' ? 'mo' : addon.billing_cycle}</span>
                           </p>
                         </div>
-                        <Button 
-                          size="sm" 
-                          variant={isInstalled ? "secondary" : "default"}
-                          className={cn(
-                            "font-bold px-4",
-                            !isInstalled && "bg-indigo-600 hover:bg-indigo-700"
-                          )}
-                        >
-                          {isInstalled ? "Configure" : "Install"}
-                        </Button>
+                        <div className="flex gap-2">
+                          {isInstalled && installedAddon?.cancelled_at ? (
+                            <Button size="sm" variant="outline" disabled className="text-xs">
+                              Renewal Cancelled
+                            </Button>
+                          ) : isInstalled ? (
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              disabled={loading}
+                              onClick={() => {
+                                if(window.confirm('Apakah Anda yakin ingin membatalkan perpanjangan addon ini?')) {
+                                  handleCancelRenewal(addon.id);
+                                }
+                              }}
+                              className="font-bold px-3 text-xs"
+                            >
+                              Cancel Renewal
+                            </Button>
+                          ) : null}
+                          
+                          <Button 
+                            size="sm" 
+                            variant={isInstalled ? "secondary" : "default"}
+                            disabled={loading}
+                            onClick={() => handleInstallAddon(addon)}
+                            className={cn(
+                              "font-bold px-4",
+                              !isInstalled && "bg-indigo-600 hover:bg-indigo-700"
+                            )}
+                          >
+                            {loading ? "..." : isInstalled ? "Buy More" : "Install"}
+                          </Button>
+                        </div>
                       </div>
                     </CardFooter>
                   </Card>
@@ -557,6 +644,16 @@ export default function SubscriptionPage() {
           setIsPaymentModalOpen(true);
         }}
       />
+
+      {/* Addon Purchase Dialog */}
+      {selectedAddonForPurchase && (
+        <AddonPurchaseDialog
+          addon={selectedAddonForPurchase}
+          isOpen={true}
+          onClose={() => setSelectedAddonForPurchase(null)}
+          onConfirm={handleAddonPurchaseConfirm}
+        />
+      )}
     </PageLayout>
   );
 }

@@ -258,7 +258,7 @@ func (r *AddonRepository) CodeExists(ctx context.Context, code string, excludeID
 // GetTenantAddons retrieves all active addons for a tenant
 func (r *AddonRepository) GetTenantAddons(ctx context.Context, tenantID uuid.UUID) ([]*addon.TenantAddon, error) {
 	query := `
-		SELECT ta.id, ta.tenant_id, ta.addon_id, ta.started_at, ta.expires_at, ta.created_at, ta.updated_at,
+		SELECT ta.id, ta.tenant_id, ta.addon_id, ta.quantity, ta.status, ta.started_at, ta.expires_at, ta.cancelled_at, ta.created_at, ta.updated_at,
 		       a.id, a.code, a.name, a.description, a.price, a.billing_cycle, a.currency, a.addon_type, a.value, a.is_active, a.available_for_plans, a.created_at, a.updated_at
 		FROM tenant_addons ta
 		INNER JOIN addons a ON a.id = ta.addon_id
@@ -278,7 +278,7 @@ func (r *AddonRepository) GetTenantAddons(ctx context.Context, tenantID uuid.UUI
 		var ta addon.TenantAddon
 		var a addon.Addon
 		if err := rows.Scan(
-			&ta.ID, &ta.TenantID, &ta.AddonID, &ta.StartedAt, &ta.ExpiresAt, &ta.CreatedAt, &ta.UpdatedAt,
+			&ta.ID, &ta.TenantID, &ta.AddonID, &ta.Quantity, &ta.Status, &ta.StartedAt, &ta.ExpiresAt, &ta.CancelledAt, &ta.CreatedAt, &ta.UpdatedAt,
 			&a.ID, &a.Code, &a.Name, &a.Description, &a.Price, &a.BillingCycle, &a.Currency, &a.Type, &a.Value, &a.IsActive, &a.AvailableForPlans, &a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -327,20 +327,43 @@ func (r *AddonRepository) GetTenantAddons(ctx context.Context, tenantID uuid.UUI
 	return tenantAddons, nil
 }
 
-// AssignAddonToTenant assigns an addon to a tenant
-func (r *AddonRepository) AssignAddonToTenant(ctx context.Context, tenantID, addonID uuid.UUID, expiresAt *time.Time) error {
+// AssignAddonToTenant assigns an addon to a tenant (with quantity support)
+func (r *AddonRepository) AssignAddonToTenant(ctx context.Context, tenantID, addonID uuid.UUID, expiresAt *time.Time, quantity int) error {
+	if quantity <= 0 {
+		quantity = 1
+	}
 	query := `
-		INSERT INTO tenant_addons (id, tenant_id, addon_id, started_at, expires_at, created_at, updated_at)
-		VALUES ($1, $2, $3, NOW(), $4, NOW(), NOW())
-		ON CONFLICT (tenant_id, addon_id) DO UPDATE SET expires_at = $4, updated_at = NOW()
+		INSERT INTO tenant_addons (id, tenant_id, addon_id, quantity, started_at, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), $5, NOW(), NOW())
+		ON CONFLICT (tenant_id, addon_id) DO UPDATE SET
+			quantity = tenant_addons.quantity + $4,
+			expires_at = COALESCE($5, tenant_addons.expires_at),
+			updated_at = NOW()
 	`
-	_, err := r.db.Exec(ctx, query, uuid.New(), tenantID, addonID, expiresAt)
+	_, err := r.db.Exec(ctx, query, uuid.New(), tenantID, addonID, quantity, expiresAt)
 	return err
 }
 
 // RemoveAddonFromTenant removes an addon from a tenant
 func (r *AddonRepository) RemoveAddonFromTenant(ctx context.Context, tenantID, addonID uuid.UUID) error {
 	result, err := r.db.Exec(ctx, `DELETE FROM tenant_addons WHERE tenant_id = $1 AND addon_id = $2`, tenantID, addonID)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrAddonNotFound
+	}
+	return nil
+}
+
+// CancelAddonRenewal marks a tenant's addon as cancelled so it won't be renewed
+func (r *AddonRepository) CancelAddonRenewal(ctx context.Context, tenantID, addonID uuid.UUID) error {
+	query := `
+		UPDATE tenant_addons
+		SET cancelled_at = NOW(), updated_at = NOW()
+		WHERE tenant_id = $1 AND addon_id = $2 AND status = 'active' AND cancelled_at IS NULL
+	`
+	result, err := r.db.Exec(ctx, query, tenantID, addonID)
 	if err != nil {
 		return err
 	}

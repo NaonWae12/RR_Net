@@ -27,6 +27,7 @@ type AuthActions = {
   setTenantSlug: (slug: string | null) => void;
   setAuth: (user: User, tenant: Tenant | null, token: string, refreshToken: string) => void;
   refreshTenant: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   hydrate: (data: Partial<AuthState>) => void;
 };
 
@@ -240,6 +241,16 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       persistState(get());
     } catch (err) {
       console.error("Failed to refresh tenant info:", err);
+    }
+  },
+
+  refreshUser: async () => {
+    try {
+      const res = await authService.me();
+      set({ user: res.user });
+      persistState(get());
+    } catch (err) {
+      console.error("Failed to refresh user info:", err);
     }
   },
 }));

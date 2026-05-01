@@ -16,6 +16,7 @@ type Config struct {
 	Auth      AuthConfig
 	Server    ServerConfig
 	WAGateway WAGatewayConfig
+	Mail      MailConfig
 }
 
 // AppConfig holds application-level settings
@@ -60,6 +61,12 @@ type ServerConfig struct {
 type WAGatewayConfig struct {
 	URL        string
 	AdminToken string
+}
+
+// MailConfig holds email provider configuration
+type MailConfig struct {
+	ResendAPIKey string
+	FromEmail    string
 }
 
 // Load reads and validates configuration from environment variables.
@@ -190,6 +197,10 @@ func Load() (*Config, error) {
 	if cfg.WAGateway.AdminToken == "" && cfg.App.Env != "production" {
 		cfg.WAGateway.AdminToken = "dev-wa-admin-token"
 	}
+
+	// Mail config
+	cfg.Mail.ResendAPIKey = os.Getenv("RESEND_API_KEY")
+	cfg.Mail.FromEmail = getEnvOrDefault("MAIL_FROM", "onboarding@resend.dev")
 
 	return cfg, nil
 }

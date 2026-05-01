@@ -23,10 +23,12 @@ type AuthServiceInterface interface {
 	RefreshToken(ctx context.Context, req *service.RefreshTokenRequest) (*service.LoginResponse, error)
 	Register(ctx context.Context, tenantID uuid.UUID, roleCode string, req *service.RegisterRequest) (*service.UserDTO, error)
 	GetProfile(ctx context.Context, userID uuid.UUID) (*service.ProfileResponse, error)
+	UpdateProfile(ctx context.Context, userID uuid.UUID, req *service.UpdateUserProfileRequest) (*service.UserDTO, error)
 	ChangePassword(ctx context.Context, userID uuid.UUID, req *service.ChangePasswordRequest) error
 	OAuthLogin(ctx context.Context, oauthUser *auth.OAuthUser) (*service.LoginResponse, error)
-	RequestPasswordResetOTP(ctx context.Context, email string) (string, error)
+	RequestPasswordResetOTP(ctx context.Context, email, method string) (string, error)
 	VerifyAndResetPassword(ctx context.Context, email, otp, newPassword string) error
+	RequestProfileUpdateOTP(ctx context.Context, userID uuid.UUID, method, value string) error
 }
 
 // AuthHandler handles authentication HTTP endpoints
@@ -66,6 +68,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		case service.ErrTenantNotActive:
 			sendError(w, http.StatusForbidden, "Tenant is not active")
 		default:
+			log.Error().Err(err).Msg("Login failed with internal error")
 			sendError(w, http.StatusInternalServerError, "Internal server error")
 		}
 		return
@@ -183,6 +186,61 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UpdateProfile handles PATCH /api/v1/auth/profile
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	var req service.UpdateUserProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Service uses service.UpdateProfileRequest which we should define or reuse
+	user, err := h.authService.UpdateProfile(r.Context(), userID, &req)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to update profile: "+err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Profile updated successfully",
+		"user":    user,
+	})
+}
+
+// RequestProfileUpdateOTP handles POST /api/v1/auth/profile/request-otp
+func (h *AuthHandler) RequestProfileUpdateOTP(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Method string `json:"method"` // "email" or "whatsapp"
+		Value  string `json:"value"`  // the new email or phone number
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	err := h.authService.RequestProfileUpdateOTP(r.Context(), userID, req.Method, req.Value)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "Gagal mengirim OTP: "+err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{
+		"message": "OTP berhasil dikirim ke " + req.Value,
+	})
+}
+
 // OAuthRedirect handles GET /api/v1/auth/{provider}/login
 func (h *AuthHandler) OAuthRedirect(w http.ResponseWriter, r *http.Request) {
 	provider := auth.OAuthProvider(getPathParam(r, "provider"))
@@ -275,11 +333,16 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // ForgotPassword handles POST /api/v1/auth/forgot-password
 func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email string `json:"email"`
+		Email  string `json:"email"`
+		Method string `json:"method"` // "whatsapp" or "email"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+
+	if req.Method == "" {
+		req.Method = "email" // default to email
 	}
 
 	if req.Email == "" {
@@ -287,12 +350,9 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maskedPhone, err := h.authService.RequestPasswordResetOTP(r.Context(), req.Email)
+	maskedInfo, err := h.authService.RequestPasswordResetOTP(r.Context(), req.Email, req.Method)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
-			// Don't reveal if email exists or not for security, 
-			// but here user asked for specific behavior maybe? 
-			// Let's keep it simple for now as requested.
 			sendError(w, http.StatusNotFound, "Email tidak ditemukan")
 			return
 		}
@@ -301,8 +361,8 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendJSON(w, http.StatusOK, map[string]string{
-		"message": "OTP sent to WhatsApp",
-		"phone":   maskedPhone,
+		"message": "OTP sent via " + req.Method,
+		"info":    maskedInfo,
 	})
 }
 

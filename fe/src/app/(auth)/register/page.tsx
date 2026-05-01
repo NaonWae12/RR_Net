@@ -63,6 +63,7 @@ function RegisterContent() {
     password: "",
     companyName: "",
     slug: "",
+    otpMethod: "whatsapp", // default to whatsapp
     referralCode: searchParams?.get("ref") || "",
   });
   const [otp, setOtp] = useState("");
@@ -155,6 +156,7 @@ function RegisterContent() {
           company_name: formData.companyName,
           slug: formData.slug,
           is_oauth: isOAuth,
+          otp_method: formData.otpMethod,
           referral_code: formData.referralCode || searchParams?.get("ref") || undefined,
         }),
       });
@@ -177,7 +179,7 @@ function RegisterContent() {
         setStep(5); // Go to success step
       } else {
         // Regular users need OTP verification
-        showToast("Data registrasi diterima. Silakan cek WhatsApp untuk kode OTP.", "success");
+        showToast(`Data registrasi diterima. Silakan cek ${formData.otpMethod === "whatsapp" ? "WhatsApp" : "Email"} untuk kode OTP.`, "success");
         setStep(4); // Move to OTP step
         setTimer(60);
       }
@@ -239,11 +241,12 @@ function RegisterContent() {
         },
         body: JSON.stringify({
           email: formData.email,
+          method: formData.otpMethod,
         }),
       });
 
       if (response.ok) {
-        showToast("OTP baru telah dikirim ke WhatsApp!", "success");
+        showToast(`OTP baru telah dikirim ke ${formData.otpMethod === "whatsapp" ? "WhatsApp" : "Email"}!`, "success");
         setTimer(60);
         setOtp("");
       } else {
@@ -849,6 +852,43 @@ function RegisterContent() {
                     </div>
                   </div>
                 </div>
+
+                {!isOAuth && (
+                  <div className="space-y-3 pt-2">
+                    <label className="text-sm font-bold text-white/50 uppercase tracking-widest flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4" />
+                      Verifikasi OTP via
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, otpMethod: "whatsapp" })}
+                        className={cn(
+                          "flex items-center justify-center gap-2 p-4 rounded-2xl border transition-all",
+                          formData.otpMethod === "whatsapp" 
+                            ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400" 
+                            : "bg-white/5 border-white/10 text-white/40 hover:border-white/20"
+                        )}
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        WhatsApp
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, otpMethod: "email" })}
+                        className={cn(
+                          "flex items-center justify-center gap-2 p-4 rounded-2xl border transition-all",
+                          formData.otpMethod === "email" 
+                            ? "bg-blue-500/10 border-blue-500/50 text-blue-400" 
+                            : "bg-white/5 border-white/10 text-white/40 hover:border-white/20"
+                        )}
+                      >
+                        <Mail className="w-4 h-4" />
+                        Email
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-[10px] text-purple-300 flex items-start gap-3">
                   <ShieldCheck className="w-4 h-4 shrink-0" />

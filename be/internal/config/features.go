@@ -57,6 +57,7 @@ var FeatureCatalog = []Feature{
 
 	// Communication
 	{Code: "wa_gateway", Name: "WA Gateway", Description: "WhatsApp gateway integration", Category: "communication"},
+	{Code: "wa_gateway_basic", Name: "WA Gateway Basic", Description: "Basic WhatsApp gateway integration", Category: "communication"},
 
 	// HCM & Operations
 	{Code: "hcm_module", Name: "HCM (Absensi, Gaji, Cuti, Reimbursement)", Description: "Human Capital Management module", Category: "hcm"},

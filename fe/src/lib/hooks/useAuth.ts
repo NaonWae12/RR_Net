@@ -45,5 +45,6 @@ export function useAuth() {
     isAuthenticated,
     ready,
     refreshTenant,
+    refreshUser: useAuthStore((s) => s.refreshUser),
   };
 }

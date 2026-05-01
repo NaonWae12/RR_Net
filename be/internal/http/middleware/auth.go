@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"rrnet/internal/auth"
 )
 
@@ -43,7 +44,14 @@ func AuthMiddleware(jwtManager *auth.JWTManager) func(http.Handler) http.Handler
 			ctx := r.Context()
 			ctx = auth.SetClaims(ctx, claims)
 			ctx = auth.SetUserID(ctx, claims.UserID)
-			ctx = auth.SetTenantID(ctx, claims.TenantID)
+			
+			// Only overwrite tenant ID if it's not Nil in claims
+			// This allows Superadmin (with Nil tenant ID in token) to access tenant-scoped routes
+			// that have been resolved by TenantContext middleware
+			if claims.TenantID != uuid.Nil {
+				ctx = auth.SetTenantID(ctx, claims.TenantID)
+			}
+			
 			ctx = auth.SetRole(ctx, claims.Role)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -79,7 +87,11 @@ func OptionalAuth(jwtManager *auth.JWTManager) func(http.Handler) http.Handler {
 			ctx := r.Context()
 			ctx = auth.SetClaims(ctx, claims)
 			ctx = auth.SetUserID(ctx, claims.UserID)
-			ctx = auth.SetTenantID(ctx, claims.TenantID)
+			
+			if claims.TenantID != uuid.Nil {
+				ctx = auth.SetTenantID(ctx, claims.TenantID)
+			}
+			
 			ctx = auth.SetRole(ctx, claims.Role)
 
 			next.ServeHTTP(w, r.WithContext(ctx))

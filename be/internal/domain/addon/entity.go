@@ -2,6 +2,7 @@ package addon
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,8 +101,12 @@ func (a *Addon) IsAvailableForPlan(planCode string) bool {
 	if err != nil {
 		return false
 	}
+	// If no plans specified, it's available for all plans
+	if len(plans) == 0 {
+		return true
+	}
 	for _, p := range plans {
-		if p == planCode {
+		if strings.EqualFold(p, planCode) {
 			return true
 		}
 	}
@@ -113,9 +118,12 @@ type TenantAddon struct {
 	ID           uuid.UUID       `json:"id"`
 	TenantID     uuid.UUID       `json:"tenant_id"`
 	AddonID      uuid.UUID       `json:"addon_id"`
+	Quantity     int             `json:"quantity"`
+	Status       string          `json:"status"`
 	CustomConfig json.RawMessage `json:"custom_config,omitempty"`
 	StartedAt    time.Time       `json:"started_at"`
 	ExpiresAt    *time.Time      `json:"expires_at,omitempty"`
+	CancelledAt  *time.Time      `json:"cancelled_at,omitempty"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 

@@ -15,13 +15,15 @@ import (
 
 // AddonHandler handles addon-related HTTP requests
 type AddonHandler struct {
-	addonService *service.AddonService
+	addonService   *service.AddonService
+	billingService *service.PlatformBillingService
 }
 
 // NewAddonHandler creates a new addon handler
-func NewAddonHandler(addonService *service.AddonService) *AddonHandler {
+func NewAddonHandler(addonService *service.AddonService, billingService *service.PlatformBillingService) *AddonHandler {
 	return &AddonHandler{
-		addonService: addonService,
+		addonService:   addonService,
+		billingService: billingService,
 	}
 }
 
@@ -110,7 +112,12 @@ func (h *AddonHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		sendError(w, http.StatusBadRequest, "Invalid addon ID")
+		switch err {
+		case repository.ErrAddonNotFound:
+			sendError(w, http.StatusNotFound, "Addon not found")
+		default:
+			sendError(w, http.StatusInternalServerError, "Failed to update addon")
+		}
 		return
 	}
 
@@ -262,5 +269,77 @@ func (h *AddonHandler) GetTenantAddons(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"addons": addons,
 		"total":  len(addons),
+	})
+}
+
+// HandlePurchase handles current tenant purchasing an addon
+func (h *AddonHandler) HandlePurchase(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == (uuid.UUID{}) {
+		sendError(w, http.StatusBadRequest, "No tenant context found in request")
+		return
+	}
+
+	var req struct {
+		AddonID  string `json:"addon_id"`
+		Quantity int    `json:"quantity"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid JSON body: "+err.Error())
+		return
+	}
+
+	if req.AddonID == "" {
+		sendError(w, http.StatusBadRequest, "addon_id is missing in request body")
+		return
+	}
+
+	// Default quantity to 1
+	if req.Quantity <= 0 {
+		req.Quantity = 1
+	}
+	if req.Quantity > 10 {
+		sendError(w, http.StatusBadRequest, "Maximum quantity is 10")
+		return
+	}
+
+	addonID, err := uuid.Parse(req.AddonID)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid addon_id format: "+err.Error())
+		return
+	}
+
+	inv, err := h.billingService.CreateAddonInvoice(r.Context(), tenantID, addonID, req.Quantity)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to create addon invoice: "+err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Add-on invoice created successfully",
+		"status":  "success",
+		"invoice": inv,
+	})
+}
+
+// HandleCancelRenewal handles canceling a tenant's addon renewal
+func (h *AddonHandler) HandleCancelRenewal(w http.ResponseWriter, r *http.Request) {
+	tenantID, _ := auth.GetTenantID(r.Context())
+	addonIDStr := getPathParam(r, "addon_id")
+	
+	addonID, err := uuid.Parse(addonIDStr)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid addon ID")
+		return
+	}
+
+	if err := h.addonService.CancelRenewal(r.Context(), tenantID, addonID); err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to cancel add-on renewal: "+err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{
+		"message": "Add-on renewal has been cancelled",
+		"status":  "success",
 	})
 }

@@ -15,6 +15,9 @@ export interface PlatformInvoice {
   subtotal: number;
   discount_amount: number;
   discount_id?: string;
+  addon_id?: string;
+  addon_quantity?: number;
+  addon_name?: string;
   amount: number;
   paid_amount: number;
   currency: string;
@@ -43,9 +46,12 @@ export interface TenantAddon {
   id: string;
   tenant_id: string;
   addon_id: string;
+  quantity: number;
+  status: string;
   addon?: PlatformAddon;
   started_at: string;
   expires_at?: string;
+  cancelled_at?: string;
 }
 
 export interface SubmitPaymentRequest {
@@ -89,6 +95,15 @@ export const subscriptionService = {
   async getMyAddons(): Promise<TenantAddon[]> {
     const res = await apiClient.get<{ addons: TenantAddon[]; total: number }>("/my/addons");
     return res.data.addons || [];
+  },
+
+  async purchaseAddon(addonId: string, quantity: number = 1): Promise<PlatformInvoice> {
+    const res = await apiClient.post("/my/addons", { addon_id: addonId, quantity });
+    return res.data.invoice;
+  },
+
+  async cancelAddonRenewal(addonId: string): Promise<void> {
+    await apiClient.post(`/my/addons/${addonId}/cancel`);
   },
 
   // Super Admin Endpoints

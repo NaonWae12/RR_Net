@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -128,6 +129,22 @@ func (s *AddonService) Create(ctx context.Context, req *CreateAddonRequest) (*Ad
 		UpdatedAt:         now,
 	}
 
+	// Sync relational fields from Value
+	if req.Type == addon.AddonTypeLimitBoost {
+		a.LimitsMap = make(map[string]int)
+		for k, v := range req.Value {
+			if val, ok := v.(float64); ok {
+				a.LimitsMap[k] = int(val)
+			} else if val, ok := v.(int); ok {
+				a.LimitsMap[k] = val
+			}
+		}
+	} else if req.Type == addon.AddonTypeFeature {
+		if feat, ok := req.Value["feature"].(string); ok && feat != "" {
+			a.FeaturesList = []string{feat}
+		}
+	}
+
 	if err := s.addonRepo.Create(ctx, a); err != nil {
 		return nil, err
 	}
@@ -183,9 +200,7 @@ func (s *AddonService) Update(ctx context.Context, id uuid.UUID, req *UpdateAddo
 	if req.Name != "" {
 		a.Name = req.Name
 	}
-	if req.Description != "" {
-		a.Description = &req.Description
-	}
+	a.Description = &req.Description
 	a.Price = req.Price
 	if req.BillingCycle != "" {
 		a.BillingCycle = req.BillingCycle
@@ -209,6 +224,22 @@ func (s *AddonService) Update(ctx context.Context, id uuid.UUID, req *UpdateAddo
 		a.AvailableForPlans = plansJSON
 	}
 
+	// Sync relational fields from Value
+	if a.Type == addon.AddonTypeLimitBoost && req.Value != nil {
+		a.LimitsMap = make(map[string]int)
+		for k, v := range req.Value {
+			if val, ok := v.(float64); ok {
+				a.LimitsMap[k] = int(val)
+			} else if val, ok := v.(int); ok {
+				a.LimitsMap[k] = val
+			}
+		}
+	} else if a.Type == addon.AddonTypeFeature && req.Value != nil {
+		if feat, ok := req.Value["feature"].(string); ok && feat != "" {
+			a.FeaturesList = []string{feat}
+		}
+	}
+
 	if err := s.addonRepo.Update(ctx, a); err != nil {
 		return nil, err
 	}
@@ -223,16 +254,28 @@ func (s *AddonService) Delete(ctx context.Context, id uuid.UUID) error {
 
 // TenantAddonDTO represents tenant addon data for API responses
 type TenantAddonDTO struct {
-	ID        uuid.UUID  `json:"id"`
-	TenantID  uuid.UUID  `json:"tenant_id"`
-	AddonID   uuid.UUID  `json:"addon_id"`
-	Addon     *AddonDTO  `json:"addon,omitempty"`
-	StartedAt time.Time  `json:"started_at"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	ID          uuid.UUID  `json:"id"`
+	TenantID    uuid.UUID  `json:"tenant_id"`
+	AddonID     uuid.UUID  `json:"addon_id"`
+	Quantity    int        `json:"quantity"`
+	Status      string     `json:"status"`
+	Addon       *AddonDTO  `json:"addon,omitempty"`
+	StartedAt   time.Time  `json:"started_at"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 }
 
 // AssignToTenant assigns an addon to a tenant
 func (s *AddonService) AssignToTenant(ctx context.Context, tenantID, addonID uuid.UUID, expiresAt *time.Time) error {
+	return s.AssignToTenantWithQuantity(ctx, tenantID, addonID, expiresAt, 1)
+}
+
+// AssignToTenantWithQuantity assigns an addon to a tenant with a specific quantity
+func (s *AddonService) AssignToTenantWithQuantity(ctx context.Context, tenantID, addonID uuid.UUID, expiresAt *time.Time, quantity int) error {
+	if quantity <= 0 {
+		quantity = 1
+	}
+
 	// Verify addon exists and is active
 	a, err := s.addonRepo.GetByID(ctx, addonID)
 	if err != nil {
@@ -245,17 +288,50 @@ func (s *AddonService) AssignToTenant(ctx context.Context, tenantID, addonID uui
 	// Verify addon is available for tenant's plan
 	plan, err := s.planRepo.GetTenantPlan(ctx, tenantID)
 	if err == nil && plan != nil {
+		available, _ := a.GetAvailablePlans()
 		if !a.IsAvailableForPlan(plan.Code) {
+			log.Printf("[addon_service] addon %s not available for plan %s. available_for: %v", a.Code, plan.Code, available)
 			return ErrAddonNotForPlan
 		}
+	} else if err != nil {
+		log.Printf("[addon_service] failed to get tenant plan: %v", err)
 	}
 
-	return s.addonRepo.AssignAddonToTenant(ctx, tenantID, addonID, expiresAt)
+	return s.addonRepo.AssignAddonToTenant(ctx, tenantID, addonID, expiresAt, quantity)
+}
+
+// PurchaseAddon allows a tenant to purchase/install an addon (with quantity)
+func (s *AddonService) PurchaseAddon(ctx context.Context, tenantID, addonID uuid.UUID, quantity int) error {
+	if quantity <= 0 {
+		quantity = 1
+	}
+
+	// Determine expiry based on billing cycle
+	a, err := s.addonRepo.GetByID(ctx, addonID)
+	if err != nil {
+		return err
+	}
+
+	var expiresAt *time.Time
+	if a.BillingCycle == addon.BillingCycleMonthly {
+		t := time.Now().AddDate(0, 1, 0)
+		expiresAt = &t
+	} else if a.BillingCycle == addon.BillingCycleYearly {
+		t := time.Now().AddDate(1, 0, 0)
+		expiresAt = &t
+	}
+
+	return s.AssignToTenantWithQuantity(ctx, tenantID, addonID, expiresAt, quantity)
 }
 
 // RemoveFromTenant removes an addon from a tenant
 func (s *AddonService) RemoveFromTenant(ctx context.Context, tenantID, addonID uuid.UUID) error {
 	return s.addonRepo.RemoveAddonFromTenant(ctx, tenantID, addonID)
+}
+
+// CancelRenewal cancels the renewal of a tenant's addon
+func (s *AddonService) CancelRenewal(ctx context.Context, tenantID, addonID uuid.UUID) error {
+	return s.addonRepo.CancelAddonRenewal(ctx, tenantID, addonID)
 }
 
 // GetTenantAddons retrieves all addons for a tenant
@@ -268,11 +344,14 @@ func (s *AddonService) GetTenantAddons(ctx context.Context, tenantID uuid.UUID) 
 	dtos := make([]*TenantAddonDTO, len(tenantAddons))
 	for i, ta := range tenantAddons {
 		dto := &TenantAddonDTO{
-			ID:        ta.ID,
-			TenantID:  ta.TenantID,
-			AddonID:   ta.AddonID,
-			StartedAt: ta.StartedAt,
-			ExpiresAt: ta.ExpiresAt,
+			ID:          ta.ID,
+			TenantID:    ta.TenantID,
+			AddonID:     ta.AddonID,
+			Quantity:    ta.Quantity,
+			Status:      ta.Status,
+			StartedAt:   ta.StartedAt,
+			ExpiresAt:   ta.ExpiresAt,
+			CancelledAt: ta.CancelledAt,
 		}
 		if ta.Addon != nil {
 			dto.Addon = s.toDTO(ta.Addon)

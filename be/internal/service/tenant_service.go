@@ -16,6 +16,7 @@ import (
 	"rrnet/internal/domain/tenant"
 	"rrnet/internal/domain/user"
 	"rrnet/internal/domain/affiliate"
+	"rrnet/internal/infra/mail"
 	"rrnet/internal/infra/wa_gateway"
 	"rrnet/internal/repository"
 )
@@ -37,6 +38,7 @@ type TenantService struct {
 	waClient               *wa_gateway.Client
 	platformBillingService *PlatformBillingService
 	affiliateService       *AffiliateService
+	mailProvider           mail.MailProvider
 }
 
 // NewTenantService creates a new tenant service
@@ -49,6 +51,7 @@ func NewTenantService(
 	waClient *wa_gateway.Client,
 	platformBillingService *PlatformBillingService,
 	affiliateService *AffiliateService,
+	mailProvider mail.MailProvider,
 ) *TenantService {
 	return &TenantService{
 		tenantRepo:             tenantRepo,
@@ -59,6 +62,7 @@ func NewTenantService(
 		waClient:               waClient,
 		platformBillingService: platformBillingService,
 		affiliateService:       affiliateService,
+		mailProvider:           mailProvider,
 	}
 }
 
@@ -140,6 +144,7 @@ type RegisterTenantRequest struct {
 
 	BillingCycle string `json:"billing_cycle"`
 	IsOAuth      bool   `json:"is_oauth"`
+	OTPMethod    string `json:"otp_method"`   // "email" or "whatsapp"
 	ReferralCode string `json:"referral_code"` // The code from the affiliate
 }
 
@@ -199,18 +204,24 @@ func (s *TenantService) RegisterTenant(ctx context.Context, req *RegisterTenantR
 		rand.Seed(time.Now().UnixNano())
 		otpCode = fmt.Sprintf("%06d", rand.Intn(1000000))
 
-		// Try to send OTP via WhatsApp - this validates the phone number
-		if s.waClient != nil && req.Phone != "" {
+		// Send OTP based on chosen method
+		if req.OTPMethod == "whatsapp" && s.waClient != nil && req.Phone != "" {
 			message := fmt.Sprintf("Halo %s, berikut adalah Kode OTP Anda untuk proses registrasi di RRNET: %s. Kode ini bersifat rahasia dan berlaku selama 10 menit. Mohon tidak memberikan kode ini kepada siapapun.", req.Name, otpCode)
 			_, err := s.waClient.Send(ctx, "platform", req.Phone, message)
 			if err != nil {
-				log.Error().Err(err).Str("phone", req.Phone).Msg("Failed to send registration OTP via WhatsApp - invalid phone number")
-				return nil, ErrInvalidPhoneNumber
+				log.Error().Err(err).Str("phone", req.Phone).Msg("Failed to send registration OTP via WhatsApp")
+				return nil, errors.New("gagal mengirim OTP via WhatsApp, pastikan nomor Anda benar")
 			}
 			log.Info().Str("phone", req.Phone).Msg("Registration OTP sent via WhatsApp successfully")
 		} else {
-			log.Warn().Msg("WhatsApp client not available or phone empty")
-			return nil, errors.New("WhatsApp service is currently unavailable")
+			// Default to Email
+			if s.mailProvider != nil {
+				if err := s.SendRegistrationOTPEmail(ctx, req.Email, req.Name, otpCode); err != nil {
+					log.Error().Err(err).Str("email", req.Email).Msg("Failed to send registration OTP via Email")
+					return nil, errors.New("gagal mengirim OTP via Email")
+				}
+				log.Info().Str("email", req.Email).Msg("Registration OTP sent via Email successfully")
+			}
 		}
 
 		// Store OTP in Redis (expires in 10 minutes)
@@ -412,7 +423,8 @@ func (s *TenantService) VerifyOTP(ctx context.Context, req *VerifyOTPRequest) er
 }
 
 type ResendOTPRequest struct {
-	Email string `json:"email"`
+	Email  string `json:"email"`
+	Method string `json:"method"` // "email" or "whatsapp"
 }
 
 func (s *TenantService) ResendOTP(ctx context.Context, req *ResendOTPRequest) error {
@@ -436,16 +448,43 @@ func (s *TenantService) ResendOTP(ctx context.Context, req *ResendOTPRequest) er
 		Str("otp", otpCode).
 		Msg(">>> REGISTRATION OTP RESENT <<<")
 
-	// Send via WhatsApp if available
-	if s.waClient != nil && u.Phone != nil && *u.Phone != "" {
+	// 3. Resend via chosen method
+	if req.Method == "whatsapp" && u.Phone != nil && *u.Phone != "" && s.waClient != nil {
 		message := fmt.Sprintf("Halo %s, Kode OTP baru Anda untuk registrasi di RRNET adalah: %s. Kode ini berlaku selama 10 menit. Mohon tidak memberikan kode ini kepada siapapun.", u.Name, otpCode)
-		_, err := s.waClient.Send(ctx, "platform", *u.Phone, message)
-		if err != nil {
+		if _, err := s.waClient.Send(ctx, "platform", *u.Phone, message); err != nil {
 			log.Error().Err(err).Str("phone", *u.Phone).Msg("Failed to resend OTP via WhatsApp")
+			return errors.New("gagal mengirim ulang OTP via WhatsApp")
+		}
+	} else {
+		if s.mailProvider != nil {
+			if err := s.SendRegistrationOTPEmail(ctx, u.Email, u.Name, otpCode); err != nil {
+				return errors.New("gagal mengirim ulang OTP via Email")
+			}
 		}
 	}
 
 	return nil
+}
+
+func (s *TenantService) SendRegistrationOTPEmail(ctx context.Context, email, name, otp string) error {
+	subject := "Kode Verifikasi Pendaftaran - RRNet ERP"
+	body := fmt.Sprintf(`
+		<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+			<h2 style="color: #4f46e5; text-align: center;">Verifikasi Akun Anda</h2>
+			<p>Halo <strong>%s</strong>,</p>
+			<p>Terima kasih telah mendaftar di RRNet ERP. Gunakan kode OTP di bawah ini untuk memverifikasi alamat email Anda:</p>
+			<div style="background-color: #f8fafc; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1e293b; border-radius: 8px; margin: 20px 0;">
+				%s
+			</div>
+			<p style="color: #64748b; font-size: 14px;">Kode ini hanya berlaku selama 10 menit. Jika Anda tidak merasa melakukan pendaftaran, silakan abaikan email ini.</p>
+			<hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+			<p style="color: #94a3b8; font-size: 12px; text-align: center;">
+				© 2026 RRNet Cloud ERP.
+			</p>
+		</div>
+	`, name, otp)
+
+	return s.mailProvider.Send(ctx, []string{email}, subject, body)
 }
 
 // ApproveTenant approves a pending tenant (superadmin only)
@@ -465,7 +504,43 @@ func (s *TenantService) ApproveTenant(ctx context.Context, tenantID uuid.UUID) e
 	}
 
 	log.Info().Str("tenant_id", tenantID.String()).Str("name", t.Name).Msg("Tenant approved successfully")
+
+	// Notify owner via email (Non-blocking)
+	go func() {
+		users, err := s.userRepo.ListByTenant(context.Background(), t.ID)
+		if err == nil {
+			for _, u := range users {
+				if u.Role != nil && u.Role.Code == "owner" {
+					_ = s.SendTenantApprovalEmail(context.Background(), u.Email, u.Name, t.Name)
+					break
+				}
+			}
+		}
+	}()
+
 	return nil
+}
+
+func (s *TenantService) SendTenantApprovalEmail(ctx context.Context, email, name, companyName string) error {
+	subject := "Perusahaan Anda Telah Disetujui! - RRNet ERP"
+	body := fmt.Sprintf(`
+		<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+			<h2 style="color: #059669; text-align: center;">Pendaftaran Disetujui!</h2>
+			<p>Halo <strong>%s</strong>,</p>
+			<p>Selamat! Pendaftaran perusahaan Anda <strong>%s</strong> telah kami setujui.</p>
+			<p>Sekarang Anda sudah bisa menggunakan seluruh fitur RRNet ERP sesuai dengan paket yang Anda pilih.</p>
+			<div style="margin: 30px 0; text-align: center;">
+				<a href="https://erp.rrnet.id/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Ke Dashboard Sekarang</a>
+			</div>
+			<p>Terima kasih telah mempercayai RRNet sebagai solusi manajemen bisnis Anda.</p>
+			<hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+			<p style="color: #94a3b8; font-size: 12px; text-align: center;">
+				© 2026 RRNet Cloud ERP.
+			</p>
+		</div>
+	`, name, companyName)
+
+	return s.mailProvider.Send(ctx, []string{email}, subject, body)
 }
 
 // RejectTenant rejects/suspends a tenant (superadmin only)

@@ -172,8 +172,8 @@ export default function PlanDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {Object.entries(plan.limits)
                   .filter(([key]) => {
-                    // Skip max_user as requested
-                    if (key === "max_user") return false;
+                    // Skip max_user(s) as requested
+                    if (key === "max_user" || key === "max_users") return false;
 
                     if (key === "rbac_client_reseller") {
                       const hasRbacClientReseller =
