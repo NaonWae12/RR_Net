@@ -1,6 +1,6 @@
 import { apiClient } from "./apiClient";
 
-export type PlatformInvoiceStatus = "pending" | "paid" | "overdue" | "cancelled";
+export type PlatformInvoiceStatus = "unpaid" | "pending" | "paid" | "overdue" | "cancelled";
 
 export interface PlatformInvoice {
   id: string;
@@ -129,8 +129,14 @@ export const subscriptionService = {
     await apiClient.post(`/superadmin/billing/payments/${id}/verify`, { approved });
   },
 
-  async generateInvoices(): Promise<void> {
-    await apiClient.post("/superadmin/billing/generate");
+  async generateInvoices(params?: { 
+    tenant_id?: string; 
+    month?: string; 
+    period_start?: string;
+    period_end?: string;
+    due_date?: string;
+  }): Promise<void> {
+    await apiClient.post("/superadmin/billing/generate", params || {});
   },
 
   async getPublicPlans(): Promise<any[]> {
@@ -163,5 +169,9 @@ export const subscriptionService = {
   async purchasePlan(data: { plan_id: string, billing_cycle?: string, discount_code?: string, method: string }): Promise<any> {
     const response = await apiClient.post("/my/plan", data);
     return response.data || response;
+  },
+
+  async cancelSubmission(invoiceId: string): Promise<void> {
+    await apiClient.post("/subscription/cancel", { invoice_id: invoiceId });
   },
 };

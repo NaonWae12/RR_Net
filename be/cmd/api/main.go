@@ -90,15 +90,6 @@ func main() {
 
 	log.Info().Msg("Infrastructure initialized successfully")
 
-	// Step 4: Setup HTTP router with dependency injection
-	handler := router.New(router.Dependencies{
-		Config:    cfg,
-		DB:        db,
-		Redis:     redisClient,
-		Asynq:     asynqClient,
-		WAGateway: waGatewayClient,
-	})
-
 	// Step 4b: Start lightweight daily invoice scheduler (H-1 before due date)
 	tenantRepo := repository.NewTenantRepository(db)
 	clientRepo := repository.NewClientRepository(db)
@@ -106,9 +97,28 @@ func main() {
 	paymentRepo := repository.NewPaymentRepository(db)
 	servicePackageRepo := repository.NewServicePackageRepository(db)
 	discountRepo := repository.NewDiscountRepository(db)
+	
+	// Platform billing dependencies
+	platformBillingRepo := repository.NewPlatformBillingRepository(db)
+	planRepo := repository.NewPlanRepository(db)
+	platformDiscountRepo := repository.NewPlatformDiscountRepository(db)
+	addonRepo := repository.NewAddonRepository(db)
+	
 	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
-	invoiceScheduler := service.NewInvoiceScheduler(tenantRepo, clientRepo, invoiceRepo, billingService)
+	platformBillingService := service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo, addonRepo)
+	
+	invoiceScheduler := service.NewInvoiceScheduler(tenantRepo, clientRepo, invoiceRepo, billingService, platformBillingService)
 	invoiceScheduler.StartDailyScheduler(context.Background())
+
+	// Step 4: Setup HTTP router with dependency injection
+	handler := router.New(router.Dependencies{
+		Config:                 cfg,
+		DB:                     db,
+		Redis:                  redisClient,
+		Asynq:                  asynqClient,
+		WAGateway:              waGatewayClient,
+		PlatformBillingService: platformBillingService,
+	})
 
 	// Step 4c: Start weekly client cleanup scheduler (hard delete after 28 days)
 	cleanupScheduler := service.NewClientCleanupScheduler(

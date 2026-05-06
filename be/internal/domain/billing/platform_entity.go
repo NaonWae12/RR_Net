@@ -10,6 +10,7 @@ type PlatformInvoiceStatus string
 
 const (
 	PlatformInvoiceStatusPending   PlatformInvoiceStatus = "pending"
+	PlatformInvoiceStatusUnpaid    PlatformInvoiceStatus = "unpaid"
 	PlatformInvoiceStatusPaid      PlatformInvoiceStatus = "paid"
 	PlatformInvoiceStatusOverdue   PlatformInvoiceStatus = "overdue"
 	PlatformInvoiceStatusCancelled PlatformInvoiceStatus = "cancelled"

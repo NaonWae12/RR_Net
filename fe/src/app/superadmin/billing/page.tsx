@@ -42,6 +42,7 @@ import {
 import { StatusBadge } from "@/components/utilities";
 import { PaymentMethodModal } from "@/components/superadmin/PaymentMethodModal";
 import { DiscountModal } from "@/components/superadmin/DiscountModal";
+import GeneratePlatformInvoiceModal from "@/components/superadmin/GeneratePlatformInvoiceModal";
 
 const container = {
   hidden: { opacity: 0 },
@@ -349,6 +350,7 @@ export default function SuperAdminBillingPage() {
 
   const stats = {
     total: invoices.length,
+    unpaid: Array.isArray(invoices) ? invoices.filter((i) => i.status === "unpaid").length : 0,
     pending: Array.isArray(invoices) ? invoices.filter((i) => i.status === "pending").length : 0,
     overdue: Array.isArray(invoices) ? invoices.filter((i) => i.status === "overdue").length : 0,
     revenue: Array.isArray(invoices) 
@@ -435,7 +437,7 @@ export default function SuperAdminBillingPage() {
       render: (value) => (
         <StatusBadge 
           status={value} 
-          variant={value === "paid" ? "success" : value === "pending" ? "warning" : "error"}
+          variant={value === "paid" ? "success" : value === "pending" ? "warning" : value === "unpaid" ? "info" : "error"}
           size="sm"
         />
       ),
@@ -596,22 +598,10 @@ export default function SuperAdminBillingPage() {
     },
   ];
 
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+
   const handleGenerateInvoices = async () => {
-    try {
-      await subscriptionService.generateInvoices();
-      toast({
-        type: "success",
-        title: "Batch Generation Success",
-        message: "New period invoices have been provisioned for all tenants."
-      });
-      fetchInvoices();
-    } catch (error) {
-      toast({
-        type: "error",
-        title: "Generation Error",
-        message: "Could not initiate batch invoice generation."
-      });
-    }
+    setIsGenerateModalOpen(true);
   };
 
   const tabs = [
@@ -657,6 +647,11 @@ export default function SuperAdminBillingPage() {
         )
       }
     >
+      <GeneratePlatformInvoiceModal 
+        isOpen={isGenerateModalOpen} 
+        onClose={() => setIsGenerateModalOpen(false)} 
+        onSuccess={fetchInvoices} 
+      />
       {/* Tab Navigation */}
       <div className="border-b border-slate-200 mb-8">
         <div className="flex gap-1">
@@ -706,11 +701,11 @@ export default function SuperAdminBillingPage() {
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
             >
               <SummaryCard 
-                title="Registry Total" 
-                value={stats.total} 
+                title="Unpaid Invoices" 
+                value={stats.unpaid} 
                 icon={CreditCard} 
                 color="blue" 
-                description="All platform records"
+                description="New monthly billings"
               />
               <SummaryCard 
                 title="Pending Verification" 

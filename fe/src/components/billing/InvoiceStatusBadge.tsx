@@ -19,6 +19,10 @@ export function InvoiceStatusBadge({ status, className }: InvoiceStatusBadgeProp
       colorClass = "bg-yellow-100 text-yellow-800";
       text = "Pending";
       break;
+    case "unpaid":
+      colorClass = "bg-blue-100 text-blue-800";
+      text = "Unpaid";
+      break;
     case "paid":
       colorClass = "bg-green-100 text-green-800";
       text = "Paid";

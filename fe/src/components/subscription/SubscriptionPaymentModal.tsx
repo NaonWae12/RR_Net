@@ -22,6 +22,7 @@ interface SubscriptionPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  isUpgradeMode?: boolean;
 }
 
 export default function SubscriptionPaymentModal({
@@ -30,6 +31,7 @@ export default function SubscriptionPaymentModal({
   isOpen,
   onClose,
   onSuccess,
+  isUpgradeMode = false,
 }: SubscriptionPaymentModalProps) {
   const [currentInvoice, setCurrentInvoice] = useState<PlatformInvoice | null>(initialInvoice || null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -310,7 +312,7 @@ export default function SubscriptionPaymentModal({
                 </Button>
               </div>
 
-              {currentInvoice && currentInvoice.plan_id && (
+              {isUpgradeMode && currentInvoice && (
                 <button
                   type="button"
                   onClick={async () => {

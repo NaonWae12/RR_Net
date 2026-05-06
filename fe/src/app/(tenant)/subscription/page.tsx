@@ -35,6 +35,7 @@ export default function SubscriptionPage() {
   const [affiliateStatus, setAffiliateStatus] = useState<string>("unregistered");
   const [selectedAddonForPurchase, setSelectedAddonForPurchase] = useState<PlatformAddon | null>(null);
   const [addonPurchaseData, setAddonPurchaseData] = useState<{ addon: PlatformAddon; quantity: number } | null>(null);
+  const [isUpgradeFlow, setIsUpgradeFlow] = useState(false);
 
   const { showToast } = useNotificationStore();
   const router = useRouter();
@@ -53,10 +54,23 @@ export default function SubscriptionPage() {
     const store = useDashboardStore.getState();
     store.reset();
     fetchBootstrapData();
+    refreshInvoices();
+  };
+
+  const handleCancelSubmission = async (invoiceId: string) => {
+    if (!confirm("Are you sure you want to cancel this payment submission?")) return;
+    try {
+      await subscriptionService.cancelSubmission(invoiceId);
+      showToast({ title: "Success", description: "Payment submission has been cancelled.", variant: "success" });
+      refreshInvoices();
+    } catch (error: any) {
+      showToast({ title: "Failed", description: "Failed to cancel payment submission.", variant: "error" });
+    }
   };
 
   const handlePayClick = (invoice: PlatformInvoice) => {
     setSelectedInvoice(invoice);
+    setIsUpgradeFlow(false);
     setIsPaymentModalOpen(true);
   };
 
@@ -90,6 +104,7 @@ export default function SubscriptionPage() {
       
       // Select the new invoice and open payment modal
       setSelectedInvoice(invoice);
+      setIsUpgradeFlow(false);
       setIsPaymentModalOpen(true);
 
       // Refresh invoices list so the new one shows up
@@ -161,6 +176,8 @@ export default function SubscriptionPage() {
         return "bg-green-100 text-green-700";
       case "pending":
         return "bg-amber-100 text-amber-700";
+      case "unpaid":
+        return "bg-blue-100 text-blue-700";
       case "overdue":
         return "bg-red-100 text-red-700";
       default:
@@ -495,12 +512,12 @@ export default function SubscriptionPage() {
                 <Button 
                   className="w-full bg-slate-900 hover:bg-black font-bold"
                   onClick={() => {
-                    const latestPending = invoices.find(inv => inv.status === 'pending' || inv.status === 'overdue');
+                    const latestPending = invoices.find(inv => inv.status === 'pending' || inv.status === 'unpaid' || inv.status === 'overdue');
                     if (latestPending) {
                       handlePayClick(latestPending);
                     }
                   }}
-                  disabled={!invoices.some(inv => inv.status === 'pending' || inv.status === 'overdue')}
+                  disabled={!invoices.some(inv => inv.status === 'pending' || inv.status === 'unpaid' || inv.status === 'overdue')}
                 >
                   Instant Payment (Xendit)
                 </Button>
@@ -578,16 +595,25 @@ export default function SubscriptionPage() {
                             </Badge>
                           </td>
                           <td className="px-6 py-5 text-right">
-                            {inv.status !== "paid" ? (
+                            {inv.status === "pending" ? (
                               <Button 
                                 size="sm" 
-                                className="h-8 bg-indigo-600 hover:bg-indigo-700 text-[11px] shadow-md px-4"
+                                variant="outline"
+                                className="h-8 border-rose-200 text-rose-600 hover:bg-rose-50 text-[11px] shadow-sm px-4 font-bold"
+                                onClick={() => handleCancelSubmission(inv.id)}
+                              >
+                                CANCEL
+                              </Button>
+                            ) : inv.status !== "paid" ? (
+                              <Button 
+                                size="sm" 
+                                className="h-8 bg-indigo-600 hover:bg-indigo-700 text-[11px] shadow-md px-4 font-bold"
                                 onClick={() => handlePayClick(inv)}
                               >
                                 PAY NOW
                               </Button>
                             ) : (
-                              <Button size="sm" variant="ghost" className="h-8 text-[11px] text-slate-400">
+                              <Button size="sm" variant="ghost" className="h-8 text-[11px] text-slate-400 font-bold">
                                 DOWNLOAD PDF
                               </Button>
                             )}
@@ -617,6 +643,7 @@ export default function SubscriptionPage() {
             refreshInvoices();
             handlePlanChangeSuccess();
           }}
+          isUpgradeMode={isUpgradeFlow}
         />
       )}
 
@@ -631,6 +658,8 @@ export default function SubscriptionPage() {
             // It's an existing invoice (Resume mode)
             setSelectedInvoice(data);
             setSelectedPlanForUpgrade(null);
+            setIsUpgradeFlow(false);
+            setIsPaymentModalOpen(true);
           } else {
             // It's a plan selection (New Upgrade mode)
             setSelectedPlanForUpgrade({
@@ -641,6 +670,7 @@ export default function SubscriptionPage() {
             });
             setSelectedInvoice(null);
           }
+          setIsUpgradeFlow(true);
           setIsPaymentModalOpen(true);
         }}
       />

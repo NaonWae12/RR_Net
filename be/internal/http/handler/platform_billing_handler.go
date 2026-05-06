@@ -3,8 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/auth"
 	"rrnet/internal/domain/billing"
@@ -107,6 +109,36 @@ func (h *PlatformBillingHandler) RemoveDiscount(w http.ResponseWriter, r *http.R
 	sendJSON(w, http.StatusOK, updatedInv)
 }
 
+func (h *PlatformBillingHandler) CancelSubmission(w http.ResponseWriter, r *http.Request) {
+	tenantID, _ := auth.GetTenantID(r.Context())
+	var req struct {
+		InvoiceID uuid.UUID `json:"invoice_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+
+	log.Info().Str("tenant_id", tenantID.String()).Str("invoice_id", req.InvoiceID.String()).Msg("Attempting to cancel payment submission")
+
+	if err := h.service.CancelPaymentSubmission(r.Context(), tenantID, req.InvoiceID); err != nil {
+		log.Error().Err(err).Str("invoice_id", req.InvoiceID.String()).Msg("Failed to cancel payment submission")
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	log.Info().Str("invoice_id", req.InvoiceID.String()).Msg("Payment submission cancelled successfully")
+
+	// Fetch updated invoice to return
+	updatedInv, err := h.service.GetInvoice(r.Context(), req.InvoiceID)
+	if err != nil {
+		sendJSON(w, http.StatusOK, map[string]string{"message": "Submission cancelled successfully"})
+		return
+	}
+
+	sendJSON(w, http.StatusOK, updatedInv)
+}
+
 func (h *PlatformBillingHandler) ListAllInvoices(w http.ResponseWriter, r *http.Request) {
 	invoices, err := h.service.ListAllInvoices(r.Context())
 	if err != nil {
@@ -162,9 +194,48 @@ func (h *PlatformBillingHandler) VerifyPayment(w http.ResponseWriter, r *http.Re
 }
 
 func (h *PlatformBillingHandler) GenerateInvoices(w http.ResponseWriter, r *http.Request) {
-	if err := h.service.GenerateTenantInvoices(r.Context()); err != nil {
+	var req struct {
+		TenantID    *uuid.UUID `json:"tenant_id"`
+		Month       *string    `json:"month"` // Format: YYYY-MM (for batch)
+		PeriodStart *string    `json:"period_start"`
+		PeriodEnd   *string    `json:"period_end"`
+		DueDate     *string    `json:"due_date"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	var targetMonth *time.Time
+	if req.Month != nil && *req.Month != "" {
+		t, err := time.Parse("2006-01", *req.Month)
+		if err != nil {
+			sendError(w, http.StatusBadRequest, "Invalid month format. Use YYYY-MM")
+			return
+		}
+		targetMonth = &t
+	}
+
+	// Handle specific dates if provided (only for single tenant)
+	var pStart, pEnd, dDate *time.Time
+	if req.PeriodStart != nil && *req.PeriodStart != "" {
+		t, _ := time.Parse("2006-01-02", *req.PeriodStart)
+		pStart = &t
+	}
+	if req.PeriodEnd != nil && *req.PeriodEnd != "" {
+		t, _ := time.Parse("2006-01-02", *req.PeriodEnd)
+		pEnd = &t
+	}
+	if req.DueDate != nil && *req.DueDate != "" {
+		t, _ := time.Parse("2006-01-02", *req.DueDate)
+		dDate = &t
+	}
+
+	if err := h.service.GenerateTenantInvoices(r.Context(), req.TenantID, targetMonth, pStart, pEnd, dDate); err != nil {
 		sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	
 	sendJSON(w, http.StatusOK, map[string]string{"message": "Invoices generated successfully"})
 }

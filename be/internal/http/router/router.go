@@ -38,6 +38,7 @@ type Dependencies struct {
 	Asynq     *asynq.Client
 	WAGateway *wagw.Client
 	Mail      mail.MailProvider
+	PlatformBillingService *service.PlatformBillingService
 }
 
 // New creates the HTTP router with all routes and middlewares.
@@ -102,7 +103,10 @@ func New(deps Dependencies) http.Handler {
 
 	// Services
 	authService := service.NewAuthService(userRepo, tenantRepo, jwtManager, oauthManager, deps.Redis, waGatewayClient, mailProvider)
-	platformBillingService := service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo, addonRepo)
+	platformBillingService := deps.PlatformBillingService
+	if platformBillingService == nil {
+		platformBillingService = service.NewPlatformBillingService(platformBillingRepo, tenantRepo, planRepo, platformDiscountRepo, addonRepo)
+	}
 	platformDiscountService := service.NewPlatformDiscountService(platformDiscountRepo)
 
 	// Affiliate management
@@ -2471,6 +2475,7 @@ func New(deps Dependencies) http.Handler {
 	// ============================================
 	mux.Handle("/api/v1/subscription/invoices", requireAuth(methodHandler("GET", platformBillingHandler.GetMyInvoices)))
 	mux.Handle("/api/v1/subscription/pay", requireAuth(methodHandler("POST", platformBillingHandler.SubmitPayment)))
+	mux.Handle("/api/v1/subscription/cancel", requireAuth(methodHandler("POST", platformBillingHandler.CancelSubmission)))
 
 	// ============================================
 	// Inventory routes (Protected, tenant-scoped)

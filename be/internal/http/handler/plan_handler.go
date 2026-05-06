@@ -290,7 +290,7 @@ func (h *PlanHandler) GetPendingPlanChange(w http.ResponseWriter, r *http.Reques
 	}
 
 	for _, inv := range invoices {
-		if inv.Status == billing.PlatformInvoiceStatusPending && inv.PlanID != uuid.Nil {
+		if (inv.Status == billing.PlatformInvoiceStatusPending || inv.Status == billing.PlatformInvoiceStatusUnpaid) && inv.PlanID != uuid.Nil {
 			sendJSON(w, http.StatusOK, inv)
 			return
 		}

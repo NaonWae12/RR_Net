@@ -131,7 +131,7 @@ func (r *PlatformBillingRepository) ApplyDiscount(ctx context.Context, id uuid.U
 	query := `
 		UPDATE platform_invoices 
 		SET discount_id = $2, discount_amount = $3, amount = $4, subtotal = $5, updated_at = NOW()
-		WHERE id = $1 AND status = 'pending'
+		WHERE id = $1 AND (status = 'pending' OR status = 'unpaid')
 	`
 	_, err := r.db.Exec(ctx, query, id, discountID, discountAmount, finalAmount, subtotal)
 	return err
@@ -141,7 +141,7 @@ func (r *PlatformBillingRepository) RemoveDiscount(ctx context.Context, id uuid.
 	query := `
 		UPDATE platform_invoices 
 		SET discount_id = NULL, discount_amount = 0, amount = $2, updated_at = NOW()
-		WHERE id = $1 AND status = 'pending'
+		WHERE id = $1 AND (status = 'pending' OR status = 'unpaid')
 	`
 	_, err := r.db.Exec(ctx, query, id, originalAmount)
 	return err
@@ -151,7 +151,7 @@ func (r *PlatformBillingRepository) UpdateInvoicePlan(ctx context.Context, id uu
 	query := `
 		UPDATE platform_invoices 
 		SET plan_id = $2, subtotal = $3, amount = $4, period_end = $5, updated_at = NOW()
-		WHERE id = $1 AND status = 'pending'
+		WHERE id = $1 AND (status = 'pending' OR status = 'unpaid')
 	`
 	_, err := r.db.Exec(ctx, query, id, planID, subtotal, amount, periodEnd)
 	return err
@@ -238,6 +238,35 @@ func (r *PlatformBillingRepository) ListPayments(ctx context.Context, invoiceID 
 	return payments, nil
 }
 
+func (r *PlatformBillingRepository) GetLatestInvoiceByTenantID(ctx context.Context, tenantID uuid.UUID) (*billing.PlatformInvoice, error) {
+	query := `
+		SELECT 
+			i.id, i.tenant_id, t.name as tenant_name, i.plan_id, p.name as plan_name, i.invoice_number, 
+			i.period_start, i.period_end, i.due_date, i.subtotal, i.discount_amount, i.discount_id, i.addon_id, i.addon_quantity, a.name as addon_name, i.amount, i.currency, i.status, 
+			i.paid_amount, i.paid_at, i.notes, i.created_at, i.updated_at
+		FROM platform_invoices i
+		JOIN tenants t ON i.tenant_id = t.id
+		LEFT JOIN plans p ON i.plan_id = p.id
+		LEFT JOIN addons a ON i.addon_id = a.id
+		WHERE i.tenant_id = $1
+		ORDER BY i.period_start DESC
+		LIMIT 1
+	`
+	var inv billing.PlatformInvoice
+	err := r.db.QueryRow(ctx, query, tenantID).Scan(
+		&inv.ID, &inv.TenantID, &inv.TenantName, &inv.PlanID, &inv.PlanName, &inv.InvoiceNumber,
+		&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate, &inv.Subtotal, &inv.DiscountAmount, &inv.DiscountID, &inv.AddonID, &inv.AddonQuantity, &inv.AddonName, &inv.Amount, &inv.Currency, &inv.Status,
+		&inv.PaidAmount, &inv.PaidAt, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &inv, nil
+}
+
 func (r *PlatformBillingRepository) ExistsForTenantPeriod(ctx context.Context, tenantID uuid.UUID, start, end time.Time) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM platform_invoices WHERE tenant_id = $1 AND period_start = $2 AND period_end = $3)`
 	var exists bool
@@ -257,5 +286,10 @@ func (r *PlatformBillingRepository) GenerateInvoiceNumber(ctx context.Context) (
 
 func (r *PlatformBillingRepository) DeleteInvoice(ctx context.Context, id uuid.UUID) error {
 	_, err := r.db.Exec(ctx, "DELETE FROM platform_invoices WHERE id = $1 AND status = 'pending'", id)
+	return err
+}
+
+func (r *PlatformBillingRepository) DeletePaymentByInvoiceID(ctx context.Context, invoiceID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, "DELETE FROM platform_payments WHERE platform_invoice_id = $1", invoiceID)
 	return err
 }

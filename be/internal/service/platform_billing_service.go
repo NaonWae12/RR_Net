@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/domain/billing"
+	"rrnet/internal/domain/tenant"
 	"rrnet/internal/repository"
 )
 
@@ -69,88 +70,152 @@ func (s *PlatformBillingService) UpdateInvoicePlan(ctx context.Context, invoiceI
 	return s.repo.UpdateInvoicePlan(ctx, invoiceID, planID, int64(price), int64(price), periodEnd)
 }
 
-func (s *PlatformBillingService) GenerateTenantInvoices(ctx context.Context) error {
-	tenants, err := s.tenantRepo.ListAll(ctx)
+func (s *PlatformBillingService) GenerateTenantInvoices(ctx context.Context, tenantID *uuid.UUID, targetMonth, customStart, customEnd, customDue *time.Time) error {
+	var tenants []*tenant.Tenant
+	var err error
+
+	if tenantID != nil {
+		t, err := s.tenantRepo.GetByID(ctx, *tenantID)
+		if err != nil {
+			return err
+		}
+		tenants = []*tenant.Tenant{t}
+	} else {
+		tenants, err = s.tenantRepo.ListAll(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, t := range tenants {
+		if t.Status != "active" || t.PlanID == nil || *t.PlanID == uuid.Nil {
+			continue
+		}
+
+		// Mode 1: Specific Month / Dates (Manual Flexible)
+		if targetMonth != nil || customStart != nil {
+			pStart := time.Now()
+			if customStart != nil {
+				pStart = *customStart
+			} else if targetMonth != nil {
+				pStart = time.Date(targetMonth.Year(), targetMonth.Month(), 1, 0, 0, 0, 0, time.Local)
+			}
+			
+			if err := s.generateSingleInvoice(ctx, t, pStart, customEnd, customDue); err != nil {
+				log.Error().Err(err).Str("tenant_id", t.ID.String()).Msg("Failed to generate manual platform invoice")
+			}
+			continue
+		}
+
+		// Mode 2: Auto Catch-up (Same as before)
+		latest, err := s.repo.GetLatestInvoiceByTenantID(ctx, t.ID)
+		if err != nil {
+			log.Error().Err(err).Str("tenant_id", t.ID.String()).Msg("Failed to get latest invoice for auto-gen")
+			continue
+		}
+
+		var nextPeriodStart time.Time
+		if latest == nil {
+			now := time.Now()
+			nextPeriodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+		} else {
+			nextPeriodStart = latest.PeriodEnd.Add(24 * time.Hour)
+			nextPeriodStart = time.Date(nextPeriodStart.Year(), nextPeriodStart.Month(), 1, 0, 0, 0, 0, time.Local)
+		}
+
+		now := time.Now()
+		limitMonth := now.AddDate(0, 1, 0)
+		limitDate := time.Date(limitMonth.Year(), limitMonth.Month(), 1, 0, 0, 0, 0, time.Local)
+
+		for !nextPeriodStart.After(limitDate) {
+			periodEnd := nextPeriodStart.AddDate(0, 1, -1)
+			exists, _ := s.repo.ExistsForTenantPeriod(ctx, t.ID, nextPeriodStart, periodEnd)
+			
+			if !exists {
+				if err := s.generateSingleInvoice(ctx, t, nextPeriodStart, nil, nil); err != nil {
+					log.Error().Err(err).Str("tenant_id", t.ID.String()).Msg("Failed auto-gen platform invoice")
+					break
+				}
+				log.Info().Str("tenant", t.Name).Str("period", nextPeriodStart.Format("2006-01")).Msg("Auto-generated catch-up invoice")
+			}
+			nextPeriodStart = nextPeriodStart.AddDate(0, 1, 0)
+		}
+	}
+
+	return nil
+}
+
+// generateSingleInvoice is a helper to create one invoice for a specific period
+func (s *PlatformBillingService) generateSingleInvoice(ctx context.Context, t *tenant.Tenant, periodStart time.Time, customEnd, customDue *time.Time) error {
+	periodEnd := periodStart.AddDate(0, 1, -1)
+	if customEnd != nil {
+		periodEnd = *customEnd
+	}
+	
+	// Default due date based on tenant's registration day
+	dueDay := t.CreatedAt.Day()
+	dueDate := time.Date(periodStart.Year(), periodStart.Month(), dueDay, 0, 0, 0, 0, time.Local)
+	
+	// Handle cases where dueDay is 31 but month has 30 days
+	if dueDate.Month() != periodStart.Month() {
+		dueDate = time.Date(periodStart.Year(), periodStart.Month()+1, 0, 0, 0, 0, 0, time.Local)
+	}
+
+	if customDue != nil {
+		dueDate = *customDue
+	}
+	
+	now := time.Now()
+
+	plan, err := s.planRepo.GetByID(ctx, *t.PlanID)
 	if err != nil {
 		return err
 	}
 
-	now := time.Now()
-	// Next month's period
-	nextMonth := now.AddDate(0, 1, 0)
-	periodStart := time.Date(nextMonth.Year(), nextMonth.Month(), 1, 0, 0, 0, 0, time.Local)
-	periodEnd := periodStart.AddDate(0, 1, -1)
-	dueDate := periodStart.AddDate(0, 0, 5) // Due on the 5th
-
-	for _, t := range tenants {
-		if t.PlanID == nil || *t.PlanID == uuid.Nil {
-			continue
-		}
-
-		// Check if invoice already exists
-		exists, err := s.repo.ExistsForTenantPeriod(ctx, t.ID, periodStart, periodEnd)
-		if err != nil {
-			log.Error().Err(err).Str("tenant_id", t.ID.String()).Msg("Failed to check if platform invoice exists")
-			continue
-		}
-		if exists {
-			continue
-		}
-
-		plan, err := s.planRepo.GetByID(ctx, *t.PlanID)
-		if err != nil {
-			log.Error().Err(err).Str("plan_id", t.PlanID.String()).Msg("Failed to get plan for platform invoice")
-			continue
-		}
-
-		invNum, _ := s.repo.GenerateInvoiceNumber(ctx)
-		
-		// Calculate add-ons
-		var addonTotal float64
-		var addonNotes string
-		
-		tenantAddons, err := s.addonRepo.GetTenantAddons(ctx, t.ID)
-		if err == nil {
-			for _, ta := range tenantAddons {
-				if ta.Status == "active" && ta.CancelledAt == nil {
-					addonData, err := s.addonRepo.GetByID(ctx, ta.AddonID)
-					if err == nil {
-						price := addonData.Price * float64(ta.Quantity)
-						addonTotal += price
-						addonNotes += fmt.Sprintf("Add-on: %s (x%d) - %.0f %s\n", addonData.Name, ta.Quantity, price, addonData.Currency)
-					}
+	invNum, _ := s.repo.GenerateInvoiceNumber(ctx)
+	
+	// Calculate add-ons
+	var addonTotal float64
+	var addonNotes string
+	
+	tenantAddons, err := s.addonRepo.GetTenantAddons(ctx, t.ID)
+	if err == nil {
+		for _, ta := range tenantAddons {
+			if ta.Status == "active" && (ta.CancelledAt == nil || ta.CancelledAt.After(periodStart)) {
+				addonData, err := s.addonRepo.GetByID(ctx, ta.AddonID)
+				if err == nil {
+					price := addonData.Price * float64(ta.Quantity)
+					addonTotal += price
+					addonNotes += fmt.Sprintf("Add-on: %s (x%d) - %.0f %s\n", addonData.Name, ta.Quantity, price, addonData.Currency)
 				}
 			}
 		}
-
-		totalAmount := int64(plan.PriceMonthly) + int64(addonTotal)
-		notes := ""
-		if addonNotes != "" {
-			notes = "Includes active Add-ons:\n" + addonNotes
-		}
-
-		inv := &billing.PlatformInvoice{
-			ID:            uuid.New(),
-			TenantID:      t.ID,
-			PlanID:        *t.PlanID,
-			InvoiceNumber: invNum,
-			PeriodStart:   periodStart,
-			PeriodEnd:     periodEnd,
-			DueDate:       dueDate,
-			Subtotal:      totalAmount,
-			Amount:        totalAmount,
-			Currency:      plan.Currency,
-			Status:        billing.PlatformInvoiceStatusPending,
-			Notes:         notes,
-			CreatedAt:     now,
-			UpdatedAt:     now,
-		}
-
-		if err := s.repo.CreateInvoice(ctx, inv); err != nil {
-			log.Error().Err(err).Str("tenant_id", t.ID.String()).Msg("Failed to create platform invoice")
-		}
 	}
-	return nil
+
+	totalAmount := int64(plan.PriceMonthly) + int64(addonTotal)
+	notes := ""
+	if addonNotes != "" {
+		notes = "Includes active Add-ons:\n" + addonNotes
+	}
+
+	inv := &billing.PlatformInvoice{
+		ID:            uuid.New(),
+		TenantID:      t.ID,
+		PlanID:        *t.PlanID,
+		InvoiceNumber: invNum,
+		PeriodStart:   periodStart,
+		PeriodEnd:     periodEnd,
+		DueDate:       dueDate,
+		Subtotal:      totalAmount,
+		Amount:        totalAmount,
+		Currency:      plan.Currency,
+		Status:        billing.PlatformInvoiceStatusUnpaid,
+		Notes:         notes,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	return s.repo.CreateInvoice(ctx, inv)
 }
 
 func (s *PlatformBillingService) CreateInitialInvoice(ctx context.Context, tenantID uuid.UUID, planID uuid.UUID, billingCycle string) (*billing.PlatformInvoice, error) {
@@ -201,7 +266,7 @@ func (s *PlatformBillingService) CreateInitialInvoice(ctx context.Context, tenan
 		Subtotal:      int64(price),
 		Amount:        int64(price),
 		Currency:      plan.Currency,
-		Status:        billing.PlatformInvoiceStatusPending,
+		Status:        billing.PlatformInvoiceStatusUnpaid,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -261,7 +326,7 @@ func (s *PlatformBillingService) CreateAddonInvoice(ctx context.Context, tenantI
 		Subtotal:      int64(totalPrice),
 		Amount:        int64(totalPrice),
 		Currency:      addonCurrency,
-		Status:        billing.PlatformInvoiceStatusPending,
+		Status:        billing.PlatformInvoiceStatusUnpaid,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -307,7 +372,35 @@ func (s *PlatformBillingService) SubmitPayment(ctx context.Context, tenantID uui
 	if err := s.repo.CreatePayment(ctx, p); err != nil {
 		return nil, err
 	}
+
+	// Update invoice status to Pending (Awaiting Verification)
+	if err := s.repo.UpdateInvoiceStatus(ctx, invID, billing.PlatformInvoiceStatusPending, 0, nil); err != nil {
+		log.Error().Err(err).Str("invoice_id", invID.String()).Msg("Failed to update invoice status to pending after payment submission")
+	}
+
 	return p, nil
+}
+
+func (s *PlatformBillingService) CancelPaymentSubmission(ctx context.Context, tenantID uuid.UUID, invID uuid.UUID) error {
+	inv, err := s.repo.GetInvoiceByID(ctx, invID)
+	if err != nil {
+		return err
+	}
+	if inv.TenantID != tenantID {
+		return fmt.Errorf("unauthorized access to invoice")
+	}
+
+	if inv.Status != billing.PlatformInvoiceStatusPending {
+		return fmt.Errorf("only pending invoices can be cancelled")
+	}
+
+	// 1. Revert invoice status to Unpaid
+	if err := s.repo.UpdateInvoiceStatus(ctx, invID, billing.PlatformInvoiceStatusUnpaid, 0, nil); err != nil {
+		return err
+	}
+
+	// 2. Delete the payment record
+	return s.repo.DeletePaymentByInvoiceID(ctx, invID)
 }
 
 func (s *PlatformBillingService) VerifyPayment(ctx context.Context, paymentID uuid.UUID, adminID uuid.UUID, approved bool) error {
@@ -408,9 +501,9 @@ func (s *PlatformBillingService) ApplyDiscountToInvoice(ctx context.Context, inv
 		return err
 	}
 
-	if inv.Status != billing.PlatformInvoiceStatusPending {
-		log.Warn().Str("invoice_id", invoiceID.String()).Str("status", string(inv.Status)).Msg("Discount application failed: invoice not pending")
-		return fmt.Errorf("discount can only be applied to pending invoices")
+	if inv.Status != billing.PlatformInvoiceStatusPending && inv.Status != billing.PlatformInvoiceStatusUnpaid {
+		log.Warn().Str("invoice_id", invoiceID.String()).Str("status", string(inv.Status)).Msg("Discount application failed: invoice not pending or unpaid")
+		return fmt.Errorf("discount can only be applied to pending or unpaid invoices")
 	}
 
 	if inv.DiscountID != nil {
@@ -481,8 +574,14 @@ func (s *PlatformBillingService) RemoveDiscountFromInvoice(ctx context.Context, 
 		return err
 	}
 
-	if inv.Status != billing.PlatformInvoiceStatusPending {
-		return fmt.Errorf("discount can only be removed from pending invoices")
+	if inv.Status != billing.PlatformInvoiceStatusPending && inv.Status != billing.PlatformInvoiceStatusUnpaid {
+		return fmt.Errorf("discount can only be removed from pending or unpaid invoices")
+	}
+
+	if inv.DiscountID != nil {
+		if err := s.discountRepo.DecrementUsedCount(ctx, *inv.DiscountID); err != nil {
+			log.Error().Err(err).Str("discount_id", inv.DiscountID.String()).Msg("Failed to decrement discount usage count")
+		}
 	}
 
 	return s.repo.RemoveDiscount(ctx, invoiceID, inv.Subtotal)

@@ -147,6 +147,12 @@ func (r *PlatformDiscountRepository) IncrementUsedCount(ctx context.Context, id 
 	return err
 }
 
+func (r *PlatformDiscountRepository) DecrementUsedCount(ctx context.Context, id uuid.UUID) error {
+	query := `UPDATE platform_discounts SET used_count = used_count - 1 WHERE id = $1 AND used_count > 0`
+	_, err := r.db.Exec(ctx, query, id)
+	return err
+}
+
 func (r *PlatformDiscountRepository) CodeExists(ctx context.Context, code string, excludeID *uuid.UUID) (bool, error) {
 	var query string
 	var args []interface{}

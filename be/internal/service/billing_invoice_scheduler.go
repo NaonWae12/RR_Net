@@ -14,10 +14,11 @@ import (
 
 // InvoiceScheduler handles automatic invoice generation on a schedule
 type InvoiceScheduler struct {
-	tenantRepo     *repository.TenantRepository
-	clientRepo     *repository.ClientRepository
-	invoiceRepo    *repository.InvoiceRepository
-	billingService *BillingService
+	tenantRepo             *repository.TenantRepository
+	clientRepo             *repository.ClientRepository
+	invoiceRepo            *repository.InvoiceRepository
+	billingService         *BillingService
+	platformBillingService *PlatformBillingService
 }
 
 // NewInvoiceScheduler creates a new invoice scheduler
@@ -26,12 +27,14 @@ func NewInvoiceScheduler(
 	clientRepo *repository.ClientRepository,
 	invoiceRepo *repository.InvoiceRepository,
 	billingService *BillingService,
+	platformBillingService *PlatformBillingService,
 ) *InvoiceScheduler {
 	return &InvoiceScheduler{
-		tenantRepo:     tenantRepo,
-		clientRepo:     clientRepo,
-		invoiceRepo:    invoiceRepo,
-		billingService: billingService,
+		tenantRepo:             tenantRepo,
+		clientRepo:             clientRepo,
+		invoiceRepo:            invoiceRepo,
+		billingService:         billingService,
+		platformBillingService: platformBillingService,
 	}
 }
 
@@ -72,6 +75,13 @@ func (s *InvoiceScheduler) runScheduledJob(ctx context.Context) {
 		log.Error().Err(err).Msg("Failed to mark overdue invoices")
 	} else if count > 0 {
 		log.Info().Int64("count", count).Msg("Marked invoices as overdue")
+	}
+
+	// Generate platform invoices (Tenant -> Platform)
+	if err := s.platformBillingService.GenerateTenantInvoices(ctx, nil, nil, nil, nil, nil); err != nil {
+		log.Error().Err(err).Msg("Failed to generate platform invoices in scheduled job")
+	} else {
+		log.Info().Msg("Automated platform invoice generation completed")
 	}
 
 	// Get all active tenants
