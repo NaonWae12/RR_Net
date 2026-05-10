@@ -52,6 +52,50 @@ func (r *PaymentRepository) Create(ctx context.Context, payment *billing.Payment
 	return err
 }
 
+func (r *PaymentRepository) CreateWithInvoiceUpdateV2(ctx context.Context, payment *billing.Payment, newPaidAmount int64, newStatus billing.InvoiceStatus, paidAt *time.Time) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 1. Insert payment
+	insertQuery := `
+		INSERT INTO payments (
+			id, tenant_id, invoice_id, client_id, amount, currency, method,
+			reference, collector_id, notes, status, received_at, created_at, created_by_user_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	`
+	_, err = tx.Exec(ctx, insertQuery,
+		payment.ID, payment.TenantID, payment.InvoiceID, payment.ClientID,
+		payment.Amount, payment.Currency, payment.Method, payment.Reference,
+		payment.CollectorID, payment.Notes, payment.Status, payment.ReceivedAt, payment.CreatedAt,
+		payment.CreatedByUserID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert payment: %w", err)
+	}
+
+	// 2. Update invoice
+	var updateQuery string
+	var args []interface{}
+
+	if paidAt != nil {
+		updateQuery = `UPDATE invoices SET paid_amount = $1, status = $2, paid_at = $3, updated_at = NOW() WHERE id = $4`
+		args = []interface{}{newPaidAmount, newStatus, *paidAt, payment.InvoiceID}
+	} else {
+		updateQuery = `UPDATE invoices SET paid_amount = $1, status = $2, updated_at = NOW() WHERE id = $3`
+		args = []interface{}{newPaidAmount, newStatus, payment.InvoiceID}
+	}
+
+	_, err = tx.Exec(ctx, updateQuery, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update invoice: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*billing.Payment, error) {
 	query := `
 		SELECT p.id, p.tenant_id, p.invoice_id, p.client_id,

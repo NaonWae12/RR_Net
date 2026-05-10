@@ -31,17 +31,19 @@ export function proxy(request: NextRequest) {
   
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com https://app.sandbox.midtrans.com https://app.midtrans.com",
     "worker-src 'self' blob: https://unpkg.com",
     "style-src 'self' 'unsafe-inline'",
     // Leaflet tiles are loaded as <img>. Allow https tiles and data URLs.
     // Some browsers/extensions may use blob URLs for image resources; allow blob: to avoid blank tiles.
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    // Allow backend + OSRM connection (dev: localhost, prod: configured origins)
+    // Allow backend + OSRM + Midtrans connection
     isDevelopment
-      ? `connect-src 'self' ${backendOrigin} ${osrmOrigin} https://unpkg.com http://localhost:8080 http://localhost:9500 ws://localhost:*`
-      : `connect-src 'self' ${backendOrigin} ${osrmOrigin} https://unpkg.com`,
+      ? `connect-src 'self' ${backendOrigin} ${osrmOrigin} https://unpkg.com https://app.sandbox.midtrans.com https://app.midtrans.com http://localhost:8080 http://localhost:9500 ws://localhost:*`
+      : `connect-src 'self' ${backendOrigin} ${osrmOrigin} https://unpkg.com https://app.sandbox.midtrans.com https://app.midtrans.com`,
+    // Allow Midtrans Snap popup iframe
+    "frame-src 'self' https://app.sandbox.midtrans.com https://app.midtrans.com",
     "frame-ancestors 'self'",
   ].join('; ');
 

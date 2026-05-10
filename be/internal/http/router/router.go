@@ -139,7 +139,9 @@ func New(deps Dependencies) http.Handler {
 
 	// Reseller management
 	resellerRepo := repository.NewResellerRepository(deps.DB)
-	resellerService := service.NewResellerService(resellerRepo, clientRepo, discountRepo, voucherService, financeService)
+	midtransService := service.NewMidtransService()
+	resellerService := service.NewResellerService(resellerRepo, clientRepo, discountRepo, voucherService, financeService, midtransService, tenantService)
+	portalService := service.NewPortalService(clientRepo, invoiceRepo, servicePackageRepo, paymentRepo, midtransService, tenantService)
 
 	// WhatsApp campaigns (async)
 	waCampaignRepo := repository.NewWACampaignRepository(deps.DB)
@@ -180,6 +182,8 @@ func New(deps Dependencies) http.Handler {
 	platformBillingHandler := handler.NewPlatformBillingHandler(platformBillingService)
 
 	platformDiscountHandler := handler.NewPlatformDiscountHandler(platformDiscountService)
+
+	midtransHandler := handler.NewMidtransHandlerV2(midtransService, platformBillingService, siteSettingService, portalService, resellerService, tenantService)
 
 	// AI & Migration
 	aiService := service.NewAIService(tenantRepo, siteSettingRepo, deps.Config.Auth.JWTSecret)
@@ -277,6 +281,13 @@ func New(deps Dependencies) http.Handler {
 		authHandler.OAuthCallback(w, r)
 	})
 
+	// Public settings
+	mux.HandleFunc("/api/v1/public/settings/midtrans", method("GET", siteSettingHandler.GetPublicMidtransConfig))
+
+	// Webhooks
+	mux.HandleFunc("/api/v1/public/webhooks/midtrans/platform", method("POST", midtransHandler.HandlePlatformWebhook))
+	mux.HandleFunc("/api/v1/public/webhooks/midtrans/tenant", method("POST", midtransHandler.HandleTenantWebhook))
+
 	// Auth routes (public)
 	mux.HandleFunc("/api/v1/auth/login", method("POST", authHandler.Login))
 	mux.HandleFunc("/api/v1/auth/register", method("POST", authHandler.Register))
@@ -290,6 +301,7 @@ func New(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/tenants/verify-otp", method("POST", tenantHandler.VerifyOTP))
 	mux.HandleFunc("/api/v1/tenants/resend-otp", method("POST", tenantHandler.ResendOTP))
 	mux.Handle("/api/v1/tenants/update-plan", requireAuth(methodHandler("PATCH", tenantHandler.UpdateRegistrationPlan)))
+	mux.Handle("/api/v1/tenants/pending-invoice", requireAuth(methodHandler("GET", tenantHandler.GetPendingInvoice)))
 
 	// Affiliate registration (public)
 	mux.HandleFunc("/api/v1/affiliate/register", method("POST", affiliateHandler.Register))
@@ -578,7 +590,7 @@ func New(deps Dependencies) http.Handler {
 	tempoTemplateService := service.NewBillingTempoTemplateService(tempoTemplateRepo)
 	tempoTemplateHandler := handler.NewBillingTempoTemplateHandler(tempoTemplateService)
 
-	portalService := service.NewPortalService(clientRepo, invoiceRepo, servicePackageRepo, paymentRepo)
+	// portalService moved up to line 144
 	portalHandler := handler.NewPortalHandler(portalService)
 
 	// ============================================
@@ -650,6 +662,7 @@ func New(deps Dependencies) http.Handler {
 	// Portal routes
 	mux.Handle("/api/v1/portal/dashboard", requireAuth(methodHandler("GET", portalHandler.GetDashboard)))
 	mux.Handle("/api/v1/portal/invoices", requireAuth(methodHandler("GET", portalHandler.GetInvoices)))
+	mux.Handle("/api/v1/portal/midtrans-config", requireAuth(methodHandler("GET", portalHandler.GetMidtransConfig)))
 	mux.Handle("/api/v1/portal/invoices/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/portal/invoices/")
 		path = strings.TrimSuffix(path, "/") // Remove trailing slash
@@ -670,6 +683,14 @@ func New(deps Dependencies) http.Handler {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
 			return
+		}
+
+		// Snap token route: /api/v1/portal/invoices/{id}/snap-token
+		if len(parts) == 2 && parts[1] == "snap-token" {
+			if r.Method == http.MethodGet {
+				portalHandler.GetSnapToken(w, r)
+				return
+			}
 		}
 
 		// Invoice detail route: /api/v1/portal/invoices/{id}
@@ -989,6 +1010,12 @@ func New(deps Dependencies) http.Handler {
 					return
 				}
 			}
+			if action == "snap-token" {
+				if r.Method == http.MethodGet {
+					resellerHandler.GetSnapToken(w, r)
+					return
+				}
+			}
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
@@ -1015,6 +1042,17 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/portal/reseller/me", requireAuth(methodHandler("GET", resellerHandler.GetMyResellerStatus)))
 	mux.Handle("/api/v1/portal/reseller/prices", requireAuth(methodHandler("GET", resellerHandler.GetMyPrices)))
 	mux.Handle("/api/v1/portal/reseller/purchases", requireAuth(methodHandler("POST", resellerHandler.ProcessMyPurchase)))
+	mux.Handle("/api/v1/portal/reseller/purchases/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/portal/reseller/purchases/")
+		path = strings.TrimSuffix(path, "/")
+		parts := strings.Split(path, "/")
+		if len(parts) == 2 && parts[1] == "snap-token" {
+			r = setPathParam(r, "id", parts[0])
+			resellerHandler.GetSnapToken(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})))
 	mux.Handle("/api/v1/portal/reseller/payment-methods", requireAuth(methodHandler("GET", paymentMethodHandler.List)))
 
 	// ============================================
@@ -1398,6 +1436,18 @@ func New(deps Dependencies) http.Handler {
 			requireCapability(rbac.CapHRView)(http.HandlerFunc(attendanceHandler.GetSettings)).ServeHTTP(w, r)
 		case http.MethodPut:
 			requireCapability(rbac.CapHRManage)(http.HandlerFunc(attendanceHandler.UpdateSettings)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Tenant Settings
+	mux.Handle("/api/v1/tenant/settings/midtrans", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			tenantHandler.GetMidtransConfig(w, r)
+		case http.MethodPatch:
+			tenantHandler.UpdateMidtransConfig(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -2474,6 +2524,15 @@ func New(deps Dependencies) http.Handler {
 	// Subscription routes (Tenant-scoped)
 	// ============================================
 	mux.Handle("/api/v1/subscription/invoices", requireAuth(methodHandler("GET", platformBillingHandler.GetMyInvoices)))
+	mux.Handle("/api/v1/subscription/snap-token/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/subscription/snap-token/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r = setPathParam(r, "id", path)
+		platformBillingHandler.GetSnapToken(w, r)
+	})))
 	mux.Handle("/api/v1/subscription/pay", requireAuth(methodHandler("POST", platformBillingHandler.SubmitPayment)))
 	mux.Handle("/api/v1/subscription/cancel", requireAuth(methodHandler("POST", platformBillingHandler.CancelSubmission)))
 
@@ -2675,6 +2734,18 @@ func New(deps Dependencies) http.Handler {
 		w.WriteHeader(http.StatusNotFound)
 	})))
 	mux.Handle("/api/v1/superadmin/billing/generate", requireSuperAdmin(methodHandler("POST", platformBillingHandler.GenerateInvoices)))
+
+	// Midtrans Platform Settings
+	mux.Handle("/api/v1/superadmin/settings/midtrans", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			siteSettingHandler.GetMidtransConfig(w, r)
+		case http.MethodPatch:
+			siteSettingHandler.UpdateMidtransConfig(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
 
 	// Platform Discounts (Coupons)
 	mux.Handle("/api/v1/superadmin/billing/discounts", requireSuperAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

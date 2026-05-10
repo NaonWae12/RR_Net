@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
+import Script from "next/script";
 import { AuthProvider } from "../lib/providers/AuthProvider";
 import { ToastProvider } from "../lib/providers/ToastProvider";
 import { ErrorBoundary } from "../lib/providers/ErrorBoundary";
@@ -33,6 +34,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <Script 
+          src="https://app.sandbox.midtrans.com/snap/snap.js" 
+          data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+          strategy="afterInteractive"
+        />
         <ErrorBoundary>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <QueryProvider>

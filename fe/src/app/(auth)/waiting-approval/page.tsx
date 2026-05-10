@@ -32,8 +32,11 @@ import {
   Zap, 
   User as UserIcon, 
   Building2,
-  X
+  X,
+  CreditCard as MidtransIcon,
+  Loader2
 } from "lucide-react";
+import { subscriptionService } from "@/lib/api/subscriptionService";
 
 import { Suspense } from "react";
 
@@ -41,7 +44,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1
 
 function WaitingApprovalContent() {
   const router = useRouter();
-  const { user, tenant, ready, logout } = useAuth();
+  const { user, tenant, ready, logout, refreshTenant } = useAuth();
   const { showToast } = useNotificationStore();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [invoice, setInvoice] = useState<any>(null);
@@ -53,6 +56,9 @@ function WaitingApprovalContent() {
   const [plans, setPlans] = useState<any[]>([]);
   const [config, setConfig] = useState<any>(null);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [midtransEnabled, setMidtransEnabled] = useState(false);
+  const [isMidtransLoading, setIsMidtransLoading] = useState(false);
+  const [isProcessingMidtrans, setIsProcessingMidtrans] = useState(false);
 
   useEffect(() => {
     // Wait until auth is ready before checking redirects
@@ -69,9 +75,15 @@ function WaitingApprovalContent() {
       router.push("/login");
       return;
     }
+  }, [ready, tenant?.status, user?.id, tenant?.id, router]);
 
-    fetchData();
-  }, [ready, tenant?.status, user, tenant, router]);
+  // Initial data fetch - only run once when component mounts and auth is ready
+  useEffect(() => {
+    if (ready && user && tenant && tenant.status !== "active") {
+      fetchData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -79,7 +91,8 @@ function WaitingApprovalContent() {
       await Promise.all([
         fetchPaymentMethods(),
         fetchInvoice(),
-        fetchPlans()
+        fetchPlans(),
+        refreshTenant()
       ]);
     } catch (error) {
       console.error("Failed to fetch data:", error);
@@ -90,14 +103,115 @@ function WaitingApprovalContent() {
 
   const fetchPaymentMethods = async () => {
     try {
-      const methods = await paymentMethodService.listPublic();
+      const [methods, mtConfig] = await Promise.all([
+        paymentMethodService.listPublic(),
+        subscriptionService.getPublicMidtransConfig()
+      ]);
+
       if (Array.isArray(methods)) {
         setPaymentMethods(methods.filter(m => m.is_active));
       } else {
         setPaymentMethods([]);
       }
+
+      if (mtConfig.enabled && mtConfig.client_key) {
+        setMidtransEnabled(true);
+        loadMidtransScript(mtConfig.client_key, mtConfig.is_production);
+      }
     } catch (error) {
       console.error("Failed to fetch payment methods:", error);
+    }
+  };
+
+  const loadMidtransScript = (clientKey: string, isProduction: boolean) => {
+    if (typeof window === "undefined") return;
+    if (window.snap) return;
+
+    setIsMidtransLoading(true);
+    const scriptId = "midtrans-snap-script";
+    const existingScript = document.getElementById(scriptId);
+    
+    if (existingScript) {
+      setIsMidtransLoading(false);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = isProduction 
+      ? "https://app.midtrans.com/snap/snap.js" 
+      : "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.id = scriptId;
+    script.setAttribute("data-client-key", clientKey);
+    
+    script.onload = () => {
+      console.log("[Midtrans] Snap SDK script loaded, waiting for window.snap...");
+      let attempts = 0;
+      const checkSnap = setInterval(() => {
+        attempts++;
+        if (window.snap) {
+          console.log("[Midtrans] window.snap initialized after", attempts * 50, "ms");
+          clearInterval(checkSnap);
+          setIsMidtransLoading(false);
+        } else if (attempts > 40) { 
+          console.warn("[Midtrans] window.snap not found after 2s");
+          clearInterval(checkSnap);
+          setIsMidtransLoading(false);
+        }
+      }, 50);
+    };
+
+    script.onerror = (err) => {
+      console.error("[Midtrans] Failed to load Snap SDK script:", err);
+      setIsMidtransLoading(false);
+    };
+
+    document.head.appendChild(script);
+  };
+
+  const handlePayWithMidtrans = async () => {
+    console.log("[Midtrans] handlePayWithMidtrans triggered for invoice:", invoice?.id);
+    if (!invoice?.id) {
+      console.error("[Midtrans] Invoice ID not found. Payment cannot proceed.");
+      return;
+    }
+    
+    if (!window.snap) {
+      console.error("[Midtrans] window.snap is not defined");
+      showToast("Midtrans Snap SDK not loaded. Please refresh.", "error");
+      return;
+    }
+
+    setIsProcessingMidtrans(true);
+    try {
+      console.log("[Midtrans] Fetching Snap Token for invoice:", invoice.id);
+      const token = await subscriptionService.getSnapToken(invoice.id);
+      console.log("[Midtrans] Received Snap Token successfully");
+      
+      window.snap.pay(token, {
+        onSuccess: (result: any) => {
+          console.log("[Midtrans] Payment Success:", result);
+          showToast("Pembayaran berhasil!", "success");
+          fetchData();
+        },
+        onPending: (result: any) => {
+          console.log("[Midtrans] Payment Pending:", result);
+          showToast("Pembayaran tertunda. Silakan selesaikan pembayaran Anda.", "info");
+          fetchData();
+        },
+        onError: (result: any) => {
+          console.error("[Midtrans] Payment Error:", result);
+          showToast("Pembayaran gagal. Silakan coba lagi.", "error");
+        },
+        onClose: () => {
+          console.log("[Midtrans] Payment Popup Closed");
+          showToast("Pembayaran dibatalkan.", "info");
+        }
+      });
+    } catch (error: any) {
+      console.error("[Midtrans] Failed to get Snap Token:", error);
+      showToast(error.response?.data?.error || "Gagal mendapatkan token pembayaran", "error");
+    } finally {
+      setIsProcessingMidtrans(false);
     }
   };
 
@@ -377,14 +491,26 @@ function WaitingApprovalContent() {
 
             {/* Payment Methods */}
             <div className="bg-black/20 border border-white/10 rounded-[2.5rem] p-8 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center shrink-0">
-                  <Wallet className="w-6 h-6 text-emerald-400" />
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center shrink-0">
+                    <Wallet className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-white">Payment Methods</h3>
+                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mt-1">Select your preferred way to pay</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-lg text-white">Payment Methods</h3>
-                  <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mt-1">Select your preferred way to pay</p>
-                </div>
+                {midtransEnabled && invoice && (
+                  <button
+                    onClick={handlePayWithMidtrans}
+                    disabled={isProcessingMidtrans || isMidtransLoading}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-black italic tracking-tighter uppercase text-xs flex items-center gap-2 shadow-lg shadow-indigo-900/40 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                  >
+                    {isProcessingMidtrans ? <Loader2 className="w-4 h-4 animate-spin" /> : <MidtransIcon className="w-4 h-4" />}
+                    Instant Pay
+                  </button>
+                )}
               </div>
 
               {loading ? (

@@ -728,8 +728,6 @@ export interface AttendanceListResponse {
 
 // ========== Reimbursement Types ==========
 
-// ========== Reimbursement Types ==========
-
 export type ReimbursementStatus = "submitted" | "approved" | "rejected" | "paid";
 export type ReimbursementCategory = "transport" | "meal" | "accommodation" | "equipment" | "other" | "medical" | "supplies";
 
@@ -1217,6 +1215,7 @@ export interface ResellerPurchase {
   created_at: string;
   updated_at: string;
   vouchers?: Voucher[];
+  snap_token?: string;
 }
 
 export interface UpgradeClientRequest {

@@ -78,16 +78,10 @@ export function Header({ onMenuClick }: HeaderProps) {
               />
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20">
                 <a
-                  href="/settings/profile"
-                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  Profile Settings
-                </a>
-                <a
                   href="/settings"
                   className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
-                  Account Settings
+                  My Profile & Settings
                 </a>
                 <hr className="my-1 border-slate-200" />
                 <button

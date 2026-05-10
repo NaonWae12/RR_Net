@@ -239,3 +239,28 @@ func (h *PlatformBillingHandler) GenerateInvoices(w http.ResponseWriter, r *http
 	
 	sendJSON(w, http.StatusOK, map[string]string{"message": "Invoices generated successfully"})
 }
+func (h *PlatformBillingHandler) GetSnapToken(w http.ResponseWriter, r *http.Request) {
+	tenantID, _ := auth.GetTenantID(r.Context())
+	idStr := getPathParam(r, "id")
+	invoiceID, err := uuid.Parse(idStr)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid invoice ID")
+		return
+	}
+
+	// Verify invoice belongs to tenant (service should handle this too)
+	inv, err := h.service.GetInvoice(r.Context(), invoiceID)
+	if err != nil || inv.TenantID != tenantID {
+		sendError(w, http.StatusUnauthorized, "Unauthorized access to invoice")
+		return
+	}
+
+	category := r.URL.Query().Get("category")
+	token, err := h.service.GetSnapToken(r.Context(), invoiceID, category)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{"token": token})
+}

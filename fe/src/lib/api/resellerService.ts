@@ -157,7 +157,13 @@ export const resellerService = {
   async submitPayment(id: string): Promise<ResellerPurchase> {
     const response = await apiClient.post<{ data: ResellerPurchase }>(`/resellers/purchases/${id}/submit-payment`, {});
     return response.data?.data;
+  },
+
+  async getSnapToken(purchaseId: string, category: string = ''): Promise<string> {
+    const response = await apiClient.get(`/portal/reseller/purchases/${purchaseId}/snap-token?category=${category}`);
+    return response.data.token;
   }
 };
+
 
 export default resellerService;

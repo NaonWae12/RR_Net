@@ -8,6 +8,7 @@ require (
 	github.com/hibiken/asynq v0.24.1
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/joho/godotenv v1.5.1
+	github.com/midtrans/midtrans-go v1.3.8
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.11.1

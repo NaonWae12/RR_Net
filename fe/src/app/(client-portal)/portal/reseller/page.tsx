@@ -3,7 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import resellerService from '@/lib/api/resellerService';
+import { portalService } from '@/lib/api/portalService';
 import { Reseller, ResellerPrice, ResellerPurchase, Voucher, ResellerDiscount } from '@/lib/api/types';
+
+declare global {
+  interface Window {
+    snap?: {
+      pay: (token: string, options: Record<string, any>) => void;
+    };
+  }
+}
 import { 
   Loader2, 
   CheckCircle, 
@@ -25,7 +34,10 @@ import {
   Tag,
   Eye,
   Percent,
-  Sparkles
+  Sparkles,
+  Building2,
+  Wallet,
+  CreditCard
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { paymentMethodService, PaymentMethod } from '@/lib/api/paymentMethodService';
@@ -46,7 +58,8 @@ export default function PortalResellerPage() {
   const [purchaseSuccess, setPurchaseSuccess] = useState<ResellerPurchase | null>(null);
   const [availablePromos, setAvailablePromos] = useState<ResellerDiscount[]>([]);
   const [appliedPromoId, setAppliedPromoId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'balance' | 'transfer'>('balance');
+  const [paymentCategory, setPaymentCategory] = useState<'balance' | 'manual' | 'instant' | null>('balance');
+  const [instantSubCategory, setInstantSubCategory] = useState<'bank_transfer' | 'ewallet' | 'qris' | null>(null);
   const [availablePaymentMethods, setAvailablePaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('');
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
@@ -64,6 +77,10 @@ export default function PortalResellerPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [showInsufficientBalance, setShowInsufficientBalance] = useState(false);
+  const [midtransEnabled, setMidtransEnabled] = useState(false);
+  const [midtransClientKey, setMidtransClientKey] = useState('');
+  const [isMidtransProduction, setIsMidtransProduction] = useState(false);
+  const [isPayOnlineLoading, setIsPayOnlineLoading] = useState(false);
 
   // History Pagination
   const [historyPage, setHistoryPage] = useState(1);
@@ -72,7 +89,35 @@ export default function PortalResellerPage() {
 
   useEffect(() => {
     checkStatus();
+    loadMidtransConfig();
   }, []);
+
+  const loadMidtransConfig = async () => {
+    try {
+      const config = await portalService.getMidtransConfig();
+      if (config.enabled && config.client_key) {
+        setMidtransEnabled(true);
+        setMidtransClientKey(config.client_key);
+        setIsMidtransProduction(config.is_production);
+        
+        // Inject Snap SDK
+        if (typeof window !== 'undefined' && !window.snap) {
+          const scriptId = 'midtrans-snap-script';
+          if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script');
+            script.id = scriptId;
+            script.src = config.is_production 
+              ? 'https://app.midtrans.com/snap/snap.js' 
+              : 'https://app.sandbox.midtrans.com/snap/snap.js';
+            script.setAttribute('data-client-key', config.client_key);
+            document.body.appendChild(script);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load Midtrans config", err);
+    }
+  };
 
   useEffect(() => {
     if (reseller?.status === 'active') {
@@ -204,7 +249,7 @@ export default function PortalResellerPage() {
     if (!selectedPkg) return;
     
     // Client-side balance check for 'Potong Saldo'
-    if (paymentMethod === 'balance') {
+    if (paymentCategory === 'balance') {
       const currentBalance = reseller?.balance ?? 0;
       if (currentBalance < totalPrice) {
         setShowInsufficientBalance(true);
@@ -216,9 +261,15 @@ export default function PortalResellerPage() {
       setPurchaseStep('processing');
       setIsProcessingPurchase(true);
       const selectedPM = availablePaymentMethods.find(m => m.id === selectedPaymentMethodId);
-      let finalPaymentMethod = paymentMethod === 'transfer' && selectedPM
-        ? (selectedPM.category === 'pay later' ? `PayLater - ${selectedPM.name}` : (selectedPM.provider || selectedPM.name || 'Transfer'))
-        : paymentMethod;
+      
+      let finalPaymentMethod = '';
+      if (paymentCategory === 'balance') {
+        finalPaymentMethod = 'balance';
+      } else if (paymentCategory === 'manual') {
+        finalPaymentMethod = selectedPM ? (selectedPM.provider || selectedPM.name || 'Transfer') : 'transfer';
+      } else if (paymentCategory === 'instant') {
+        finalPaymentMethod = `midtrans_${instantSubCategory}`;
+      }
 
       const result = await resellerService.processMyPurchase({
         voucher_package_id: selectedPkg.voucher_package_id,
@@ -231,7 +282,12 @@ export default function PortalResellerPage() {
       setGeneratedVouchers(result.vouchers || []);
       setPurchaseStep('success');
       checkStatus(); // Refresh revenue etc
-      toast.success("Pembelian voucher berhasil!");
+      
+      if (paymentCategory === 'instant') {
+        handlePayOnline(result.id, instantSubCategory || '');
+      } else {
+        toast.success("Pembelian voucher berhasil!");
+      }
     } catch (err: unknown) {
       console.error("Purchase failed", err);
       setPurchaseStep('input');
@@ -245,6 +301,43 @@ export default function PortalResellerPage() {
       }
     } finally {
       setIsProcessingPurchase(false);
+    }
+  };
+
+  const handlePayOnline = async (purchaseId: string, category: string = '') => {
+    try {
+      setIsPayOnlineLoading(true);
+      const token = await resellerService.getSnapToken(purchaseId, category);
+      
+      if (!window.snap) {
+        toast.error("Midtrans SDK belum siap. Silakan coba lagi.");
+        return;
+      }
+
+      window.snap.pay(token, {
+        onSuccess: () => {
+          toast.success("Pembayaran berhasil!");
+          loadHistory();
+          checkStatus();
+          setViewingPurchase(null);
+        },
+        onPending: () => {
+          toast.info("Pembayaran tertunda. Silakan selesaikan pembayaran Anda.");
+          loadHistory();
+          setViewingPurchase(null);
+        },
+        onError: () => {
+          toast.error("Pembayaran gagal. Silakan coba lagi.");
+        },
+        onClose: () => {
+          setIsPayOnlineLoading(false);
+        }
+      });
+    } catch (err: any) {
+      console.error("Failed to get snap token", err);
+      toast.error(err.response?.data?.error || "Gagal memulai pembayaran online");
+    } finally {
+      setIsPayOnlineLoading(false);
     }
   };
 
@@ -613,7 +706,7 @@ export default function PortalResellerPage() {
                     <button
                       onClick={() => {
                         setShowInsufficientBalance(false);
-                        setPaymentMethod('transfer');
+                        setPaymentCategory('manual');
                       }}
                       className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-indigo-700 transition-all"
                     >
@@ -696,50 +789,122 @@ export default function PortalResellerPage() {
                              {/* Payment Method Selection */}
                              <div className="space-y-4">
                                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">Metode Pembayaran</label>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-3 gap-3">
                                    <button 
                                      type="button"
-                                     onClick={() => setPaymentMethod('balance')}
-                                     className={`p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'balance' ? (reseller.balance >= totalPrice ? 'border-indigo-600 bg-indigo-50' : 'border-red-400 bg-red-50') : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                                     onClick={() => { setPaymentCategory('balance'); setInstantSubCategory(null); }}
+                                     className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 text-center ${paymentCategory === 'balance' ? (reseller.balance >= totalPrice ? 'border-indigo-600 bg-indigo-50' : 'border-red-400 bg-red-50') : 'border-slate-100 bg-white hover:border-slate-200'}`}
                                    >
-                                      <div className="font-bold text-slate-900">Potong Saldo</div>
-                                      <div className={`text-[10px] font-semibold whitespace-nowrap mt-0.5 ${reseller.balance >= totalPrice ? 'text-emerald-600' : 'text-red-500'}`}>Saldo: Rp {reseller.balance.toLocaleString("id-ID")}</div>
+                                      <div className={`p-2.5 rounded-xl ${paymentCategory === 'balance' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                        <Wallet className="w-5 h-5" />
+                                      </div>
+                                      <div className="font-bold text-[10px] text-slate-900">Potong Saldo</div>
+                                      <div className={`text-[8px] font-semibold whitespace-nowrap ${reseller.balance >= totalPrice ? 'text-emerald-600' : 'text-red-500'}`}>Rp {reseller.balance.toLocaleString("id-ID")}</div>
                                    </button>
                                    <button 
                                      type="button"
-                                     onClick={() => setPaymentMethod('transfer')}
-                                     className={`p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'transfer' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                                     onClick={() => { setPaymentCategory('manual'); setInstantSubCategory(null); }}
+                                     className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 text-center ${paymentCategory === 'manual' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                                    >
-                                      <div className="font-bold text-slate-900">Transfer Bank</div>
-                                      <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap">Konfirmasi Manual</div>
+                                      <div className={`p-2.5 rounded-xl ${paymentCategory === 'manual' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                        <Building2 className="w-5 h-5" />
+                                      </div>
+                                      <div className="font-bold text-[10px] text-slate-900">Transfer</div>
+                                      <div className="text-[8px] text-slate-500 font-medium">Manual</div>
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      disabled={!midtransEnabled}
+                                      onClick={() => { setPaymentCategory('instant'); setInstantSubCategory(null); }}
+                                      className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 text-center ${!midtransEnabled ? 'opacity-50 grayscale' : paymentCategory === 'instant' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                                    >
+                                      <div className={`p-2.5 rounded-xl ${paymentCategory === 'instant' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                        <CreditCard className="w-5 h-5" />
+                                      </div>
+                                      <div className="font-bold text-[10px] text-slate-900">Instant</div>
+                                      <div className="text-[8px] text-indigo-600 font-bold">Online</div>
                                     </button>
                                  </div>
 
                                  {/* Insufficient balance inline warning */}
-                                 {paymentMethod === 'balance' && reseller.balance < totalPrice && (
-                                   <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-xs text-red-600 font-bold animate-in fade-in duration-200 mt-2">
+                                 {paymentCategory === 'balance' && reseller.balance < totalPrice && (
+                                   <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-[10px] text-red-600 font-bold animate-in fade-in duration-200 mt-2">
                                      <AlertTriangle size={14} className="flex-shrink-0" />
                                      <span>Saldo tidak mencukupi. Kurang Rp {(totalPrice - reseller.balance).toLocaleString('id-ID')}</span>
                                    </div>
                                  )}
 
-                                {/* Bank Selector if Transfer */}
-                                {paymentMethod === 'transfer' && availablePaymentMethods.length > 0 && (
-                                   <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                 {/* Sub-options for Manual Transfer */}
+                                 {paymentCategory === 'manual' && availablePaymentMethods.length > 0 && (
+                                   <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
                                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Rekening Tujuan</label>
-                                      <select 
-                                        value={selectedPaymentMethodId}
-                                        onChange={(e) => setSelectedPaymentMethodId(e.target.value)}
-                                        className="w-full px-4 py-3 bg-white border-2 border-slate-100 rounded-2xl text-sm font-black text-slate-900 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer"
-                                      >
+                                      <div className="grid grid-cols-1 gap-2">
                                         {availablePaymentMethods.map(pm => (
-                                          <option key={pm.id} value={pm.id}>
-                                            {pm.provider || pm.name} - {pm.account_number} ({pm.account_name})
-                                          </option>
+                                          <div 
+                                            key={pm.id}
+                                            onClick={() => setSelectedPaymentMethodId(pm.id)}
+                                            className={`p-3 rounded-xl border-2 transition-all flex items-center justify-between cursor-pointer ${selectedPaymentMethodId === pm.id ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-100'}`}
+                                          >
+                                            <div className="flex items-center gap-3">
+                                              <div className={`p-1.5 rounded-lg ${selectedPaymentMethodId === pm.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                                <Building2 className="w-4 h-4" />
+                                              </div>
+                                              <div>
+                                                <p className="font-bold text-slate-900 uppercase text-[10px]">{pm.provider || pm.name}</p>
+                                                <p className="text-[10px] font-medium text-slate-500">{pm.account_number}</p>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <button 
+                                                onClick={(e) => { 
+                                                  e.stopPropagation(); 
+                                                  copyToClipboard(pm.account_number || ''); 
+                                                }}
+                                                className={`p-2 rounded-lg transition-colors ${selectedPaymentMethodId === pm.id ? 'bg-white text-indigo-600 shadow-sm' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                                                title="Salin Nomor Rekening"
+                                              >
+                                                <Copy size={14} />
+                                              </button>
+                                              {selectedPaymentMethodId === pm.id && <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center text-white"><CheckCircle size={12}/></div>}
+                                            </div>
+                                          </div>
                                         ))}
-                                      </select>
+                                      </div>
                                    </div>
-                                )}
+                                 )}
+
+                                 {/* Sub-options for Instant Payment */}
+                                 {paymentCategory === 'instant' && (
+                                   <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
+                                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pilih Metode Instant</label>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setInstantSubCategory('bank_transfer')}
+                                          className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${instantSubCategory === 'bank_transfer' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                                        >
+                                          <Building2 className="w-4 h-4 text-slate-500" />
+                                          <p className="text-[9px] font-bold">Bank VA</p>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setInstantSubCategory('ewallet')}
+                                          className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${instantSubCategory === 'ewallet' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                                        >
+                                          <Wallet className="w-4 h-4 text-slate-500" />
+                                          <p className="text-[9px] font-bold">E-Wallet</p>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setInstantSubCategory('qris')}
+                                          className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${instantSubCategory === 'qris' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                                        >
+                                          <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+                                          <p className="text-[9px] font-bold">QRIS</p>
+                                        </button>
+                                      </div>
+                                   </div>
+                                 )}
                              </div>
 
                              {/* Quantity & Calculation Area (Copied Admin Style) */}
@@ -1004,7 +1169,17 @@ export default function PortalResellerPage() {
                                   <span className="font-black text-xl text-amber-700">Rp {viewingPurchase.total_amount.toLocaleString('id-ID')}</span>
                                </div>
                                 {(viewingPurchase.status === 'paylater') && (
-                                   <div className="pt-4 border-t border-amber-200">
+                                   <div className="pt-4 border-t border-amber-200 space-y-3">
+                                      {midtransEnabled && viewingPurchase.payment_method.toLowerCase().includes('midtrans') && (
+                                        <button 
+                                           onClick={() => handlePayOnline(viewingPurchase.id)}
+                                           disabled={isPayOnlineLoading}
+                                           className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                                        >
+                                           {isPayOnlineLoading ? <Loader2 className="animate-spin" size={20} /> : <CreditCard size={20} />}
+                                           Bayar Sekarang (Online)
+                                        </button>
+                                      )}
                                       <button 
                                          onClick={handleSubmitPayment}
                                          disabled={isSubmittingPayment}

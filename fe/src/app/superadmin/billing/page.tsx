@@ -27,7 +27,8 @@ import {
   Ticket,
   Percent,
   Calendar,
-  Tag
+  Tag,
+  Zap
 } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/tables";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,7 +43,20 @@ import {
 import { StatusBadge } from "@/components/utilities";
 import { PaymentMethodModal } from "@/components/superadmin/PaymentMethodModal";
 import { DiscountModal } from "@/components/superadmin/DiscountModal";
+import { MidtransPlatformModal } from "@/components/superadmin/MidtransPlatformModal";
+import { superAdminService } from "@/lib/api/superAdminService";
 import GeneratePlatformInvoiceModal from "@/components/superadmin/GeneratePlatformInvoiceModal";
+import { MDRSettingsModal } from "@/components/superadmin/MDRSettingsModal";
+import { FeeConfigurationModal } from "@/components/common/FeeConfigurationModal";
+import { Scale, Settings2 } from "lucide-react";
+
+declare global {
+  interface Window {
+    snap?: {
+      pay: (token: string, options: Record<string, any>) => void;
+    };
+  }
+}
 
 const container = {
   hidden: { opacity: 0 },
@@ -96,11 +110,24 @@ export default function SuperAdminBillingPage() {
   const [discounts, setDiscounts] = useState<PlatformDiscount[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMidtransModalOpen, setIsMidtransModalOpen] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [selectedDiscount, setSelectedDiscount] = useState<PlatformDiscount | null>(null);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [discountModalMode, setDiscountModalMode] = useState<"create" | "edit">("create");
+  const [midtransConfig, setMidtransConfig] = useState<any>(null);
+  const [isMDRModalOpen, setIsMDRModalOpen] = useState(false);
+  const [isFeeModalOpen, setIsFeeModalOpen] = useState(false);
+
+  const fetchMidtransConfig = async () => {
+    try {
+      const config = await superAdminService.getMidtransConfig();
+      setMidtransConfig(config);
+    } catch (error) {
+      console.error("[BillingPage] Failed to fetch Midtrans config:", error);
+    }
+  };
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -315,6 +342,7 @@ export default function SuperAdminBillingPage() {
     } else if (activeTab === "discounts") {
       fetchDiscounts();
     }
+    fetchMidtransConfig();
   }, [activeTab]);
 
   const handleVerify = async (invoiceId: string, approved: boolean) => {
@@ -344,6 +372,61 @@ export default function SuperAdminBillingPage() {
         type: "error",
         title: "Action Failed",
         message: "Unable to process payment verification at this time."
+      });
+    }
+  };
+
+  const handlePayOnline = async (invoiceId: string) => {
+    try {
+      toast({
+        type: "info",
+        title: "Processing",
+        message: "Requesting payment token..."
+      });
+      
+      const token = await subscriptionService.getSnapToken(invoiceId);
+      
+      if (window.snap) {
+        window.snap.pay(token, {
+          onSuccess: (result: any) => {
+            console.log("Payment success:", result);
+            toast({
+              type: "success",
+              title: "Payment Successful",
+              message: "Your payment has been processed successfully."
+            });
+            fetchInvoices();
+          },
+          onPending: (result: any) => {
+            console.log("Payment pending:", result);
+            toast({
+              type: "warning",
+              title: "Payment Pending",
+              message: "Please complete your payment."
+            });
+            fetchInvoices();
+          },
+          onError: (result: any) => {
+            console.error("Payment error:", result);
+            toast({
+              type: "error",
+              title: "Payment Failed",
+              message: "There was an error processing your payment."
+            });
+          },
+          onClose: () => {
+            console.log("Payment popup closed");
+          }
+        });
+      } else {
+        throw new Error("Midtrans Snap SDK not loaded");
+      }
+    } catch (error: any) {
+      console.error("[BillingPage] Payment failed:", error);
+      toast({
+        type: "error",
+        title: "Payment Error",
+        message: error.message || "Failed to initialize online payment."
       });
     }
   };
@@ -473,6 +556,7 @@ export default function SuperAdminBillingPage() {
                 <div className="h-px bg-slate-100 my-1 mx-1" />
               </>
             )}
+
             <DropdownMenuItem 
               className="flex items-center gap-2 py-2 px-3 rounded-lg focus:bg-slate-50 cursor-pointer font-jakarta"
               onClick={() => {}}
@@ -755,8 +839,72 @@ export default function SuperAdminBillingPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
-            className="space-y-6"
+            className="space-y-8"
           >
+            {/* Midtrans Platform Card */}
+            <motion.div
+              variants={item}
+              className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 overflow-hidden relative group"
+            >
+              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                <Zap size={140} className="text-purple-600" />
+              </div>
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+                <div className="flex items-center gap-6">
+                  <div className="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-purple-200">
+                    <Zap className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="text-xl font-bold text-slate-900">Midtrans Integration</h3>
+                      <StatusBadge 
+                        status={midtransConfig?.enabled ? "active" : "inactive"} 
+                        variant={midtransConfig?.enabled ? "success" : "default"} 
+                        size="sm" 
+                      />
+                    </div>
+                    <p className="text-sm text-slate-500 max-w-xl">
+                      Automate platform-to-tenant billing. When enabled, tenants can pay their subscription invoices 
+                      automatically via Midtrans Snap using VA, QRIS, or Credit Cards.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIsMDRModalOpen(true)}
+                    className="border-slate-200 text-slate-600 font-bold px-4 rounded-xl hover:bg-slate-50 transition-all"
+                  >
+                    <Settings2 className="w-4 h-4 mr-2" />
+                    MDR Settings
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIsFeeModalOpen(true)}
+                    className="border-slate-200 text-slate-600 font-bold px-4 rounded-xl hover:bg-slate-50 transition-all"
+                  >
+                    <Scale className="w-4 h-4 mr-2" />
+                    Fee Sharing
+                  </Button>
+                  <Button 
+                    onClick={() => setIsMidtransModalOpen(true)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 rounded-xl shadow-lg shadow-purple-200 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Zap className="w-4 h-4 mr-2 fill-current" />
+                    Configure Gateway
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-indigo-500" />
+                Manual Payment Methods
+              </h3>
+              <p className="text-xs text-slate-400 font-medium">Configure bank accounts for manual transfer verification</p>
+            </div>
+
             {/* Payment Methods Grid */}
             {loading ? (
               <div className="flex items-center justify-center py-20">
@@ -992,6 +1140,38 @@ export default function SuperAdminBillingPage() {
           is_active: selectedMethod.is_active,
         } : undefined}
         mode={modalMode}
+      />
+
+      <MidtransPlatformModal 
+        isOpen={isMidtransModalOpen} 
+        onClose={() => setIsMidtransModalOpen(false)} 
+      />
+
+      <MDRSettingsModal
+        isOpen={isMDRModalOpen}
+        onClose={() => setIsMDRModalOpen(false)}
+        config={midtransConfig}
+        onUpdate={fetchMidtransConfig}
+      />
+
+      <FeeConfigurationModal
+        isOpen={isFeeModalOpen}
+        onClose={() => setIsFeeModalOpen(false)}
+        config={midtransConfig}
+        onSave={async (share) => {
+          await superAdminService.updateMidtransConfig({
+            ...midtransConfig,
+            customer_share_percent: share
+          });
+          toast({
+            type: "success",
+            title: "Fee Sharing Updated",
+            message: "Tenant subscription fee sharing has been updated."
+          });
+          fetchMidtransConfig();
+        }}
+        title="Subscription Fee Sharing"
+        description="Set how transaction fees are shared for platform billing."
       />
 
       <DiscountModal

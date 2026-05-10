@@ -122,6 +122,7 @@ type ResellerPurchase struct {
 	VoucherPackageName string             `json:"voucher_package_name"`
 	PromoCode          string             `json:"promo_code,omitempty"`
 	Vouchers           []*voucher.Voucher `json:"vouchers,omitempty"`
+	SnapToken          string             `json:"snap_token,omitempty"`
 }
 
 // ResellerListFilter represents filters for listing resellers

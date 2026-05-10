@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -581,4 +582,45 @@ func (s *TenantService) DeleteTenant(ctx context.Context, tenantID uuid.UUID) er
 
 	log.Info().Str("tenant_id", tenantID.String()).Msg("Tenant and its users deleted successfully")
 	return nil
+}
+// UpdateMidtransConfig updates the tenant's Midtrans configuration
+func (s *TenantService) UpdateMidtransConfig(ctx context.Context, tenantID uuid.UUID, config *MidtransConfig) error {
+	t, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	if t.Settings == nil {
+		t.Settings = make(map[string]interface{})
+	}
+
+	t.Settings["midtrans"] = config
+	return s.tenantRepo.UpdateSettings(ctx, tenantID, t.Settings)
+}
+
+// GetMidtransConfig retrieves the tenant's Midtrans configuration
+func (s *TenantService) GetMidtransConfig(ctx context.Context, tenantID uuid.UUID) (*MidtransConfig, error) {
+	t, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	midtransData, ok := t.Settings["midtrans"]
+	if !ok {
+		return &MidtransConfig{Enabled: false}, nil
+	}
+
+	// Since it's from a map[string]interface{} coming from JSON, 
+	// we might need to convert it back to struct
+	jsonStr, err := json.Marshal(midtransData)
+	if err != nil {
+		return nil, err
+	}
+
+	var config MidtransConfig
+	if err := json.Unmarshal(jsonStr, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }

@@ -12,6 +12,8 @@ import (
 	"rrnet/internal/domain/client"
 	"rrnet/internal/domain/reseller"
 	"rrnet/internal/repository"
+	"github.com/midtrans/midtrans-go"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -30,6 +32,8 @@ type ResellerService struct {
 	discountRepo   *repository.DiscountRepository
 	voucherService *VoucherService
 	financeService *FinanceService
+	midtransService *MidtransService
+	tenantService   *TenantService
 }
 
 // NewResellerService creates a new reseller service
@@ -39,6 +43,8 @@ func NewResellerService(
 	discountRepo *repository.DiscountRepository,
 	voucherService *VoucherService,
 	financeService *FinanceService,
+	midtransService *MidtransService,
+	tenantService *TenantService,
 ) *ResellerService {
 	return &ResellerService{
 		resellerRepo:   resellerRepo,
@@ -46,6 +52,8 @@ func NewResellerService(
 		discountRepo:   discountRepo,
 		voucherService: voucherService,
 		financeService: financeService,
+		midtransService: midtransService,
+		tenantService:   tenantService,
 	}
 }
 
@@ -381,8 +389,10 @@ func (s *ResellerService) ProcessPurchase(ctx context.Context, tenantID, reselle
 	// Calculate margin (Estimated Profit: RetailTotal - TotalAmountPaid)
 	margin := retailTotal - totalAmount
 
-	// Determine initial status based on payment method
+	// Determine initial status and deduct amount based on payment method
 	status := reseller.PurchaseStatusPending
+	var deductAmount float64
+
 	if paymentMethod == "balance" {
 		// Verify reseller balance
 		r, err := s.resellerRepo.GetByID(ctx, tenantID, resellerID)
@@ -393,10 +403,7 @@ func (s *ResellerService) ProcessPurchase(ctx context.Context, tenantID, reselle
 			return nil, ErrInsufficientBalance
 		}
 
-		// Deduct balance
-		if err := s.resellerRepo.UpdateBalance(ctx, tenantID, resellerID, -totalAmount); err != nil {
-			return nil, fmt.Errorf("failed to deduct balance: %w", err)
-		}
+		deductAmount = totalAmount
 		status = reseller.PurchaseStatusSuccess
 	}
 
@@ -420,8 +427,31 @@ func (s *ResellerService) ProcessPurchase(ctx context.Context, tenantID, reselle
 		UpdatedAt:        time.Now(),
 	}
 
-	if err := s.resellerRepo.CreatePurchase(ctx, purchase); err != nil {
-		return nil, fmt.Errorf("failed to create purchase: %w", err)
+	// Use the transactional method to create purchase and deduct balance together
+	if err := s.resellerRepo.CreatePurchaseWithBalanceUpdate(ctx, purchase, deductAmount); err != nil {
+		return nil, fmt.Errorf("failed to process purchase transaction: %w", err)
+	}
+
+	// Generate Midtrans Snap Token if method is midtrans
+	if paymentMethod == "midtrans" {
+		config, err := s.tenantService.GetMidtransConfig(ctx, tenantID)
+		if err == nil && config.Enabled {
+			// Get Reseller info for customer details
+			resellerInfo, _ := s.resellerRepo.GetByID(ctx, tenantID, resellerID)
+			customer := &midtrans.CustomerDetails{
+				FName: resellerInfo.ClientName,
+				Email: resellerInfo.ClientEmail,
+				Phone: resellerInfo.ClientPhone,
+			}
+
+			midtransOrderID := fmt.Sprintf("RS_%s_%d", purchase.ID.String(), time.Now().Unix())
+			token, err := s.midtransService.CreateSnapToken(ctx, midtransOrderID, int64(totalAmount), *config, customer, "reseller_purchase")
+			if err == nil {
+				purchase.SnapToken = token
+			} else {
+				log.Error().Err(err).Msg("Failed to create Midtrans Snap token for reseller purchase")
+			}
+		}
 	}
 
 	// Only Generate Vouchers if status is Success (e.g. balance payment)
@@ -435,8 +465,18 @@ func (s *ResellerService) ProcessPurchase(ctx context.Context, tenantID, reselle
 			CodeLength:         4,
 			ResellerPurchaseID: &purchase.ID,
 		})
+		
 		if err != nil {
-			return nil, fmt.Errorf("payment successful but voucher generation failed: %w", err)
+			// MANUAL COMPENSATION (SAGA ROLLBACK)
+			// Delete the partially generated vouchers
+			_ = s.voucherService.DeleteVouchersByPurchase(ctx, tenantID, purchase.ID)
+			// Delete the purchase record
+			_ = s.resellerRepo.DeletePurchase(ctx, tenantID, purchase.ID)
+			// Refund the balance back to the reseller
+			if deductAmount > 0 {
+				_ = s.resellerRepo.UpdateBalance(ctx, tenantID, resellerID, deductAmount)
+			}
+			return nil, fmt.Errorf("payment successful but voucher generation failed, transaction rolled back: %w", err)
 		}
 
 		// Record revenue for the tenant
@@ -450,6 +490,9 @@ func (s *ResellerService) ProcessPurchase(ctx context.Context, tenantID, reselle
 	if err != nil {
 		return nil, err
 	}
+
+	// Preserve the snap_token (in-memory only, not in DB)
+	p.SnapToken = purchase.SnapToken
 
 	// Load generated vouchers if any
 	if status == reseller.PurchaseStatusSuccess {
@@ -497,7 +540,12 @@ func (s *ResellerService) ConfirmPurchase(ctx context.Context, tenantID, purchas
 			ResellerPurchaseID: &p.ID,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate vouchers: %w", err)
+			// MANUAL COMPENSATION (SAGA ROLLBACK)
+			// Delete any partially generated vouchers
+			_ = s.voucherService.DeleteVouchersByPurchase(ctx, tenantID, p.ID)
+			// Revert the purchase status back to Pending
+			_ = s.resellerRepo.UpdatePurchaseStatus(ctx, tenantID, p.ID, reseller.PurchaseStatusPending)
+			return nil, fmt.Errorf("failed to generate vouchers, transaction rolled back: %w", err)
 		}
 
 		// Record revenue immediately ONLY for non-paylater
@@ -628,3 +676,75 @@ func (s *ResellerService) DeleteReseller(ctx context.Context, tenantID, reseller
 	// 4. Delete the reseller record
 	return s.resellerRepo.Delete(ctx, tenantID, resellerID)
 }
+
+func (s *ResellerService) GetSnapToken(ctx context.Context, tenantID, resellerID, purchaseID uuid.UUID, category string) (string, error) {
+	// 1. Get purchase
+	p, err := s.resellerRepo.GetPurchaseByID(ctx, tenantID, purchaseID)
+	if err != nil {
+		return "", err
+	}
+
+	// Verify reseller ID
+	if p.ResellerID != resellerID {
+		return "", fmt.Errorf("unauthorized")
+	}
+
+	// 2. Get tenant's Midtrans config
+	config, err := s.tenantService.GetMidtransConfig(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+
+	if !config.Enabled {
+		return "", fmt.Errorf("pembayaran otomatis sedang tidak aktif untuk ISP ini")
+	}
+
+	// 3. Prepare customer details
+	customer := &midtrans.CustomerDetails{
+		FName: p.ResellerName,
+	}
+
+	// 4. Generate unique Order ID for Midtrans
+	// Format: RS_[purchaseID]_[timestamp]
+	uniqueOrderID := fmt.Sprintf("RS_%s_%d", p.ID.String(), time.Now().Unix())
+
+	// 5. Create Snap Token
+	return s.midtransService.CreateSnapToken(ctx, uniqueOrderID, int64(p.TotalAmount), *config, customer, category)
+}
+
+func (s *ResellerService) HandleMidtransPayment(ctx context.Context, tenantID uuid.UUID, orderID string, amount int64) error {
+	// OrderID format: RS_[purchaseID]_[timestamp]
+	parts := strings.Split(orderID, "_")
+	if len(parts) < 2 || parts[0] != "RS" {
+		return fmt.Errorf("invalid order id format for reseller payment")
+	}
+
+	purchaseID, err := uuid.Parse(parts[1])
+	if err != nil {
+		return fmt.Errorf("failed to parse purchase id from order id: %w", err)
+	}
+
+	// Get purchase
+	p, err := s.resellerRepo.GetPurchaseByID(ctx, tenantID, purchaseID)
+	if err != nil {
+		return err
+	}
+
+	// Check if already processed
+	if p.Status == reseller.PurchaseStatusSuccess {
+		log.Info().Str("purchaseID", purchaseID.String()).Msg("Purchase already successful, skipping Midtrans handling")
+		return nil
+	}
+
+	// Confirm the purchase (which generates vouchers and records revenue)
+	_, err = s.ConfirmPurchase(ctx, tenantID, purchaseID)
+	return err
+}
+
+func (s *ResellerService) GetPurchaseByIDRaw(ctx context.Context, id uuid.UUID) (*reseller.ResellerPurchase, error) {
+	// We need a repository method that doesn't require tenantID for initial lookup
+	// Or we can just use uuid.Nil for tenantID if the repo allows it, but it's better to be explicit.
+	return s.resellerRepo.GetPurchaseByIDRaw(ctx, id)
+}
+
+

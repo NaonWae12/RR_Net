@@ -901,3 +901,48 @@ func (h *ResellerHandler) SubmitPayment(w http.ResponseWriter, r *http.Request) 
 		"message": "Payment notification submitted successfully",
 	})
 }
+
+func (h *ResellerHandler) GetSnapToken(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == (uuid.UUID{}) {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+
+	// Resolve ClientID from UserID
+	client, err := h.svc.GetClientByUserID(r.Context(), tenantID, userID)
+	if err != nil {
+		sendError(w, http.StatusForbidden, "User profile not found")
+		return
+	}
+
+	// Get Reseller
+	res, err := h.svc.GetResellerByClientID(r.Context(), tenantID, client.ID)
+	if err != nil {
+		sendError(w, http.StatusForbidden, "Only active resellers can purchase vouchers")
+		return
+	}
+
+	purchaseID, err := uuid.Parse(getPathParam(r, "id"))
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid purchase ID")
+		return
+	}
+
+	category := r.URL.Query().Get("category")
+	token, err := h.svc.GetSnapToken(r.Context(), tenantID, res.ID, purchaseID, category)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get snap token for reseller purchase")
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{"token": token})
+}
+

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import { 
   Users, 
   ShoppingBag, 
@@ -37,6 +38,7 @@ import clientService from '@/lib/api/clientService';
 import { voucherService } from '@/lib/api/voucherService';
 import { networkService } from '@/lib/api/networkService';
 import { paymentMethodService, PaymentMethod } from '@/lib/api/paymentMethodService';
+import portalService from '@/lib/api/portalService';
 import { 
   Reseller, 
   ResellerPurchase, 
@@ -158,6 +160,11 @@ export default function ResellerPage() {
   const [isProcessingConfirm, setIsProcessingConfirm] = useState(false);
   const [availablePaymentMethods, setAvailablePaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('');
+  const [isMidtransEnabled, setIsMidtransEnabled] = useState(false);
+  const [isProcessingSnap, setIsProcessingSnap] = useState(false);
+  const [midtransScriptUrl, setMidtransScriptUrl] = useState('');
+  const [midtransClientKey, setMidtransClientKey] = useState('');
+  const [isSnapReady, setIsSnapReady] = useState(false);
 
   // Pagination States for Purchase History
   const [purchasePage, setPurchasePage] = useState(1);
@@ -234,6 +241,27 @@ export default function ResellerPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const checkMidtrans = async () => {
+      try {
+        const config = await portalService.getMidtransConfig();
+        console.log('[Midtrans] Config response:', config);
+        if (config && config.enabled) {
+          setIsMidtransEnabled(true);
+          setMidtransClientKey(config.client_key);
+          setMidtransScriptUrl(
+            config.is_production 
+              ? 'https://app.midtrans.com/snap/snap.js' 
+              : 'https://app.sandbox.midtrans.com/snap/snap.js'
+          );
+        }
+      } catch (e) {
+        console.error('[Midtrans] Failed to check config', e);
+      }
+    };
+    checkMidtrans();
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -358,7 +386,7 @@ export default function ResellerPage() {
       const promoCode = appliedPromoId ? generatedDiscounts.find(d => d.id === appliedPromoId)?.code : undefined;
       
       let finalPaymentMethod = paymentMethod;
-      if (paymentMethod !== 'balance' && selectedPaymentMethodId) {
+      if (paymentMethod !== 'balance' && paymentMethod !== 'midtrans' && selectedPaymentMethodId) {
         const pm = availablePaymentMethods.find(m => m.id === selectedPaymentMethodId);
         if (pm) {
           finalPaymentMethod = pm.category === 'pay later' ? `PayLater - ${pm.name}` : (pm.name || pm.provider || paymentMethod);
@@ -379,7 +407,58 @@ export default function ResellerPage() {
       }
       
       setCurrentGeneratedPurchase(purchase);
-      setStep('success');
+      
+      // If payment method is Midtrans, trigger Snap immediately
+      if (paymentMethod === 'midtrans') {
+        const token = purchase.snap_token;
+        console.log('[Midtrans] Purchase created, snap_token:', token, 'isSnapReady:', isSnapReady, 'window.snap:', !!(window as any).snap);
+        
+        if (token) {
+          // Close generator modal so Snap popup is clearly visible
+          setStep('input');
+          setIsGeneratingVoucher(false);
+          
+          // Small delay to let React re-render (close modal) before opening Snap
+          setTimeout(() => {
+            if ((window as any).snap) {
+              console.log('[Midtrans] Calling snap.pay() with token:', token);
+              (window as any).snap.pay(token, {
+                onSuccess: (result: any) => {
+                  console.log('[Midtrans] Payment success', result);
+                  fetchData();
+                },
+                onPending: (result: any) => {
+                  console.log('[Midtrans] Payment pending', result);
+                  fetchData();
+                  setViewingPurchase(purchase);
+                },
+                onError: (err: any) => {
+                  console.error('[Midtrans] Payment error', err);
+                  setViewingPurchase(purchase);
+                },
+                onClose: () => {
+                  console.log('[Midtrans] Snap popup closed');
+                  fetchData();
+                  setViewingPurchase(purchase);
+                }
+              });
+            } else {
+              // Fallback: open redirect URL in new tab
+              console.error('[Midtrans] window.snap not available, using redirect fallback');
+              const redirectUrl = `https://app.sandbox.midtrans.com/snap/v4/redirection/${token}`;
+              window.open(redirectUrl, '_blank');
+              fetchData();
+              setViewingPurchase(purchase);
+            }
+          }, 300);
+        } else {
+          console.warn('[Midtrans] No snap_token in server response');
+          setStep('success');
+        }
+      } else {
+        setStep('success');
+      }
+      
       // Update list
       setPurchasesList([purchase, ...purchasesList]);
     } catch (error) {
@@ -515,6 +594,35 @@ export default function ResellerPage() {
     }
   };
 
+  const handleMidtransPay = async (purchase: ResellerPurchase) => {
+    setIsProcessingSnap(true);
+    try {
+      const token = await resellerService.getSnapToken(purchase.id);
+      console.log('Manual pay triggering Snap with token:', token);
+      if ((window as any).snap) {
+        (window as any).snap.pay(token, {
+          onSuccess: (result: any) => {
+            console.log('Payment success', result);
+            fetchData();
+            setViewingPurchase(null);
+          },
+          onPending: (result: any) => {
+            console.log('Payment pending', result);
+            setViewingPurchase(null);
+          },
+          onClose: () => {
+            console.log('Snap closed');
+          }
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to initiate online payment");
+    } finally {
+      setIsProcessingSnap(false);
+    }
+  };
+
   const checkVouchersAndDelete = async (reseller: Reseller) => {
     setIsCheckingVouchers(true);
     try {
@@ -549,6 +657,21 @@ export default function ResellerPage() {
 
   return (
     <div className="space-y-6">
+      {/* Midtrans Snap SDK - loaded via Next.js Script component */}
+      {midtransScriptUrl && (
+        <Script
+          src={midtransScriptUrl}
+          data-client-key={midtransClientKey}
+          strategy="afterInteractive"
+          onReady={() => {
+            console.log('[Midtrans] Snap SDK loaded and ready! window.snap:', !!(window as any).snap);
+            setIsSnapReady(true);
+          }}
+          onError={(e) => {
+            console.error('[Midtrans] Failed to load Snap SDK:', e);
+          }}
+        />
+      )}
       {/* Reseller Detail Modal */}
       {viewingReseller && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
@@ -725,9 +848,12 @@ export default function ResellerPage() {
                        >
                          <option value="Transfer">Manual Transfer / Cash</option>
                          <option value="balance">Deduct Reseller Balance</option>
+                         {isMidtransEnabled && (
+                           <option value="midtrans">Online Payment (Midtrans)</option>
+                         )}
                        </select>
                     </div>
-                    {paymentMethod !== 'balance' && (
+                    {paymentMethod !== 'balance' && paymentMethod !== 'midtrans' && (
                       <div className="space-y-1.5">
                         <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Account / Bank</label>
                         <select 
@@ -1439,6 +1565,20 @@ export default function ResellerPage() {
                   <Printer size={18} />
                   Cetak Voucher
                 </button>
+                {viewingPurchase.status !== 'success' && isMidtransEnabled && (
+                  <button 
+                    onClick={() => handleMidtransPay(viewingPurchase)}
+                    disabled={isProcessingSnap}
+                    className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-100 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isProcessingSnap ? (
+                      <Clock className="animate-spin" size={18} />
+                    ) : (
+                      <ShoppingBag size={18} />
+                    )}
+                    Pay Online
+                  </button>
+                )}
                 <button 
                   onClick={() => setViewingPurchase(null)}
                   className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"

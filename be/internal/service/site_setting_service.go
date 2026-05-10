@@ -14,6 +14,8 @@ type SiteSettingService interface {
 	UpdatePricingConfig(ctx context.Context, config *site_setting.LandingPagePricing) error
 	ListSettings(ctx context.Context) ([]site_setting.SiteSetting, error)
 	GetByKey(ctx context.Context, key string) (*site_setting.SiteSetting, error)
+	GetMidtransConfig(ctx context.Context) (*MidtransConfig, error)
+	UpdateMidtransConfig(ctx context.Context, config *MidtransConfig) error
 }
 
 type siteSettingService struct {
@@ -109,4 +111,34 @@ func (s *siteSettingService) ListSettings(ctx context.Context) ([]site_setting.S
 
 func (s *siteSettingService) GetByKey(ctx context.Context, key string) (*site_setting.SiteSetting, error) {
 	return s.repo.GetByKey(ctx, key)
+}
+
+func (s *siteSettingService) GetMidtransConfig(ctx context.Context) (*MidtransConfig, error) {
+	setting, err := s.repo.GetByKey(ctx, "midtrans_platform_config")
+	if err != nil {
+		return &MidtransConfig{Enabled: false}, nil
+	}
+
+	var config MidtransConfig
+	if len(setting.Value) > 0 && string(setting.Value) != "{}" {
+		if err := json.Unmarshal(setting.Value, &config); err != nil {
+			return nil, err
+		}
+	}
+	return &config, nil
+}
+
+func (s *siteSettingService) UpdateMidtransConfig(ctx context.Context, config *MidtransConfig) error {
+	val, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	setting := &site_setting.SiteSetting{
+		Key:         "midtrans_platform_config",
+		Value:       val,
+		Description: "Midtrans Configuration for Platform Billing",
+	}
+
+	return s.repo.Upsert(ctx, setting)
 }

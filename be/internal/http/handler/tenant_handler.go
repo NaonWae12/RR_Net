@@ -174,3 +174,42 @@ func (h *TenantHandler) UpdateRegistrationPlan(w http.ResponseWriter, r *http.Re
 
 	sendJSON(w, http.StatusOK, invoice)
 }
+
+// GetMidtransConfig handles GET /api/v1/tenant/settings/midtrans
+func (h *TenantHandler) GetMidtransConfig(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	config, err := h.tenantService.GetMidtransConfig(r.Context(), tenantID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, config)
+}
+
+// UpdateMidtransConfig handles PATCH /api/v1/tenant/settings/midtrans
+func (h *TenantHandler) UpdateMidtransConfig(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	var config service.MidtransConfig
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := h.tenantService.UpdateMidtransConfig(r.Context(), tenantID, &config); err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, config)
+}

@@ -77,6 +77,34 @@ func (r *PlatformBillingRepository) GetInvoiceByID(ctx context.Context, id uuid.
 	return &inv, nil
 }
 
+func (r *PlatformBillingRepository) GetInvoiceByNumber(ctx context.Context, number string) (*billing.PlatformInvoice, error) {
+	query := `
+		SELECT 
+			i.id, i.tenant_id, t.name as tenant_name, i.plan_id, p.name as plan_name, i.invoice_number, 
+			i.period_start, i.period_end, i.due_date, i.subtotal, i.discount_amount, i.discount_id, i.addon_id, i.addon_quantity, a.name as addon_name, i.amount, i.currency, i.status, 
+			i.paid_amount, i.paid_at, i.notes, i.created_at, i.updated_at
+		FROM platform_invoices i
+		JOIN tenants t ON i.tenant_id = t.id
+		LEFT JOIN plans p ON i.plan_id = p.id
+		LEFT JOIN addons a ON i.addon_id = a.id
+		WHERE i.invoice_number = $1
+	`
+	var inv billing.PlatformInvoice
+	err := r.db.QueryRow(ctx, query, number).Scan(
+		&inv.ID, &inv.TenantID, &inv.TenantName, &inv.PlanID, &inv.PlanName, &inv.InvoiceNumber,
+		&inv.PeriodStart, &inv.PeriodEnd, &inv.DueDate, &inv.Subtotal, &inv.DiscountAmount, &inv.DiscountID, &inv.AddonID, &inv.AddonQuantity, &inv.AddonName, &inv.Amount, &inv.Currency, &inv.Status,
+		&inv.PaidAmount, &inv.PaidAt, &inv.Notes, &inv.CreatedAt, &inv.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("platform invoice not found")
+		}
+		return nil, err
+	}
+
+	return &inv, nil
+}
+
 func (r *PlatformBillingRepository) ListInvoices(ctx context.Context, tenantID *uuid.UUID) ([]*billing.PlatformInvoice, error) {
 	query := `
 		SELECT 

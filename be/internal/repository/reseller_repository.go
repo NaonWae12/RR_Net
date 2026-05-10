@@ -429,6 +429,49 @@ func (r *ResellerRepository) CreatePurchase(ctx context.Context, purchase *resel
 	return err
 }
 
+// CreatePurchaseWithBalanceUpdate creates a new reseller purchase and deducts balance in a single transaction
+func (r *ResellerRepository) CreatePurchaseWithBalanceUpdate(ctx context.Context, purchase *reseller.ResellerPurchase, deductAmount float64) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 1. Deduct balance if requested
+	if deductAmount > 0 {
+		updateQuery := `UPDATE resellers SET balance = balance - $1, updated_at = NOW() WHERE tenant_id = $2 AND id = $3`
+		result, err := tx.Exec(ctx, updateQuery, deductAmount, purchase.TenantID, purchase.ResellerID)
+		if err != nil {
+			return fmt.Errorf("failed to deduct balance: %w", err)
+		}
+		if result.RowsAffected() == 0 {
+			return ErrResellerNotFound
+		}
+	}
+
+	// 2. Insert purchase record
+	insertQuery := `
+		INSERT INTO reseller_purchases (
+			id, tenant_id, reseller_id, voucher_package_id, router_id, quantity,
+			unit_price, subtotal, discount_id, discount_amount, total_amount, margin,
+			payment_method, status, notes, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+	`
+	_, err = tx.Exec(ctx, insertQuery,
+		purchase.ID, purchase.TenantID, purchase.ResellerID, purchase.VoucherPackageID,
+		purchase.RouterID, purchase.Quantity, purchase.UnitPrice, purchase.Subtotal,
+		purchase.DiscountID, purchase.DiscountAmount, purchase.TotalAmount, purchase.Margin,
+		purchase.PaymentMethod, purchase.Status, purchase.Notes,
+		purchase.CreatedAt, purchase.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert purchase: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 // GetPurchaseByID retrieves a purchase by ID
 func (r *ResellerRepository) GetPurchaseByID(ctx context.Context, tenantID, id uuid.UUID) (*reseller.ResellerPurchase, error) {
 	query := `
@@ -671,3 +714,28 @@ func (r *ResellerRepository) scanPurchaseFromRows(rows pgx.Rows) (*reseller.Rese
 	}
 	return &purchase, nil
 }
+
+func (r *ResellerRepository) GetPurchaseByIDRaw(ctx context.Context, id uuid.UUID) (*reseller.ResellerPurchase, error) {
+	query := `
+		SELECT rp.id, rp.tenant_id, rp.reseller_id, rp.voucher_package_id, rp.router_id, rp.quantity,
+			rp.unit_price, rp.subtotal, rp.discount_id, rp.discount_amount, rp.total_amount, rp.margin,
+			rp.payment_method, rp.status, rp.notes, rp.created_at, rp.updated_at,
+			r.name as reseller_name, vp.name as voucher_package_name, '' as promo_code
+		FROM reseller_purchases rp
+		JOIN resellers r ON r.id = rp.reseller_id
+		JOIN voucher_packages vp ON vp.id = rp.voucher_package_id
+		WHERE rp.id = $1
+	`
+	var p reseller.ResellerPurchase
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&p.ID, &p.TenantID, &p.ResellerID, &p.VoucherPackageID, &p.RouterID, &p.Quantity,
+		&p.UnitPrice, &p.Subtotal, &p.DiscountID, &p.DiscountAmount, &p.TotalAmount, &p.Margin,
+		&p.PaymentMethod, &p.Status, &p.Notes, &p.CreatedAt, &p.UpdatedAt,
+		&p.ResellerName, &p.VoucherPackageName, &p.PromoCode,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("purchase not found")
+	}
+	return &p, err
+}
+

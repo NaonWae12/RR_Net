@@ -7,9 +7,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"strings"
 
 	"rrnet/internal/domain/billing"
 	"rrnet/internal/repository"
+	"github.com/midtrans/midtrans-go"
 )
 
 type PortalDashboardDTO struct {
@@ -28,6 +30,8 @@ type PortalService struct {
 	invoiceRepo        *repository.InvoiceRepository
 	servicePackageRepo *repository.ServicePackageRepository
 	paymentRepo        *repository.PaymentRepository
+	midtransService    *MidtransService
+	tenantService      *TenantService
 }
 
 func NewPortalService(
@@ -35,12 +39,16 @@ func NewPortalService(
 	invoiceRepo *repository.InvoiceRepository,
 	servicePackageRepo *repository.ServicePackageRepository,
 	paymentRepo *repository.PaymentRepository,
+	midtransService *MidtransService,
+	tenantService *TenantService,
 ) *PortalService {
 	return &PortalService{
 		clientRepo:         clientRepo,
 		invoiceRepo:        invoiceRepo,
 		servicePackageRepo: servicePackageRepo,
 		paymentRepo:        paymentRepo,
+		midtransService:    midtransService,
+		tenantService:      tenantService,
 	}
 }
 
@@ -299,13 +307,7 @@ func (s *PortalService) RecordPayment(ctx context.Context, tenantID, userID, inv
 		CreatedByUserID: userID,
 	}
 
-	// 6. Save payment to database
-	if err := s.paymentRepo.Create(ctx, payment); err != nil {
-		log.Error().Err(err).Msg("❌ [Portal] Failed to create payment record")
-		return nil, fmt.Errorf("failed to create payment: %w", err)
-	}
-
-	// 7. Update invoice paid_amount and status
+	// 6. Calculate new paid amount and status
 	newPaidAmount := invoice.PaidAmount + amount
 	newStatus := invoice.Status
 	var paidAt *time.Time
@@ -315,18 +317,10 @@ func (s *PortalService) RecordPayment(ctx context.Context, tenantID, userID, inv
 		paidAt = &now
 	}
 
-	// Update paid amount
-	if err := s.invoiceRepo.UpdatePaidAmount(ctx, invoiceID, newPaidAmount, paidAt); err != nil {
-		log.Error().Err(err).Msg("❌ [Portal] Failed to update invoice paid amount")
-		// Payment is already created, so we log but don't fail
-		// In production, this should be in a transaction
-	}
-
-	// Update status if changed
-	if newStatus != invoice.Status {
-		if err := s.invoiceRepo.UpdateStatus(ctx, invoiceID, newStatus); err != nil {
-			log.Error().Err(err).Msg("❌ [Portal] Failed to update invoice status")
-		}
+	// 7. Save payment and update invoice in a single database transaction
+	if err := s.paymentRepo.CreateWithInvoiceUpdateV2(ctx, payment, newPaidAmount, newStatus, paidAt); err != nil {
+		log.Error().Err(err).Msg("❌ [Portal] Failed to create payment and update invoice in transaction")
+		return nil, fmt.Errorf("failed to process payment: %w", err)
 	}
 
 	log.Info().
@@ -335,7 +329,124 @@ func (s *PortalService) RecordPayment(ctx context.Context, tenantID, userID, inv
 		Int64("amount", amount).
 		Str("method", string(method)).
 		Str("newStatus", string(newStatus)).
-		Msg("✅ [Portal] Payment recorded successfully")
+		Msg("✅ [Portal] Payment recorded successfully in transaction")
 
 	return payment, nil
 }
+
+func (s *PortalService) GetSnapToken(ctx context.Context, tenantID, userID, invoiceID uuid.UUID, category string) (string, error) {
+	// 1. Get client to verify ownership
+	c, err := s.clientRepo.GetByUserID(ctx, tenantID, userID)
+	if err != nil {
+		return "", err
+	}
+
+	// 2. Get invoice
+	inv, err := s.invoiceRepo.GetByID(ctx, invoiceID)
+	if err != nil {
+		return "", err
+	}
+
+	// 3. Verify invoice belongs to the client
+	if inv.ClientID != c.ID {
+		return "", fmt.Errorf("unauthorized")
+	}
+
+	// 3. Get tenant's Midtrans config
+	config, err := s.tenantService.GetMidtransConfig(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+
+	if !config.Enabled {
+		return "", fmt.Errorf("pembayaran otomatis sedang tidak aktif untuk ISP ini")
+	}
+
+	// 4. Prepare customer details
+	fname := ""
+	if inv.ClientName != nil {
+		fname = *inv.ClientName
+	}
+	customer := &midtrans.CustomerDetails{
+		FName: fname,
+		// Email: inv.ClientEmail, // If available in invoice or client
+	}
+
+	// 5. Generate unique Order ID for Midtrans
+	// Format: PT_[invoiceID]_[timestamp]
+	uniqueOrderID := fmt.Sprintf("PT_%s_%d", inv.ID.String(), time.Now().Unix())
+
+	// 6. Create Snap Token
+	amount := inv.TotalAmount - inv.PaidAmount
+	return s.midtransService.CreateSnapToken(ctx, uniqueOrderID, amount, *config, customer, category)
+}
+
+func (s *PortalService) HandleMidtransPayment(ctx context.Context, tenantID uuid.UUID, orderID string, amount int64) error {
+	// OrderID format: PT_[invoiceID]_[timestamp]
+	parts := strings.Split(orderID, "_")
+	if len(parts) < 2 || parts[0] != "PT" {
+		return fmt.Errorf("invalid order id format for portal payment")
+	}
+
+	invoiceID, err := uuid.Parse(parts[1])
+	if err != nil {
+		return fmt.Errorf("failed to parse invoice id from order id: %w", err)
+	}
+
+	// Get invoice
+	inv, err := s.invoiceRepo.GetByID(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	// Verify tenant
+	if inv.TenantID != tenantID {
+		return fmt.Errorf("invoice tenant mismatch")
+	}
+
+	// 3. Check if already paid
+	if inv.Status == billing.InvoiceStatusPaid {
+		log.Info().Str("invoiceID", invoiceID.String()).Msg("Invoice already paid, skipping Midtrans handling")
+		return nil
+	}
+
+	// 4. Cap payment amount at remaining balance
+	// The extra amount from Midtrans is the surcharge/fee we added, which shouldn't be recorded as debt payment
+	remainingAmount := inv.TotalAmount - inv.PaidAmount
+	paymentAmount := amount
+	if paymentAmount > remainingAmount {
+		paymentAmount = remainingAmount
+	}
+
+	// Use systematic RecordPayment logic
+	_, err = s.RecordPayment(ctx, tenantID, uuid.Nil, invoiceID, paymentAmount, "midtrans", &orderID, nil)
+	return err
+}
+
+func (s *PortalService) GetInvoiceByIDRaw(ctx context.Context, id uuid.UUID) (*billing.Invoice, error) {
+	return s.invoiceRepo.GetByID(ctx, id)
+}
+
+func (s *PortalService) GetMidtransConfig(ctx context.Context, tenantIDStr string) (map[string]interface{}, error) {
+	tenantID, err := uuid.Parse(tenantIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tenant id: %w", err)
+	}
+
+	config, err := s.tenantService.GetMidtransConfig(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !config.Enabled {
+		return map[string]interface{}{"enabled": false}, nil
+	}
+
+	return map[string]interface{}{
+		"enabled":       true,
+		"client_key":    config.ClientKey,
+		"is_production": config.IsProduction,
+	}, nil
+}
+
+

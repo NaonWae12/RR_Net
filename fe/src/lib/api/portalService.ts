@@ -54,7 +54,7 @@ export const portalService = {
     return response.data;
   },
 
-  async recordPayment(invoiceId: string, amount: number, method: 'cash' | 'collector', reference?: string, notes?: string): Promise<any> {
+  async recordPayment(invoiceId: string, amount: number, method: 'cash' | 'collector' | 'midtrans', reference?: string, notes?: string): Promise<any> {
     const response = await apiClient.post(`portal/invoices/${invoiceId}/payments`, {
       amount,
       method,
@@ -63,6 +63,21 @@ export const portalService = {
     });
     return response.data;
   },
+  
+  async getSnapToken(invoiceId: string, category?: string): Promise<string> {
+    const url = category 
+      ? `portal/invoices/${invoiceId}/snap-token?category=${category}`
+      : `portal/invoices/${invoiceId}/snap-token`;
+    const response = await apiClient.get(url);
+    return response.data.token;
+  },
+
+  async getMidtransConfig(): Promise<{ enabled: boolean; client_key: string; is_production: boolean }> {
+    const response = await apiClient.get('portal/midtrans-config');
+    return response.data;
+  },
 };
+
+
 
 export default portalService;

@@ -206,5 +206,16 @@ export const superAdminService = {
   async decommissionRouter(routerId: string): Promise<void> {
     await apiClient.post(`/superadmin/routers/${routerId}/decommission`, {});
   },
+
+  // ========== Midtrans (Platform) ==========
+  async getMidtransConfig(): Promise<any> {
+    const response = await apiClient.get("/superadmin/settings/midtrans");
+    return response.data;
+  },
+
+  async updateMidtransConfig(config: any): Promise<any> {
+    const response = await apiClient.patch("/superadmin/settings/midtrans", config);
+    return response.data;
+  },
 };
 

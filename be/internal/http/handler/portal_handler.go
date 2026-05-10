@@ -148,8 +148,8 @@ func (h *PortalHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate method
-	if req.Method != "cash" && req.Method != "collector" {
-		sendError(w, http.StatusBadRequest, "Invalid payment method. Only 'cash' and 'collector' are allowed")
+	if req.Method != "cash" && req.Method != "collector" && req.Method != "midtrans" {
+		sendError(w, http.StatusBadRequest, "Invalid payment method. Only 'cash', 'collector', and 'midtrans' are allowed")
 		return
 	}
 
@@ -175,3 +175,53 @@ func (h *PortalHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 
 	sendJSON(w, http.StatusCreated, payment)
 }
+
+func (h *PortalHandler) GetSnapToken(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == (uuid.UUID{}) {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		sendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	// Get invoice ID from path parameter
+	invoiceIDStr := getPathParam(r, "id")
+	invoiceID, err := uuid.Parse(invoiceIDStr)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid invoice ID")
+		return
+	}
+
+	category := r.URL.Query().Get("category")
+	token, err := h.portalService.GetSnapToken(r.Context(), tenantID, userID, invoiceID, category)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get snap token for portal invoice")
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{"token": token})
+}
+
+func (h *PortalHandler) GetMidtransConfig(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == (uuid.UUID{}) {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	config, err := h.portalService.GetMidtransConfig(r.Context(), tenantID.String())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get midtrans config for portal")
+		sendError(w, http.StatusInternalServerError, "Failed to get payment config")
+		return
+	}
+
+	sendJSON(w, http.StatusOK, config)
+}
+

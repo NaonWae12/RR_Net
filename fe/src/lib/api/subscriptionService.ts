@@ -174,4 +174,14 @@ export const subscriptionService = {
   async cancelSubmission(invoiceId: string): Promise<void> {
     await apiClient.post("/subscription/cancel", { invoice_id: invoiceId });
   },
+
+  async getSnapToken(invoiceId: string, category: string = ''): Promise<string> {
+    const res = await apiClient.get<{ token: string }>(`/subscription/snap-token/${invoiceId}?category=${category}`);
+    return res.data.token;
+  },
+
+  async getPublicMidtransConfig(): Promise<{ enabled: boolean, client_key: string, is_production: boolean }> {
+    const res = await apiClient.get("/public/settings/midtrans");
+    return res.data;
+  },
 };

@@ -7,33 +7,36 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { 
   Rocket, 
   ArrowRight, 
-  Check, 
-  ShieldCheck, 
+  CheckCircle2, 
   Zap, 
-  Building2, 
-  Mail, 
-  Lock, 
-  User,
-  CheckCircle2,
-  Globe,
+  User as UserIcon, 
+  Building2,
+  X,
+  CreditCard as MidtransIcon,
+  Loader2,
+  RefreshCcw,
+  Check,
   ArrowLeft,
+  Mail,
+  Lock,
+  User,
+  ShieldCheck,
+  Wallet,
+  Phone,
+  Globe,
   Key,
   Info,
-  RefreshCcw,
-  Phone,
   MessageSquare,
-  CreditCard,
-  Wallet,
   DollarSign,
   Copy,
   CheckCircle,
-  Ticket,
-  X
+  Ticket
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { paymentMethodService, PaymentMethod } from "@/lib/api/paymentMethodService";
+import { subscriptionService } from "@/lib/api/subscriptionService";
 import { platformDiscountService } from "@/lib/api/platformDiscountService";
 import { tenantService } from "@/lib/api/tenantService";
 
@@ -50,9 +53,13 @@ function RegisterContent() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  const [isChangingPlan, setIsChangingPlan] = useState(false);
   const [error, setError] = useState("");
   const [plans, setPlans] = useState<any[]>([]);
   const [config, setConfig] = useState<any>(null);
+  const [midtransEnabled, setMidtransEnabled] = useState(false);
+  const [isMidtransLoading, setIsMidtransLoading] = useState(false);
+  const [isProcessingMidtrans, setIsProcessingMidtrans] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [formData, setFormData] = useState({
     plan: "pro", // default to pro
@@ -89,17 +96,115 @@ function RegisterContent() {
 
   const fetchPaymentMethods = async () => {
     try {
-      const methods = await paymentMethodService.listPublic();
-      console.log("Fetched methods:", methods);
-      
+      const [methods, mtConfig] = await Promise.all([
+        paymentMethodService.listPublic(),
+        subscriptionService.getPublicMidtransConfig()
+      ]);
+
       if (Array.isArray(methods)) {
         setPaymentMethods(methods.filter(m => m.is_active));
       } else {
-        console.error("Payment methods response is not an array:", methods);
         setPaymentMethods([]);
+      }
+
+      if (mtConfig.enabled && mtConfig.client_key) {
+        setMidtransEnabled(true);
+        loadMidtransScript(mtConfig.client_key, mtConfig.is_production);
       }
     } catch (error) {
       console.error("Failed to fetch payment methods:", error);
+    }
+  };
+
+  const loadMidtransScript = (clientKey: string, isProduction: boolean) => {
+    if (typeof window === "undefined") return;
+    if (window.snap) return;
+
+    setIsMidtransLoading(true);
+    const scriptId = "midtrans-snap-script";
+    const existingScript = document.getElementById(scriptId);
+    
+    if (existingScript) {
+      setIsMidtransLoading(false);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = isProduction 
+      ? "https://app.midtrans.com/snap/snap.js" 
+      : "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.id = scriptId;
+    script.setAttribute("data-client-key", clientKey);
+    
+    script.onload = () => {
+      console.log("[Midtrans] Snap SDK script loaded, waiting for window.snap...");
+      let attempts = 0;
+      const checkSnap = setInterval(() => {
+        attempts++;
+        if (window.snap) {
+          console.log("[Midtrans] window.snap initialized after", attempts * 50, "ms");
+          clearInterval(checkSnap);
+          setIsMidtransLoading(false);
+        } else if (attempts > 40) { 
+          console.warn("[Midtrans] window.snap not found after 2s");
+          clearInterval(checkSnap);
+          setIsMidtransLoading(false);
+        }
+      }, 50);
+    };
+
+    script.onerror = (err) => {
+      console.error("[Midtrans] Failed to load Snap SDK script:", err);
+      setIsMidtransLoading(false);
+    };
+
+    document.head.appendChild(script);
+  };
+
+  const handlePayWithMidtrans = async () => {
+    console.log("[Midtrans] handlePayWithMidtrans triggered for invoice:", regResponse?.invoice?.id);
+    if (!regResponse?.invoice?.id) {
+      console.error("[Midtrans] No invoice ID found in regResponse");
+      return;
+    }
+    
+    if (!window.snap) {
+      console.error("[Midtrans] window.snap is not defined");
+      showToast("Midtrans Snap SDK not loaded. Please refresh.", "error");
+      return;
+    }
+
+    setIsProcessingMidtrans(true);
+    try {
+      console.log("[Midtrans] Fetching Snap Token for invoice:", regResponse.invoice.id);
+      const token = await subscriptionService.getSnapToken(regResponse.invoice.id);
+      console.log("[Midtrans] Received Snap Token successfully");
+      
+      window.snap.pay(token, {
+        onSuccess: (result: any) => {
+          console.log("[Midtrans] Payment Success:", result);
+          showToast("Pembayaran berhasil!", "success");
+          router.push("/login");
+        },
+        onPending: (result: any) => {
+          console.log("[Midtrans] Payment Pending:", result);
+          showToast("Pembayaran tertunda. Silakan selesaikan pembayaran Anda.", "info");
+          router.push("/login");
+        },
+        onError: (result: any) => {
+          console.error("[Midtrans] Payment Error:", result);
+          showToast("Pembayaran gagal. Silakan coba lagi.", "error");
+        },
+        onClose: () => {
+          console.log("[Midtrans] Payment Popup Closed");
+          showToast("Pembayaran dibatalkan.", "info");
+        }
+      });
+    } catch (error: any) {
+      console.error("[Midtrans] Failed to get Snap Token:", error);
+      showToast(error.response?.data?.error || "Gagal mendapatkan token pembayaran", "error");
+    } finally {
+      setIsProcessingMidtrans(false);
     }
   };
 
@@ -1098,14 +1203,26 @@ function RegisterContent() {
 
                 {/* Payment Methods */}
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center">
-                      <Wallet className="w-6 h-6 text-emerald-400" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center">
+                        <Wallet className="w-6 h-6 text-emerald-400" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-white">Metode Pembayaran</h3>
+                        <p className="text-xs text-muted-foreground">Pilih metode yang Anda inginkan</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-lg">Metode Pembayaran yang Tersedia</h3>
-                      <p className="text-xs text-muted-foreground">Pilih metode pembayaran yang Anda inginkan</p>
-                    </div>
+                    {midtransEnabled && (
+                      <button
+                        onClick={handlePayWithMidtrans}
+                        disabled={isProcessingMidtrans || isMidtransLoading}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-black italic tracking-tighter uppercase text-xs flex items-center gap-2 shadow-lg shadow-indigo-900/40 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                      >
+                        {isProcessingMidtrans ? <Loader2 className="w-4 h-4 animate-spin" /> : <MidtransIcon className="w-4 h-4" />}
+                        Instant Pay
+                      </button>
+                    )}
                   </div>
 
                   {paymentMethods.length === 0 ? (

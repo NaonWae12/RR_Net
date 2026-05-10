@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/midtrans/midtrans-go"
 	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/domain/billing"
@@ -20,6 +22,8 @@ type PlatformBillingService struct {
 	discountRepo     *repository.PlatformDiscountRepository
 	addonRepo        *repository.AddonRepository
 	affiliateService *AffiliateService
+	midtransService  *MidtransService
+	siteSettingService SiteSettingService
 }
 
 func NewPlatformBillingService(
@@ -33,8 +37,10 @@ func NewPlatformBillingService(
 		repo:         repo,
 		tenantRepo:   tenantRepo,
 		planRepo:     planRepo,
-		discountRepo: discountRepo,
-		addonRepo:    addonRepo,
+		discountRepo:       discountRepo,
+		addonRepo:          addonRepo,
+		midtransService:     NewMidtransService(),
+		siteSettingService: NewSiteSettingService(repository.NewSiteSettingRepository(repo.GetDB())),
 	}
 }
 
@@ -589,4 +595,119 @@ func (s *PlatformBillingService) RemoveDiscountFromInvoice(ctx context.Context, 
 
 func (s *PlatformBillingService) DeletePendingInvoice(ctx context.Context, id uuid.UUID) error {
 	return s.repo.DeleteInvoice(ctx, id)
+}
+
+func (s *PlatformBillingService) GetSnapToken(ctx context.Context, invoiceID uuid.UUID, category string) (string, error) {
+	inv, err := s.repo.GetInvoiceByID(ctx, invoiceID)
+	if err != nil {
+		return "", err
+	}
+
+	config, err := s.siteSettingService.GetMidtransConfig(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if !config.Enabled {
+		return "", fmt.Errorf("automated payment is currently disabled by administrator")
+	}
+
+	t, err := s.tenantRepo.GetByID(ctx, inv.TenantID)
+	if err != nil {
+		return "", err
+	}
+
+	customer := &midtrans.CustomerDetails{
+		FName: t.Name,
+		Email: "billing@" + t.Slug + ".com", // Fallback or get owner email
+	}
+
+	// Use a unique order ID for Midtrans to avoid "order_id already taken" error
+	// especially in Sandbox where reusing the same ID for multiple attempts is restricted.
+	uniqueOrderID := fmt.Sprintf("%s_%d", inv.InvoiceNumber, time.Now().Unix())
+
+	return s.midtransService.CreateSnapToken(ctx, uniqueOrderID, inv.Amount, *config, customer, category)
+}
+
+func (s *PlatformBillingService) HandleMidtransPayment(ctx context.Context, orderID string, amount int64) error {
+	// Strip the unique suffix if present (e.g., INV-202401-0001_1715151515 -> INV-202401-0001)
+	invoiceNumber := orderID
+	if idx := strings.Index(orderID, "_"); idx != -1 {
+		invoiceNumber = orderID[:idx]
+	}
+
+	// 1. Get invoice by number
+	inv, err := s.repo.GetInvoiceByNumber(ctx, invoiceNumber)
+	if err != nil {
+		return err
+	}
+
+	if inv.Status == billing.PlatformInvoiceStatusPaid {
+		log.Info().Str("invoice_number", invoiceNumber).Msg("Invoice already paid, skipping Midtrans handling")
+		return nil
+	}
+
+	now := time.Now()
+
+	// 2. Cap payment amount at invoice amount
+	paymentAmount := amount
+	if paymentAmount > inv.Amount {
+		paymentAmount = inv.Amount
+	}
+	
+	// 3. Create payment record
+	p := &billing.PlatformPayment{
+		ID:                uuid.New(),
+		PlatformInvoiceID: inv.ID,
+		TenantID:          inv.TenantID,
+		Amount:            paymentAmount,
+		Currency:          inv.Currency,
+		Method:            "midtrans",
+		Reference:         "Midtrans: " + invoiceNumber,
+		Status:            billing.PlatformPaymentStatusVerified,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+
+	if err := s.repo.CreatePayment(ctx, p); err != nil {
+		return err
+	}
+
+	// 4. Update invoice status to Paid
+	if err := s.repo.UpdateInvoiceStatus(ctx, inv.ID, billing.PlatformInvoiceStatusPaid, paymentAmount, &now); err != nil {
+		return err
+	}
+
+	// 4. Trigger fulfillment logic (Plan activation, Addons, Affiliates)
+	// REUSED FROM VerifyPayment logic
+	if s.affiliateService != nil {
+		_ = s.affiliateService.ProcessCommission(ctx, inv.TenantID, inv.ID, float64(amount))
+	}
+
+	// If this invoice was for an addon purchase, assign the addon
+	if inv.AddonID != nil && inv.AddonQuantity != nil {
+		var expiresAt *time.Time
+		addonData, err := s.addonRepo.GetByID(ctx, *inv.AddonID)
+		if err == nil {
+			switch addonData.BillingCycle {
+			case "monthly":
+				t := time.Now().AddDate(0, 1, 0)
+				expiresAt = &t
+			case "yearly":
+				t := time.Now().AddDate(1, 0, 0)
+				expiresAt = &t
+			}
+			s.addonRepo.AssignAddonToTenant(ctx, inv.TenantID, *inv.AddonID, expiresAt, *inv.AddonQuantity)
+		}
+	} else if inv.PlanID != uuid.Nil {
+		// Update tenant's plan
+		t, err := s.tenantRepo.GetByID(ctx, inv.TenantID)
+		if err == nil {
+			t.PlanID = &inv.PlanID
+			t.UpdatedAt = now
+			s.tenantRepo.Update(ctx, t)
+		}
+	}
+
+	return nil
 }
