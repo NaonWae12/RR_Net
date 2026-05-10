@@ -85,7 +85,6 @@ function RegisterContent() {
   const [checkingSlug, setCheckingSlug] = useState(false);
   const [discountCode, setDiscountCode] = useState("");
   const [applyingDiscount, setApplyingDiscount] = useState(false);
-  const [isChangingPlan, setIsChangingPlan] = useState(false);
 
   // Fetch payment methods when reaching success step
   useEffect(() => {
