@@ -127,7 +127,7 @@ func New(deps Dependencies) http.Handler {
 
 	// Services
 	financeService := service.NewFinanceService(financeRepo)
-	voucherService := service.NewVoucherService(voucherRepo, radiusRepo, routerRepo, financeService, limitResolver)
+	voucherService := service.NewVoucherService(voucherRepo, radiusRepo, routerRepo, financeService, limitResolver, deps.Redis)
 	billingService := service.NewBillingService(invoiceRepo, paymentRepo, clientRepo, servicePackageRepo, discountRepo)
 
 	pppoeService := service.NewPPPoEService(pppoeRepo, routerRepo, profileRepo, clientRepo, deps.Config.Auth.JWTSecret)

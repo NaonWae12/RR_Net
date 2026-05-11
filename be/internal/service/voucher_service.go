@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 
 	"regexp"
@@ -25,6 +27,7 @@ type VoucherService struct {
 	routerRepo     *repository.RouterRepository
 	financeService *FinanceService
 	limitResolver  *LimitResolver
+	redis          *redis.Client
 }
 
 func NewVoucherService(
@@ -33,14 +36,19 @@ func NewVoucherService(
 	routerRepo *repository.RouterRepository,
 	financeService *FinanceService,
 	limitResolver *LimitResolver,
+	redisClient ...*redis.Client,
 ) *VoucherService {
-	return &VoucherService{
-		voucherRepo:    voucherRepo,
-		radiusRepo:     radiusRepo,
-		routerRepo:     routerRepo,
+	svc := &VoucherService{
+		voucherRepo:   voucherRepo,
+		radiusRepo:    radiusRepo,
+		routerRepo:    routerRepo,
 		financeService: financeService,
 		limitResolver:  limitResolver,
 	}
+	if len(redisClient) > 0 {
+		svc.redis = redisClient[0]
+	}
+	return svc
 }
 
 // VoucherRepo exposes the underlying repository for handler access
@@ -465,6 +473,41 @@ func (s *VoucherService) CreateVoucher(ctx context.Context, tenantID uuid.UUID, 
 	return v, nil
 }
 
+// batchInsertChunk inserts a slice of vouchers atomically using a pgx transaction batch.
+func (s *VoucherService) batchInsertChunk(ctx context.Context, vouchers []*voucher.Voucher) error {
+	if len(vouchers) == 0 {
+		return nil
+	}
+	tx, err := s.voucherRepo.DB().Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	const insertQuery = `
+		INSERT INTO vouchers (
+			id, tenant_id, package_id, router_id, code, password, status,
+			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+	`
+
+	batch := &pgx.Batch{}
+	for _, v := range vouchers {
+		batch.Queue(insertQuery,
+			v.ID, v.TenantID, v.PackageID, v.RouterID, v.Code, v.Password, v.Status,
+			v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers,
+			v.ResellerPurchaseID, v.CreatedAt, v.UpdatedAt,
+		)
+	}
+
+	br := tx.SendBatch(ctx, batch)
+	if err := br.Close(); err != nil {
+		return fmt.Errorf("batch insert chunk failed: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUID, req GenerateVouchersRequest) ([]*voucher.Voucher, error) {
 	// 0. Enforce Limit
 	currentCount, err := s.voucherRepo.CountVouchersByTenant(ctx, tenantID)
@@ -481,8 +524,9 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 		return nil, fmt.Errorf("package not found: %w", err)
 	}
 
-	if req.Quantity <= 0 || req.Quantity > 1000 {
-		return nil, fmt.Errorf("quantity must be between 1 and 1000")
+	// Support up to 10.000 vouchers per request
+	if req.Quantity <= 0 || req.Quantity > 10000 {
+		return nil, fmt.Errorf("quantity must be between 1 and 10000")
 	}
 
 	codeLength := req.CodeLength
@@ -496,10 +540,7 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 		return nil, fmt.Errorf("invalid character_mode %q: %w", req.CharacterMode, err)
 	}
 
-	vouchers := make([]*voucher.Voucher, 0, req.Quantity)
-	now := time.Now()
-
-	// Generate batch notes (4-character random code) for grouping vouchers created together
+	// 2. Generate batch notes (4-character random code)
 	batchNotes, err := generateRandomFromCharset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 4)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate batch notes: %w", err)
@@ -507,27 +548,74 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 
 	userMode := req.UserMode
 	if userMode == "" {
-		userMode = "up" // Default is Username & Password
+		userMode = "up"
 	}
 
+	// 3. Generate codes with Redis-backed collision detection
+	// Redis SET per batch: key = "vgen:{tenantID}:{batchNotes}", TTL = 10 menit
+	// Fungsi sebagai in-memory hash untuk deteksi duplikat intra-batch secara atomik
+	now := time.Now()
+	vouchers := make([]*voucher.Voucher, 0, req.Quantity)
+
+	// In-memory map as primary (O(1)), Redis as secondary guard for extra safety
+	batchCodes := make(map[string]struct{}, req.Quantity)
+
+	// Redis key untuk deduplikasi intra-batch (opsional, lebih aman)
+	redisKey := fmt.Sprintf("vgen:%s:%s", tenantID, batchNotes)
+	useRedis := s.redis != nil
+	if useRedis {
+		// Set TTL 15 menit, cukup untuk proses generate selesai
+		s.redis.Expire(ctx, redisKey, 15*time.Minute)
+	}
+
+	const maxRetries = 10 // Max retry per code sebelum dianggap charset terlalu kecil
 	for i := 0; i < req.Quantity; i++ {
 		var code, password string
-		var err error
+		var genErr error
+		var unique bool
 
-		// Username is always from selected charset
-		code, err = generateRandomFromCharset(charset, codeLength)
-		if err != nil {
-			return nil, err
+		// Retry sampai dapat kode unik dalam batch ini
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			code, genErr = generateRandomFromCharset(charset, codeLength)
+			if genErr != nil {
+				return nil, genErr
+			}
+
+			// Cek duplikat di in-memory map dulu (paling cepat)
+			if _, exists := batchCodes[code]; exists {
+				continue
+			}
+
+			// Cek duplikat di Redis (guard kedua, atomik)
+			if useRedis {
+				added, redisErr := s.redis.SAdd(ctx, redisKey, code).Result()
+				if redisErr != nil || added == 0 {
+					// Kode sudah ada di Redis set, coba lagi
+					continue
+				}
+			}
+
+			batchCodes[code] = struct{}{}
+			unique = true
+			break
+		}
+
+		if !unique {
+			// Charset terlalu kecil atau code_length terlalu pendek
+			log.Warn().
+				Int("index", i).
+				Int("code_length", codeLength).
+				Str("charset_len", fmt.Sprintf("%d", len(charset))).
+				Msg("Voucher Service: could not generate unique code after max retries, using last attempt")
+			// Tetap pakai kode terakhir (konflik DB akan tetap dicegah oleh constraint)
 		}
 
 		if userMode == "up" {
-			// Password is random digits, same length as username
-			password, err = generateRandomFromCharset("0123456789", codeLength)
-			if err != nil {
-				return nil, err
+			password, genErr = generateRandomFromCharset("0123456789", codeLength)
+			if genErr != nil {
+				return nil, genErr
 			}
 		} else {
-			// User = Password
 			password = code
 		}
 
@@ -538,67 +626,83 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 			RouterID:           req.RouterID,
 			Code:               code,
 			Password:           password,
-			Notes:              batchNotes, // Assign batch notes for grouping
+			Notes:              batchNotes,
 			Status:             voucher.VoucherStatusActive,
 			ExpiresAt:          req.ExpiresAt,
 			ResellerPurchaseID: req.ResellerPurchaseID,
 			CreatedAt:          now,
 			UpdatedAt:          now,
 		}
-
-		if err := s.voucherRepo.CreateVoucher(ctx, v); err != nil {
-			return nil, fmt.Errorf("failed to create voucher: %w", err)
-		}
-
 		vouchers = append(vouchers, v)
 	}
 
-	// For radius_auth_only mode, create Hotspot users on MikroTik routers
-	// This is required because MikroTik Hotspot doesn't support dynamic profile assignment via RADIUS
-	if pkg.RateLimitMode == "radius_auth_only" {
-		log.Info().
-			Str("package_id", pkg.ID.String()).
-			Str("package_name", pkg.Name).
-			Str("mode", pkg.RateLimitMode).
-			Int("voucher_count", len(vouchers)).
-			Msg("Creating Hotspot users on routers for radius_auth_only mode")
+	// Cleanup Redis key di background setelah selesai
+	if useRedis {
+		go s.redis.Del(context.Background(), redisKey)
+	}
 
-		// Determine target routers: either a specific one or all routers
-		var targetRouters []*network.Router
-		if req.RouterID != nil {
-			target, err := s.routerRepo.GetByID(ctx, *req.RouterID)
-			if err == nil {
-				targetRouters = []*network.Router{target}
-			}
-		} else {
-			targetRouters, _ = s.routerRepo.ListByTenant(ctx, tenantID)
+	// 4. CHUNKED ATOMIC Batch Insert
+	// Dibagi per 500 biar transaksi nggak terlalu berat (aman buat ribuan/puluhan ribu)
+	const chunkSize = 500
+	for start := 0; start < len(vouchers); start += chunkSize {
+		end := start + chunkSize
+		if end > len(vouchers) {
+			end = len(vouchers)
 		}
+		chunk := vouchers[start:end]
+		if err := s.batchInsertChunk(ctx, chunk); err != nil {
+			return nil, fmt.Errorf("failed to insert voucher chunk [%d-%d]: %w", start, end, err)
+		}
+	}
 
-		if len(targetRouters) > 0 {
+	// 5. ASYNCHRONOUS Parallel MikroTik Sync
+	// This prevents the main request from timing out while connecting to external hardware
+	if pkg.RateLimitMode == "radius_auth_only" {
+		go func(vList []*voucher.Voucher, p *voucher.VoucherPackage, tID uuid.UUID, rID *uuid.UUID) {
+			// Use background context for long-running task
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			log.Info().
+				Str("package_id", p.ID.String()).
+				Int("count", len(vList)).
+				Msg("Voucher Service: Starting background parallel sync to routers")
+
+			var targetRouters []*network.Router
+			if rID != nil {
+				target, err := s.routerRepo.GetByID(bgCtx, *rID)
+				if err == nil {
+					targetRouters = []*network.Router{target}
+				}
+			} else {
+				targetRouters, _ = s.routerRepo.ListByTenant(bgCtx, tID)
+			}
+
 			for _, router := range targetRouters {
 				if router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
 					continue
 				}
 
 				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-				for _, v := range vouchers {
+				
+				// Sync each voucher to this router
+				// We can optimize this further with a worker pool if needed, 
+				// but backgrounding is already a huge improvement.
+				for _, v := range vList {
 					hotspotUser := mikrotik.HotspotUser{
 						Name:     v.Code,
 						Password: v.Password,
-						Profile:  pkg.Name,
+						Profile:  p.Name,
 						Comment:  fmt.Sprintf("RRNET Voucher - Generated %s", now.Format("2006-01-02 15:04:05")),
 					}
 
-					userCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-					err := mikrotik.AddHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotUser)
-					cancel()
-
-					if err != nil {
-						log.Warn().Err(err).Str("router", router.Name).Str("code", v.Code).Msg("Failed to sync voucher to router")
-					}
+					syncCtx, syncCancel := context.WithTimeout(bgCtx, 10*time.Second)
+					_ = mikrotik.AddHotspotUser(syncCtx, addr, router.APIUseTLS, router.Username, router.Password, hotspotUser)
+					syncCancel()
 				}
 			}
-		}
+			log.Info().Str("batch_notes", batchNotes).Msg("Voucher Service: Background parallel sync completed")
+		}(vouchers, pkg, tenantID, req.RouterID)
 	}
 
 	return vouchers, nil
@@ -619,81 +723,82 @@ func (s *VoucherService) DeleteVouchersByPurchase(ctx context.Context, tenantID,
 		return nil
 	}
 
-	// 2. Check if we need to cleanup MikroTik (based on the first voucher's package mode)
+	// 2. Check if we need to cleanup MikroTik (Backgrounding)
 	pkg, err := s.voucherRepo.GetPackageByID(ctx, vouchers[0].PackageID)
 	if err == nil && pkg.RateLimitMode == "radius_auth_only" {
-		// Group vouchers by RouterID for efficient cleanup
-		routerVouchers := make(map[uuid.UUID][]string)
-		var routersToCleanup []uuid.UUID
+		go func(vList []*voucher.Voucher, tID uuid.UUID) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 
-		hasGlobalVouchers := false
-		for _, v := range vouchers {
-			if v.RouterID != nil {
-				routerVouchers[*v.RouterID] = append(routerVouchers[*v.RouterID], v.Code)
-				// Keep track of unique routers
-				found := false
-				for _, rid := range routersToCleanup {
-					if rid == *v.RouterID {
-						found = true
-						break
-					}
-				}
-				if !found {
-					routersToCleanup = append(routersToCleanup, *v.RouterID)
-				}
-			} else {
-				hasGlobalVouchers = true
-			}
-		}
+			// Group vouchers by RouterID for efficient cleanup
+			routerVouchers := make(map[uuid.UUID][]string)
+			var routersToCleanup []uuid.UUID
 
-		// 2a. Cleanup from specific routers detected in vouchers
-		for _, rid := range routersToCleanup {
-			router, err := s.routerRepo.GetByID(ctx, rid)
-			if err != nil || router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
-				continue
-			}
-			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-			for _, code := range routerVouchers[rid] {
-				userCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-				_ = mikrotik.RemoveHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, code)
-				cancel()
-			}
-		}
-
-		// 2b. If there are any global vouchers, we MUST scan all OTHER routers as well
-		if hasGlobalVouchers {
-			routers, err := s.routerRepo.ListByTenant(ctx, tenantID)
-			if err == nil {
-				for _, router := range routers {
-					// Skip routers we already cleaned specifically
-					isSpecific := false
+			hasGlobalVouchers := false
+			for _, v := range vList {
+				if v.RouterID != nil {
+					routerVouchers[*v.RouterID] = append(routerVouchers[*v.RouterID], v.Code)
+					// Keep track of unique routers
+					found := false
 					for _, rid := range routersToCleanup {
-						if rid == router.ID {
-							isSpecific = true
+						if rid == *v.RouterID {
+							found = true
 							break
 						}
 					}
-					if isSpecific {
-						continue
+					if !found {
+						routersToCleanup = append(routersToCleanup, *v.RouterID)
 					}
+				} else {
+					hasGlobalVouchers = true
+				}
+			}
 
-					if router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
-						continue
-					}
-					addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-					for _, v := range vouchers {
-						if v.RouterID == nil {
-							userCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-							_ = mikrotik.RemoveHotspotUser(userCtx, addr, router.APIUseTLS, router.Username, router.Password, v.Code)
-							cancel()
+			// 2a. Cleanup from specific routers
+			for _, rid := range routersToCleanup {
+				router, err := s.routerRepo.GetByID(bgCtx, rid)
+				if err != nil || router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
+					continue
+				}
+				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+				for _, code := range routerVouchers[rid] {
+					uCtx, cancel := context.WithTimeout(bgCtx, 2*time.Second)
+					_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, code)
+					cancel()
+				}
+			}
+
+			// 2b. Cleanup global vouchers
+			if hasGlobalVouchers {
+				routers, err := s.routerRepo.ListByTenant(bgCtx, tID)
+				if err == nil {
+					for _, router := range routers {
+						// Skip routers we already cleaned specifically
+						isSpecific := false
+						for _, rid := range routersToCleanup {
+							if rid == router.ID {
+								isSpecific = true
+								break
+							}
+						}
+						if isSpecific || router.Status != network.RouterStatusOnline || router.Type != network.RouterTypeMikroTik {
+							continue
+						}
+						addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+						for _, v := range vList {
+							if v.RouterID == nil {
+								uCtx, cancel := context.WithTimeout(bgCtx, 2*time.Second)
+								_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, v.Code)
+								cancel()
+							}
 						}
 					}
 				}
 			}
-		}
+		}(vouchers, tenantID)
 	}
 
-	// 3. Delete from DB
+	// 3. Delete from DB (Immediate)
 	return s.voucherRepo.DeleteVouchersByPurchase(ctx, purchaseID)
 }
 
@@ -703,7 +808,6 @@ func (s *VoucherService) ListVouchers(ctx context.Context, tenantID uuid.UUID, l
 
 func (s *VoucherService) DeleteBatch(ctx context.Context, tenantID uuid.UUID, createdAt time.Time) error {
 	// 1. Get vouchers in this batch to clean up from MikroTik if needed
-	// Use ListVouchers with large limit to find exactly this batch
 	vouchers, _, err := s.voucherRepo.ListVouchersByTenant(ctx, tenantID, 1000, 0, "", "")
 	if err != nil {
 		return err
@@ -720,55 +824,60 @@ func (s *VoucherService) DeleteBatch(ctx context.Context, tenantID uuid.UUID, cr
 		return fmt.Errorf("batch not found or already deleted")
 	}
 
-	// 2. Cleanup MikroTik if needed
+	// 2. Cleanup MikroTik if needed (Backgrounding)
 	pkg, err := s.voucherRepo.GetPackageByID(ctx, batchVouchers[0].PackageID)
 	if err == nil && pkg.RateLimitMode == "radius_auth_only" {
-		// Group by router for efficiency
-		routerVouchers := make(map[uuid.UUID][]string)
-		hasGlobal := false
-		
-		for _, v := range batchVouchers {
-			if v.RouterID != nil {
-				routerVouchers[*v.RouterID] = append(routerVouchers[*v.RouterID], v.Code)
-			} else {
-				hasGlobal = true
-			}
-		}
+		go func(vList []*voucher.Voucher, tID uuid.UUID) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 
-		// Cleanup specific routers
-		for rid, codes := range routerVouchers {
-			router, err := s.routerRepo.GetByID(ctx, rid)
-			if err != nil || router.Status != network.RouterStatusOnline {
-				continue
+			// Group by router for efficiency
+			routerVouchers := make(map[uuid.UUID][]string)
+			hasGlobal := false
+			
+			for _, v := range vList {
+				if v.RouterID != nil {
+					routerVouchers[*v.RouterID] = append(routerVouchers[*v.RouterID], v.Code)
+				} else {
+					hasGlobal = true
+				}
 			}
-			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-			for _, code := range codes {
-				uCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-				_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, code)
-				cancel()
-			}
-		}
 
-		// Cleanup global vouchers
-		if hasGlobal {
-			routers, _ := s.routerRepo.ListByTenant(ctx, tenantID)
-			for _, router := range routers {
-				if _, ok := routerVouchers[router.ID]; ok || router.Status != network.RouterStatusOnline {
+			// Cleanup specific routers
+			for rid, codes := range routerVouchers {
+				router, err := s.routerRepo.GetByID(bgCtx, rid)
+				if err != nil || router.Status != network.RouterStatusOnline {
 					continue
 				}
 				addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-				for _, v := range batchVouchers {
-					if v.RouterID == nil {
-						uCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-						_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, v.Code)
-						cancel()
+				for _, code := range codes {
+					uCtx, cancel := context.WithTimeout(bgCtx, 2*time.Second)
+					_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, code)
+					cancel()
+				}
+			}
+
+			// Cleanup global vouchers
+			if hasGlobal {
+				routers, _ := s.routerRepo.ListByTenant(bgCtx, tID)
+				for _, router := range routers {
+					if _, ok := routerVouchers[router.ID]; ok || router.Status != network.RouterStatusOnline {
+						continue
+					}
+					addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
+					for _, v := range vList {
+						if v.RouterID == nil {
+							uCtx, cancel := context.WithTimeout(bgCtx, 2*time.Second)
+							_ = mikrotik.RemoveHotspotUser(uCtx, addr, router.APIUseTLS, router.Username, router.Password, v.Code)
+							cancel()
+						}
 					}
 				}
 			}
-		}
+		}(batchVouchers, tenantID)
 	}
 
-	// 3. Delete from DB
+	// 3. Delete from DB (Immediate)
 	return s.voucherRepo.DeleteVouchersByCreatedAt(ctx, tenantID, createdAt)
 }
 

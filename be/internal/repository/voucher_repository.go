@@ -21,6 +21,10 @@ func NewVoucherRepository(db *pgxpool.Pool) *VoucherRepository {
 	return &VoucherRepository{db: db}
 }
 
+func (r *VoucherRepository) DB() *pgxpool.Pool {
+	return r.db
+}
+
 // ========== Voucher Packages ==========
 
 func (r *VoucherRepository) CreatePackage(ctx context.Context, pkg *voucher.VoucherPackage) error {
@@ -131,6 +135,39 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 		v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers, v.ResellerPurchaseID, v.CreatedAt, v.UpdatedAt,
 	)
 	return err
+}
+
+func (r *VoucherRepository) CreateVouchersBatch(ctx context.Context, vouchers []*voucher.Voucher) error {
+	if len(vouchers) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+	query := `
+		INSERT INTO vouchers (
+			id, tenant_id, package_id, router_id, code, password, status,
+			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+	`
+
+	for _, v := range vouchers {
+		batch.Queue(query,
+			v.ID, v.TenantID, v.PackageID, v.RouterID, v.Code, v.Password, v.Status,
+			v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers, v.ResellerPurchaseID, v.CreatedAt, v.UpdatedAt,
+		)
+	}
+
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for range vouchers {
+		_, err := br.Exec()
+		if err != nil {
+			return fmt.Errorf("batch insert failed: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
