@@ -505,6 +505,10 @@ export default function VouchersPage() {
   };
 
   const generate = async () => {
+    if (Number(genForm.quantity) > 10000) {
+      showToast({ title: "Input tidak valid", description: "Maksimal generate adalah 10.000 voucher", variant: "error" });
+      return;
+    }
     setLoading(true);
     try {
       const res = await voucherService.generate({
@@ -994,18 +998,29 @@ export default function VouchersPage() {
                   </select>
                 </div>
 
-                <Input
-                  label="Batch Qty"
-                  type="number"
-                  min={1}
-                  max={1000}
-                  className="h-10 border-slate-200"
-                  value={genForm.quantity}
-                  onChange={(e) => setGenForm({ ...genForm, quantity: e.target.value === "" ? "" : Number(e.target.value) })}
-                />
+                <div className="space-y-1">
+                  <Input
+                    label="Batch Qty"
+                    type="number"
+                    min={1}
+                    max={10000}
+                    className={`h-10 ${Number(genForm.quantity) > 10000 ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'}`}
+                    value={genForm.quantity}
+                    onChange={(e) => setGenForm({ ...genForm, quantity: e.target.value === "" ? "" : Number(e.target.value) })}
+                  />
+                  {Number(genForm.quantity) > 10000 && (
+                    <p className="text-[10px] text-red-500 font-medium animate-pulse">
+                      Maksimal generate adalah 10.000 voucher dalam satu batch
+                    </p>
+                  )}
+                </div>
 
                 <div className="lg:col-span-2">
-                  <Button onClick={generate} disabled={loading || !genForm.package_id} className="w-full bg-orange-600 hover:bg-orange-700 h-10 text-white font-bold shadow-md shadow-orange-100 transition-all active:scale-[0.98]">
+                  <Button 
+                    onClick={generate} 
+                    disabled={loading || !genForm.package_id || Number(genForm.quantity) > 10000} 
+                    className="w-full bg-orange-600 hover:bg-orange-700 h-10 text-white font-bold shadow-md shadow-orange-100 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale"
+                  >
                     Generate Batch Sekarang
                   </Button>
                 </div>
