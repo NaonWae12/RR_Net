@@ -478,7 +478,9 @@ func (s *VoucherService) batchInsertChunk(ctx context.Context, vouchers []*vouch
 	if len(vouchers) == 0 {
 		return nil
 	}
-	tx, err := s.voucherRepo.DB().Begin(ctx)
+	
+	db := s.voucherRepo.DB()
+	tx, err := db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -502,10 +504,16 @@ func (s *VoucherService) batchInsertChunk(ctx context.Context, vouchers []*vouch
 
 	br := tx.SendBatch(ctx, batch)
 	if err := br.Close(); err != nil {
+		log.Error().Err(err).Msg("Voucher Service: Batch insert chunk failed")
 		return fmt.Errorf("batch insert chunk failed: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		log.Error().Err(err).Msg("Voucher Service: Failed to commit voucher chunk transaction")
+		return err
+	}
+	
+	return nil
 }
 
 func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUID, req GenerateVouchersRequest) ([]*voucher.Voucher, error) {
@@ -651,7 +659,8 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 		}
 		chunk := vouchers[start:end]
 		if err := s.batchInsertChunk(ctx, chunk); err != nil {
-			return nil, fmt.Errorf("failed to insert voucher chunk [%d-%d]: %w", start, end, err)
+			log.Error().Err(err).Int("start", start).Int("end", end).Msg("Voucher Service: GenerateVouchers failed during chunk insertion")
+			return nil, err
 		}
 	}
 
