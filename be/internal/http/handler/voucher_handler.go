@@ -10,6 +10,8 @@ import (
 
 	"rrnet/internal/auth"
 	"rrnet/internal/service"
+
+	"github.com/rs/zerolog/log"
 )
 
 type VoucherHandler struct {
@@ -180,7 +182,10 @@ func (h *VoucherHandler) GenerateVouchers(w http.ResponseWriter, r *http.Request
 
 	vouchers, err := h.voucherService.GenerateVouchers(r.Context(), tenantID, req)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		log.Error().Err(err).Interface("request", req).Msg("Handler: GenerateVouchers failed")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
