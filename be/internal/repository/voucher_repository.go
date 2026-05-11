@@ -323,6 +323,13 @@ func (r *VoucherRepository) UpdateVoucher(ctx context.Context, v *voucher.Vouche
 	return err
 }
 
+func (r *VoucherRepository) ExistsByCode(ctx context.Context, tenantID uuid.UUID, code string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM vouchers WHERE tenant_id = $1 AND code = $2)`
+	var exists bool
+	err := r.db.QueryRow(ctx, query, tenantID, code).Scan(&exists)
+	return exists, err
+}
+
 func (r *VoucherRepository) CountVouchersByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
 	query := `SELECT COUNT(*) FROM vouchers WHERE tenant_id = $1 AND status NOT IN ('expired', 'revoked') AND (expires_at IS NULL OR expires_at > NOW())`
 	var count int

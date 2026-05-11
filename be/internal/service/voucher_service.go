@@ -559,98 +559,94 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 		userMode = "up"
 	}
 
-	// 3. Generate codes with Redis-backed collision detection
-	// Redis SET per batch: key = "vgen:{tenantID}:{batchNotes}", TTL = 10 menit
-	// Fungsi sebagai in-memory hash untuk deteksi duplikat intra-batch secara atomik
-	now := time.Now()
-	vouchers := make([]*voucher.Voucher, 0, req.Quantity)
-
+	// 3. Generate random vouchers with multi-layer collision detection
 	// In-memory map as primary (O(1)), Redis as secondary guard for extra safety
 	batchCodes := make(map[string]struct{}, req.Quantity)
+	vouchers := make([]*voucher.Voucher, 0, req.Quantity)
+	now := time.Now()
 
 	// Redis key untuk deduplikasi intra-batch (opsional, lebih aman)
 	redisKey := fmt.Sprintf("vgen:%s:%s", tenantID, batchNotes)
 	useRedis := s.redis != nil
 	if useRedis {
-		// Set TTL 15 menit, cukup untuk proses generate selesai
 		s.redis.Expire(ctx, redisKey, 15*time.Minute)
 	}
 
-	const maxRetries = 10 // Max retry per code sebelum dianggap charset terlalu kecil
+	const maxRetries = 10
 	for i := 0; i < req.Quantity; i++ {
 		var code, password string
 		var genErr error
-		var unique bool
+		var generated bool
 
-		// Retry sampai dapat kode unik dalam batch ini
 		for attempt := 0; attempt < maxRetries; attempt++ {
 			code, genErr = generateRandomFromCharset(charset, codeLength)
 			if genErr != nil {
 				return nil, genErr
 			}
 
-			// Cek duplikat di in-memory map dulu (paling cepat)
+			// Layer 1: In-memory check
 			if _, exists := batchCodes[code]; exists {
 				continue
 			}
 
-			// Cek duplikat di Redis (guard kedua, atomik)
+			// Layer 2: Redis check (for concurrent batches)
 			if useRedis {
 				added, redisErr := s.redis.SAdd(ctx, redisKey, code).Result()
 				if redisErr != nil || added == 0 {
-					// Kode sudah ada di Redis set, coba lagi
 					continue
 				}
 			}
 
+			// Layer 3: Database check (against ALL existing vouchers)
+			existsInDB, err := s.voucherRepo.ExistsByCode(ctx, tenantID, code)
+			if err != nil {
+				log.Error().Err(err).Str("code", code).Msg("Voucher Service: Failed to check code existence in DB")
+				continue
+			}
+			if existsInDB {
+				continue
+			}
+
+			// Unique code found!
+			if userMode == "up" {
+				password, genErr = generateRandomFromCharset("0123456789", codeLength)
+				if genErr != nil {
+					return nil, genErr
+				}
+			} else {
+				password = code
+			}
+
+			v := &voucher.Voucher{
+				ID:        uuid.New(),
+				TenantID:  tenantID,
+				PackageID: req.PackageID,
+				RouterID:  req.RouterID,
+				Code:      code,
+				Password:  password,
+				Status:    voucher.VoucherStatusActive,
+				Notes:     batchNotes,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+
+			vouchers = append(vouchers, v)
 			batchCodes[code] = struct{}{}
-			unique = true
+			generated = true
 			break
 		}
 
-		if !unique {
-			// Charset terlalu kecil atau code_length terlalu pendek
-			log.Warn().
-				Int("index", i).
-				Int("code_length", codeLength).
-				Str("charset_len", fmt.Sprintf("%d", len(charset))).
-				Msg("Voucher Service: could not generate unique code after max retries, using last attempt")
-			// Tetap pakai kode terakhir (konflik DB akan tetap dicegah oleh constraint)
+		if !generated {
+			return nil, fmt.Errorf("failed to generate unique code for voucher #%d after %d attempts (charset may be too small)", i+1, maxRetries)
 		}
-
-		if userMode == "up" {
-			password, genErr = generateRandomFromCharset("0123456789", codeLength)
-			if genErr != nil {
-				return nil, genErr
-			}
-		} else {
-			password = code
-		}
-
-		v := &voucher.Voucher{
-			ID:                 uuid.New(),
-			TenantID:           tenantID,
-			PackageID:          req.PackageID,
-			RouterID:           req.RouterID,
-			Code:               code,
-			Password:           password,
-			Notes:              batchNotes,
-			Status:             voucher.VoucherStatusActive,
-			ExpiresAt:          req.ExpiresAt,
-			ResellerPurchaseID: req.ResellerPurchaseID,
-			CreatedAt:          now,
-			UpdatedAt:          now,
-		}
-		vouchers = append(vouchers, v)
 	}
 
-	// Cleanup Redis key di background setelah selesai
+	// Cleanup Redis key in background
 	if useRedis {
 		go s.redis.Del(context.Background(), redisKey)
 	}
 
 	// 4. CHUNKED ATOMIC Batch Insert
-	// Dibagi per 500 biar transaksi nggak terlalu berat (aman buat ribuan/puluhan ribu)
 	const chunkSize = 500
 	for start := 0; start < len(vouchers); start += chunkSize {
 		end := start + chunkSize
