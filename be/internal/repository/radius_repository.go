@@ -197,14 +197,53 @@ func (r *RadiusRepository) GetSessionByAcctSessionID(ctx context.Context, acctSe
 // HasActiveSession checks if voucher has any active session
 func (r *RadiusRepository) HasActiveSession(ctx context.Context, voucherID uuid.UUID) (bool, error) {
 	query := `
-		SELECT COUNT(*) > 0
-		FROM radius_sessions
-		WHERE voucher_id = $1 AND session_status = 'active'
-		LIMIT 1
+		SELECT EXISTS (
+			SELECT 1
+			FROM radius_sessions
+			WHERE voucher_id = $1 AND session_status = 'active'
+		)
 	`
 	var hasActive bool
 	err := r.db.QueryRow(ctx, query, voucherID).Scan(&hasActive)
 	return hasActive, err
+}
+
+// GetActiveSessionsByVoucher returns all active sessions for a specific voucher
+func (r *RadiusRepository) GetActiveSessionsByVoucher(ctx context.Context, voucherID uuid.UUID) ([]*radius.Session, error) {
+	query := `
+		SELECT id, tenant_id, router_id, voucher_id, acct_session_id, acct_unique_id,
+			username, nas_ip_address, nas_port_id, framed_ip_address,
+			calling_station_id, called_station_id, acct_start_time, acct_stop_time,
+			acct_session_time, acct_input_octets, acct_output_octets,
+			acct_input_packets, acct_output_packets, acct_terminate_cause,
+			session_status, created_at, updated_at
+		FROM radius_sessions
+		WHERE voucher_id = $1 AND session_status = 'active'
+	`
+	rows, err := r.db.Query(ctx, query, voucherID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []*radius.Session
+	for rows.Next() {
+		var s radius.Session
+		err := rows.Scan(
+			&s.ID, &s.TenantID, &s.RouterID, &s.VoucherID, &s.AcctSessionID,
+			&s.AcctUniqueID, &s.Username, &s.NASIPAddress, &s.NASPortID,
+			&s.FramedIPAddress, &s.CallingStationID, &s.CalledStationID,
+			&s.AcctStartTime, &s.AcctStopTime, &s.AcctSessionTime,
+			&s.AcctInputOctets, &s.AcctOutputOctets, &s.AcctInputPackets,
+			&s.AcctOutputPackets, &s.AcctTerminateCause, &s.SessionStatus,
+			&s.CreatedAt, &s.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, &s)
+	}
+	return sessions, nil
 }
 
 // MarkStaleSessionsStopped marks all 'active' sessions that haven't received
@@ -268,4 +307,19 @@ func (r *RadiusRepository) ListActiveSessions(ctx context.Context, tenantID uuid
 		sessions = append(sessions, &s)
 	}
 	return sessions, nil
+}
+
+// CloseSession marks a specific session as stopped with a terminate cause
+func (r *RadiusRepository) CloseSession(ctx context.Context, acctSessionID string, cause string) error {
+	query := `
+		UPDATE radius_sessions
+		SET
+			session_status = 'stopped',
+			acct_terminate_cause = $2,
+			acct_stop_time = NOW(),
+			updated_at = NOW()
+		WHERE acct_session_id = $1
+	`
+	_, err := r.db.Exec(ctx, query, acctSessionID, cause)
+	return err
 }

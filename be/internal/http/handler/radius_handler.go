@@ -135,7 +135,7 @@ func (h *RadiusHandler) Auth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate voucher
-	v, err := h.voucherService.ValidateVoucherForAuth(ctx, router.TenantID, req.UserName)
+	v, err := h.voucherService.ValidateVoucherForAuth(ctx, router.TenantID, req.UserName, req.CallingStationID)
 	if err != nil {
 		h.logAuthReject(w, r, router.TenantID, &router.ID, req.UserName, req.NASIPAddress, err.Error())
 		return

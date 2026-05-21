@@ -16,6 +16,7 @@ import (
 
 	"regexp"
 	"rrnet/internal/domain/network"
+	"rrnet/internal/domain/radius"
 	"rrnet/internal/domain/voucher"
 	"rrnet/internal/infra/mikrotik"
 	"rrnet/internal/repository"
@@ -1110,7 +1111,7 @@ func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error 
 }
 
 // ValidateVoucherForAuth checks if voucher can be used for authentication
-func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uuid.UUID, code string) (*voucher.Voucher, error) {
+func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uuid.UUID, code string, macAddress string) (*voucher.Voucher, error) {
 	code = strings.TrimSpace(code)
 	v, err := s.voucherRepo.GetVoucherByCode(ctx, tenantID, code)
 	if err != nil {
@@ -1137,17 +1138,56 @@ func (s *VoucherService) ValidateVoucherForAuth(ctx context.Context, tenantID uu
 		}
 	}
 
-	// Allow reuse if voucher is 'used' but not expired and no active session
+	// Allow reuse if voucher is 'used' but not expired
 	if v.Status == voucher.VoucherStatusUsed {
-		hasActive, err := s.radiusRepo.HasActiveSession(ctx, v.ID)
+		activeSessions, err := s.radiusRepo.GetActiveSessionsByVoucher(ctx, v.ID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check active session: %w", err)
+			return nil, fmt.Errorf("failed to check active sessions: %w", err)
 		}
-		if hasActive {
-			return nil, fmt.Errorf("voucher is currently in use")
+
+		// Filter out stale sessions (no update in last 7 minutes)
+		var validActiveSessions []*radius.Session
+		staleThreshold := 7 * time.Minute
+
+		for _, sess := range activeSessions {
+			if time.Since(sess.UpdatedAt) > staleThreshold {
+				// Mark as stopped in DB so it doesn't clutter active sessions
+				_ = s.radiusRepo.CloseSession(ctx, sess.AcctSessionID, "Stale-Cleanup")
+				log.Info().
+					Str("voucher", v.Code).
+					Str("session_id", sess.AcctSessionID).
+					Time("last_update", sess.UpdatedAt).
+					Msg("Voucher Service: Cleaned up stale session during auth validation")
+				continue
+			}
+			validActiveSessions = append(validActiveSessions, sess)
 		}
-		// No active session → Allow reuse
-		return v, nil
+
+		// 1. Shared Users Check: If we have room, let them in
+		sharedLimit := v.SharedUsers
+		if sharedLimit < 1 {
+			sharedLimit = 1 // Default to 1
+		}
+
+		if len(validActiveSessions) < sharedLimit {
+			return v, nil
+		}
+
+		// 2. Session Reclaim: If limit reached, allow if it's the SAME device (MAC match)
+		if macAddress != "" {
+			for _, sess := range validActiveSessions {
+				if sess.CallingStationID == macAddress {
+					// This is a reconnect/reclaim from the same device, allow it
+					log.Info().
+						Str("voucher", v.Code).
+						Str("mac", macAddress).
+						Msg("Voucher Service: Allowing session reclaim for same MAC")
+					return v, nil
+				}
+			}
+		}
+
+		return nil, fmt.Errorf("voucher is currently in use (shared users limit reached)")
 	}
 
 	// Normal flow: Check status for 'active'
