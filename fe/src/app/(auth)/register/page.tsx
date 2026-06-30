@@ -222,7 +222,8 @@ function RegisterContent() {
     const oauthEmail = searchParams.get("email");
     const oauthName = searchParams.get("name");
     const oauthProvider = searchParams.get("oauth_provider");
-    const oauthId = searchParams.get("oauth_id");
+    const qPlan = searchParams.get("plan");
+    const qBilling = searchParams.get("billing");
     
     if (oauthEmail && oauthProvider) {
       setIsOAuth(true);
@@ -230,11 +231,13 @@ function RegisterContent() {
         ...prev,
         email: oauthEmail,
         name: oauthName || prev.name,
+        plan: qPlan || prev.plan,
+        billing: qBilling || prev.billing,
         // Set a random password for OAuth users (backend won't use it)
         password: Math.random().toString(36).slice(-10) + "!" + Math.random().toString(36).slice(-10)
       }));
       setStep(3); // Skip to organization details
-      showToast("Signed in with Google. Let's complete your organization setup!", "success");
+      showToast("Akun Google terverifikasi! Lengkapi detail organisasi Anda.", "success");
     }
   }, [searchParams, showToast]);
 
@@ -274,13 +277,14 @@ function RegisterContent() {
       // Store response for later use
       setRegResponse(data);
       
-      // For testing Affiliate logic, we bypass OTP check if it's local DEV or automatically
-      // If OAuth user, skip OTP and go directly to success
-      if (isOAuth || true) { // forced true to bypass OTP for E2E affiliate test
-        // Set auth immediately for OAuth users (email already verified by Google)
+      if (isOAuth) {
+        // OAuth users: email already verified by Google, set auth and go to dashboard
         setAuth(data.user, data.tenant, data.access_token, data.refresh_token);
-        showToast("Registration successful! Welcome aboard!", "success");
-        setStep(5); // Go to success step
+        showToast("Registrasi berhasil! Selamat datang!", "success");
+        // Redirect to dashboard after short delay so toast is visible
+        setTimeout(() => {
+          router.replace("/dashboard");
+        }, 1000);
       } else {
         // Regular users need OTP verification
         showToast(`Data registrasi diterima. Silakan cek ${formData.otpMethod === "whatsapp" ? "WhatsApp" : "Email"} untuk kode OTP.`, "success");
