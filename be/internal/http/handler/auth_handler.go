@@ -298,7 +298,14 @@ func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	response, err := h.authService.OAuthLogin(r.Context(), oauthUser)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
-			// Redirect back to frontend for registration
+			// Check if this was a login attempt
+			values, parseErr := url.ParseQuery(state)
+			if parseErr == nil && values.Get("action") == "login" {
+				http.Redirect(w, r, frontendURL+"/login?error=user_not_found", http.StatusFound)
+				return
+			}
+
+			// Otherwise, redirect back to frontend for registration
 			target := fmt.Sprintf("%s/register?email=%s&name=%s&oauth_provider=%s&oauth_id=%s",
 				frontendURL, url.QueryEscape(oauthUser.Email), url.QueryEscape(oauthUser.Name), provider, oauthUser.ID)
 			
@@ -310,7 +317,18 @@ func (h *AuthHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, target, http.StatusFound)
 			return
 		}
-		// Error page or redirect with error param
+		
+		// Handle active status errors
+		if errors.Is(err, service.ErrUserNotActive) {
+			http.Redirect(w, r, frontendURL+"/login?error=user_inactive", http.StatusFound)
+			return
+		}
+		if errors.Is(err, service.ErrTenantNotActive) {
+			http.Redirect(w, r, frontendURL+"/login?error=tenant_inactive", http.StatusFound)
+			return
+		}
+
+		// General auth failure
 		http.Redirect(w, r, frontendURL+"/login?error=auth_failed", http.StatusFound)
 		return
 	}

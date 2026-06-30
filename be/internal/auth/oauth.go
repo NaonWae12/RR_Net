@@ -54,7 +54,8 @@ func (m *OAuthManager) GetAuthURL(provider OAuthProvider, state string) (string,
 	if err != nil {
 		return "", err
 	}
-	return config.AuthCodeURL(state), nil
+	// Force account picker to always appear (don't auto-select cached session)
+	return config.AuthCodeURL(state, oauth2.SetAuthURLParam("prompt", "select_account")), nil
 }
 
 type OAuthUser struct {

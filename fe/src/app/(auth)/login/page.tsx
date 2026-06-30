@@ -3,8 +3,8 @@
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -33,13 +33,45 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, isLoading } = useAuth();
   const { showToast } = useNotificationStore();
   const [submitted, setSubmitted] = useState(false);
   const [showTenantInfo, setShowTenantInfo] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      let title = "Autentikasi Gagal";
+      let description = "Terjadi kesalahan saat masuk menggunakan Google.";
+      
+      if (errorParam === "user_not_found") {
+        title = "Akun Belum Terdaftar";
+        description = "Email Google Anda belum terdaftar. Silakan registrasi terlebih dahulu.";
+      } else if (errorParam === "user_inactive") {
+        title = "Akun Tidak Aktif";
+        description = "Akun Anda saat ini dinonaktifkan. Silakan hubungi admin.";
+      } else if (errorParam === "tenant_inactive") {
+        title = "Organisasi Tidak Aktif";
+        description = "Organisasi Anda tidak aktif atau ditangguhkan.";
+      }
+
+      showToast({
+        title,
+        description,
+        variant: "error",
+      });
+
+      // Clear the query parameters to avoid showing the toast again on refresh
+      const newParams = new URLSearchParams(searchParams.toString());
+      newParams.delete("error");
+      const newUrl = newParams.toString() ? `/login?${newParams.toString()}` : "/login";
+      router.replace(newUrl);
+    }
+  }, [searchParams, showToast, router]);
 
   const {
     register: registerField,
@@ -297,7 +329,13 @@ export default function LoginPage() {
               <div className="flex flex-col gap-4">
                 <button 
                   type="button" 
-                  onClick={() => window.location.assign(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'}/auth/google/login`)}
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      action: "login"
+                    });
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+                    window.location.assign(`${apiUrl}/auth/google/login?state=${encodeURIComponent(params.toString())}`);
+                  }}
                   className="flex items-center justify-center gap-2 bg-white/5 border border-white/10 py-4 rounded-2xl hover:bg-white/10 transition-all font-medium text-sm group"
                 >
                   <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
@@ -319,5 +357,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }
