@@ -83,17 +83,24 @@ func (r *InvoiceRepository) Create(ctx context.Context, invoice *billing.Invoice
 
 func (r *InvoiceRepository) GetByID(ctx context.Context, id uuid.UUID) (*billing.Invoice, error) {
 	query := `
-		SELECT id, tenant_id, client_id, invoice_number, period_start, period_end,
-			due_date, subtotal, tax_amount, discount_amount, total_amount,
-			paid_amount, currency, status, COALESCE(notes, ''), created_at, updated_at, paid_at
-		FROM invoices
-		WHERE id = $1
+		SELECT i.id, i.tenant_id, i.client_id, 
+			c.name as client_name, c.phone as client_phone, c.address as client_address,
+			g.name as client_group_name,
+			i.invoice_number, i.period_start, i.period_end,
+			i.due_date, i.subtotal, i.tax_amount, i.discount_amount, i.total_amount,
+			i.paid_amount, i.currency, i.status, COALESCE(i.notes, ''), i.created_at, i.updated_at, i.paid_at
+		FROM invoices i
+		INNER JOIN clients c ON c.id = i.client_id
+		LEFT JOIN client_groups g ON g.id = c.group_id
+		WHERE i.id = $1
 	`
 	var invoice billing.Invoice
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&invoice.ID, &invoice.TenantID, &invoice.ClientID, &invoice.InvoiceNumber,
-		&invoice.PeriodStart, &invoice.PeriodEnd, &invoice.DueDate,
-		&invoice.Subtotal, &invoice.TaxAmount, &invoice.DiscountAmount, &invoice.TotalAmount,
+		&invoice.ID, &invoice.TenantID, &invoice.ClientID,
+		&invoice.ClientName, &invoice.ClientPhone, &invoice.ClientAddress,
+		&invoice.ClientGroupName,
+		&invoice.InvoiceNumber, &invoice.PeriodStart, &invoice.PeriodEnd,
+		&invoice.DueDate, &invoice.Subtotal, &invoice.TaxAmount, &invoice.DiscountAmount, &invoice.TotalAmount,
 		&invoice.PaidAmount, &invoice.Currency, &invoice.Status, &invoice.Notes,
 		&invoice.CreatedAt, &invoice.UpdatedAt, &invoice.PaidAt,
 	)

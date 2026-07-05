@@ -2,6 +2,8 @@ import React from 'react';
 import { VoucherTemplateProps } from "./types";
 
 const MikhmonTemplate: React.FC<VoucherTemplateProps> = ({ voucher, index, pkg, headerTitle }) => {
+  const isSameCredentials = voucher.code === (voucher.password || voucher.code);
+
   return (
     <div className="print-card bg-white border border-black p-1 text-[9px] font-bold text-black w-full max-w-[160px] shadow-none uppercase min-h-[86px] flex flex-col justify-between">
       <div>
@@ -9,18 +11,29 @@ const MikhmonTemplate: React.FC<VoucherTemplateProps> = ({ voucher, index, pkg, 
           <span className="truncate max-w-[100px] font-bold normal-case text-[10px]">{headerTitle}</span>
           <span className="text-[8px]">[{index + 1}]</span>
         </div>
-        <div className="flex text-[8px] text-center mb-0.5 leading-none">
-          <div className="flex-1">User</div>
-          <div className="flex-1">Pass</div>
-        </div>
-        <div className="flex gap-1 mb-1">
-          <div className="flex-1 border border-black py-0.5 px-0.5 text-center font-semibold text-[18px] leading-tight normal-case bg-slate-50/50">
-            {voucher.code}
-          </div>
-          <div className="flex-1 border border-black py-0.5 px-0.5 text-center font-semibold text-[18px] leading-tight normal-case bg-slate-50/50">
-            {voucher.password || voucher.code}
-          </div>
-        </div>
+        {isSameCredentials ? (
+          <>
+            <div className="text-[8px] text-center mb-0.5 leading-none">Kode</div>
+            <div className="border border-black py-0.5 px-0.5 text-center font-semibold text-[18px] leading-tight normal-case bg-slate-50/50 mb-1">
+              {voucher.code}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex text-[8px] text-center mb-0.5 leading-none">
+              <div className="flex-1">User</div>
+              <div className="flex-1">Pass</div>
+            </div>
+            <div className="flex gap-1 mb-1">
+              <div className="flex-1 border border-black py-0.5 px-0.5 text-center font-semibold text-[18px] leading-tight normal-case bg-slate-50/50">
+                {voucher.code}
+              </div>
+              <div className="flex-1 border border-black py-0.5 px-0.5 text-center font-semibold text-[18px] leading-tight normal-case bg-slate-50/50">
+                {voucher.password}
+              </div>
+            </div>
+          </>
+        )}
       </div>
       <div className="border border-black py-0.5 px-1 text-center text-[10px] font-bold leading-none bg-slate-100/30">
         {pkg?.duration_hours ? `${pkg.duration_hours}J` : '∞'} - RP {pkg?.price ? pkg.price.toLocaleString('id-ID') : '0'}

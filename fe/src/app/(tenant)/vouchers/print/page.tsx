@@ -271,11 +271,15 @@ export default function VoucherPrintPage() {
                     const resellerAllowed = Array.isArray(resellerSlugs) ? resellerSlugs : (resellerSlugs ? [resellerSlugs as unknown as string] : []);
                     
                     // Filter designs based on role and mandatory collection
-                    let availableDesigns = ownedDesigns;
-                    if (isReseller && resellerAllowed.length > 0) {
-                      availableDesigns = ownedDesigns.filter(d => resellerAllowed.includes(d.slug) || d.slug === 'modern');
-                    } else if (!isReseller && defaultAllowed.length > 0) {
-                      availableDesigns = ownedDesigns.filter(d => defaultAllowed.includes(d.slug) || d.slug === 'modern');
+                    let availableDesigns: VoucherDesign[] = [];
+                    const alwaysAllowed = ['simple', 'mikhmon'];
+                    
+                    if (isReseller) {
+                      const allowed = resellerAllowed.length > 0 ? resellerAllowed : alwaysAllowed;
+                      availableDesigns = ownedDesigns.filter(d => allowed.includes(d.slug) || alwaysAllowed.includes(d.slug));
+                    } else {
+                      const allowed = defaultAllowed.length > 0 ? defaultAllowed : alwaysAllowed;
+                      availableDesigns = ownedDesigns.filter(d => allowed.includes(d.slug) || alwaysAllowed.includes(d.slug));
                     }
 
                     if (availableDesigns.length > 0) {
@@ -295,18 +299,20 @@ export default function VoucherPrintPage() {
                       });
                     }
 
-                    // Fallback to defaults if no owned designs
-                    return Object.values(VOUCHER_TEMPLATES).slice(0, 3).map(tmpl => (
-                      <button
-                        key={tmpl.id}
-                        onClick={() => setCardDesignMode(tmpl.id)}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
-                          cardDesignMode === tmpl.id ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
-                        {tmpl.id.charAt(0).toUpperCase() + tmpl.id.slice(1)}
-                      </button>
-                    ));
+                    // No designs allowed case
+                    return (
+                      <div className="flex items-center gap-3 px-2">
+                        <span className="text-xs font-bold text-red-500">Belum ada desain yang diaktifkan.</span>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => router.push('/vouchers/design')}
+                          className="h-7 text-[10px] font-bold border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          Pilih Desain Sekarang
+                        </Button>
+                      </div>
+                    );
                   })()}
                 </div>
               </div>

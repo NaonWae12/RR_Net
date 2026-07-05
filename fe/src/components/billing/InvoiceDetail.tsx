@@ -3,8 +3,9 @@
 import { Invoice, Payment } from "@/lib/api/types";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import { format } from "date-fns";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { Printer } from "lucide-react";
+
 
 interface InvoiceDetailProps {
   invoice: Invoice;
@@ -162,14 +163,24 @@ export function InvoiceDetail({ invoice, payments = [], onRecordPayment }: Invoi
       )}
 
       {/* Actions */}
-      {(invoice.status === "pending" || invoice.status === "overdue") && !isFullyPaid && onRecordPayment && (
-        <div className="flex space-x-2">
-          <Button onClick={onRecordPayment} className="bg-indigo-600 hover:bg-indigo-700 font-bold shadow-lg">Record Payment</Button>
-          <Button variant="outline" className="font-bold" onClick={() => router.push(`/billing/invoices/${invoice.id}/edit`)}>
-            Edit Invoice
-          </Button>
-        </div>
-      )}
+      <div className="flex space-x-2">
+        <Button 
+          variant="outline" 
+          className="font-bold flex items-center gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50" 
+          onClick={() => router.push(`/billing/invoices/${invoice.id}/print`)}
+        >
+          <Printer className="h-4 w-4" /> Print Nota
+        </Button>
+        {(invoice.status === "pending" || invoice.status === "overdue") && !isFullyPaid && onRecordPayment && (
+          <>
+            <Button onClick={onRecordPayment} className="bg-indigo-600 hover:bg-indigo-700 font-bold shadow-lg">Record Payment</Button>
+            <Button variant="outline" className="font-bold" onClick={() => router.push(`/billing/invoices/${invoice.id}/edit`)}>
+              Edit Invoice
+            </Button>
+          </>
+        )}
+      </div>
+
 
       {invoice.notes && (
         <div className="bg-slate-50 rounded-lg p-4">

@@ -23,6 +23,9 @@ const ModernTemplate: React.FC<VoucherTemplateProps> = ({ voucher, index = 0, pk
   // Dynamic Header Text
   const displayTitle = headerTitle || "INTERNET HOTSPOT";
 
+  // Check if username equals password
+  const isSameCredentials = voucher.code === (voucher.password || voucher.code);
+
   return (
     <div className="print-card bg-white border border-dashed border-slate-600 p-0 text-slate-900 w-full max-w-[160px] shadow-none flex flex-col overflow-hidden leading-none font-sans relative h-[88px]">
       
@@ -56,17 +59,29 @@ const ModernTemplate: React.FC<VoucherTemplateProps> = ({ voucher, index = 0, pk
              <Radio className="w-10 h-10" />
           </div>
 
-          {/* Username Row */}
-          <div className="flex-1 flex border-b-2 border-slate-200 items-center justify-between px-1.5 relative z-10 leading-none">
-            <span className="text-[16px] font-bold text-black font-mono tracking-tighter">{voucher.code}</span>
-            <span className="rotate-180 [writing-mode:vertical-lr] text-[5px] font-black text-slate-400 uppercase">User</span>
-          </div>
+          {isSameCredentials ? (
+            <>
+              {/* Single Code Row (when user === pass) */}
+              <div className="flex-[2] flex border-b-2 border-slate-200 items-center justify-between px-1.5 relative z-10 leading-none">
+                <span className="text-[18px] font-bold text-black font-mono tracking-tighter">{voucher.code}</span>
+                <span className="rotate-180 [writing-mode:vertical-lr] text-[5px] font-black text-slate-400 uppercase">Code</span>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Username Row */}
+              <div className="flex-1 flex border-b-2 border-slate-200 items-center justify-between px-1.5 relative z-10 leading-none">
+                <span className="text-[16px] font-bold text-black font-mono tracking-tighter">{voucher.code}</span>
+                <span className="rotate-180 [writing-mode:vertical-lr] text-[5px] font-black text-slate-400 uppercase">User</span>
+              </div>
 
-          {/* Password Row */}
-          <div className="flex-1 flex border-b-2 border-slate-200 items-center justify-between px-1.5 relative z-10 leading-none">
-            <span className="text-[16px] font-bold text-black font-mono tracking-tighter">{voucher.password || voucher.code}</span>
-            <span className="rotate-180 [writing-mode:vertical-lr] text-[4px] font-black text-slate-400 uppercase tracking-tighter">Pass</span>
-          </div>
+              {/* Password Row */}
+              <div className="flex-1 flex border-b-2 border-slate-200 items-center justify-between px-1.5 relative z-10 leading-none">
+                <span className="text-[16px] font-bold text-black font-mono tracking-tighter">{voucher.password}</span>
+                <span className="rotate-180 [writing-mode:vertical-lr] text-[4px] font-black text-slate-400 uppercase tracking-tighter">Pass</span>
+              </div>
+            </>
+          )}
 
           {/* Price Row */}
           <div className="flex-1 flex items-center justify-between px-1.5 bg-slate-50/50 relative z-10 leading-none">

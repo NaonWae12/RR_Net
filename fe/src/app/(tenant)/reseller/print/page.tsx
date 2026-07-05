@@ -1,18 +1,40 @@
-'use client';
+/**
+ * RESELLER VOUCHER PRINT PAGE
+ * This is a TypeScript React file (.tsx)
+ */
+"use client";
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import resellerService from '@/lib/api/resellerService';
 import { voucherService } from '@/lib/api/voucherService';
 import { ResellerPurchase, Voucher, VoucherPackage, ResellerPrice } from '@/lib/api/types';
-import { ArrowLeft, Printer, Ticket, Download, Loader2 } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Printer, 
+  Ticket, 
+  Download, 
+  Loader2, 
+  Settings2,
+  CheckCircle2,
+  AlertCircle,
+  Palette,
+  Monitor,
+  Tag,
+  ChevronDown
+} from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useNetworkStore } from '@/stores/networkStore';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { VOUCHER_TEMPLATES, getTemplateBySlug } from '@/components/vouchers/templates/registry';
 
 function PrintPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const purchaseId = searchParams.get('purchase_id');
+  const printRef = useRef<HTMLDivElement>(null);
 
   const [purchase, setPurchase] = useState<ResellerPurchase | null>(null);
   const [packages, setPackages] = useState<VoucherPackage[]>([]);
@@ -20,9 +42,26 @@ function PrintPage() {
   const [loading, setLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cardMode, setCardMode] = useState<'simple' | 'branded' | 'mikhmon'>('simple');
+  const [cardDesignMode, setCardDesignMode] = useState<string>('simple');
+  
+  // Header Branding State (synced with Portal logic)
+  const [brandingSource, setBrandingSource] = useState<'tenant' | 'package' | 'dns' | 'label'>('tenant');
+  const [selectedBrandingValue, setSelectedBrandingValue] = useState('');
+
   const { tenant } = useAuth();
   const { routers, fetchRouters } = useNetworkStore();
+
+  // Collect DNS names & labels from routers branding_config (same as Portal)
+  const allAvailableDNS = Array.from(new Set(
+    routers.flatMap(r => [
+      ...(r.dns_name ? [r.dns_name] : []),
+      ...(r.branding_config?.dns_names || [])
+    ])
+  ));
+
+  const allAvailableLabels = Array.from(new Set(
+    routers.flatMap(r => r.branding_config?.labels || [])
+  ));
 
   useEffect(() => {
     if (!purchaseId) {
@@ -39,16 +78,18 @@ function PrintPage() {
       const [purchaseData, packagesData, pricesData] = await Promise.all([
         resellerService.getPurchase(id),
         voucherService.listPackages(),
-        resellerService.getGlobalPrices() // Admins use global prices
+        resellerService.getGlobalPrices()
       ]);
-
-      if (routers.length === 0) {
-        await fetchRouters();
-      }
 
       setPurchase(purchaseData);
       setPackages(packagesData);
       setResellerPrices(pricesData);
+      
+      try {
+        await fetchRouters();
+      } catch (e) {
+        console.warn('Failed to fetch routers');
+      }
     } catch (err: any) {
       setError(err?.message || 'Gagal memuat data.');
     } finally {
@@ -56,12 +97,32 @@ function PrintPage() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  useEffect(() => {
+    if (purchase?.vouchers?.[0]?.router_id && routers.length > 0) {
+      const matchedRouter = routers.find(r => r.id === purchase.vouchers![0].router_id);
+      if (matchedRouter?.dns_name && !selectedBrandingValue) {
+        setSelectedBrandingValue(matchedRouter.dns_name);
+      }
+    }
+  }, [purchase, routers]);
+
+  // Pagination Logic
+  const vouchers = purchase?.vouchers || [];
+  const template = getTemplateBySlug(cardDesignMode);
+  const TemplateComponent = template.component;
+  const gridCols = template.gridCols || 3;
+  const vouchersPerPage = (cardDesignMode === 'mikhmon' || cardDesignMode === 'modern') ? 55 : 15;
+
+  const pages = useMemo(() => {
+    const p: Voucher[][] = [];
+    for (let i = 0; i < vouchers.length; i += vouchersPerPage) {
+      p.push(vouchers.slice(i, i + vouchersPerPage));
+    }
+    return p;
+  }, [vouchers, vouchersPerPage]);
 
   const handleDownloadPDF = async () => {
-    const element = document.getElementById('voucher-print-area');
+    const element = document.querySelector('.print-pages-flow') as HTMLElement;
     if (!element) return;
 
     try {
@@ -69,29 +130,22 @@ function PrintPage() {
       const { toPng } = await import('html-to-image');
       const { jsPDF } = await import('jspdf');
       
-      const dataUrl = await toPng(element, { 
-        quality: 1.0, 
-        pixelRatio: 2,
-        backgroundColor: '#f8fafc' 
-      });
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageElements = element.querySelectorAll('.a4-paper-sheet');
       
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'cm',
-        format: 'a4'
-      });
-
-      const imgProps = pdf.getImageProperties(dataUrl);
-      const pdfWidth = pdf.internal.pageSize.getWidth() - 1.4; // 0.7cm margins
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      for (let i = 0; i < pageElements.length; i++) {
+        const page = pageElements[i] as HTMLElement;
+        const dataUrl = await toPng(page, { 
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          skipFonts: true
+        });
+        
+        if (i > 0) pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297);
+      }
       
-      const price = resellerPrices.find(p => p.voucher_package_id === purchase?.vouchers?.[0]?.package_id)?.retail_price || purchase?.unit_price || 0;
-      const pkg = (purchase?.voucher_package_name || 'Voucher').toLowerCase().replace(/\s+/g, '-');
-      const now = new Date();
-      const ts = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}-${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-      
-      pdf.addImage(dataUrl, 'PNG', 0.7, 0.7, pdfWidth, pdfHeight);
-      pdf.save(`voucher-${pkg}-${price}-${ts}.pdf`);
+      pdf.save(`Vouchers-${purchase?.reseller_name}-${new Date().getTime()}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
     } finally {
@@ -103,8 +157,8 @@ function PrintPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4 text-slate-500">
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="font-bold text-sm">Memuat data voucher...</p>
+          <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
+          <p className="font-bold text-sm">Menyiapkan cetakan voucher...</p>
         </div>
       </div>
     );
@@ -113,245 +167,327 @@ function PrintPage() {
   if (error || !purchase) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-            <Ticket className="w-8 h-8 text-red-400" />
+        <div className="text-center space-y-4 max-w-md p-8 bg-white rounded-3xl shadow-xl border border-slate-100">
+          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-10 h-10 text-red-500" />
           </div>
-          <h2 className="font-black text-slate-800 text-xl">Tidak Dapat Memuat</h2>
-          <p className="text-slate-500 text-sm">{error}</p>
-          <button
-            onClick={() => router.back()}
-            className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all text-sm"
-          >
-            Kembali
-          </button>
+          <h2 className="font-black text-slate-900 text-2xl tracking-tight">Oops! Terjadi Kesalahan</h2>
+          <p className="text-slate-500 font-medium leading-relaxed">{error}</p>
+          <Button onClick={() => router.back()} className="w-full h-12 rounded-2xl bg-slate-900 hover:bg-black transition-all font-bold">
+            Kembali ke Daftar
+          </Button>
         </div>
       </div>
     );
   }
 
-  const vouchers: Voucher[] = purchase.vouchers || [];
-  const pkgName = purchase.voucher_package_name || 'Voucher';
+  // Resolve Header Text (same logic as Portal)
+  const resolveHeaderTitle = () => {
+    switch(brandingSource) {
+      case 'tenant': return tenant?.name || "WIFI VOUCHER";
+      case 'package': return purchase.voucher_package_name || "HOTSPOT";
+      case 'dns': return selectedBrandingValue || "hotspot.net";
+      case 'label': return selectedBrandingValue || "WIFI VOUCHER";
+      default: return "WIFI VOUCHER";
+    }
+  };
+  const headerTitle = resolveHeaderTitle();
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="no-print bg-white border-b border-slate-100 shadow-sm sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-bold text-sm"
-            >
-              <ArrowLeft className="w-4 h-4" /> Kembali
-            </button>
-            <div className="h-6 w-px bg-slate-200" />
+    <div className="min-h-screen bg-slate-100/50 pb-20">
+      {/* Header Sticky - No Print */}
+      <div className="no-print bg-white/80 backdrop-blur-xl border-b border-slate-200 sticky top-0 z-[100] shadow-sm">
+        <div className="max-w-[1200px] mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-slate-100">
+              <ArrowLeft className="w-5 h-5 text-slate-600" />
+            </Button>
             <div>
-              <h1 className="font-black text-slate-900 text-base flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-indigo-600" /> Cetak Voucher (Admin)
-              </h1>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-tight">
-                {purchase.reseller_name || 'Reseller'} &bull; {pkgName} &bull; {vouchers.length} voucher
+              <div className="flex items-center gap-2">
+                <h1 className="font-black text-slate-900 text-lg tracking-tight">Cetak Voucher (Admin)</h1>
+                <Badge className="bg-indigo-600 text-white border-none text-[10px] uppercase font-black px-2">Order #{purchase.id.slice(0, 8)}</Badge>
+              </div>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-0.5">
+                {purchase.reseller_name} &bull; {purchase.voucher_package_name} &bull; {vouchers.length} Items
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Template:</span>
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-              <button
-                onClick={() => setCardMode('simple')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  cardMode === 'simple' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Simple
-              </button>
-              <button
-                onClick={() => setCardMode('branded')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  cardMode === 'branded' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Branded
-              </button>
-              <button
-                onClick={() => setCardMode('mikhmon')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  cardMode === 'mikhmon' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Mikhmon
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
+          
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <Button 
+              variant="outline" 
               onClick={handleDownloadPDF}
-              disabled={vouchers.length === 0 || isDownloading}
-              className="flex items-center gap-2 px-6 py-2.5 bg-white text-indigo-600 border border-indigo-200 rounded-2xl font-black hover:bg-slate-50 transition-all text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isDownloading}
+              className="bg-white border-slate-200 text-slate-700 h-11 gap-2 shadow-sm rounded-2xl px-6 font-bold hover:bg-slate-50 transition-all"
             >
-              {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} 
+              {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Download PDF
-            </button>
-            <button
-              onClick={handlePrint}
-              disabled={vouchers.length === 0}
-              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all text-sm shadow-md shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            </Button>
+            <Button 
+              onClick={() => window.print()}
+              className="bg-indigo-600 hover:bg-indigo-700 h-11 gap-2 shadow-md shadow-indigo-100 rounded-2xl px-6 font-black transition-all"
             >
-              <Printer className="w-4 h-4" /> Print {vouchers.length} Voucher
-            </button>
+              <Printer className="w-4 h-4" />
+              Cetak Sekarang
+            </Button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        <div 
-          id="voucher-print-area" 
-          className={`print-voucher-grid grid gap-4 ${
-            cardMode === 'mikhmon' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3'
-          }`}
-          data-mode={cardMode}
-        >
-          {(() => {
-            const uniqueRouterIds = new Set(vouchers.map(v => v.router_id).filter(Boolean));
-            const uniqueDnsNames = new Set(
-              vouchers
-                .map(v => routers.find(r => r.id === v.router_id)?.dns_name)
-                .filter(Boolean)
-            );
-            const useOrgName = uniqueRouterIds.size > 1 || uniqueDnsNames.size > 1;
-            const orgName = tenant?.name || "WIFI VOUCHER";
+      <div className="print-layout-wrapper max-w-[1200px] mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* Controls Sidebar - No Print */}
+        <div className="no-print lg:col-span-4 space-y-6">
+          <Card className="rounded-[2rem] border-none shadow-xl shadow-slate-200/50 overflow-hidden">
+            <CardHeader className="bg-slate-900 text-white p-6 pb-8">
+              <CardTitle className="flex items-center gap-2 text-xl font-black">
+                <Settings2 className="w-6 h-6 text-indigo-400" />
+                Pengaturan Print
+              </CardTitle>
+              <CardDescription className="text-slate-400 font-medium">Kustomisasi tampilan voucher sebelum dicetak.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 -mt-4 bg-white rounded-t-[2rem] space-y-8">
+              {/* Template Selection */}
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-indigo-500" /> Pilih Desain:
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {(() => {
+                    const allowedSlugs = tenant?.reseller_voucher_design_slug;
+                    const resellerAllowed = Array.isArray(allowedSlugs) 
+                      ? allowedSlugs 
+                      : (allowedSlugs ? [allowedSlugs as string] : []);
+                    
+                    const alwaysAllowed = ['simple', 'mikhmon'];
+                    const allowed = resellerAllowed.length > 0 ? resellerAllowed : alwaysAllowed;
+                    
+                    const availableTemplates = Object.values(VOUCHER_TEMPLATES).filter(t => 
+                      allowed.includes(t.id) || alwaysAllowed.includes(t.id)
+                    );
 
-            return vouchers.map((v, idx) => {
-              const pkg = packages.find(p => p.id === v.package_id);
-              const router = routers.find(r => r.id === v.router_id);
-              const displayDns = useOrgName ? orgName : (router?.dns_name || "hotspot.net");
-              const price = resellerPrices.find(p => p.voucher_package_id === v.package_id)?.retail_price || purchase.unit_price;
-
-              if (cardMode === 'simple') {
-                return (
-                  <div key={v.id || idx} className="print-card border-2 border-dashed border-slate-300 rounded-xl p-4 bg-white shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded">#{String(idx + 1).padStart(3, '0')}</span>
-                      <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">{pkgName}</span>
-                    </div>
-                    <div className="border-t border-slate-100 pt-3 space-y-2">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400 font-medium">Username</span>
-                        <span className="font-mono font-black text-slate-900">{v.code}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400 font-medium">Password</span>
-                        <span className="font-mono font-black text-slate-900">{v.password || v.code}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400 font-medium">Harga</span>
-                        <span className="font-black text-emerald-600">Rp {price.toLocaleString('id-ID')}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400 font-medium">Aktif</span>
-                        <span className="font-black text-slate-700">{pkg?.duration_hours ? `${pkg.duration_hours} Jam` : 'Unlimited'}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (cardMode === 'branded') {
-                return (
-                  <div key={v.id || idx} className="print-card border-2 border-dashed border-indigo-200 rounded-xl overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50 shadow-sm">
-                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2.5 text-white flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Ticket className="w-3.5 h-3.5" />
-                        <span className="font-black text-xs">WIFI VOUCHER</span>
-                      </div>
-                      <span className="text-[10px] font-bold opacity-70">#{String(idx + 1).padStart(3, '0')}</span>
-                    </div>
-                    <div className="p-3 space-y-2">
-                      <div className="text-center">
-                        <span className="text-[10px] font-black bg-indigo-100 text-indigo-700 px-3 py-0.5 rounded-full">{pkgName}</span>
-                      </div>
-                      <div className="bg-white rounded-lg p-2.5 border border-indigo-100 space-y-1.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-400 font-medium">Username</span>
-                          <span className="font-mono font-black text-indigo-700">{v.code}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-400 font-medium">Password</span>
-                          <span className="font-mono font-black text-purple-700">{v.password || v.code}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs pt-1 border-t border-indigo-50">
-                          <span className="text-slate-400 font-medium">Harga</span>
-                          <span className="font-black text-emerald-600">Rp {price.toLocaleString('id-ID')}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-400 font-medium">Aktif</span>
-                          <span className="font-black text-slate-700">{pkg?.duration_hours ? `${pkg.duration_hours} Jam` : 'Unlimited'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              // Mikhmon Mode
-              return (
-                <div key={v.id || idx} className="print-card bg-white border-2 border-black p-2 text-[10px] font-bold text-black w-full max-w-[160px] uppercase shadow-sm min-h-[100px] flex flex-col justify-between">
-                  <div>
-                    <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-1.5 px-1">
-                      <span className="truncate max-w-[90px] font-bold normal-case">{displayDns}</span>
-                      <span>[{idx + 1}]</span>
-                    </div>
-                    <div className="flex text-[9px] text-center mb-1 leading-none">
-                      <div className="flex-1">User</div>
-                      <div className="flex-1">Pass</div>
-                    </div>
-                    <div className="flex gap-1 mb-2">
-                      <div className="flex-1 border-2 border-black py-1 px-1 text-center font-semibold text-[13px] leading-none normal-case">
-                        {v.code}
-                      </div>
-                      <div className="flex-1 border-2 border-black py-1 px-1 text-center font-semibold text-[13px] leading-none normal-case">
-                        {v.password || v.code}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="border-2 border-black py-1 px-1 text-center text-[11px] font-black leading-none bg-slate-50">
-                    {pkg?.duration_hours ? `${pkg.duration_hours}j` : '∞'} Rp {price ? `${(price / 1000).toFixed(0)}rb` : '0'}
-                  </div>
+                    return availableTemplates.map(tmpl => (
+                      <button
+                        key={tmpl.id}
+                        onClick={() => setCardDesignMode(tmpl.id)}
+                        className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all group ${
+                          cardDesignMode === tmpl.id 
+                            ? 'border-indigo-600 bg-indigo-50/50 shadow-sm' 
+                            : 'border-slate-100 hover:border-slate-200 bg-slate-50/30'
+                        }`}
+                      >
+                        <span className={`font-black text-sm uppercase tracking-tight ${cardDesignMode === tmpl.id ? 'text-indigo-700' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                          {tmpl.id}
+                        </span>
+                        {cardDesignMode === tmpl.id && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}
+                      </button>
+                    ));
+                  })()}
                 </div>
-              );
-            });
-          })()}
+              </div>
+
+              {/* Branding Header (synced with Portal functionality) */}
+              <div className="space-y-4 pt-4 border-t border-slate-50">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Ticket className="w-4 h-4 text-indigo-500" /> Voucher Header Branding:
+                </label>
+                
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: 'tenant', label: 'Nama Toko' },
+                      { id: 'package', label: 'Nama Paket' },
+                      { id: 'dns', label: 'DNS Name' },
+                      { id: 'label', label: 'Voucher Label' }
+                    ].map(type => (
+                      <button
+                        key={type.id}
+                        onClick={() => {
+                          setBrandingSource(type.id as any);
+                          setSelectedBrandingValue('');
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                          brandingSource === type.id 
+                            ? 'bg-slate-900 text-white shadow-md' 
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {brandingSource === 'dns' && (
+                    <div className="space-y-2">
+                      <select 
+                        value={selectedBrandingValue}
+                        onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                        className="w-full p-3 rounded-xl border-2 border-slate-100 bg-slate-50 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                      >
+                        <option value="">-- Pilih DNS --</option>
+                        {allAvailableDNS.map(dns => (
+                          <option key={dns} value={dns}>{dns}</option>
+                        ))}
+                      </select>
+                      <input 
+                        type="text"
+                        placeholder="Manual DNS..."
+                        value={selectedBrandingValue}
+                        onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                        className="w-full p-3 rounded-xl border-2 border-slate-100 bg-slate-50 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                      />
+                    </div>
+                  )}
+
+                  {brandingSource === 'label' && (
+                    <div className="space-y-2">
+                      <select 
+                        value={selectedBrandingValue}
+                        onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                        className="w-full p-3 rounded-xl border-2 border-slate-100 bg-slate-50 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                      >
+                        <option value="">-- Pilih Label --</option>
+                        {allAvailableLabels.map(lbl => (
+                          <option key={lbl} value={lbl}>{lbl}</option>
+                        ))}
+                      </select>
+                      <input 
+                        type="text"
+                        placeholder="Manual Label..."
+                        value={selectedBrandingValue}
+                        onChange={(e) => setSelectedBrandingValue(e.target.value)}
+                        className="w-full p-3 rounded-xl border-2 border-slate-100 bg-slate-50 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Paper Simulation Area */}
+        <div className="lg:col-span-8 flex flex-col items-center gap-10 pt-4 print-pages-flow bg-slate-200/40 rounded-[3rem] p-10 shadow-inner border border-slate-200/50">
+          <div className="flex items-center justify-between no-print w-full max-w-[210mm]">
+            <div className="flex items-center gap-3 bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-sm">
+              <Monitor className="w-5 h-5 text-indigo-600" />
+              <span className="text-sm font-black text-slate-700 uppercase tracking-tight">Preview Kertas A4 ({pages.length} Halaman)</span>
+            </div>
+            <Badge className="bg-indigo-600 text-white font-black px-4 py-1.5 rounded-xl shadow-lg shadow-indigo-100">
+               {vouchers.length} Vouchers
+            </Badge>
+          </div>
+
+          {pages.map((pageVouchers, pageIdx) => (
+            <div 
+              key={pageIdx} 
+              /* vvv SET MARGIN KERTAS (PREVIEW) DISINI vvv */
+              className="a4-paper-sheet bg-white shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] w-full md:w-[210mm] min-h-[297mm] flex flex-col relative overflow-hidden rounded-sm transition-transform hover:scale-[1.01] duration-500"
+              style={{
+                paddingTop: '4mm',    // <-- MARGIN ATAS
+                paddingBottom: '2mm', // <-- MARGIN BAWAH (DIPRES BIAR GAK BANDEL)
+                paddingLeft: '6mm',   // <-- MARGIN KIRI
+                paddingRight: '6mm',  // <-- MARGIN KANAN
+              }}
+            >
+              {/* Page number indicator for screen only */}
+              <div className="absolute top-6 -left-12 no-print rotate-[-90deg]">
+                 <Badge className="bg-slate-900 text-white font-black px-4 py-1 rounded-lg shadow-xl">PAGE {pageIdx + 1}</Badge>
+              </div>
+
+              {/* vvv SET JARAK ANTAR VOUCHER DISINI (gap-[5px]) vvv */}
+              <div className={`print-voucher-grid grid ${gridCols === 5 ? 'grid-cols-5 gap-[5px]' : 'grid-cols-3 gap-4'}`}>
+                {pageVouchers.map((v, i) => {
+                  const pkg = packages.find(p => p.id === v.package_id);
+                  const price = resellerPrices.find(p => p.voucher_package_id === v.package_id)?.retail_price || purchase.unit_price;
+
+                  return (
+                    <div key={v.id} className="w-full h-fit">
+                      <TemplateComponent 
+                        voucher={v as any}
+                        index={i + (pageIdx * vouchersPerPage)}
+                        pkg={{...pkg, price} as any}
+                        headerTitle={headerTitle}
+                        config={{
+                          label: headerTitle,
+                          dnsName: brandingSource === 'dns' ? selectedBrandingValue : '',
+                          selectedDesignSlug: cardDesignMode
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Simplified Single Line Footer */}
+              <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center opacity-40 px-2 text-[10px] font-black uppercase">
+                <span>{tenant?.name}</span>
+                <span>HALAMAN {pageIdx + 1} DARI {pages.length}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
+      {/* Global Print Styles */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          body * { visibility: hidden; }
-          .print-voucher-grid, .print-voucher-grid * { visibility: visible !important; }
-          .print-voucher-grid {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            margin: 0 !important;
+          @page { size: A4 portrait; margin: 0 !important; }
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+          .no-print, header, footer, nav, aside, button, [role="navigation"], .fixed, .sticky {
+            display: none !important;
+          }
+          /* RESET PARENT GRID BIAR PAPER AREA FULL WIDTH SAAT PRINT */
+          .print-layout-wrapper {
+            display: block !important;
+            max-width: none !important;
             padding: 0 !important;
-            display: grid !important;
-            grid-template-columns: var(--grid-cols, repeat(3, 1fr)) !important;
-            gap: 8px !important;
+            margin: 0 !important;
+            gap: 0 !important;
           }
-          
-          .print-voucher-grid[data-mode="mikhmon"] {
-            --grid-cols: repeat(5, 1fr);
+          .print-pages-flow { 
+            display: block !important; 
+            width: 210mm !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
           }
-          
-          .print-voucher-grid[data-mode="branded"],
-          .print-voucher-grid[data-mode="simple"] {
-            --grid-cols: repeat(3, 1fr);
+          .a4-paper-sheet { 
+            display: flex !important; 
+            flex-direction: column !important;
+            page-break-after: always !important; 
+            page-break-inside: avoid !important;
+            width: 210mm !important; 
+            height: 297mm !important; 
+            margin: 0 !important; 
+            
+            /* vvv SET MARGIN KERTAS (SAAT PRINT) DISINI vvv */
+            padding-top: 4mm !important;    /* MARGIN ATAS */
+            padding-bottom: 2mm !important; /* MARGIN BAWAH */
+            padding-left: 6mm !important;   /* MARGIN KIRI */
+            padding-right: 6mm !important;  /* MARGIN KANAN */
+            
+            background: white !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          .print-card { page-break-inside: avoid !important; break-inside: avoid !important; padding: 8px !important; }
-          @page { size: A4 portrait; margin: 0.7cm; }
+          .print-voucher-grid { 
+            display: grid !important; 
+            grid-template-columns: repeat(${gridCols}, 1fr) !important; 
+            /* SET JARAK VOUCHER SAAT PRINT DISINI */
+            gap: 5px !important; 
+            width: 100% !important;
+          }
         }
       `}} />
     </div>
@@ -362,7 +498,7 @@ export default function AdminResellerPrintPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
       </div>
     }>
       <PrintPage />

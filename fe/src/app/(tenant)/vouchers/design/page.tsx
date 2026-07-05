@@ -174,16 +174,26 @@ export default function VoucherDesignManagementPage() {
                 {ownedDesigns.map((design) => {
                   const templateData = getTemplateBySlug(design.slug);
                   const Template = templateData.component;
-                  const isGlobalDefault = Array.isArray(tenant?.default_voucher_design_slug) 
-                    ? tenant?.default_voucher_design_slug?.includes(design.slug)
-                    : tenant?.default_voucher_design_slug === design.slug;
+                  
+                  const currentDefaults = Array.isArray(tenant?.default_voucher_design_slug) 
+                    ? tenant?.default_voucher_design_slug 
+                    : (tenant?.default_voucher_design_slug ? [tenant.default_voucher_design_slug as unknown as string] : []);
                     
-                  const isResellerDefault = Array.isArray(tenant?.reseller_voucher_design_slug)
-                    ? tenant?.reseller_voucher_design_slug?.includes(design.slug)
-                    : tenant?.reseller_voucher_design_slug === design.slug;
+                  const currentResellers = Array.isArray(tenant?.reseller_voucher_design_slug)
+                    ? tenant?.reseller_voucher_design_slug
+                    : (tenant?.reseller_voucher_design_slug ? [tenant.reseller_voucher_design_slug as unknown as string] : []);
+
+                  // Logic Fallback: Jika kosong, anggap simple & mikhmon terpilih
+                  const isGlobalDefault = currentDefaults.length === 0 
+                    ? ['simple', 'mikhmon'].includes(design.slug)
+                    : currentDefaults.includes(design.slug);
+                    
+                  const isResellerDefault = currentResellers.length === 0
+                    ? ['simple', 'mikhmon'].includes(design.slug)
+                    : currentResellers.includes(design.slug);
 
                   return (
-                    <Card key={design.id} className={`group relative overflow-hidden transition-all duration-300 hover:shadow-2xl border-2 ${isGlobalDefault || isResellerDefault ? 'border-purple-500 shadow-purple-500/5' : 'border-slate-100 hover:border-slate-300'}`}>
+                    <Card key={design.id} className={`group relative overflow-hidden transition-all duration-300 hover:shadow-2xl border-2 ${isGlobalDefault || isResellerDefault ? 'border-purple-500 shadow-purple-500/10' : 'border-slate-100 hover:border-slate-300'}`}>
                       <CardHeader className="p-5 pb-3">
                         <div className="flex justify-between items-start">
                           <div>
@@ -191,8 +201,8 @@ export default function VoucherDesignManagementPage() {
                             <CardDescription className="text-xs uppercase font-bold tracking-widest mt-1 opacity-70">Slug: {design.slug}</CardDescription>
                           </div>
                           {(isGlobalDefault || isResellerDefault) && (
-                            <Badge className="bg-purple-600 text-white border-none">
-                              Active
+                            <Badge className="bg-purple-600 text-white border-none animate-in zoom-in">
+                              Selected
                             </Badge>
                           )}
                         </div>
@@ -202,10 +212,10 @@ export default function VoucherDesignManagementPage() {
                         <div className="aspect-[1.6/1] bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center p-4 mb-6 group-hover:bg-slate-100/50 transition-colors transform group-hover:scale-[1.02] duration-500 origin-center overflow-hidden">
                           <div className="transform scale-[0.8] origin-center">
                              <Template 
-                               voucher={mockVoucher as any} 
-                               index={0}
-                               pkg={mockPackage as any} 
-                               config={{...mockConfig, selectedDesignSlug: design.slug}} 
+                                voucher={mockVoucher as any} 
+                                index={0}
+                                pkg={mockPackage as any} 
+                                config={{...mockConfig, selectedDesignSlug: design.slug}} 
                              />
                           </div>
                         </div>
@@ -213,19 +223,25 @@ export default function VoucherDesignManagementPage() {
                         {/* Action Buttons */}
                         <div className="grid grid-cols-1 gap-3">
                           <Button 
-                            variant={isGlobalDefault ? "secondary" : "outline"}
-                            className={`w-full justify-between h-12 rounded-xl transition-all ${isGlobalDefault ? 'bg-purple-50 text-purple-700 border-purple-200' : 'hover:bg-slate-50'}`}
+                            variant={isGlobalDefault ? "default" : "outline"}
+                            className={`w-full justify-between h-12 rounded-xl transition-all ${
+                              isGlobalDefault 
+                                ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-200' 
+                                : 'hover:bg-slate-50 border-slate-200 text-slate-600'
+                            }`}
                             disabled={updating === "global"}
                             onClick={() => {
-                              const current = Array.isArray(tenant?.default_voucher_design_slug) 
-                                ? tenant?.default_voucher_design_slug 
-                                : (tenant?.default_voucher_design_slug ? [tenant.default_voucher_design_slug as unknown as string] : []);
-                                
-                              const next = current.includes(design.slug) 
-                                ? current.filter(s => s !== design.slug) 
-                                : [...current, design.slug];
+                              // Jika sebelumnya kosong (pake fallback), maka "next" harus menyertakan yang tersisa dari fallback jika salah satu dilepas
+                              let baseDefaults = currentDefaults;
+                              if (currentDefaults.length === 0) {
+                                baseDefaults = ['simple', 'mikhmon'];
+                              }
+
+                              const next = isGlobalDefault 
+                                ? baseDefaults.filter(s => s !== design.slug) 
+                                : [...currentDefaults, design.slug];
                               
-                              if (next.length > current.length && next.length > 3) {
+                              if (!isGlobalDefault && next.length > 3) {
                                 showToast({ 
                                   title: "Limit Tercapai", 
                                   description: "Anda hanya bisa memilih maksimal 3 desain default.",
@@ -234,35 +250,35 @@ export default function VoucherDesignManagementPage() {
                                 return;
                               }
                               
-                              const resellerSlugs = Array.isArray(tenant?.reseller_voucher_design_slug)
-                                ? tenant?.reseller_voucher_design_slug
-                                : (tenant?.reseller_voucher_design_slug ? [tenant.reseller_voucher_design_slug as unknown as string] : []);
-
-                              console.log("Updating default designs:", next);
-                              handleUpdateSettings(next, resellerSlugs);
+                              handleUpdateSettings(next, currentResellers);
                             }}
                           >
-                            <span className="flex items-center">
+                            <span className="flex items-center font-bold">
                               {updating === "global" ? <RotateCw className="w-4 h-4 mr-2 animate-spin" /> : <UserCircle className="w-4 h-4 mr-2" />}
                               Default Design
                             </span>
-                            {isGlobalDefault && <CheckCircle2 className="w-4 h-4 text-purple-600" />}
+                            {isGlobalDefault && <CheckCircle2 className="w-5 h-5 text-white fill-white/20" />}
                           </Button>
 
                           <Button 
-                            variant={isResellerDefault ? "secondary" : "outline"}
-                            className={`w-full justify-between h-12 rounded-xl transition-all ${isResellerDefault ? 'bg-amber-50 text-amber-700 border-amber-200' : 'hover:bg-slate-50'}`}
+                            variant={isResellerDefault ? "default" : "outline"}
+                            className={`w-full justify-between h-12 rounded-xl transition-all ${
+                              isResellerDefault 
+                                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-200' 
+                                : 'hover:bg-slate-50 border-slate-200 text-slate-600'
+                            }`}
                             disabled={updating === "global"}
                             onClick={() => {
-                              const current = Array.isArray(tenant?.reseller_voucher_design_slug) 
-                                ? tenant?.reseller_voucher_design_slug 
-                                : (tenant?.reseller_voucher_design_slug ? [tenant.reseller_voucher_design_slug as unknown as string] : []);
+                              let baseResellers = currentResellers;
+                              if (currentResellers.length === 0) {
+                                baseResellers = ['simple', 'mikhmon'];
+                              }
 
-                              const next = current.includes(design.slug) 
-                                ? current.filter(s => s !== design.slug) 
-                                : [...current, design.slug];
+                              const next = isResellerDefault 
+                                ? baseResellers.filter(s => s !== design.slug) 
+                                : [...currentResellers, design.slug];
                               
-                              if (next.length > current.length && next.length > 3) {
+                              if (!isResellerDefault && next.length > 3) {
                                 showToast({ 
                                   title: "Limit Tercapai", 
                                   description: "Anda hanya bisa memilih maksimal 3 desain reseller.",
@@ -271,19 +287,14 @@ export default function VoucherDesignManagementPage() {
                                 return;
                               }
                               
-                              const defaultSlugs = Array.isArray(tenant?.default_voucher_design_slug)
-                                ? tenant?.default_voucher_design_slug
-                                : (tenant?.default_voucher_design_slug ? [tenant.default_voucher_design_slug as unknown as string] : []);
-
-                              console.log("Updating reseller designs:", next);
-                              handleUpdateSettings(defaultSlugs, next);
+                              handleUpdateSettings(currentDefaults, next);
                             }}
                           >
-                            <span className="flex items-center">
+                            <span className="flex items-center font-bold">
                               {updating === "global" ? <RotateCw className="w-4 h-4 mr-2 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
                               Design Reseller
                             </span>
-                            {isResellerDefault && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
+                            {isResellerDefault && <CheckCircle2 className="w-5 h-5 text-white fill-white/20" />}
                           </Button>
                         </div>
                       </CardContent>

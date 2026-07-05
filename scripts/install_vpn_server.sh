@@ -141,15 +141,12 @@ ms-dns 1.1.1.1
 ms-dns 8.8.8.8
 noccp
 auth
-crtscts
 # idle 0 = disable idle timeout.
 # Previously was 1800 (30 min) which caused VPN to drop during low-traffic periods.
 idle 0
 mtu 1410
 mru 1410
-lock
 hide-password
-modem
 # proxyarp REMOVED: caused ARP conflicts when multiple routers connect simultaneously.
 # Each router gets a unique static IP via chap-secrets, so proxyarp is not needed.
 # lcp-echo: 60s interval x 5 failures = 5 min tolerance before drop.

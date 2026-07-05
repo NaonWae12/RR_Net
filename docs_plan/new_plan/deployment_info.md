@@ -4,7 +4,8 @@
 > This document contains confidential access information for the new VPS deployment. Keep it safe!
 
 ## 🌐 Server Details
-- **IP Address:** `srv1501081` (based on terminal output) / `76.13.17.143` (SSH terminal command)
+- **IP Address:** `srv1501081` (based on terminal output) / `76.13.17.143` (SSH terminal command)(server lama)
+- **IP Address:** `173.234.14.162` (Unihost VPS)
 - **Deployment User:** `root`
 - **Root Directory:** `/opt/rrnet`
   - `/opt/rrnet/BE`: Backend source and configuration
@@ -30,9 +31,9 @@
 - **JWT_REFRESH_TTL:** `7d`
 
 ## 🔗 Environment Links
-- **Backend API:** `http://76.13.17.143:8080`
-- **Frontend Dashboard:** `http://76.13.17.143:3000`
-- **Public Inventory:** `http://76.13.17.143:3000/public/asset/[id]`
+- **Backend API:** `http://173.234.14.162:8080`
+- **Frontend Dashboard:** `http://173.234.14.162:3000`
+- **Public Inventory:** `http://173.234.14.162:3000/public/asset/[id]`
 
 ---
 ## 🚀 Command Cheat Sheet

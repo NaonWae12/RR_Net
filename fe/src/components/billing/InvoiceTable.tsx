@@ -17,6 +17,8 @@ import { useBillingStore } from "@/stores/billingStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { format } from "date-fns";
+import { Printer, Layers } from "lucide-react";
+
 
 interface InvoiceTableProps {
   invoices: Invoice[] | null | undefined;
@@ -42,6 +44,36 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
   const router = useRouter();
   const { cancelInvoice, invoiceFilters, setInvoiceFilters } = useBillingStore();
   const { showToast } = useNotificationStore();
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allIds = (invoices ?? []).map((inv) => inv.id);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
+  const someSelected = allIds.some((id) => selectedIds.has(id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allIds));
+    }
+  };
+
+  const handleBulkPrint = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    router.push(`/billing/invoices/print/bulk?ids=${ids.join(",")}`);
+  };
 
   const [visibleColumns, setVisibleColumns] = React.useState<Record<ColumnKey, boolean>>({
     invoice_number: true,
@@ -125,6 +157,17 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
     <div className="bg-white rounded-lg shadow overflow-hidden border border-slate-200">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
         <div className="flex items-center gap-2">
+          {/* Bulk Print Button */}
+          {someSelected && (
+            <Button
+              onClick={handleBulkPrint}
+              size="sm"
+              className="h-8 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm text-xs"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Cetak Semua ({selectedIds.size})
+            </Button>
+          )}
            <details className="relative group">
               <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold border border-slate-200 rounded-lg bg-slate-50 hover:bg-white text-slate-700 transition-all">
                 <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -263,6 +306,16 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
         <Table>
           <TableHeader>
             <TableRow className="border-slate-200">
+              {/* Select All Checkbox */}
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-indigo-600 cursor-pointer"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  title="Pilih semua"
+                />
+              </TableHead>
               {visibleColumns.invoice_number && <TableHead className="text-slate-700">Invoice Number</TableHead>}
               {visibleColumns.client && <TableHead className="text-slate-700">Client Name</TableHead>}
               {visibleColumns.contact && <TableHead className="text-slate-700">Contact</TableHead>}
@@ -278,7 +331,19 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
           </TableHeader>
           <TableBody>
             {invoices.map((invoice) => (
-              <TableRow key={invoice.id} className="border-slate-200">
+              <TableRow
+                key={invoice.id}
+                className={`border-slate-200 transition-colors ${selectedIds.has(invoice.id) ? "bg-indigo-50/60" : ""}`}
+              >
+                {/* Row Checkbox */}
+                <TableCell className="w-10">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300 text-indigo-600 cursor-pointer"
+                    checked={selectedIds.has(invoice.id)}
+                    onChange={() => toggleSelect(invoice.id)}
+                  />
+                </TableCell>
                 {visibleColumns.invoice_number && (
                   <TableCell className="font-medium text-slate-900">{invoice.invoice_number}</TableCell>
                 )}
@@ -308,6 +373,15 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                   <TableCell className="flex space-x-2 text-slate-900">
                     <Button variant="outline" size="sm" onClick={() => handleView(invoice.id)}>
                       View
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/billing/invoices/${invoice.id}/print`)}
+                      title="Print Invoice"
+                      className="p-2 border-indigo-150 text-indigo-700 hover:bg-indigo-50"
+                    >
+                      <Printer className="h-4 w-4" />
                     </Button>
                     {invoice.status === "pending" && (
                       <Button

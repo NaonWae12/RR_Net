@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { VoucherTemplateProps } from "./types";
 
 const SimpleTemplate: React.FC<VoucherTemplateProps> = ({ voucher, index, pkg, headerTitle }) => {
+  const isSameCredentials = voucher.code === (voucher.password || voucher.code);
+
   return (
     <div className="print-card border-2 border-dashed border-slate-300 rounded-lg p-4 bg-white h-full">
       <div className="space-y-2">
@@ -14,14 +16,23 @@ const SimpleTemplate: React.FC<VoucherTemplateProps> = ({ voucher, index, pkg, h
         </div>
         <div className="border-t border-slate-200 pt-2">
           <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="text-slate-500 font-medium">Username:</span>
-              <span className="font-mono font-bold text-slate-900">{voucher.code}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-slate-500 font-medium">Password:</span>
-              <span className="font-mono font-bold text-slate-900">{voucher.password || voucher.code}</span>
-            </div>
+            {isSameCredentials ? (
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500 font-medium">Kode Akses:</span>
+                <span className="font-mono font-bold text-slate-900">{voucher.code}</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Username:</span>
+                  <span className="font-mono font-bold text-slate-900">{voucher.code}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Password:</span>
+                  <span className="font-mono font-bold text-slate-900">{voucher.password}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-xs">
               <span className="text-slate-500 font-medium">Harga:</span>
               <span className="font-bold text-emerald-600">Rp {(pkg?.price || 0).toLocaleString('id-ID')}</span>
