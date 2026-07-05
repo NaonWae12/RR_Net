@@ -310,9 +310,10 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
               <TableHead className="w-10">
                 <input
                   type="checkbox"
-                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
+                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 accent-indigo-600 cursor-pointer"
                   checked={allSelected}
                   onChange={toggleSelectAll}
+                  style={{ colorScheme: "light" }}
                   title="Pilih semua"
                 />
               </TableHead>
@@ -339,9 +340,10 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                 <TableCell className="w-10">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
+                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 accent-indigo-600 cursor-pointer"
                     checked={selectedIds.has(invoice.id)}
                     onChange={() => toggleSelect(invoice.id)}
+                    style={{ colorScheme: "light" }}
                   />
                 </TableCell>
                 {visibleColumns.invoice_number && (
