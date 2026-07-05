@@ -241,12 +241,10 @@ func (h *ResellerHandler) ProcessMyPurchase(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Use the router associated with the client account
+	// Use the router associated with the client account.
+	// If client has no router assigned (nil), ProcessPurchase/GenerateVouchers will
+	// distribute the vouchers to ALL routers in the tenant — consistent with admin behavior.
 	routerID := client.RouterID
-	if routerID == nil {
-		sendError(w, http.StatusForbidden, "Your account does not have a router assigned. Please contact administrator.")
-		return
-	}
 
 	purchase, err := h.svc.ProcessPurchase(r.Context(), tenantID, res.ID, packageID, routerID, req.Quantity, req.PaymentMethod, req.PromoCode)
 	if err != nil {
