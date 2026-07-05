@@ -310,7 +310,7 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
               <TableHead className="w-10">
                 <input
                   type="checkbox"
-                  className="rounded border-slate-300 text-indigo-600 cursor-pointer"
+                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
                   checked={allSelected}
                   onChange={toggleSelectAll}
                   title="Pilih semua"
@@ -339,7 +339,7 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                 <TableCell className="w-10">
                   <input
                     type="checkbox"
-                    className="rounded border-slate-300 text-indigo-600 cursor-pointer"
+                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 cursor-pointer"
                     checked={selectedIds.has(invoice.id)}
                     onChange={() => toggleSelect(invoice.id)}
                   />
@@ -379,7 +379,7 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                       size="sm"
                       onClick={() => router.push(`/billing/invoices/${invoice.id}/print`)}
                       title="Print Invoice"
-                      className="p-2 border-indigo-150 text-indigo-700 hover:bg-indigo-50"
+                      className="p-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
                     >
                       <Printer className="h-4 w-4" />
                     </Button>

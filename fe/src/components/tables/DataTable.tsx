@@ -226,7 +226,7 @@ export const DataTable = React.memo(function DataTable<T extends Record<string, 
                       type="checkbox"
                       checked={table.getIsAllPageRowsSelected()}
                       onChange={table.getToggleAllPageRowsSelectedHandler()}
-                      className="rounded border-gray-300"
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
                     />
                   </TableHead>
                 )}
@@ -279,7 +279,7 @@ export const DataTable = React.memo(function DataTable<T extends Record<string, 
                         type="checkbox"
                         checked={row.getIsSelected()}
                         onChange={row.getToggleSelectedHandler()}
-                        className="rounded border-gray-300"
+                        className="w-4 h-4 rounded border-gray-300 cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                       />
                     </TableCell>
