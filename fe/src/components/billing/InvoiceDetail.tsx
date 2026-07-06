@@ -2,6 +2,7 @@
 
 import { Invoice, Payment } from "@/lib/api/types";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { Printer } from "lucide-react";
