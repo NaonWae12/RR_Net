@@ -345,7 +345,7 @@ export function ClientTable({ clients, loading, onStatusChange, isCollectorMode 
                       </div>
                       {client.pppoe_username && (
                         <p className="text-sm text-slate-500">
-                          PPPoE: {client.pppoe_username}
+                          {client.connection_type === 'hotspot' ? 'Hotspot' : 'PPPoE'}: {client.pppoe_username}
                         </p>
                       )}
                     </Link>

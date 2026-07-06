@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useClientStore } from '@/stores/clientStore';
 import { useCollectorStore } from '@/stores/collectorStore';
 import { ClientTable, ClientFilters, ClientPagination, ClientFiltersForCollector } from '@/components/clients';
-import { clientService, Client } from '@/lib/api/clientService';
+import { clientService, Client, ClientStats } from '@/lib/api/clientService';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useRole } from '@/lib/hooks/useRole';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -31,6 +31,18 @@ export default function ClientsPage() {
   const { isAuthenticated } = useAuth();
   const hasFetchedRef = useRef(false);
   const lastRoleRef = useRef<string | null>(null);
+  const [stats, setStats] = useState<ClientStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && !isTechnician) {
+      setStatsLoading(true);
+      clientService.getStats()
+        .then(setStats)
+        .catch(console.error)
+        .finally(() => setStatsLoading(false));
+    }
+  }, [isAuthenticated, isTechnician, clients]);
 
   useEffect(() => {
     // Only fetch if authenticated
@@ -154,6 +166,57 @@ export default function ClientsPage() {
           </Link>
         </div>
       </div>
+
+      {/* Overview Cards */}
+      {!isTechnician && stats && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-6 opacity-[0.04] pointer-events-none group-hover:scale-110 transition-transform duration-300">
+              <svg className="w-16 h-16 text-indigo-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+            </div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Pelanggan</p>
+            <p className="text-3xl font-black text-slate-900 mt-2">{stats.total}</p>
+            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Pelanggan aktif dalam sistem
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-6 opacity-[0.04] pointer-events-none group-hover:scale-110 transition-transform duration-300">
+              <svg className="w-16 h-16 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+              </svg>
+            </div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sisa Kuota Limit</p>
+            <p className="text-3xl font-black text-emerald-600 mt-2">
+              {stats.unlimited ? '∞' : stats.remaining}
+            </p>
+            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+              Kuota pendaftaran client baru
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-6 opacity-[0.04] pointer-events-none group-hover:scale-110 transition-transform duration-300">
+              <svg className="w-16 h-16 text-slate-900" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+              </svg>
+            </div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Batas Maksimal Plan</p>
+            <p className="text-3xl font-black text-slate-900 mt-2">
+              {stats.unlimited ? 'Tak Terbatas' : stats.limit}
+            </p>
+            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              Berdasarkan paket langganan ERP Anda
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       {isTechnician ? (
