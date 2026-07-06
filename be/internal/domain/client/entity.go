@@ -22,6 +22,7 @@ type ConnectionType string
 const (
 	ConnectionTypePPPoE   ConnectionType = "pppoe"
 	ConnectionTypeHotspot ConnectionType = "hotspot"
+	ConnectionTypeNone    ConnectionType = "none"
 )
 
 // Status represents client status

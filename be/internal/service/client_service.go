@@ -193,9 +193,12 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 	}
 	// Validate service model rules + load package
 	isHotspot := req.ConnectionType == client.ConnectionTypeHotspot
+	isNone := req.ConnectionType == client.ConnectionTypeNone
 	var pkg *service_package.ServicePackage
 
-	if isHotspot {
+	if isNone {
+		// No service package or voucher package required for connection_type none
+	} else if isHotspot {
 		if req.VoucherPackageID == nil || *req.VoucherPackageID == uuid.Nil {
 			return nil, errors.New("voucher_package_id is required for hotspot connection")
 		}
@@ -219,7 +222,9 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 
 	var pppoePasswordEnc *string
 	var pppoePasswordUpdatedAt *time.Time
-	if req.Category == client.CategoryLite {
+	if isNone {
+		// PPPoE credentials not required for connection_type none
+	} else if req.Category == client.CategoryLite {
 		if req.DeviceCount == nil || *req.DeviceCount < 1 {
 			return nil, errors.New("device_count is required for lite")
 		}
@@ -354,12 +359,17 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 		PPPoERemoteAddress: req.PPPoERemoteAddress,
 		PPPoEComment:       req.PPPoEComment,
 		ServicePackageID: func() *uuid.UUID {
-			if isHotspot {
+			if isHotspot || isNone {
 				return nil
 			}
 			return req.ServicePackageID
 		}(),
-		VoucherPackageID:       req.VoucherPackageID,
+		VoucherPackageID: func() *uuid.UUID {
+			if isNone {
+				return nil
+			}
+			return req.VoucherPackageID
+		}(),
 		DeviceCount:            req.DeviceCount,
 		PPPoEPasswordEnc:       pppoePasswordEnc,
 		PPPoEPasswordUpdatedAt: pppoePasswordUpdatedAt,
@@ -733,9 +743,12 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 
 	// Validate service model rules + load package
 	isHotspot := req.ConnectionType == client.ConnectionTypeHotspot
+	isNone := req.ConnectionType == client.ConnectionTypeNone
 	var pkg *service_package.ServicePackage
 
-	if isHotspot {
+	if isNone {
+		// No service package or voucher package validation for none connection type
+	} else if isHotspot {
 		if req.VoucherPackageID == nil || *req.VoucherPackageID == uuid.Nil {
 			return nil, ErrVoucherPackageRequired
 		}
@@ -774,7 +787,10 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	if req.PPPoEComment != nil {
 		c.PPPoEComment = req.PPPoEComment
 	}
-	if isHotspot {
+	if isNone {
+		c.ServicePackageID = nil
+		c.VoucherPackageID = nil
+	} else if isHotspot {
 		c.ServicePackageID = nil
 	} else if req.ServicePackageID != nil && *req.ServicePackageID != uuid.Nil {
 		c.ServicePackageID = req.ServicePackageID
@@ -790,7 +806,9 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	}
 
 	// Sync MonthlyFee and ServicePlan from package if changed or missing
-	if isHotspot {
+	if isNone {
+		// No monthly fee sync from package needed for none
+	} else if isHotspot {
 		// Try to fetch package details if we have an ID
 		// Check both req and c for the ID, as req might only have one of them if partial update
 		vpID := req.VoucherPackageID
@@ -831,7 +849,11 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 		c.MonthlyFee = *req.MonthlyFee
 	}
 
-	if req.Category == client.CategoryLite {
+	if isNone {
+		c.PPPoEUsername = nil
+		c.PPPoEPasswordEnc = nil
+		c.PPPoEPasswordUpdatedAt = nil
+	} else if req.Category == client.CategoryLite {
 		if req.DeviceCount == nil || *req.DeviceCount < 1 {
 			return nil, errors.New("device_count is required for lite")
 		}

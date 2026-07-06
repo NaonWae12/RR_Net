@@ -12,7 +12,7 @@ export interface Client {
   address?: string | null;
   status: ClientStatus;
   category: ClientCategory;
-  connection_type?: 'pppoe' | 'hotspot';
+  connection_type?: 'pppoe' | 'hotspot' | 'none';
   service_package_id?: string | null;
   voucher_package_id?: string | null;
   group_id?: string | null;
@@ -67,7 +67,7 @@ export interface CreateClientRequest {
   phone?: string;
   address?: string;
   category: ClientCategory;
-  connection_type?: 'pppoe' | 'hotspot';
+  connection_type?: 'pppoe' | 'hotspot' | 'none';
   service_package_id?: string | null;
   group_id?: string;
   isolir_mode?: 'auto' | 'manual';
