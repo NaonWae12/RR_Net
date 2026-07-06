@@ -145,6 +145,33 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
     }).format(amount);
   };
 
+  const getFilterLabel = () => {
+    const { start_date, end_date } = invoiceFilters;
+    if (!start_date && !end_date) {
+      return "All Time";
+    }
+
+    try {
+      const startStr = start_date ? format(new Date(start_date), "MMMM yyyy") : "";
+      const endStr = end_date ? format(new Date(end_date), "MMMM yyyy") : "";
+
+      if (start_date && end_date) {
+        if (start_date.substring(0, 7) === end_date.substring(0, 7)) {
+          return startStr;
+        }
+        return `${startStr} - ${endStr}`;
+      }
+
+      if (start_date) {
+        return `From: ${startStr}`;
+      }
+
+      return `Until: ${endStr}`;
+    } catch (e) {
+      return "Custom Range";
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-48 bg-white rounded-lg border border-slate-200">
@@ -168,14 +195,12 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
               Cetak Semua ({selectedIds.size})
             </Button>
           )}
-           <details className="relative group">
+            <details className="relative group">
               <summary className="list-none cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold border border-slate-200 rounded-lg bg-slate-50 hover:bg-white text-slate-700 transition-all">
                 <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                {(!invoiceFilters.start_date && !invoiceFilters.end_date) ? 'All Time' : 
-                 (invoiceFilters.start_date === invoiceFilters.end_date) ? `Date: ${invoiceFilters.start_date}` :
-                 'Custom Range'}
+                {getFilterLabel()}
                 <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -185,7 +210,7 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="text-xs"
+                    className="text-xs font-bold text-slate-700 animate-none"
                     onClick={() => setInvoiceFilters({ start_date: undefined, end_date: undefined })}
                   >
                     All Time
@@ -193,38 +218,55 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="text-xs"
+                    className="text-xs font-bold text-slate-700 animate-none"
                     onClick={() => {
-                      const today = new Date().toISOString().split('T')[0];
-                      setInvoiceFilters({ start_date: today, end_date: today });
+                      const now = new Date();
+                      const year = now.getFullYear();
+                      const month = now.getMonth();
+                      const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+                      const lastDay = new Date(year, month + 1, 0).getDate();
+                      const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+                      setInvoiceFilters({ start_date: start, end_date: end });
                     }}
                   >
-                    Today
+                    This Month
                   </Button>
                 </div>
                 
                 <div className="space-y-3 pt-3 border-t border-slate-100">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Start Date / Per Day</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Start Month</label>
                     <input 
-                      type="date" 
-                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={invoiceFilters.start_date || ''}
+                      type="month" 
+                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 font-medium"
+                      value={invoiceFilters.start_date ? invoiceFilters.start_date.substring(0, 7) : ''}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setInvoiceFilters({ start_date: val || undefined });
+                        if (val) {
+                          const start = `${val}-01`;
+                          setInvoiceFilters({ start_date: start });
+                        } else {
+                          setInvoiceFilters({ start_date: undefined });
+                        }
                       }}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">End Date (Optional Range)</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">End Month</label>
                     <input 
-                      type="date" 
-                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={invoiceFilters.end_date || ''}
+                      type="month" 
+                      className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 font-medium"
+                      value={invoiceFilters.end_date ? invoiceFilters.end_date.substring(0, 7) : ''}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setInvoiceFilters({ end_date: val || undefined });
+                        if (val) {
+                          const [year, month] = val.split('-');
+                          const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+                          const end = `${val}-${String(lastDay).padStart(2, '0')}`;
+                          setInvoiceFilters({ end_date: end });
+                        } else {
+                          setInvoiceFilters({ end_date: undefined });
+                        }
                       }}
                     />
                   </div>
@@ -234,7 +276,6 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                   <Button 
                     className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-1"
                     onClick={() => {
-                      // Trigger fetch via store effect
                       const details = document.querySelector('details[open]');
                       if (details) details.removeAttribute('open');
                     }}
@@ -243,7 +284,7 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                   </Button>
                 </div>
               </div>
-           </details>
+            </details>
         </div>
 
         <details className="relative">
@@ -359,8 +400,7 @@ export function InvoiceTable({ invoices, loading }: InvoiceTableProps) {
                 )}
                 {visibleColumns.period && (
                   <TableCell className="text-slate-700">
-                    {format(new Date(invoice.period_start), "MMM d")} -{" "}
-                    {format(new Date(invoice.period_end), "MMM d, yyyy")}
+                    {format(new Date(invoice.period_start), "MMMM yyyy")}
                   </TableCell>
                 )}
                 {visibleColumns.due_date && <TableCell className="text-slate-700">{format(new Date(invoice.due_date), "MMM d, yyyy")}</TableCell>}

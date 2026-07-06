@@ -42,14 +42,17 @@ export function InvoiceDetail({ invoice, payments = [], onRecordPayment }: Invoi
       {/* Invoice Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white rounded-lg shadow p-6">
         <div>
+          <p className="text-sm font-bold text-slate-500 uppercase tracking-tight">Client Name</p>
+          <p className="text-lg font-bold text-slate-900 mt-1">{invoice.client_name || "-"}</p>
+        </div>
+        <div>
           <p className="text-sm font-bold text-slate-500 uppercase tracking-tight">Client ID</p>
           <p className="text-sm font-medium text-slate-400 mt-1 break-all">{invoice.client_id}</p>
         </div>
         <div>
           <p className="text-sm font-bold text-slate-500 uppercase tracking-tight">Period</p>
           <p className="text-lg font-bold text-slate-900 mt-1">
-            {format(new Date(invoice.period_start), "MMM d, yyyy")} -{" "}
-            {format(new Date(invoice.period_end), "MMM d, yyyy")}
+            {format(new Date(invoice.period_start), "MMMM yyyy")}
           </p>
         </div>
         <div>
