@@ -290,13 +290,22 @@ export default function ClientDetailPage() {
               <dl className="space-y-4">
                 <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <dt className="text-sm font-bold text-slate-500 uppercase">Connection</dt>
-                  <dd className="text-sm font-black text-indigo-600">{client.connection_type?.toUpperCase() || 'PPPoE'}</dd>
+                  <dd className="text-sm font-black text-indigo-600 text-right">
+                    {client.connection_type === 'none' ? (
+                      <>
+                        <span className="block">Billing Only</span>
+                        <span className="text-[10px] font-medium text-slate-400">(Tanpa Koneksi)</span>
+                      </>
+                    ) : (
+                      client.connection_type?.toUpperCase() || 'PPPoE'
+                    )}
+                  </dd>
                 </div>
                 <div className="flex flex-col">
                   <dt className="text-xs font-bold text-slate-400 uppercase tracking-wider">Package / Plan</dt>
                   <dd className="text-slate-900 font-black">{client.package_name || client.service_plan || '-'}</dd>
                 </div>
-                {(client.connection_type !== 'lite') && (
+                {client.connection_type !== 'none' && (
                   <div className="flex flex-col gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <div className="flex justify-between items-center">
                       <dt className="text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -380,9 +389,11 @@ export default function ClientDetailPage() {
                     </div>
                   </div>
                 )}
-                {client.connection_type === 'hotspot' && (
+                {(client.connection_type === 'hotspot' || client.category === 'lite') && (
                   <div className="flex justify-between items-center bg-indigo-50 p-3 rounded-xl border border-indigo-100">
-                    <dt className="text-xs font-bold text-indigo-400 uppercase">Device Limit</dt>
+                    <dt className="text-xs font-bold text-indigo-400 uppercase">
+                      {client.category === 'lite' ? 'Jumlah Device' : 'Device Limit'}
+                    </dt>
                     <dd className="text-sm font-black text-indigo-700">{client.device_count || '1'} Device</dd>
                   </div>
                 )}
@@ -406,7 +417,7 @@ export default function ClientDetailPage() {
                     </div>
                   )}
                 </div>
-                {client.connection_type === 'pppoe' && (
+                {client.connection_type === 'pppoe' && client.category !== 'lite' && (
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t-2 border-slate-100">
                     <div className="flex flex-col">
                       <dt className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Local IP</dt>
@@ -468,7 +479,11 @@ export default function ClientDetailPage() {
 
             <div className="space-y-3">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-indigo-100 font-medium">Biaya Dasar</span>
+                <span className="text-indigo-100 font-medium">
+                  {client.category === 'lite'
+                    ? `Biaya / Device (×${client.device_count || 1})`
+                    : 'Biaya Dasar'}
+                </span>
                 <span className="font-bold">Rp {client.monthly_fee?.toLocaleString('id-ID') || '0'}</span>
               </div>
               {client.discount_value && client.discount_value > 0 && (

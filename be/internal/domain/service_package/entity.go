@@ -35,7 +35,7 @@ type ServicePackage struct {
 	PriceMonthly      float64         `json:"price_monthly"`
 	PricePerDevice    float64         `json:"price_per_device"`
 	BillingDayDefault *int            `json:"billing_day_default,omitempty"`
-	NetworkProfileID  uuid.UUID       `json:"network_profile_id"`
+	NetworkProfileID  *uuid.UUID      `json:"network_profile_id,omitempty"`
 	IsActive          bool            `json:"is_active"`
 	Metadata          json.RawMessage `json:"metadata,omitempty"`
 	CreatedAt         time.Time       `json:"created_at"`

@@ -131,7 +131,7 @@ export default function ServiceSetupPage() {
       id: p.id,
       name: p.name,
       category: p.category,
-      network_profile_id: p.network_profile_id,
+      network_profile_id: p.network_profile_id ?? '',
       billing_day_default: p.billing_day_default ?? null,
       is_active: p.is_active,
       price_monthly: p.price_monthly ?? 0,
@@ -143,10 +143,6 @@ export default function ServiceSetupPage() {
   const onSavePackage = async () => {
     if (!packageForm.name.trim()) {
       showToast({ title: 'Validation', description: 'Package name is required', variant: 'error' });
-      return;
-    }
-    if (!packageForm.network_profile_id) {
-      showToast({ title: 'Validation', description: 'Network profile is required', variant: 'error' });
       return;
     }
     const pricingModel = packageForm.category === 'lite' ? 'per_device' : 'flat_monthly';
@@ -168,7 +164,7 @@ export default function ServiceSetupPage() {
         price_monthly: pricingModel === 'flat_monthly' ? packageForm.price_monthly : 0,
         price_per_device: pricingModel === 'per_device' ? packageForm.price_per_device : 0,
         billing_day_default: packageForm.billing_day_default ?? null,
-        network_profile_id: packageForm.network_profile_id,
+        network_profile_id: packageForm.network_profile_id ? packageForm.network_profile_id : null,
         is_active: packageForm.is_active,
       };
 
@@ -395,13 +391,13 @@ export default function ServiceSetupPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Network Profile *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Network Profile (Opsional)</label>
                 <select
                   value={packageForm.network_profile_id}
                   onChange={(e) => setPackageForm({ ...packageForm, network_profile_id: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white text-slate-900"
                 >
-                  <option value="">Select profile</option>
+                  <option value="">Tanpa Profile (Billing Only / Non-Jaringan)</option>
                   {profiles?.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({formatSpeed(p.download_speed)}/{formatSpeed(p.upload_speed)})

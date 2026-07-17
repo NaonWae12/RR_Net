@@ -297,12 +297,18 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       // Bypass validation for None
       data.pppoe_username = '';
       data.pppoe_password = '';
-      data.service_package_id = '';
       data.voucher_package_id = '';
       data.router_id = '';
       data.pppoe_local_address = '';
       data.pppoe_remote_address = '';
       data.pppoe_comment = '';
+      
+      if (data.category === 'lite') {
+        if (!data.device_count || data.device_count < 1) {
+          setError('device_count', { type: 'validate', message: 'Device count is required for Lite' });
+          return;
+        }
+      }
     } else if (data.category === 'lite') {
       if (!data.device_count || data.device_count < 1) {
         setError('device_count', { type: 'validate', message: 'Device count is required for Lite' });
@@ -340,7 +346,7 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       phone: finalPhone,
       address: data.address,
       category: data.category,
-      service_package_id: (data.connection_type === 'hotspot' || data.connection_type === 'none') ? null : (data.service_package_id || undefined),
+      service_package_id: data.connection_type === 'hotspot' ? null : (data.service_package_id || undefined),
       group_id: data.group_id ? data.group_id : undefined,
       isolir_mode: data.isolir_mode || 'manual',
       connection_type: data.connection_type || 'pppoe',
@@ -524,7 +530,55 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       </div>
 
       {/* Service Information */}
-      {connectionType !== 'none' && (
+      {/* For 'none' type: show package selector only (for billing). For pppoe/hotspot: show full network config. */}
+      {connectionType === 'none' ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex items-center space-x-2 pb-4 mb-4 border-b border-slate-100">
+            <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+              <Wifi className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Paket Billing</h2>
+              <p className="text-xs text-slate-500">Pilih paket untuk menentukan tagihan bulanan. Tidak ada provisioning jaringan.</p>
+            </div>
+          </div>
+          <Controller
+            name="service_package_id"
+            control={control}
+            render={({ field }) => (
+              <select
+                {...field}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:text-slate-500 disabled:bg-slate-50 transition-all"
+                disabled={packagesLoading}
+              >
+                <option value="">{packagesLoading ? 'Loading packages...' : 'Tanpa paket (tidak ada tagihan)'}</option>
+                {visiblePackages.map((p) => (
+                  <option key={p.id} value={p.id} className="text-slate-900">
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
+          {errors.service_package_id && (
+            <p className="mt-1 text-xs text-red-600">{errors.service_package_id.message}</p>
+          )}
+          {category === 'lite' && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Jumlah Device
+              </label>
+              <Input
+                type="number"
+                {...register('device_count', { valueAsNumber: true })}
+                placeholder="e.g., 3"
+                min={1}
+                error={errors.device_count?.message}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all duration-200">
           <div className="flex items-center space-x-2 pb-4 mb-4 border-b border-slate-100">
             <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
@@ -563,6 +617,21 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
                 {errors.service_package_id && (
                   <p className="mt-1 text-xs text-red-600">{errors.service_package_id.message}</p>
                 )}
+              </div>
+            )}
+
+            {connectionType !== 'hotspot' && category === 'lite' && (
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Jumlah Device
+                </label>
+                <Input
+                  type="number"
+                  {...register('device_count', { valueAsNumber: true })}
+                  placeholder="e.g., 3"
+                  min={1}
+                  error={errors.device_count?.message}
+                />
               </div>
             )}
 

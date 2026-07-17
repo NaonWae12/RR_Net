@@ -35,7 +35,7 @@ type CreateServicePackageRequest struct {
 	PriceMonthly      float64                      `json:"price_monthly,omitempty"`
 	PricePerDevice    float64                      `json:"price_per_device,omitempty"`
 	BillingDayDefault *int                         `json:"billing_day_default,omitempty"`
-	NetworkProfileID  uuid.UUID                    `json:"network_profile_id"`
+	NetworkProfileID  *uuid.UUID                   `json:"network_profile_id,omitempty"`
 	IsActive          bool                         `json:"is_active"`
 	Metadata          map[string]interface{}       `json:"metadata,omitempty"`
 }
@@ -50,7 +50,7 @@ type ServicePackageDTO struct {
 	PriceMonthly      float64                      `json:"price_monthly"`
 	PricePerDevice    float64                      `json:"price_per_device"`
 	BillingDayDefault *int                         `json:"billing_day_default,omitempty"`
-	NetworkProfileID  uuid.UUID                    `json:"network_profile_id"`
+	NetworkProfileID  *uuid.UUID                   `json:"network_profile_id,omitempty"`
 	IsActive          bool                         `json:"is_active"`
 	CreatedAt         time.Time                    `json:"created_at"`
 	UpdatedAt         time.Time                    `json:"updated_at"`
@@ -60,9 +60,7 @@ func (s *ServicePackageService) Create(ctx context.Context, tenantID uuid.UUID, 
 	if req.Name == "" {
 		return nil, ErrServicePackageNameRequired
 	}
-	if req.NetworkProfileID == (uuid.UUID{}) {
-		return nil, ErrServicePackageProfileRequired
-	}
+	// NetworkProfileID is optional — billing-only packages may omit it.
 	if err := validatePackageReq(req.Category, req.PricingModel, req.PriceMonthly, req.PricePerDevice); err != nil {
 		return nil, err
 	}
@@ -124,9 +122,7 @@ func (s *ServicePackageService) Update(ctx context.Context, tenantID, id uuid.UU
 	if req.Name == "" {
 		return nil, ErrServicePackageNameRequired
 	}
-	if req.NetworkProfileID == (uuid.UUID{}) {
-		return nil, ErrServicePackageProfileRequired
-	}
+	// NetworkProfileID is optional — billing-only packages may omit it.
 	if err := validatePackageReq(req.Category, req.PricingModel, req.PriceMonthly, req.PricePerDevice); err != nil {
 		return nil, err
 	}

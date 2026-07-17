@@ -197,7 +197,22 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 	var pkg *service_package.ServicePackage
 
 	if isNone {
-		// No service package or voucher package required for connection_type none
+		// Service package is OPTIONAL for none type (billing-only mode).
+		// If a package is supplied, load it so monthly_fee/service_plan are populated correctly.
+		if req.ServicePackageID != nil && *req.ServicePackageID != uuid.Nil {
+			var err error
+			pkg, err = s.servicePackageRepo.GetByID(ctx, tenantID, *req.ServicePackageID)
+			if err != nil {
+				if err == repository.ErrServicePackageNotFound {
+					return nil, errors.New("service package not found")
+				}
+				return nil, err
+			}
+			// Category mismatch check still applies even for none type.
+			if client.Category(pkg.Category) != req.Category {
+				return nil, errors.New("service package category mismatch")
+			}
+		}
 	} else if isHotspot {
 		if req.VoucherPackageID == nil || *req.VoucherPackageID == uuid.Nil {
 			return nil, errors.New("voucher_package_id is required for hotspot connection")
@@ -222,9 +237,7 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 
 	var pppoePasswordEnc *string
 	var pppoePasswordUpdatedAt *time.Time
-	if isNone {
-		// PPPoE credentials not required for connection_type none
-	} else if req.Category == client.CategoryLite {
+	if req.Category == client.CategoryLite {
 		if req.DeviceCount == nil || *req.DeviceCount < 1 {
 			return nil, errors.New("device_count is required for lite")
 		}
@@ -234,6 +247,8 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 		if req.PPPoEPassword != nil && *req.PPPoEPassword != "" {
 			return nil, errors.New("pppoe_password is not allowed for lite")
 		}
+	} else if isNone {
+		// PPPoE credentials not required for connection_type none
 	} else {
 		if req.PPPoEUsername == nil || *req.PPPoEUsername == "" {
 			return nil, errors.New("pppoe_username is required")
@@ -286,10 +301,15 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 			servicePlan = &pkg.Name
 		}
 		if monthlyFee <= 0 {
-			if pkg.PricingModel == service_package.PricingModelFlatMonthly {
+			switch pkg.PricingModel {
+			case service_package.PricingModelFlatMonthly:
 				monthlyFee = pkg.PriceMonthly
-			} else if pkg.PricingModel == service_package.PricingModelPerDevice && req.DeviceCount != nil {
-				monthlyFee = pkg.PricePerDevice * float64(*req.DeviceCount)
+			case service_package.PricingModelPerDevice:
+				deviceCount := 1
+				if req.DeviceCount != nil && *req.DeviceCount > 0 {
+					deviceCount = *req.DeviceCount
+				}
+				monthlyFee = pkg.PricePerDevice * float64(deviceCount)
 			}
 		}
 	}
@@ -442,11 +462,11 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 		// Create PPPoE secret if connection type is pppoe
 		if cInternal.ConnectionType == client.ConnectionTypePPPoE && cInternal.RouterID != nil && cInternal.PPPoEUsername != nil && reqInternal.PPPoEPassword != nil && cInternal.ServicePackageID != nil {
 			pkg, err := s.servicePackageRepo.GetByID(bgCtx, tID, *cInternal.ServicePackageID)
-			if err == nil {
+			if err == nil && pkg.NetworkProfileID != nil {
 				pppoeReq := CreatePPPoESecretRequest{
 					ClientID:      cInternal.ID,
 					RouterID:      *cInternal.RouterID,
-					ProfileID:     pkg.NetworkProfileID,
+					ProfileID:     *pkg.NetworkProfileID,
 					Username:      *cInternal.PPPoEUsername,
 					Password:      *reqInternal.PPPoEPassword,
 					LocalAddress:  utils.Value(cInternal.PPPoELocalAddress),
@@ -747,7 +767,20 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	var pkg *service_package.ServicePackage
 
 	if isNone {
-		// No service package or voucher package validation for none connection type
+		// Service package is OPTIONAL for none type (billing-only mode).
+		if req.ServicePackageID != nil && *req.ServicePackageID != uuid.Nil {
+			var err error
+			pkg, err = s.servicePackageRepo.GetByID(ctx, tenantID, *req.ServicePackageID)
+			if err != nil {
+				if err == repository.ErrServicePackageNotFound {
+					return nil, ErrServicePackageNotFound
+				}
+				return nil, err
+			}
+			if client.Category(pkg.Category) != req.Category {
+				return nil, ErrCategoryMismatch
+			}
+		}
 	} else if isHotspot {
 		if req.VoucherPackageID == nil || *req.VoucherPackageID == uuid.Nil {
 			return nil, ErrVoucherPackageRequired
@@ -837,10 +870,15 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	} else if pkg != nil {
 		c.ServicePlan = &pkg.Name
 		if req.MonthlyFee == nil || *req.MonthlyFee <= 0 {
-			if pkg.PricingModel == service_package.PricingModelFlatMonthly {
+			switch pkg.PricingModel {
+			case service_package.PricingModelFlatMonthly:
 				c.MonthlyFee = pkg.PriceMonthly
-			} else if pkg.PricingModel == service_package.PricingModelPerDevice && c.DeviceCount != nil {
-				c.MonthlyFee = pkg.PricePerDevice * float64(*c.DeviceCount)
+			case service_package.PricingModelPerDevice:
+				deviceCount := 1
+				if c.DeviceCount != nil && *c.DeviceCount > 0 {
+					deviceCount = *c.DeviceCount
+				}
+				c.MonthlyFee = pkg.PricePerDevice * float64(deviceCount)
 			}
 		} else {
 			c.MonthlyFee = *req.MonthlyFee
@@ -849,15 +887,16 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 		c.MonthlyFee = *req.MonthlyFee
 	}
 
-	if isNone {
-		c.PPPoEUsername = nil
-		c.PPPoEPasswordEnc = nil
-		c.PPPoEPasswordUpdatedAt = nil
-	} else if req.Category == client.CategoryLite {
+	if req.Category == client.CategoryLite {
 		if req.DeviceCount == nil || *req.DeviceCount < 1 {
 			return nil, errors.New("device_count is required for lite")
 		}
+		c.DeviceCount = req.DeviceCount
 		// Clear PPPoE fields for lite
+		c.PPPoEUsername = nil
+		c.PPPoEPasswordEnc = nil
+		c.PPPoEPasswordUpdatedAt = nil
+	} else if isNone {
 		c.PPPoEUsername = nil
 		c.PPPoEPasswordEnc = nil
 		c.PPPoEPasswordUpdatedAt = nil
@@ -935,11 +974,11 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 		// 2. Create/Sync new service
 		if cInternal.ConnectionType == client.ConnectionTypePPPoE && cInternal.RouterID != nil && cInternal.PPPoEUsername != nil && pass != "" && cInternal.ServicePackageID != nil {
 			pkg, err := s.servicePackageRepo.GetByID(bgCtx, tID, *cInternal.ServicePackageID)
-			if err == nil {
+			if err == nil && pkg.NetworkProfileID != nil {
 				pppoeReq := CreatePPPoESecretRequest{
 					ClientID:      cInternal.ID,
 					RouterID:      *cInternal.RouterID,
-					ProfileID:     pkg.NetworkProfileID,
+					ProfileID:     *pkg.NetworkProfileID,
 					Username:      *cInternal.PPPoEUsername,
 					Password:      pass,
 					LocalAddress:  utils.Value(cInternal.PPPoELocalAddress),

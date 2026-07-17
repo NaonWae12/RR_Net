@@ -11,7 +11,7 @@ export interface ServicePackage {
   price_monthly: number;
   price_per_device: number;
   billing_day_default?: number | null;
-  network_profile_id: string;
+  network_profile_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
