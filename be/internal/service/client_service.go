@@ -379,13 +379,13 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 		PPPoERemoteAddress: req.PPPoERemoteAddress,
 		PPPoEComment:       req.PPPoEComment,
 		ServicePackageID: func() *uuid.UUID {
-			if isHotspot || isNone {
+			if isHotspot {
 				return nil
 			}
 			return req.ServicePackageID
 		}(),
 		VoucherPackageID: func() *uuid.UUID {
-			if isNone {
+			if !isHotspot {
 				return nil
 			}
 			return req.VoucherPackageID
@@ -820,16 +820,27 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	if req.PPPoEComment != nil {
 		c.PPPoEComment = req.PPPoEComment
 	}
-	if isNone {
+	if isHotspot {
 		c.ServicePackageID = nil
-		c.VoucherPackageID = nil
-	} else if isHotspot {
-		c.ServicePackageID = nil
-	} else if req.ServicePackageID != nil && *req.ServicePackageID != uuid.Nil {
-		c.ServicePackageID = req.ServicePackageID
+	} else {
+		if req.ServicePackageID != nil {
+			if *req.ServicePackageID == uuid.Nil {
+				c.ServicePackageID = nil
+			} else {
+				c.ServicePackageID = req.ServicePackageID
+			}
+		}
 	}
-	if req.VoucherPackageID != nil {
-		c.VoucherPackageID = req.VoucherPackageID
+	if !isHotspot {
+		c.VoucherPackageID = nil
+	} else {
+		if req.VoucherPackageID != nil {
+			if *req.VoucherPackageID == uuid.Nil {
+				c.VoucherPackageID = nil
+			} else {
+				c.VoucherPackageID = req.VoucherPackageID
+			}
+		}
 	}
 	if req.DeviceCount != nil {
 		c.DeviceCount = req.DeviceCount
@@ -839,9 +850,7 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	}
 
 	// Sync MonthlyFee and ServicePlan from package if changed or missing
-	if isNone {
-		// No monthly fee sync from package needed for none
-	} else if isHotspot {
+	if isHotspot {
 		// Try to fetch package details if we have an ID
 		// Check both req and c for the ID, as req might only have one of them if partial update
 		vpID := req.VoucherPackageID
@@ -883,8 +892,13 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 		} else {
 			c.MonthlyFee = *req.MonthlyFee
 		}
-	} else if req.MonthlyFee != nil {
-		c.MonthlyFee = *req.MonthlyFee
+	} else {
+		if req.MonthlyFee != nil {
+			c.MonthlyFee = *req.MonthlyFee
+		}
+		if req.ServicePackageID != nil && *req.ServicePackageID == uuid.Nil {
+			c.ServicePlan = nil
+		}
 	}
 
 	if req.Category == client.CategoryLite {

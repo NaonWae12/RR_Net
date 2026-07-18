@@ -121,6 +121,26 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
   // React-hook-form reset when client data arrives/changes
   useEffect(() => {
     if (client) {
+      let resolvedPkgId = client.service_package_id || '';
+      if (!resolvedPkgId && client.service_plan && packages.length > 0) {
+        const matchedPkg = packages.find(
+          (p) => p.name.toLowerCase() === client.service_plan?.toLowerCase()
+        );
+        if (matchedPkg) {
+          resolvedPkgId = matchedPkg.id;
+        }
+      }
+
+      let resolvedVoucherPkgId = client.voucher_package_id || '';
+      if (!resolvedVoucherPkgId && client.service_plan && voucherPackages.length > 0) {
+        const matchedVPkg = voucherPackages.find(
+          (vp) => vp.name.toLowerCase() === client.service_plan?.toLowerCase()
+        );
+        if (matchedVPkg) {
+          resolvedVoucherPkgId = matchedVPkg.id;
+        }
+      }
+
       reset({
         name: client.name || '',
         email: client.email || '',
@@ -131,18 +151,18 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         discount_id: client.discount_id || '',
         isolir_mode: (client as any).isolir_mode || 'manual',
         connection_type: client.connection_type || 'pppoe',
-        service_package_id: client.service_package_id || '',
+        service_package_id: resolvedPkgId,
         router_id: client.router_id || '',
         pppoe_username: client.pppoe_username || '',
         pppoe_password: client.pppoe_password || '', 
         pppoe_local_address: client.pppoe_local_address || '',
         pppoe_remote_address: client.pppoe_remote_address || '',
         pppoe_comment: client.pppoe_comment || '',
-        voucher_package_id: client.voucher_package_id || '',
+        voucher_package_id: resolvedVoucherPkgId,
         device_count: client.device_count || null,
       });
     }
-  }, [client, reset]);
+  }, [client, reset, packages, voucherPackages]);
 
   const category = watch('category');
   const connectionType = watch('connection_type');
@@ -165,10 +185,17 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         const list = await servicePackageService.list(category, !isEdit);
         if (!alive) return;
         setPackages(list);
-        
-        // console.log(`[DEBUG] ClientForm - Loaded ${category} packages:`, list.length);
+
         if (client?.service_package_id) {
-            // console.log(`[DEBUG] ClientForm - Existing service_package_id:`, client.service_package_id);
+          setValue('service_package_id', client.service_package_id);
+        } else if (client?.service_plan) {
+          // Fallback: match by name for legacy clients that have service_plan but no service_package_id
+          const matched = list.find(
+            (p) => p.name.toLowerCase() === client.service_plan?.toLowerCase()
+          );
+          if (matched) {
+            setValue('service_package_id', matched.id);
+          }
         }
       } catch (err) {
         // console.error('[DEBUG] ClientForm - Failed to fetch packages:', err);
@@ -180,7 +207,7 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, isEdit, setValue, client?.service_package_id]);
+  }, [category, isEdit, setValue, client?.service_package_id, client?.service_plan]);
 
   useEffect(() => {
     let alive = true;
@@ -192,7 +219,9 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         const list = await clientGroupService.list();
         if (alive) {
           setGroups(list);
-          // console.log('[DEBUG] ClientForm - Loaded groups:', list.length);
+          if (client?.group_id) {
+            setValue('group_id', client.group_id);
+          }
         }
       } catch (e) {
         // console.error('Failed to fetch groups', e);
@@ -207,7 +236,9 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         const list = await discountService.getDiscounts(isEdit, !isEdit);
         if (alive) {
           setDiscounts(Array.isArray(list) ? list : []);
-          // console.log('[DEBUG] ClientForm - Loaded discounts:', list.length);
+          if (client?.discount_id) {
+            setValue('discount_id', client.discount_id);
+          }
         }
       } catch (e) {
         // console.error('Failed to fetch discounts', e);
@@ -233,7 +264,9 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         const list = await networkService.getRouters();
         if (alive) {
           setRouters(list);
-          // console.log('[DEBUG] ClientForm - Loaded routers:', list.length);
+          if (client?.router_id) {
+            setValue('router_id', client.router_id);
+          }
         }
       } catch (e) {
         // console.error('Failed to fetch routers', e);
@@ -246,7 +279,9 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         const list = await voucherService.listPackages();
         if (alive) {
           setVoucherPackages(list);
-          // console.log('[DEBUG] ClientForm - Loaded voucher packages:', list.length);
+          if (client?.voucher_package_id) {
+            setValue('voucher_package_id', client.voucher_package_id);
+          }
         }
       } catch (e) {
         // console.error('Failed to fetch voucher packages', e);
@@ -258,7 +293,7 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
     return () => {
       alive = false;
     };
-  }, []);
+  }, [client, setValue, isEdit]);
 
   // Initialize tempo state from existing client when editing
   useEffect(() => {
