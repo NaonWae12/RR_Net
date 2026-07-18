@@ -640,6 +640,16 @@ func New(deps Dependencies) http.Handler {
 			return
 		}
 
+		// Check for package history: /api/v1/clients/{id}/package-history
+		if len(parts) == 2 && parts[1] == "package-history" {
+			if r.Method == http.MethodGet {
+				clientHandler.GetPackageHistory(w, r)
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+			return
+		}
+
 		// Client CRUD operations
 		switch r.Method {
 		case http.MethodGet:

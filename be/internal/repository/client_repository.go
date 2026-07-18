@@ -430,3 +430,60 @@ func (r *ClientRepository) scanClientFromRows(rows pgx.Rows) (*client.Client, er
 
 	return &c, nil
 }
+
+// CreatePackageChangeLog inserts a new package change history record
+func (r *ClientRepository) CreatePackageChangeLog(ctx context.Context, log *client.PackageChangeLog) error {
+	query := `
+		INSERT INTO client_package_change_logs (
+			id, tenant_id, client_id, changed_by_id, change_type,
+			old_package_id, old_package_name, old_monthly_fee,
+			new_package_id, new_package_name, new_monthly_fee,
+			notes, created_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+	`
+	_, err := r.db.Exec(ctx, query,
+		log.ID, log.TenantID, log.ClientID, log.ChangedByID, log.ChangeType,
+		log.OldPackageID, log.OldPackageName, log.OldMonthlyFee,
+		log.NewPackageID, log.NewPackageName, log.NewMonthlyFee,
+		log.Notes, log.CreatedAt,
+	)
+	return err
+}
+
+// ListPackageChangeLogs returns the package change history for a specific client
+func (r *ClientRepository) ListPackageChangeLogs(ctx context.Context, tenantID, clientID uuid.UUID) ([]*client.PackageChangeLog, error) {
+	query := `
+		SELECT
+			l.id, l.tenant_id, l.client_id, l.changed_by_id, l.change_type,
+			l.old_package_id, l.old_package_name, l.old_monthly_fee,
+			l.new_package_id, l.new_package_name, l.new_monthly_fee,
+			l.notes, l.created_at,
+			u.name AS changed_by_name
+		FROM client_package_change_logs l
+		LEFT JOIN users u ON u.id = l.changed_by_id
+		WHERE l.tenant_id = $1 AND l.client_id = $2
+		ORDER BY l.created_at DESC
+		LIMIT 100
+	`
+	rows, err := r.db.Query(ctx, query, tenantID, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []*client.PackageChangeLog
+	for rows.Next() {
+		var l client.PackageChangeLog
+		if err := rows.Scan(
+			&l.ID, &l.TenantID, &l.ClientID, &l.ChangedByID, &l.ChangeType,
+			&l.OldPackageID, &l.OldPackageName, &l.OldMonthlyFee,
+			&l.NewPackageID, &l.NewPackageName, &l.NewMonthlyFee,
+			&l.Notes, &l.CreatedAt,
+			&l.ChangedByName,
+		); err != nil {
+			return nil, err
+		}
+		logs = append(logs, &l)
+	}
+	return logs, rows.Err()
+}

@@ -690,6 +690,9 @@ type UpdateClientRequest struct {
 	PaymentTempoOption     *string    `json:"payment_tempo_option,omitempty"`
 	PaymentDueDay          *int       `json:"payment_due_day,omitempty"`
 	PaymentTempoTemplateID *uuid.UUID `json:"payment_tempo_template_id,omitempty"`
+
+	// Who performed the change (populated by handler from JWT)
+	ChangedByID *uuid.UUID `json:"-"`
 }
 
 // Update updates a client
@@ -699,6 +702,12 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	if err != nil {
 		return nil, err
 	}
+
+	// Capture old package state for change log
+	oldPackageID := c.ServicePackageID
+	oldVoucherPackageID := c.VoucherPackageID
+	oldServicePlan := c.ServicePlan
+	oldMonthlyFee := c.MonthlyFee
 
 	// Capture old values for transition handling
 	oldConnType := c.ConnectionType
@@ -955,6 +964,52 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 		return nil, err
 	}
 
+	// Auto-log package change if package has changed
+	newPackageID := c.ServicePackageID
+	newVoucherPackageID := c.VoucherPackageID
+	packageChanged := false
+	if oldPackageID == nil && newPackageID != nil {
+		packageChanged = true
+	} else if oldPackageID != nil && newPackageID == nil {
+		packageChanged = true
+	} else if oldPackageID != nil && newPackageID != nil && *oldPackageID != *newPackageID {
+		packageChanged = true
+	}
+	if oldVoucherPackageID == nil && newVoucherPackageID != nil {
+		packageChanged = true
+	} else if oldVoucherPackageID != nil && newVoucherPackageID == nil {
+		packageChanged = true
+	} else if oldVoucherPackageID != nil && newVoucherPackageID != nil && *oldVoucherPackageID != *newVoucherPackageID {
+		packageChanged = true
+	}
+
+	if packageChanged {
+		changeType := client.PackageChangeChange
+		if c.MonthlyFee > oldMonthlyFee {
+			changeType = client.PackageChangeUpgrade
+		} else if c.MonthlyFee < oldMonthlyFee {
+			changeType = client.PackageChangeDowngrade
+		}
+
+		newPkgName := c.ServicePlan
+		changeLog := &client.PackageChangeLog{
+			ID:             uuid.New(),
+			TenantID:       tenantID,
+			ClientID:       clientID,
+			ChangedByID:    req.ChangedByID,
+			ChangeType:     changeType,
+			OldPackageID:   oldPackageID,
+			OldPackageName: oldServicePlan,
+			OldMonthlyFee:  oldMonthlyFee,
+			NewPackageID:   newPackageID,
+			NewPackageName: newPkgName,
+			NewMonthlyFee:  c.MonthlyFee,
+			CreatedAt:      time.Now(),
+		}
+		// Non-blocking: ignore error (log failure shouldn't fail the update)
+		_ = s.clientRepo.CreatePackageChangeLog(ctx, changeLog)
+	}
+
 	// PERFORM BACKGROUND SYNC / TRANSITION
 	go func(cInternal *client.Client, oldType client.ConnectionType, oldUser string, oldRid *uuid.UUID, pass string, tID uuid.UUID) {
 		bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -1138,4 +1193,9 @@ func (s *ClientService) toDTO(c *client.Client) *ClientDTO {
 	}
 
 	return dto
+}
+
+// GetPackageChangeLogs returns the package change history for a client
+func (s *ClientService) GetPackageChangeLogs(ctx context.Context, tenantID, clientID uuid.UUID) ([]*client.PackageChangeLog, error) {
+	return s.clientRepo.ListPackageChangeLogs(ctx, tenantID, clientID)
 }

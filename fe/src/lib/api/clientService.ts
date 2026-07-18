@@ -203,8 +203,32 @@ export const clientService = {
   async deleteClient(id: string): Promise<void> {
     await apiClient.delete(`/clients/${id}`);
   },
+
+  async getPackageHistory(id: string): Promise<PackageChangeLog[]> {
+    const response = await apiClient.get(`/clients/${id}/package-history`);
+    return response.data?.data ?? [];
+  },
 };
 
 export default clientService;
 
+// ---- Types ----
 
+export type PackageChangeType = 'upgrade' | 'downgrade' | 'change';
+
+export interface PackageChangeLog {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  changed_by_id?: string | null;
+  changed_by_name?: string | null;
+  change_type: PackageChangeType;
+  old_package_id?: string | null;
+  old_package_name?: string | null;
+  old_monthly_fee: number;
+  new_package_id?: string | null;
+  new_package_name?: string | null;
+  new_monthly_fee: number;
+  notes?: string | null;
+  created_at: string;
+}

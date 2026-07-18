@@ -173,6 +173,11 @@ func (h *ClientHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Inject who is making this change (for change log)
+	if userID, ok := auth.GetUserID(r.Context()); ok && userID != (uuid.UUID{}) {
+		req.ChangedByID = &userID
+	}
+
 	c, err := h.clientService.Update(r.Context(), tenantID, clientID, &req)
 	if err != nil {
 		switch err {
@@ -195,6 +200,43 @@ func (h *ClientHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	sendJSON(w, http.StatusOK, c)
 }
+
+// GetPackageHistory returns the package change history for a client
+func (h *ClientHandler) GetPackageHistory(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == (uuid.UUID{}) {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	idStr := getPathParam(r, "id")
+	if idStr == "" {
+		sendError(w, http.StatusBadRequest, "Client ID is required")
+		return
+	}
+
+	clientID, err := uuid.Parse(idStr)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid client ID")
+		return
+	}
+
+	logs, err := h.clientService.GetPackageChangeLogs(r.Context(), tenantID, clientID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to get package history")
+		return
+	}
+
+	if logs == nil {
+		logs = []*client.PackageChangeLog{}
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"data":  logs,
+		"total": len(logs),
+	})
+}
+
 
 // ChangeStatus changes client status
 func (h *ClientHandler) ChangeStatus(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,36 @@ import (
 	"github.com/google/uuid"
 )
 
+// PackageChangeType represents the type of package change
+type PackageChangeType string
+
+const (
+	PackageChangeUpgrade   PackageChangeType = "upgrade"
+	PackageChangeDowngrade PackageChangeType = "downgrade"
+	PackageChangeChange    PackageChangeType = "change"
+)
+
+// PackageChangeLog records a package upgrade/downgrade event for a client
+type PackageChangeLog struct {
+	ID            uuid.UUID         `json:"id"`
+	TenantID      uuid.UUID         `json:"tenant_id"`
+	ClientID      uuid.UUID         `json:"client_id"`
+	ChangedByID   *uuid.UUID        `json:"changed_by_id,omitempty"`
+	ChangedByName *string           `json:"changed_by_name,omitempty"` // display name, joined
+	ChangeType    PackageChangeType `json:"change_type"`
+
+	OldPackageID   *uuid.UUID `json:"old_package_id,omitempty"`
+	OldPackageName *string    `json:"old_package_name,omitempty"`
+	OldMonthlyFee  float64    `json:"old_monthly_fee"`
+
+	NewPackageID   *uuid.UUID `json:"new_package_id,omitempty"`
+	NewPackageName *string    `json:"new_package_name,omitempty"`
+	NewMonthlyFee  float64    `json:"new_monthly_fee"`
+
+	Notes     *string   `json:"notes,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Category string
 
 const (

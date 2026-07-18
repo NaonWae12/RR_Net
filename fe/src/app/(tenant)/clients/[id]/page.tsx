@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useClientStore } from '@/stores/clientStore';
-import { clientService } from '@/lib/api/clientService';
+import clientService, { PackageChangeLog } from '@/lib/api/clientService';
 import { ClientStatusBadge } from '@/components/clients';
 import { LoadingSpinner } from '@/components/utilities/LoadingSpinner';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -22,6 +22,8 @@ export default function ClientDetailPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [packageHistory, setPackageHistory] = useState<PackageChangeLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -32,6 +34,12 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (id) {
       fetchClient(id);
+      // Fetch package change history
+      setHistoryLoading(true);
+      clientService.getPackageHistory(id)
+        .then(setPackageHistory)
+        .catch(() => setPackageHistory([]))
+        .finally(() => setHistoryLoading(false));
     }
     return () => clearSelectedClient();
   }, [id, fetchClient, clearSelectedClient]);
@@ -549,8 +557,97 @@ export default function ClientDetailPage() {
           </div>
         </div>
       </div>
-    </div>
 
+      {/* Package Change History */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-violet-50 rounded-xl">
+            <svg className="w-5 h-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Riwayat Perubahan Paket</h2>
+            <p className="text-xs text-slate-500">History upgrade & downgrade paket pelanggan</p>
+          </div>
+        </div>
+        <span className="text-xs font-semibold bg-violet-100 text-violet-700 px-2.5 py-1 rounded-full">
+          {packageHistory.length} entri
+        </span>
+      </div>
+
+      {historyLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <LoadingSpinner size={28} />
+        </div>
+      ) : packageHistory.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+          <svg className="w-10 h-10 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+          </svg>
+          <p className="text-sm font-medium">Belum ada riwayat perubahan paket</p>
+          <p className="text-xs mt-1">History akan muncul saat paket pelanggan diubah</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {packageHistory.map((log) => {
+            const badge =
+              log.change_type === 'upgrade'
+                ? { label: 'Upgrade', bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' }
+                : log.change_type === 'downgrade'
+                ? { label: 'Downgrade', bg: 'bg-rose-100', text: 'text-rose-700', dot: 'bg-rose-500' }
+                : { label: 'Perubahan', bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' };
+
+            const feeChange = log.new_monthly_fee - log.old_monthly_fee;
+
+            return (
+              <div key={log.id} className="px-6 py-4 hover:bg-slate-50 transition-colors">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${badge.dot}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badge.bg} ${badge.text}`}>
+                          {badge.label}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(log.created_at).toLocaleString('id-ID', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                          })}
+                        </span>
+                        {log.changed_by_name && (
+                          <span className="text-xs text-indigo-600 font-medium">oleh {log.changed_by_name}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-slate-700 flex-wrap">
+                        <span className="font-medium text-slate-500">{log.old_package_name ?? 'Tanpa paket'}</span>
+                        <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
+                        <span className="font-semibold text-slate-900">{log.new_package_name ?? 'Tanpa paket'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold text-slate-900">
+                      Rp {log.new_monthly_fee.toLocaleString('id-ID')}
+                    </p>
+                    {feeChange !== 0 && (
+                      <p className={`text-xs font-semibold mt-0.5 ${feeChange > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {feeChange > 0 ? '+' : ''}Rp {feeChange.toLocaleString('id-ID')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  </div>
   );
 }
 
