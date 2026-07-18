@@ -162,7 +162,8 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
         device_count: client.device_count || null,
       });
     }
-  }, [client, reset, packages, voucherPackages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, reset]);
 
   const category = watch('category');
   const connectionType = watch('connection_type');
@@ -281,6 +282,14 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
           setVoucherPackages(list);
           if (client?.voucher_package_id) {
             setValue('voucher_package_id', client.voucher_package_id);
+          } else if (client?.service_plan) {
+            // Fallback: match by name for legacy clients that have service_plan but no voucher_package_id
+            const matched = list.find(
+              (vp) => vp.name.toLowerCase() === client.service_plan?.toLowerCase()
+            );
+            if (matched) {
+              setValue('voucher_package_id', matched.id);
+            }
           }
         }
       } catch (e) {
