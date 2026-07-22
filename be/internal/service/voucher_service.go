@@ -619,16 +619,17 @@ func (s *VoucherService) GenerateVouchers(ctx context.Context, tenantID uuid.UUI
 			}
 
 			v := &voucher.Voucher{
-				ID:        uuid.New(),
-				TenantID:  tenantID,
-				PackageID: req.PackageID,
-				RouterID:  req.RouterID,
-				Code:      code,
-				Password:  password,
-				Status:    voucher.VoucherStatusActive,
-				Notes:     batchNotes,
-				CreatedAt: now,
-				UpdatedAt: now,
+				ID:                 uuid.New(),
+				TenantID:           tenantID,
+				PackageID:          req.PackageID,
+				RouterID:           req.RouterID,
+				Code:               code,
+				Password:           password,
+				Status:             voucher.VoucherStatusActive,
+				Notes:              batchNotes,
+				ResellerPurchaseID: req.ResellerPurchaseID,
+				CreatedAt:          now,
+				UpdatedAt:          now,
 			}
 
 			vouchers = append(vouchers, v)
