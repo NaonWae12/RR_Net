@@ -74,8 +74,8 @@ export function ChartContainer({
     <div
       ref={chartRef}
       className={cn(
-        "w-full rounded-lg border border-slate-100/20 bg-card p-4",
-        theme === "dark" && "bg-slate-900 text-slate-50",
+        "w-full bg-transparent p-0",
+        theme === "dark" && "bg-slate-900 text-slate-50 p-4 rounded-lg border border-slate-100/20",
         className
       )}
     >

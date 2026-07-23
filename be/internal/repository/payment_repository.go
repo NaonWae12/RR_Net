@@ -376,13 +376,24 @@ func (r *PaymentRepository) GetRevenueAnalytics(ctx context.Context, tenantID uu
 
 	// 2. By Group
 	groupQuery := `
-		SELECT c.group_id, COALESCE(cg.name, 'No Group'), SUM(p.amount)
-		FROM payments p
-		JOIN clients c ON c.id = p.client_id
-		LEFT JOIN client_groups cg ON cg.id = c.group_id
-		WHERE p.tenant_id = $1 AND p.received_at BETWEEN $2 AND $3
-		GROUP BY c.group_id, cg.name
-		ORDER BY SUM(p.amount) DESC
+		SELECT group_id, group_name, amount FROM (
+			SELECT cg.id AS group_id, cg.name AS group_name, COALESCE(SUM(p.amount), 0) AS amount
+			FROM client_groups cg
+			LEFT JOIN clients c ON c.group_id = cg.id
+			LEFT JOIN payments p ON p.client_id = c.id AND p.received_at BETWEEN $2 AND $3
+			WHERE cg.tenant_id = $1
+			GROUP BY cg.id, cg.name
+
+			UNION ALL
+
+			SELECT NULL::uuid AS group_id, 'No Group' AS group_name, COALESCE(SUM(p.amount), 0) AS amount
+			FROM clients c
+			LEFT JOIN payments p ON p.client_id = c.id AND p.received_at BETWEEN $2 AND $3
+			WHERE c.tenant_id = $1 AND c.group_id IS NULL
+			GROUP BY c.group_id
+			HAVING COUNT(c.id) > 0 OR COALESCE(SUM(p.amount), 0) > 0
+		) sub
+		ORDER BY amount DESC
 	`
 	gRows, err := r.db.Query(ctx, groupQuery, tenantID, startDate, endDate)
 	if err != nil {
