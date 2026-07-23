@@ -1,16 +1,40 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { LoadingSpinner } from '@/components/utilities/LoadingSpinner';
 import { AuthGuard } from '@/components/auth/AuthGuard';
+import { portalService } from '@/lib/api/portalService';
 
 export default function ClientPortalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout, isAuthenticated, isHydrated } = useAuthStore();
   const router = useRouter();
+  const [portalBlocked, setPortalBlocked] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+
+  useEffect(() => {
+    const checkPortalAccess = async () => {
+      try {
+        await portalService.getDashboardData();
+        setPortalBlocked(false);
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.statusCode;
+        const features = err?.response?.data?.features ?? [];
+        const message = String(err?.response?.data?.message ?? '');
+        if (status === 403 && (features.includes('client_portal') || message.includes('Client Portal'))) {
+          setPortalBlocked(true);
+        }
+      } finally {
+        setCheckingAccess(false);
+      }
+    };
+    if (isHydrated) {
+      checkPortalAccess();
+    }
+  }, [isHydrated]);
 
   // Mobile Bottom Navigation Items
   const navItems = [
@@ -52,11 +76,89 @@ export default function ClientPortalLayout({ children }: { children: React.React
     },
   ];
 
-  if (!isHydrated) {
+  if (!isHydrated || checkingAccess) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <LoadingSpinner size={40} />
       </div>
+    );
+  }
+
+  // ─── Plan-gated: Basic plan → show upgrade screen ────────────────────────
+  if (portalBlocked) {
+    return (
+      <AuthGuard>
+        <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center p-4">
+          {/* Background Orbs */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute -top-40 -right-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
+            <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+          </div>
+
+          <div className="relative w-full max-w-md text-center">
+            {/* Lock Icon */}
+            <div className="mx-auto mb-6 w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/30">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+
+            {/* Badge */}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-amber-400/10 text-amber-300 border border-amber-400/20 mb-4">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+              Fitur Premium
+            </span>
+
+            <h1 className="text-3xl font-extrabold text-white mb-3 leading-tight">
+              Client Portal Tidak Tersedia
+            </h1>
+            <p className="text-slate-400 leading-relaxed mb-8">
+              Fitur{' '}
+              <span className="text-indigo-300 font-semibold">Client Portal</span> hanya tersedia
+              untuk paket{' '}
+              <span className="text-white font-semibold">Pro, Business,</span> dan{' '}
+              <span className="text-white font-semibold">Enterprise</span>.
+              <br />
+              <span className="text-sm mt-2 block">
+                Hubungi penyedia layanan internet Anda untuk upgrade paket.
+              </span>
+            </p>
+
+            {/* Plan comparison mini */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6 text-left space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <span className="text-sm text-slate-400">
+                  Paket <strong className="text-slate-300">Basic</strong> — Tanpa akses Client Portal
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-3 h-3 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <span className="text-sm text-slate-300">
+                  Paket <strong className="text-white">Pro, Business, Enterprise</strong> — Client Portal aktif ✓
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => logout().then(() => router.push('/login'))}
+              className="w-full py-3 px-6 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium transition-all"
+            >
+              Keluar dari Portal
+            </button>
+          </div>
+        </div>
+      </AuthGuard>
     );
   }
 
@@ -81,7 +183,7 @@ export default function ClientPortalLayout({ children }: { children: React.React
             </button>
         </header>
 
-        {/* Desktop Sidebar (Simple Version) - Optional for Tablet/Desktop users */}
+        {/* Desktop Sidebar */}
         <div className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col">
           <div className="flex min-h-0 flex-1 flex-col border-r border-slate-200 bg-white">
             <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">

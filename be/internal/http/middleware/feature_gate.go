@@ -59,7 +59,11 @@ func RequireAnyFeature(checker FeatureChecker, featureCodes ...string) func(http
 				}
 			}
 
-			sendFeatureForbidden(w, "feature not available for this tenant", featureCodes)
+			msg := "feature not available for this tenant"
+			if len(featureCodes) > 0 && featureCodes[0] == "client_portal" {
+				msg = "Fitur Client Portal tidak tersedia untuk paket Basic. Silakan upgrade ke paket Pro atau lebih tinggi."
+			}
+			sendFeatureForbidden(w, msg, featureCodes)
 		})
 	}
 }

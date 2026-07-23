@@ -116,6 +116,14 @@ func (r *FeatureResolver) HasWithData(ctx context.Context, tenantID uuid.UUID, f
 	}
 
 	if p != nil {
+		if featureCode == "client_portal" {
+			if p.Code == "basic" {
+				return false
+			}
+			if p.Code == "pro" || p.Code == "business" || p.Code == "enterprise" {
+				return true
+			}
+		}
 		return p.HasFeature(featureCode)
 	}
 
@@ -253,5 +261,6 @@ func getAllFeatureCodes() []string {
 		"addon_router",
 		"addon_user_packs",
 		"service_packages",
+		"client_portal",
 	}
 }

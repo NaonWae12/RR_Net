@@ -251,6 +251,7 @@ func New(deps Dependencies) http.Handler {
 	requireMapsFeature := middleware.RequireAnyFeature(featureResolver, "odp_maps", "client_maps")
 	requireServicePackagesFeature := middleware.RequireFeature(featureResolver, "service_packages")
 	requireWAGatewayFeature := middleware.RequireFeature(featureResolver, "wa_gateway")
+	requireClientPortalFeature := middleware.RequireFeature(featureResolver, "client_portal")
 
 	// Initialize Prometheus metrics
 	metrics.Init()
@@ -670,10 +671,10 @@ func New(deps Dependencies) http.Handler {
 	mux.Handle("/api/v1/dashboard/bootstrap", requireAuth(methodHandler("GET", dashboardHandler.GetBootstrap)))
 
 	// Portal routes
-	mux.Handle("/api/v1/portal/dashboard", requireAuth(methodHandler("GET", portalHandler.GetDashboard)))
-	mux.Handle("/api/v1/portal/invoices", requireAuth(methodHandler("GET", portalHandler.GetInvoices)))
-	mux.Handle("/api/v1/portal/midtrans-config", requireAuth(methodHandler("GET", portalHandler.GetMidtransConfig)))
-	mux.Handle("/api/v1/portal/invoices/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/v1/portal/dashboard", requireAuth(requireClientPortalFeature(methodHandler("GET", portalHandler.GetDashboard))))
+	mux.Handle("/api/v1/portal/invoices", requireAuth(requireClientPortalFeature(methodHandler("GET", portalHandler.GetInvoices))))
+	mux.Handle("/api/v1/portal/midtrans-config", requireAuth(requireClientPortalFeature(methodHandler("GET", portalHandler.GetMidtransConfig))))
+	mux.Handle("/api/v1/portal/invoices/", requireAuth(requireClientPortalFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/portal/invoices/")
 		path = strings.TrimSuffix(path, "/") // Remove trailing slash
 		if path == "" {
@@ -714,7 +715,7 @@ func New(deps Dependencies) http.Handler {
 		}
 
 		w.WriteHeader(http.StatusNotFound)
-	})))
+	}))))
 
 	// ============================================
 	// Tenant feature/limit routes (Protected, tenant context)
@@ -1048,11 +1049,11 @@ func New(deps Dependencies) http.Handler {
 	// ============================================
 	// Client Portal Reseller Routes
 	// ============================================
-	mux.Handle("/api/v1/portal/reseller/join", requireAuth(methodHandler("POST", resellerHandler.RegisterReseller)))
-	mux.Handle("/api/v1/portal/reseller/me", requireAuth(methodHandler("GET", resellerHandler.GetMyResellerStatus)))
-	mux.Handle("/api/v1/portal/reseller/prices", requireAuth(methodHandler("GET", resellerHandler.GetMyPrices)))
-	mux.Handle("/api/v1/portal/reseller/purchases", requireAuth(methodHandler("POST", resellerHandler.ProcessMyPurchase)))
-	mux.Handle("/api/v1/portal/reseller/purchases/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/v1/portal/reseller/join", requireAuth(requireClientPortalFeature(methodHandler("POST", resellerHandler.RegisterReseller))))
+	mux.Handle("/api/v1/portal/reseller/me", requireAuth(requireClientPortalFeature(methodHandler("GET", resellerHandler.GetMyResellerStatus))))
+	mux.Handle("/api/v1/portal/reseller/prices", requireAuth(requireClientPortalFeature(methodHandler("GET", resellerHandler.GetMyPrices))))
+	mux.Handle("/api/v1/portal/reseller/purchases", requireAuth(requireClientPortalFeature(methodHandler("POST", resellerHandler.ProcessMyPurchase))))
+	mux.Handle("/api/v1/portal/reseller/purchases/", requireAuth(requireClientPortalFeature(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/portal/reseller/purchases/")
 		path = strings.TrimSuffix(path, "/")
 		parts := strings.Split(path, "/")
@@ -1062,8 +1063,8 @@ func New(deps Dependencies) http.Handler {
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
-	})))
-	mux.Handle("/api/v1/portal/reseller/payment-methods", requireAuth(methodHandler("GET", paymentMethodHandler.List)))
+	}))))
+	mux.Handle("/api/v1/portal/reseller/payment-methods", requireAuth(requireClientPortalFeature(methodHandler("GET", paymentMethodHandler.List))))
 
 	// ============================================
 	// Client group routes (Protected, tenant-scoped, feature-gated: service_packages)

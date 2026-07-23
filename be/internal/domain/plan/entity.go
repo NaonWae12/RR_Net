@@ -76,10 +76,17 @@ func (p *Plan) GetFeatures() ([]string, error) {
 
 // HasFeature checks if plan includes a feature
 func (p *Plan) HasFeature(featureCode string) bool {
-	// Strictly use relational list
 	for _, f := range p.FeaturesList {
 		if f == "*" || f == featureCode {
 			return true
+		}
+	}
+	features, err := p.GetFeatures()
+	if err == nil {
+		for _, f := range features {
+			if f == "*" || f == featureCode {
+				return true
+			}
 		}
 	}
 	return false
