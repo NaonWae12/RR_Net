@@ -25,15 +25,6 @@ func (h *AIHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mask API key before sending to frontend
-	if config.APIKey != "" {
-		if len(config.APIKey) > 8 {
-			config.APIKey = config.APIKey[:4] + "********" + config.APIKey[len(config.APIKey)-4:]
-		} else {
-			config.APIKey = "****"
-		}
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(config)
 }

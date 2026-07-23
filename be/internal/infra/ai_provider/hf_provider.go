@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"rrnet/internal/domain/ai"
@@ -60,7 +61,7 @@ func (p *HuggingFaceProvider) ExtractStructuredData(ctx context.Context, model s
 				"content": content,
 			},
 		},
-		"max_tokens": 2048,
+		"max_tokens": 4096,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -112,12 +113,18 @@ func (p *HuggingFaceProvider) ExtractStructuredData(ctx context.Context, model s
 
 	var result interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		// Return raw string if JSON parsing fails
-		log.Warn().Err(err).Str("jsonStr", jsonStr).Msg("Could not parse HuggingFace response as JSON")
-		return &ai.ExtractionResult{
-			Data:       jsonStr,
-			Confidence: 0.5,
-		}, nil
+		// Try auto-repairing truncated JSON (e.g. if max_tokens was reached mid-array)
+		repairedStr := repairTruncatedJSON(jsonStr)
+		if errRepair := json.Unmarshal([]byte(repairedStr), &result); errRepair == nil {
+			jsonStr = repairedStr
+		} else {
+			// Return raw string if JSON parsing fails
+			log.Warn().Err(err).Str("jsonStr", jsonStr).Msg("Could not parse HuggingFace response as JSON")
+			return &ai.ExtractionResult{
+				Data:       jsonStr,
+				Confidence: 0.5,
+			}, nil
+		}
 	}
 
 	return &ai.ExtractionResult{
@@ -179,4 +186,34 @@ func trimSpace(s string) string {
 		return ""
 	}
 	return s[start : end+1]
+}
+
+func repairTruncatedJSON(s string) string {
+	if s == "" {
+		return s
+	}
+	var js interface{}
+	if json.Unmarshal([]byte(s), &js) == nil {
+		return s
+	}
+	// Try repair by stripping unclosed trailing object and closing brackets
+	lastObjEnd := strings.LastIndex(s, "}")
+	if lastObjEnd != -1 {
+		truncated := s[:lastObjEnd+1]
+		openBrackets := strings.Count(truncated, "[")
+		closeBrackets := strings.Count(truncated, "]")
+		if openBrackets > closeBrackets {
+			truncated += strings.Repeat("]", openBrackets-closeBrackets)
+		}
+		openBraces := strings.Count(truncated, "{")
+		closeBraces := strings.Count(truncated, "}")
+		if openBraces > closeBraces {
+			truncated += strings.Repeat("}", openBraces-closeBraces)
+		}
+		if json.Unmarshal([]byte(truncated), &js) == nil {
+			log.Info().Msg("Successfully repaired truncated LLM JSON output")
+			return truncated
+		}
+	}
+	return s
 }

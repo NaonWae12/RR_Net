@@ -14,7 +14,11 @@ import {
   CheckCircle2, 
   Loader2,
   ExternalLink,
-  Info
+  Info,
+  Eye,
+  EyeOff,
+  Copy,
+  Check
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +32,8 @@ interface AITabProps {
 export const AITab = ({ isAdmin = false }: AITabProps) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [config, setConfig] = useState<AIConfig>({
     provider: "google",
     api_key: "",
@@ -207,15 +213,45 @@ export const AITab = ({ isAdmin = false }: AITabProps) => {
                 </a>
               )}
             </div>
-            <div className="relative">
+            <div className="relative flex items-center">
               <Input 
-                type="password"
+                type={showApiKey ? "text" : "password"}
                 placeholder={config.provider === "huggingface" ? "hf_xxxxxxxxxxxxxxxxxxxx" : "Paste your AI Studio key here"}
-                className="bg-slate-50 border-slate-200 focus:bg-white transition-all pl-10"
+                className="bg-slate-50 border-slate-200 focus:bg-white transition-all pl-10 pr-20"
                 value={config.api_key}
                 onChange={(e) => setConfig({ ...config, api_key: e.target.value })}
               />
               <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {config.api_key && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!config.api_key) return;
+                      navigator.clipboard.writeText(config.api_key);
+                      setCopied(true);
+                      toast.success("Token copied to clipboard!");
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    title="Copy Token"
+                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  title={showApiKey ? "Hide Token" : "Show Token"}
+                  className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
+                >
+                  {showApiKey ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
             <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-3">
               <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />

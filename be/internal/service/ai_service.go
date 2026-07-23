@@ -64,7 +64,7 @@ func (s *AIService) GetConfig(ctx context.Context) (*ai.AIConfig, error) {
 // SaveConfig saves global AI configuration
 func (s *AIService) SaveConfig(ctx context.Context, config ai.AIConfig) error {
 	// Handle masked API Key from frontend
-	if strings.HasPrefix(config.APIKey, "****") {
+	if strings.Contains(config.APIKey, "****") {
 		currentConfig, err := s.GetConfig(ctx)
 		if err == nil && currentConfig.APIKey != "" {
 			config.APIKey = currentConfig.APIKey

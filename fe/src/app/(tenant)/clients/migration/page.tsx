@@ -2,13 +2,13 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { aiService, ExtractionResult } from "@/lib/api/aiService";
+import { aiService, ExtractionResult, AIConfig } from "@/lib/api/aiService";
 import { PageLayout } from "@/components/layouts";
 import { servicePackageService, ServicePackage } from "@/lib/api/servicePackageService";
-import { clientGroupService } from "@/lib/api/clientGroupService";
+import { clientGroupService, ClientGroup } from "@/lib/api/clientGroupService";
 import { networkService } from "@/lib/api/networkService";
 import { voucherService } from "@/lib/api/voucherService";
-import { type ClientGroup, type Router, type VoucherPackage } from "@/lib/api/clientService";
+import { type Router, type VoucherPackage } from "@/lib/api/types";
 import * as pdfjsLib from 'pdfjs-dist';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -64,6 +64,7 @@ export default function MigrationToolPage() {
   const [globalTempo, setGlobalTempo] = useState<number>(new Date().getDate());
   const [globalLocalAddress, setGlobalLocalAddress] = useState<string>("");
   const [globalRemoteAddress, setGlobalRemoteAddress] = useState<string>("");
+  const [globalAddress, setGlobalAddress] = useState<string>("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -158,44 +159,50 @@ export default function MigrationToolPage() {
         fileReader.onload = async () => {
           const typedArray = new Uint8Array(fileReader.result as ArrayBuffer);
           const pdf = await pdfjsLib.getDocument(typedArray).promise;
-          const page = await pdf.getPage(1);
-          const viewport = page.getViewport({ scale: 1.5 });
           
+          // Render page 1 to canvas for image preview
+          const firstPage = await pdf.getPage(1);
+          const viewport = firstPage.getViewport({ scale: 1.5 });
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           canvas.height = viewport.height;
           canvas.width = viewport.width;
 
-          await page.render({ canvasContext: context!, viewport }).promise;
+          await firstPage.render({ canvasContext: context!, viewport, canvas }).promise;
           const imgBase64 = canvas.toDataURL('image/jpeg', 0.8);
           setImage(imgBase64);
 
-          // Extract text for hybrid approach - improve table preservation
-          const content = await page.getTextContent();
-          let items = content.items as any[];
-          
-          // Sort items by Y descending (top to bottom), then X ascending (left to right)
-          items.sort((a, b) => {
-            const yDiff = b.transform[5] - a.transform[5];
-            if (Math.abs(yDiff) > 5) return yDiff;
-            return a.transform[4] - b.transform[4];
-          });
+          // Extract text for hybrid approach from ALL pages
+          let fullText = "";
+          for (let pIdx = 1; pIdx <= pdf.numPages; pIdx++) {
+            const page = await pdf.getPage(pIdx);
+            const content = await page.getTextContent();
+            let items = content.items as any[];
+            
+            // Sort items by Y descending (top to bottom), then X ascending (left to right)
+            items.sort((a, b) => {
+              const yDiff = b.transform[5] - a.transform[5];
+              if (Math.abs(yDiff) > 5) return yDiff;
+              return a.transform[4] - b.transform[4];
+            });
 
-          let text = "";
-          let lastY = -1;
-          for (const it of items) {
-            if (lastY !== -1 && Math.abs(it.transform[5] - lastY) > 5) {
-              text += "\n";
-            } else if (lastY !== -1) {
-              text += " | "; // Use pipe as a column separator
+            fullText += `--- Page ${pIdx} ---\n`;
+            let lastY = -1;
+            for (const it of items) {
+              if (lastY !== -1 && Math.abs(it.transform[5] - lastY) > 5) {
+                fullText += "\n";
+              } else if (lastY !== -1) {
+                fullText += " | "; // Use pipe as a column separator
+              }
+              fullText += it.str;
+              lastY = it.transform[5];
             }
-            text += it.str;
-            lastY = it.transform[5];
+            fullText += "\n\n";
           }
 
-          if (text.trim().length > 20) {
-            console.log("[Migration] Digital PDF structure preserved. Sample:\n", text.substring(0, 200));
-            setPdfText(text);
+          if (fullText.trim().length > 20) {
+            console.log(`[Migration] Digital PDF (${pdf.numPages} page(s)) structure preserved. Sample:\n`, fullText.substring(0, 300));
+            setPdfText(fullText);
           } else {
             setPdfText(null);
           }
@@ -292,14 +299,14 @@ export default function MigrationToolPage() {
       // Final safety: Ensure every item has basic keys to avoid React null warnings
       items = items.map((item, idx) => ({
         migration_id: `${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
-        name: item.name || "",
-        email: item.email || "",
-        address: item.address || item.alamat || item.residential_address || "[ALAMAT TIDAK TERBACA - MOHON SESUAIKAN]",
-        phone: item.phone || item.mobile || "",
-        nik: item.nik || "",
-        package: item.package || item.packet || item.plan || "",
-        username: item.username || "",
-        password: item.password || "",
+        name: item.name || item.nama || item.pelanggan || item.client || item.full_name || "",
+        email: item.email || item.surel || "",
+        address: item.address || item.alamat || item.residential_address || globalAddress || "",
+        phone: item.phone || item.hp || item.no_hp || item.whatsapp || item.wa || item.telp || item.mobile || item.contact || "",
+        nik: item.nik || item.ktp || "",
+        package: item.package || item.paket || item.price || item.harga || item.nominal || item.tarif || item.plan || "",
+        username: item.username || item.user || "",
+        password: item.password || item.pass || "",
         local_address: item.local_address || item.local_ip || "",
         remote_address: item.remote_address || item.remote_ip || "",
         // Set initial values from global defaults for flexibility
@@ -439,16 +446,44 @@ export default function MigrationToolPage() {
     editedData.forEach((c) => {
       const fieldErrors: string[] = [];
       if (!c.name || c.name.trim() === "") fieldErrors.push("name");
-      if (!c.email || c.email.trim() === "" || !c.email.includes("@")) fieldErrors.push("email");
-      if (!c.username || c.username.trim() === "") fieldErrors.push("username");
-      if (!c.password || c.password.trim() === "") fieldErrors.push("password");
-      if (!c.router_id) fieldErrors.push("router_id");
       
-      const isValidPackage = c.connection_type === 'hotspot' 
-        ? voucherPackageNames.has(c.package) 
-        : systemPackageNames.has(c.package);
+      // Email is optional (match manual create client flow)
+      if (c.email && c.email.trim() !== "" && !c.email.includes("@")) {
+        fieldErrors.push("email");
+      }
 
-      if (!c.package || !isValidPackage) fieldErrors.push("package");
+      // Username, Password, Router are only required for active connections (PPPoE / Hotspot)
+      const isConnectionRequired = c.connection_type !== 'none';
+      if (isConnectionRequired && c.category !== 'lite') {
+        if (!c.username || c.username.trim() === "") fieldErrors.push("username");
+        if (!c.password || c.password.trim() === "") fieldErrors.push("password");
+      }
+      if (isConnectionRequired) {
+        if (!c.router_id) fieldErrors.push("router_id");
+      }
+      
+      // Package validation: Required for PPPoE/Hotspot, optional for 'none'
+      if (c.connection_type !== 'none') {
+        if (!c.package || c.package.trim() === "") {
+          fieldErrors.push("package");
+        } else {
+          const isValidPackageName = c.connection_type === 'hotspot' 
+            ? voucherPackageNames.has(c.package) 
+            : systemPackageNames.has(c.package);
+
+          if (!isValidPackageName) {
+            // Price fallback check
+            const numPrice = parseFloat(c.package.replace(/[^0-9]/g, ''));
+            const isPriceMatch = c.connection_type === 'hotspot'
+              ? voucherPackages.some(vp => vp.price === numPrice)
+              : systemPackages.some(p => p.price_monthly === numPrice || p.price_per_device === numPrice);
+            
+            if (!isPriceMatch) {
+              fieldErrors.push("package");
+            }
+          }
+        }
+      }
 
       if (fieldErrors.length > 0) {
         errors[c.migration_id] = fieldErrors;
@@ -459,7 +494,7 @@ export default function MigrationToolPage() {
     setValidationErrors(errors);
 
     if (hasErrors) {
-      toast.error(`Validation failed for ${Object.keys(errors).length} record(s). Please fill all mandatory fields (Name, Email, Username, Password, Router, and valid Package).`, {
+      toast.error(`Validation failed for ${Object.keys(errors).length} record(s). Please check mandatory fields.`, {
         duration: 5000,
         position: "top-center"
       });
@@ -473,23 +508,26 @@ export default function MigrationToolPage() {
     }
 
     try {
-      const finalizedData = editedData.map(c => ({
-        ...c,
-        category: c.category,
-        connection_type: c.connection_type,
-        group_id: c.group_id || undefined,
-        router_id: c.router_id || undefined,
-        payment_due_day: globalTempo,
-        isolir_mode: "auto",
-        auto_create_invoice: false,
-        // Match manual flow: username/password are sent for anything non-lite
-        pppoe_username: c.category !== 'lite' ? c.username : undefined,
-        pppoe_password: c.category !== 'lite' ? c.password : undefined,
-        voucher_package_id: c.connection_type === 'hotspot' ? c.voucher_package_id : undefined,
-        pppoe_local_address: c.local_address || undefined,
-        pppoe_remote_address: c.remote_address || undefined,
-        device_count: c.connection_type === 'hotspot' ? (c.device_count || 1) : undefined,
-      }));
+      const finalizedData = editedData.map(c => {
+        const isNone = c.connection_type === 'none';
+        return {
+          ...c,
+          category: c.category,
+          connection_type: c.connection_type || 'pppoe',
+          group_id: c.group_id || undefined,
+          router_id: !isNone ? (c.router_id || undefined) : undefined,
+          payment_due_day: globalTempo,
+          isolir_mode: "auto",
+          auto_create_invoice: false,
+          // Match manual flow: credentials sent only if connection_type is not 'none' and category is not 'lite'
+          pppoe_username: (!isNone && c.category !== 'lite') ? (c.username || undefined) : undefined,
+          pppoe_password: (!isNone && c.category !== 'lite') ? (c.password || undefined) : undefined,
+          voucher_package_id: c.connection_type === 'hotspot' ? c.voucher_package_id : undefined,
+          pppoe_local_address: c.connection_type === 'pppoe' ? (c.local_address || undefined) : undefined,
+          pppoe_remote_address: c.connection_type === 'pppoe' ? (c.remote_address || undefined) : undefined,
+          device_count: (c.connection_type === 'hotspot' || c.category === 'lite') ? (c.device_count || 1) : undefined,
+        };
+      });
 
       // Start process and WAIT for it
       await toast.promise(aiService.processImport(finalizedData), {
@@ -660,12 +698,14 @@ export default function MigrationToolPage() {
                          const val = e.target.value;
                          setGlobalConnectionType(val);
                          setEditedData(prev => prev.map(c => ({ ...c, connection_type: val })));
-                         toast.success(`Connection Type set to ${val === 'pppoe' ? 'PPPoE' : 'Hotspot'} for all clients`);
+                         const labelMap: Record<string, string> = { pppoe: 'PPPoE', hotspot: 'Hotspot', none: 'Tanpa Koneksi (Data Only)' };
+                         toast.success(`Connection Type set to ${labelMap[val] || val} for all clients`);
                        }}
                        className="h-9 text-xs font-bold border-indigo-100 bg-white"
                      >
                        <option value="pppoe">PPPoE</option>
                        <option value="hotspot">Hotspot</option>
+                       <option value="none">Tanpa Koneksi (Data Only)</option>
                      </Select>
                    </div>
                    <div className="space-y-1.5">
@@ -687,25 +727,27 @@ export default function MigrationToolPage() {
                        ))}
                      </Select>
                    </div>
-                   <div className="space-y-1.5">
-                     <label className="text-[10px] font-black text-slate-400 uppercase">Default Router</label>
-                     <Select 
-                       value={globalRouterId} 
-                       onChange={(e) => {
-                         const val = e.target.value;
-                         setGlobalRouterId(val);
-                         setEditedData(prev => prev.map(c => ({ ...c, router_id: val })));
-                         const routerName = routers.find(r => r.id === val)?.name || "No Router Assigned";
-                         toast.success(`Router updated to ${routerName} for all clients`);
-                       }}
-                       className="h-9 text-xs font-bold border-indigo-100 bg-white"
-                     >
-                       <option value="">No Router Assigned</option>
-                       {Array.isArray(routers) && routers.map(r => (
-                         <option key={r.id} value={r.id}>{r.name}</option>
-                       ))}
-                     </Select>
-                   </div>
+                   {globalConnectionType !== 'none' && (
+                     <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-slate-400 uppercase">Default Router</label>
+                       <Select 
+                         value={globalRouterId} 
+                         onChange={(e) => {
+                           const val = e.target.value;
+                           setGlobalRouterId(val);
+                           setEditedData(prev => prev.map(c => ({ ...c, router_id: val })));
+                           const routerName = routers.find(r => r.id === val)?.name || "No Router Assigned";
+                           toast.success(`Router updated to ${routerName} for all clients`);
+                         }}
+                         className="h-9 text-xs font-bold border-indigo-100 bg-white"
+                       >
+                         <option value="">No Router Assigned</option>
+                         {Array.isArray(routers) && routers.map(r => (
+                           <option key={r.id} value={r.id}>{r.name}</option>
+                         ))}
+                       </Select>
+                     </div>
+                   )}
                    <div className="space-y-1.5">
                      <label className="text-[10px] font-black text-slate-400 uppercase">Payment Due Day</label>
                      <Input 
@@ -717,66 +759,88 @@ export default function MigrationToolPage() {
                      />
                    </div>
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Bulk Local Address (Gateway)</label>
-                      </div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase">Bulk Alamat (Address)</label>
                       <Input 
-                        value={globalLocalAddress}
+                        value={globalAddress}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setGlobalLocalAddress(val);
-                          setEditedData(prev => prev.map(c => ({ ...c, local_address: val })));
-                          if (val.split('.').length === 4) {
-                            toast.success("Local address applied to all clients", {
-                              description: `Set to ${val}. Unique check will be verified on save.`,
-                            });
-                          }
+                          setGlobalAddress(val);
+                          setEditedData(prev => prev.map(c => ({
+                            ...c,
+                            address: val
+                          })));
                         }}
-                        placeholder="e.g. 10.10.10.1"
+                        placeholder="e.g. Dusun Cibuaya, RT 01/02"
                         className="h-9 text-xs font-bold border-indigo-100 bg-white"
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Bulk Remote Address</label>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => applyIpSequence('remote')}
-                          className="h-5 px-2 text-[9px] font-black border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 uppercase tracking-tighter rounded-full"
-                        >
-                          Generate Sequence
-                        </Button>
-                      </div>
-                      <Input 
-                        value={globalRemoteAddress}
-                        onChange={(e) => setGlobalRemoteAddress(e.target.value)}
-                        placeholder="e.g. 172.16.0.1"
-                        className="h-9 text-xs font-bold border-indigo-100 bg-white"
-                      />
-                    </div>
-                   <div className="col-span-full pt-4 border-t border-indigo-50 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                         <span className="text-[10px] font-black text-slate-500 uppercase">Credential Helpers:</span>
-                         <Button variant="outline" size="sm" onClick={() => autoGenerateCredentials('name')} className="h-7 text-[10px] font-bold">
-                           Set Username = Name
-                         </Button>
-                          <Button variant="outline" size="sm" onClick={() => autoGenerateCredentials('phone')} className="h-7 text-[10px] font-bold">
-                            Set Username = Phone
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={autoGenerateEmails} 
-                            className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                          >
-                            Fake Emails
-                          </Button>
-                       </div>
-                      <div className="text-[10px] text-slate-400 italic">
-                        Empty usernames will be filled using the selected logic.
-                      </div>
-                   </div>
+                    {globalConnectionType !== 'none' && (
+                      <>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Bulk Local Address (Gateway)</label>
+                          </div>
+                          <Input 
+                            value={globalLocalAddress}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setGlobalLocalAddress(val);
+                              setEditedData(prev => prev.map(c => ({ ...c, local_address: val })));
+                              if (val.split('.').length === 4) {
+                                toast.success("Local address applied to all clients", {
+                                  description: `Set to ${val}. Unique check will be verified on save.`,
+                                });
+                              }
+                            }}
+                            placeholder="e.g. 10.10.10.1"
+                            className="h-9 text-xs font-bold border-indigo-100 bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Bulk Remote Address</label>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => applyIpSequence('remote')}
+                              className="h-5 px-2 text-[9px] font-black border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 uppercase tracking-tighter rounded-full"
+                            >
+                              Generate Sequence
+                            </Button>
+                          </div>
+                          <Input 
+                            value={globalRemoteAddress}
+                            onChange={(e) => setGlobalRemoteAddress(e.target.value)}
+                            placeholder="e.g. 172.16.0.1"
+                            className="h-9 text-xs font-bold border-indigo-100 bg-white"
+                          />
+                        </div>
+                      </>
+                    )}
+                   {globalConnectionType !== 'none' && (
+                     <div className="col-span-full pt-4 border-t border-indigo-50 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                           <span className="text-[10px] font-black text-slate-500 uppercase">Credential Helpers:</span>
+                           <Button variant="outline" size="sm" onClick={() => autoGenerateCredentials('name')} className="h-7 text-[10px] font-bold">
+                             Set Username = Name
+                           </Button>
+                            <Button variant="outline" size="sm" onClick={() => autoGenerateCredentials('phone')} className="h-7 text-[10px] font-bold">
+                              Set Username = Phone
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={autoGenerateEmails} 
+                              className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                            >
+                              Fake Emails
+                            </Button>
+                         </div>
+                        <div className="text-[10px] text-slate-400 italic">
+                          Empty usernames will be filled using the selected logic.
+                        </div>
+                     </div>
+                   )}
                 </div>
 
                 <div className="p-4 grid md:grid-cols-2 gap-6 border-b">
@@ -853,31 +917,61 @@ export default function MigrationToolPage() {
                 </div>
                 </div>
 
-                {/* Global Address Fix */}
+                {/* Global Address Fix & Bulk Setter */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-wider">
-                    <MapPin className="w-4 h-4" />
+                    <MapPin className="w-4 h-4 text-indigo-600" />
                     Global Address Correction ({uniqueAddresses.length})
                   </div>
+
+                  <div className="p-3 border rounded-xl bg-indigo-50/50 border-indigo-100 space-y-2">
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wide">Set Alamat Serentak (Bulk Address)</span>
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        value={globalAddress}
+                        onChange={(e) => setGlobalAddress(e.target.value)}
+                        placeholder="e.g. Dusun Cibuaya, RT 01/02"
+                        className="h-8 text-xs font-bold bg-white border-indigo-200 focus:ring-indigo-300"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (!globalAddress.trim()) {
+                            toast.error("Isi alamat terlebih dahulu");
+                            return;
+                          }
+                          setEditedData(prev => prev.map(c => ({ ...c, address: globalAddress })));
+                          toast.success(`Alamat semua client diset ke "${globalAddress}"`);
+                        }}
+                        className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shrink-0"
+                      >
+                        Terapkan Ke Semua
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="max-h-48 overflow-auto border rounded-xl bg-white divide-y">
-                    {uniqueAddresses.length === 0 && (
-                      <div className="p-4 text-center text-xs text-slate-400 font-medium">No addresses found to fix</div>
-                    )}
-                    {uniqueAddresses.map((addr, i) => (
-                      <div key={i} className="p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">Original Found:</span>
-                          <Edit2 className="w-3 h-3 text-slate-300" />
-                        </div>
-                        <Input 
-                          defaultValue={addr}
-                          onBlur={(e) => {
-                            if (e.target.value !== addr) applyBulkAddressUpdate(addr, e.target.value);
-                          }}
-                          className="h-8 text-xs font-bold border-slate-100 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-indigo-300"
-                        />
+                    {uniqueAddresses.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 font-medium">
+                        Tidak ada alamat individual yang terbaca dari dokumen. Gunakan form di atas untuk set alamat secara serentak.
                       </div>
-                    ))}
+                    ) : (
+                      uniqueAddresses.map((addr, i) => (
+                        <div key={i} className="p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">Extracted Address #{i + 1}:</span>
+                            <Edit2 className="w-3 h-3 text-slate-300" />
+                          </div>
+                          <Input 
+                            defaultValue={addr}
+                            onBlur={(e) => {
+                              if (e.target.value !== addr) applyBulkAddressUpdate(addr, e.target.value);
+                            }}
+                            className="h-8 text-xs font-bold border-slate-100 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-indigo-300"
+                          />
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
             </CardContent>
@@ -1044,9 +1138,10 @@ export default function MigrationToolPage() {
                                         }}
                                         className="w-full h-7 text-[10px] font-bold bg-white border border-slate-100 rounded focus:outline-none focus:ring-1 focus:ring-indigo-300"
                                       >
-                                        <option value="pppoe">PPPoE</option>
-                                        <option value="hotspot">Hotspot</option>
-                                      </select>
+                                         <option value="pppoe">PPPoE</option>
+                                         <option value="hotspot">Hotspot</option>
+                                         <option value="none">Tanpa Koneksi (Data Only)</option>
+                                       </select>
                                    </div>
                                    <div className="space-y-1">
                                       <span className="text-[9px] font-black text-slate-400 uppercase">Group</span>
@@ -1065,39 +1160,41 @@ export default function MigrationToolPage() {
                                         ))}
                                       </select>
                                    </div>
-                                   <div className="space-y-1">
-                                      <span className="text-[9px] font-black text-slate-400 uppercase">Router</span>
-                                      <select 
-                                        value={client.router_id || ""}
-                                        onChange={(e) => {
-                                          const newData = [...editedData];
-                                          newData[idx].router_id = e.target.value;
-                                          setEditedData(newData);
-                                          if (validationErrors[client.migration_id]) {
-                                            setValidationErrors(prev => ({
-                                              ...prev,
-                                              [client.migration_id]: (prev[client.migration_id] || []).filter(f => f !== 'router_id')
-                                            }));
-                                          }
-                                        }}
-                                        className={cn(
-                                          "w-full h-7 text-[10px] font-bold border rounded focus:outline-none focus:ring-1",
-                                          validationErrors[client.migration_id]?.includes('router_id') 
-                                            ? "border-rose-300 bg-rose-50 text-rose-600 focus:ring-rose-500" 
-                                            : "bg-white border-slate-100 focus:ring-indigo-300"
+                                   {client.connection_type !== 'none' && (
+                                     <div className="space-y-1">
+                                        <span className="text-[9px] font-black text-slate-400 uppercase">Router</span>
+                                        <select 
+                                          value={client.router_id || ""}
+                                          onChange={(e) => {
+                                            const newData = [...editedData];
+                                            newData[idx].router_id = e.target.value;
+                                            setEditedData(newData);
+                                            if (validationErrors[client.migration_id]) {
+                                              setValidationErrors(prev => ({
+                                                ...prev,
+                                                [client.migration_id]: (prev[client.migration_id] || []).filter(f => f !== 'router_id')
+                                              }));
+                                            }
+                                          }}
+                                          className={cn(
+                                            "w-full h-7 text-[10px] font-bold border rounded focus:outline-none focus:ring-1",
+                                            validationErrors[client.migration_id]?.includes('router_id') 
+                                              ? "border-rose-300 bg-rose-50 text-rose-600 focus:ring-rose-500" 
+                                              : "bg-white border-slate-100 focus:ring-indigo-300"
+                                          )}
+                                        >
+                                          <option value="">No Router</option>
+                                          {Array.isArray(routers) && routers.map(r => (
+                                            <option key={r.id} value={r.id}>{r.name}</option>
+                                          ))}
+                                        </select>
+                                        {validationErrors[client.migration_id]?.includes('router_id') && (
+                                          <span className="text-[8px] font-black text-rose-500 flex items-center gap-0.5 mt-0.5">
+                                             <AlertCircle className="w-2 h-2" /> Required
+                                          </span>
                                         )}
-                                      >
-                                        <option value="">No Router</option>
-                                        {Array.isArray(routers) && routers.map(r => (
-                                          <option key={r.id} value={r.id}>{r.name}</option>
-                                        ))}
-                                      </select>
-                                      {validationErrors[client.migration_id]?.includes('router_id') && (
-                                        <span className="text-[8px] font-black text-rose-500 flex items-center gap-0.5 mt-0.5">
-                                           <AlertCircle className="w-2 h-2" /> Required
-                                        </span>
-                                      )}
-                                   </div>
+                                     </div>
+                                   )}
                                     {client.connection_type === 'hotspot' && (
                                       <div className="space-y-1">
                                         <span className="text-[9px] font-black text-rose-400 uppercase">Device Count</span>
@@ -1136,59 +1233,67 @@ export default function MigrationToolPage() {
                               </div>
                             )}
 
-                            <div className="flex flex-col gap-1.5 border-t pt-2 mt-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-black text-slate-400 uppercase w-12 shrink-0">User:</span>
-                                <Input 
-                                  value={client.username || ""}
-                                  onChange={(e) => {
-                                    const newData = [...editedData];
-                                    newData[idx].username = e.target.value;
-                                    setEditedData(newData);
-                                    if (validationErrors[client.migration_id]) {
-                                      setValidationErrors(prev => ({
-                                        ...prev,
-                                        [client.migration_id]: (prev[client.migration_id] || []).filter(f => f !== 'username')
-                                      }));
-                                    }
-                                  }}
-                                  className={cn(
-                                    "h-6 text-[11px] font-bold bg-slate-50 border-slate-100 focus:bg-white p-1",
-                                    validationErrors[client.migration_id]?.includes('username') ? "border-rose-300 bg-rose-50 text-rose-600 ring-1 ring-rose-200" : ""
+                            {client.connection_type !== 'none' ? (
+                              <div className="flex flex-col gap-1.5 border-t pt-2 mt-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] font-black text-slate-400 uppercase w-12 shrink-0">User:</span>
+                                  <Input 
+                                    value={client.username || ""}
+                                    onChange={(e) => {
+                                      const newData = [...editedData];
+                                      newData[idx].username = e.target.value;
+                                      setEditedData(newData);
+                                      if (validationErrors[client.migration_id]) {
+                                        setValidationErrors(prev => ({
+                                          ...prev,
+                                          [client.migration_id]: (prev[client.migration_id] || []).filter(f => f !== 'username')
+                                        }));
+                                      }
+                                    }}
+                                    className={cn(
+                                      "h-6 text-[11px] font-bold bg-slate-50 border-slate-100 focus:bg-white p-1",
+                                      validationErrors[client.migration_id]?.includes('username') ? "border-rose-300 bg-rose-50 text-rose-600 ring-1 ring-rose-200" : ""
+                                    )}
+                                  />
+                                  {validationErrors[client.migration_id]?.includes('username') && (
+                                    <span className="text-[8px] font-black text-rose-500 flex items-center gap-0.5">
+                                       <AlertCircle className="w-2 h-2" /> Required
+                                    </span>
                                   )}
-                                />
-                                {validationErrors[client.migration_id]?.includes('username') && (
-                                  <span className="text-[8px] font-black text-rose-500 flex items-center gap-0.5">
-                                     <AlertCircle className="w-2 h-2" /> Required
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-black text-slate-400 uppercase w-12 shrink-0">Pass:</span>
-                                <Input 
-                                  value={client.password || ""}
-                                  onChange={(e) => {
-                                    const newData = [...editedData];
-                                    newData[idx].password = e.target.value;
-                                    setEditedData(newData);
-                                    if (validationErrors[client.migration_id]) {
-                                      setValidationErrors(prev => ({
-                                        ...prev,
-                                        [client.migration_id]: (prev[client.migration_id] || []).filter(f => f !== 'password')
-                                      }));
-                                    }
-                                  }}
-                                  className={cn(
-                                    "h-6 text-[11px] font-bold bg-slate-50 border-slate-100 focus:bg-white p-1",
-                                    validationErrors[client.migration_id]?.includes('password') ? "border-rose-300 bg-rose-50 text-rose-600 ring-1 ring-rose-200" : ""
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] font-black text-slate-400 uppercase w-12 shrink-0">Pass:</span>
+                                  <Input 
+                                    value={client.password || ""}
+                                    onChange={(e) => {
+                                      const newData = [...editedData];
+                                      newData[idx].password = e.target.value;
+                                      setEditedData(newData);
+                                      if (validationErrors[client.migration_id]) {
+                                        setValidationErrors(prev => ({
+                                          ...prev,
+                                          [client.migration_id]: (prev[client.migration_id] || []).filter(f => f !== 'password')
+                                        }));
+                                      }
+                                    }}
+                                    className={cn(
+                                      "h-6 text-[11px] font-bold bg-slate-50 border-slate-100 focus:bg-white p-1",
+                                      validationErrors[client.migration_id]?.includes('password') ? "border-rose-300 bg-rose-50 text-rose-600 ring-1 ring-rose-200" : ""
+                                    )}
+                                  />
+                                  {validationErrors[client.migration_id]?.includes('password') && (
+                                    <span className="text-[8px] font-black text-rose-500 flex items-center gap-0.5">
+                                       <AlertCircle className="w-2 h-2" /> Required
+                                    </span>
                                   )}
-                                />
-                                {validationErrors[client.migration_id]?.includes('password') && (
-                                  <span className="text-[8px] font-black text-rose-500 flex items-center gap-0.5">
-                                     <AlertCircle className="w-2 h-2" /> Required
-                                  </span>
-                                )}
+                                </div>
                               </div>
+                            ) : (
+                              <div className="mt-2 pt-2 border-t text-[10px] font-semibold text-slate-400 italic">
+                                Tanpa Akun Login (Data Only)
+                              </div>
+                            )}
+
                               {client.connection_type === 'pppoe' && (
                                 <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-slate-100">
                                   <div className="flex items-center gap-2">
@@ -1219,7 +1324,6 @@ export default function MigrationToolPage() {
                                   </div>
                                 </div>
                               )}
-                            </div>
                           </td>
                           <td className="px-4 py-4 text-right">
                             <Button size="icon" variant="ghost" className="rounded-full text-slate-300 hover:text-emerald-500">
