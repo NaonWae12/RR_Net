@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"regexp"
+	"rrnet/internal/domain/finance"
 	"rrnet/internal/domain/network"
 	"rrnet/internal/domain/radius"
 	"rrnet/internal/domain/voucher"
@@ -884,7 +885,16 @@ func (s *VoucherService) DeleteBatch(ctx context.Context, tenantID uuid.UUID, cr
 		}(batchVouchers, tenantID)
 	}
 
-	// 3. Delete from DB (Immediate)
+	// 3. Cleanup finance transactions for these vouchers if any were recorded
+	if s.financeService != nil && len(batchVouchers) > 0 {
+		vIDs := make([]uuid.UUID, 0, len(batchVouchers))
+		for _, v := range batchVouchers {
+			vIDs = append(vIDs, v.ID)
+		}
+		_ = s.financeService.DeleteTransactionsBySourceIDs(ctx, tenantID, string(finance.TransactionSourceVoucherUsage), vIDs)
+	}
+
+	// 4. Delete from DB (Immediate)
 	return s.voucherRepo.DeleteVouchersByCreatedAt(ctx, tenantID, createdAt)
 }
 
@@ -1085,7 +1095,12 @@ func (s *VoucherService) DeleteVoucher(ctx context.Context, id uuid.UUID) error 
 		return err // Already gone or error
 	}
 
-	// 2. Perform deletion in DB
+	// 2. Cleanup finance transaction recorded for this voucher usage if any
+	if s.financeService != nil {
+		_ = s.financeService.DeleteTransactionBySource(ctx, v.TenantID, string(finance.TransactionSourceVoucherUsage), id)
+	}
+
+	// 3. Perform deletion in DB
 	if err := s.voucherRepo.DeleteVoucher(ctx, id); err != nil {
 		return err
 	}

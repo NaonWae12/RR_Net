@@ -34,6 +34,13 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 		Category: r.URL.Query().Get("category"),
 	}
 
+	if isRecStr := r.URL.Query().Get("is_recurring"); isRecStr != "" {
+		isRec, err := strconv.ParseBool(isRecStr)
+		if err == nil {
+			filter.IsRecurring = &isRec
+		}
+	}
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		filter.Limit, _ = strconv.Atoi(limitStr)
 	}

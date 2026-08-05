@@ -155,6 +155,18 @@ type PPPoESecret struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
+// PPPoEIPSettings represents IP pool & gateway configuration for PPPoE secrets
+type PPPoEIPSettings struct {
+	ID           uuid.UUID  `json:"id"`
+	TenantID     uuid.UUID  `json:"tenant_id"`
+	RouterID     *uuid.UUID `json:"router_id,omitempty"`
+	LocalAddress string     `json:"local_address"`
+	PoolStart    string     `json:"pool_start"`
+	PoolEnd      string     `json:"pool_end"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
 // ConnectionStatus represents current PPPoE connection status
 type ConnectionStatus string
 

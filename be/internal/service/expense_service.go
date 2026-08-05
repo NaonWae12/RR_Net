@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,12 +35,21 @@ func (s *ExpenseService) CreateExpense(ctx context.Context, tenantID uuid.UUID, 
 		e.Currency = "IDR"
 	}
 
+	// If paying immediately, mark as paid
 	if e.PaidAt != nil || e.PaymentMethodID != nil {
 		e.Status = "paid"
 		if e.PaidAt == nil {
 			now := time.Now()
 			e.PaidAt = &now
 		}
+	}
+
+	// Recurring templates are never directly "paid" — they just schedule child expenses
+	if e.IsRecurring {
+		e.Status = "approved"
+		e.PaidAt = nil
+		e.PaymentMethodID = nil
+		e.PaymentReference = ""
 	}
 
 	return s.repo.Create(ctx, e)
@@ -59,6 +69,11 @@ func (s *ExpenseService) MarkAsPaid(ctx context.Context, id uuid.UUID, paymentMe
 		return err
 	}
 
+	// Cannot mark a recurring template as paid directly — only its children
+	if e.IsRecurring && e.ParentExpenseID == nil {
+		return fmt.Errorf("cannot mark a recurring template as paid; mark the generated monthly expense instead")
+	}
+
 	now := time.Now()
 	e.Status = "paid"
 	e.PaymentMethodID = &paymentMethodID
@@ -76,4 +91,40 @@ func (s *ExpenseService) UpdateExpense(ctx context.Context, e *finance.Expense) 
 
 func (s *ExpenseService) DeleteExpense(ctx context.Context, id uuid.UUID) error {
 	return s.repo.Delete(ctx, id)
+}
+
+// GenerateRecurringExpenses creates a new child expense for each recurring template
+// whose recurring_day matches today, if one hasn't been created yet this month.
+// Called by the daily scheduler.
+func (s *ExpenseService) GenerateRecurringExpenses(ctx context.Context) (int, error) {
+	today := time.Now()
+	templates, err := s.repo.ListRecurringDue(ctx, today)
+	if err != nil {
+		return 0, fmt.Errorf("list recurring due: %w", err)
+	}
+
+	count := 0
+	for _, tmpl := range templates {
+		child := &finance.Expense{
+			ID:              uuid.New(),
+			TenantID:        tmpl.TenantID,
+			Title:           tmpl.Title,
+			Amount:          tmpl.Amount,
+			Currency:        tmpl.Currency,
+			Date:            today,
+			Category:        tmpl.Category,
+			Description:     tmpl.Description,
+			Status:          "approved",
+			IsRecurring:     false, // child is not a template
+			ParentExpenseID: &tmpl.ID,
+			CreatedAt:       today,
+			UpdatedAt:       today,
+		}
+		if err := s.repo.Create(ctx, child); err != nil {
+			fmt.Printf("[ExpenseService] failed to generate recurring expense for template %s: %v\n", tmpl.ID, err)
+			continue
+		}
+		count++
+	}
+	return count, nil
 }

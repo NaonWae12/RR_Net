@@ -94,11 +94,18 @@ func (s *PPPoEService) CreatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 		return nil, fmt.Errorf("username already exists")
 	}
 
-	// Auto-fill local/remote address if not provided. Source is create-secret form only; profile no longer provides these.
-	localAddress := req.LocalAddress
-	remoteAddress := req.RemoteAddress
+	// Fetch IP Automation settings (router specific or tenant global)
+	ipSettings, _ := s.pppoeRepo.GetIPSettings(ctx, tenantID, &req.RouterID)
 
-	// Local address: 1. From request, 2. From router
+	localAddress := strings.TrimSpace(req.LocalAddress)
+	remoteAddress := strings.TrimSpace(req.RemoteAddress)
+
+	// 1. Auto-fill local address from IP settings if provided
+	if localAddress == "" && ipSettings != nil && ipSettings.LocalAddress != "" {
+		localAddress = ipSettings.LocalAddress
+	}
+
+	// Local address fallback: from router
 	if localAddress == "" {
 		addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 		routerLocalAddr, err := mikrotik.GetPPPoEServerLocalAddress(ctx, addr, router.APIUseTLS, router.Username, router.Password)
@@ -118,12 +125,23 @@ func (s *PPPoEService) CreatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 		}
 	}
 
-	// Remote address: from request only (set in create-secret form)
-	if remoteAddress == "" {
-		log.Warn().
-			Str("tenant_id", tenantID.String()).
-			Str("profile_id", profile.ID.String()).
-			Msg("PPPoE Service: No remote address provided, leaving empty")
+	// 2. Auto-fill remote address from IP Pool if empty
+	if remoteAddress == "" && ipSettings != nil && ipSettings.PoolStart != "" && ipSettings.PoolEnd != "" {
+		nextIP, err := s.pppoeRepo.GetNextAvailableRemoteIP(ctx, tenantID, ipSettings.PoolStart, ipSettings.PoolEnd)
+		if err == nil && nextIP != "" {
+			remoteAddress = nextIP
+			log.Info().
+				Str("tenant_id", tenantID.String()).
+				Str("remote_address", remoteAddress).
+				Msg("PPPoE Service: Auto-assigned remote IP from pool")
+		} else if err != nil {
+			log.Warn().Err(err).Msg("PPPoE Service: Failed to auto-assign remote IP from pool")
+		}
+	}
+
+	// 3. Check IP Conflict before creation
+	if isConflict, msg, err := s.pppoeRepo.CheckIPConflictWithExclude(ctx, tenantID, nil, localAddress, remoteAddress); err == nil && isConflict {
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	// Encrypt password
@@ -277,6 +295,11 @@ func (s *PPPoEService) UpdatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 	}
 	if req.Comment != nil {
 		secret.Comment = *req.Comment
+	}
+
+	// Check IP Conflict on update
+	if isConflict, msg, err := s.pppoeRepo.CheckIPConflictWithExclude(ctx, tenantID, &secret.ID, secret.LocalAddress, secret.RemoteAddress); err == nil && isConflict {
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	secret.UpdatedAt = time.Now()
@@ -715,4 +738,31 @@ func (s *PPPoEService) removeSecretFromRouter(ctx context.Context, router *netwo
 
 	addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
 	return mikrotik.RemovePPPoESecret(ctx, addr, router.APIUseTLS, router.Username, router.Password, username)
+}
+
+func (s *PPPoEService) GetIPSettings(ctx context.Context, tenantID uuid.UUID, routerID *uuid.UUID) (*network.PPPoEIPSettings, error) {
+	settings, err := s.pppoeRepo.GetIPSettings(ctx, tenantID, routerID)
+	if err != nil {
+		return nil, err
+	}
+	if settings == nil {
+		// Return empty default struct if not configured yet
+		return &network.PPPoEIPSettings{
+			TenantID: tenantID,
+			RouterID: routerID,
+		}, nil
+	}
+	return settings, nil
+}
+
+func (s *PPPoEService) UpsertIPSettings(ctx context.Context, tenantID uuid.UUID, req *network.PPPoEIPSettings) (*network.PPPoEIPSettings, error) {
+	req.TenantID = tenantID
+	req.LocalAddress = strings.TrimSpace(req.LocalAddress)
+	req.PoolStart = strings.TrimSpace(req.PoolStart)
+	req.PoolEnd = strings.TrimSpace(req.PoolEnd)
+
+	if err := s.pppoeRepo.UpsertIPSettings(ctx, req); err != nil {
+		return nil, fmt.Errorf("failed to save IP settings: %w", err)
+	}
+	return s.GetIPSettings(ctx, tenantID, req.RouterID)
 }

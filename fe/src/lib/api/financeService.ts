@@ -76,7 +76,7 @@ export const financeService = {
   },
 
   // Expense Methods
-  getExpenses: async (params?: { status?: string; category?: string; limit?: number; offset?: number }): Promise<any[]> => {
+  getExpenses: async (params?: { status?: string; category?: string; is_recurring?: boolean; limit?: number; offset?: number }): Promise<any[]> => {
     const response = await apiClient.get<any>("/finance/expenses", { params });
     return response.data.data || [];
   },
@@ -89,6 +89,9 @@ export const financeService = {
     description: string;
     payment_method_id?: string;
     payment_reference?: string;
+    is_recurring?: boolean;
+    recurring_day?: number;
+    recurring_end_at?: string | null;
   }): Promise<any> => {
     const response = await apiClient.post("/finance/expenses", expense);
     return response.data;

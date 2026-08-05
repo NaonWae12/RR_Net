@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"rrnet/internal/domain/client"
+	"rrnet/internal/domain/finance"
 	"rrnet/internal/domain/reseller"
 	"rrnet/internal/repository"
 	"github.com/midtrans/midtrans-go"
@@ -614,12 +615,27 @@ func (s *ResellerService) GetPurchaseHistory(ctx context.Context, tenantID uuid.
 }
 
 func (s *ResellerService) DeletePurchase(ctx context.Context, tenantID, id uuid.UUID) error {
-	// 1. Delete associated vouchers first
+	// 1. Get associated vouchers to clean up their usage transactions if any
+	vouchers, _ := s.voucherService.GetVouchersByPurchase(ctx, id)
+	if len(vouchers) > 0 {
+		vIDs := make([]uuid.UUID, 0, len(vouchers))
+		for _, v := range vouchers {
+			vIDs = append(vIDs, v.ID)
+		}
+		_ = s.financeService.DeleteTransactionsBySourceIDs(ctx, tenantID, string(finance.TransactionSourceVoucherUsage), vIDs)
+	}
+
+	// 2. Delete financial transaction recorded for this reseller purchase
+	if err := s.financeService.DeleteTransactionBySource(ctx, tenantID, string(finance.TransactionSourceResellerPurchase), id); err != nil {
+		log.Warn().Err(err).Str("purchase_id", id.String()).Msg("Failed to delete finance transaction for reseller purchase")
+	}
+
+	// 3. Delete associated vouchers
 	if err := s.voucherService.DeleteVouchersByPurchase(ctx, tenantID, id); err != nil {
 		return fmt.Errorf("failed to delete associated vouchers: %w", err)
 	}
 
-	// 2. Delete purchase history record
+	// 4. Delete purchase history record
 	return s.resellerRepo.DeletePurchase(ctx, tenantID, id)
 }
 

@@ -58,6 +58,17 @@ export interface UpdatePPPoESecretRequest {
   comment?: string;
 }
 
+export interface PPPoEIPSettings {
+  id?: string;
+  tenant_id?: string;
+  router_id?: string | null;
+  local_address: string;
+  pool_start: string;
+  pool_end: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export const pppoeService = {
   async listSecrets(params?: {
     router_id?: string;
@@ -109,6 +120,18 @@ export const pppoeService = {
     await apiClient.post(`/pppoe/active/${sessionId}/disconnect`, null, {
       params: { router_id: routerId },
     });
+  },
+
+  async getIPSettings(routerId?: string): Promise<PPPoEIPSettings> {
+    const params: any = {};
+    if (routerId) params.router_id = routerId;
+    const res = await apiClient.get<PPPoEIPSettings>("/pppoe/settings", { params });
+    return res.data;
+  },
+
+  async upsertIPSettings(settings: PPPoEIPSettings): Promise<PPPoEIPSettings> {
+    const res = await apiClient.put<PPPoEIPSettings>("/pppoe/settings", settings);
+    return res.data;
   },
 };
 

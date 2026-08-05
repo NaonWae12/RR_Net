@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { pppoeService, PPPoESecret } from "@/lib/api/pppoeService";
+import { pppoeService, PPPoESecret, PPPoEIPSettings } from "@/lib/api/pppoeService";
 import { clientService, Client } from "@/lib/api/clientService";
 import { useNetworkStore } from "@/stores/networkStore";
 import { Button } from "@/components/ui/button";
@@ -21,13 +21,14 @@ import {
   Router as RouterIcon,
   Power,
   PowerOff,
-  Edit,
   Trash2,
   RefreshCw,
+  Settings,
+  ShieldAlert,
+  Sparkles,
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Badge } from "@/components/ui/badge";
-import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { Input } from "@/components/ui/input";
 
@@ -45,10 +46,17 @@ export default function PPPoEPage() {
   const [selectedClient, setSelectedClient] = useState<string>("");
 
   const [createDialog, setCreateDialog] = useState(false);
-  const [editDialog, setEditDialog] = useState<{
-    open: boolean;
-    secret: PPPoESecret | null;
-  }>({ open: false, secret: null });
+  const [settingsDialog, setSettingsDialog] = useState(false);
+  const [settingsRouterId, setSettingsRouterId] = useState<string>("");
+  const [ipSettings, setIpSettings] = useState<PPPoEIPSettings>({
+    local_address: "",
+    pool_start: "",
+    pool_end: "",
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [poolHint, setPoolHint] = useState<string>("");
+
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     secret: { id: string; username: string } | null;
@@ -98,6 +106,71 @@ export default function PPPoEPage() {
     }
   };
 
+  const loadIPSettings = async (routerId?: string) => {
+    setLoadingSettings(true);
+    try {
+      const res = await pppoeService.getIPSettings(routerId || undefined);
+      setIpSettings({
+        local_address: res.local_address || "",
+        pool_start: res.pool_start || "",
+        pool_end: res.pool_end || "",
+      });
+      if (res.pool_start && res.pool_end) {
+        setPoolHint(`${res.pool_start} - ${res.pool_end}`);
+      } else {
+        setPoolHint("");
+      }
+      return res;
+    } catch (err: any) {
+      // ignore
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  const openSettingsModal = () => {
+    setSettingsRouterId("");
+    loadIPSettings("");
+    setSettingsDialog(true);
+  };
+
+  const handleSettingsRouterChange = (routerId: string) => {
+    setSettingsRouterId(routerId);
+    loadIPSettings(routerId);
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await pppoeService.upsertIPSettings({
+        router_id: settingsRouterId || null,
+        local_address: ipSettings.local_address,
+        pool_start: ipSettings.pool_start,
+        pool_end: ipSettings.pool_end,
+      });
+      showToast({ title: "Tersimpan", description: "Pengaturan automasi IP PPPoE berhasil disimpan", variant: "success" });
+      setSettingsDialog(false);
+    } catch (err: any) {
+      showToast({ title: "Gagal menyimpan", description: err?.message || "Error", variant: "error" });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleRouterSelectInCreate = async (routerId: string) => {
+    setFormData((prev) => ({ ...prev, router_id: routerId }));
+    if (routerId) {
+      const settings = await loadIPSettings(routerId);
+      if (settings) {
+        setFormData((prev) => ({
+          ...prev,
+          router_id: routerId,
+          local_address: prev.local_address || settings.local_address || "",
+        }));
+      }
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       load();
@@ -131,7 +204,7 @@ export default function PPPoEPage() {
       });
       await load();
     } catch (err: any) {
-      showToast({ title: "Failed", description: err?.message || "Error", variant: "error" });
+      showToast({ title: "Gagal Membuat Secret", description: err?.message || "Error", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -196,6 +269,13 @@ export default function PPPoEPage() {
           <p className="text-slate-500 mt-1">Manage PPPoE client accounts and sync to routers.</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={openSettingsModal}
+            className="gap-2 text-slate-700 border-slate-300 hover:bg-slate-50"
+          >
+            <Settings className="w-4 h-4 text-indigo-600" /> Automasi IP
+          </Button>
           <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
             <RotateCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
           </Button>
@@ -239,6 +319,8 @@ export default function PPPoEPage() {
                 <th className="px-6 py-4 text-left font-semibold">Username</th>
                 <th className="px-6 py-4 text-left font-semibold">Router</th>
                 <th className="px-6 py-4 text-left font-semibold">Profile</th>
+                <th className="px-6 py-4 text-left font-semibold">Local IP</th>
+                <th className="px-6 py-4 text-left font-semibold">Remote IP</th>
                 <th className="px-6 py-4 text-center font-semibold">Status</th>
                 <th className="px-6 py-4 text-right font-semibold">Actions</th>
               </tr>
@@ -252,6 +334,12 @@ export default function PPPoEPage() {
                   </td>
                   <td className="px-6 py-4 text-slate-600">
                     {profiles.find((p) => p.id === s.profile_id)?.name || "Unknown"}
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                    {s.local_address || <span className="text-slate-300 italic">-</span>}
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs font-semibold text-indigo-600">
+                    {s.remote_address || <span className="text-slate-300 italic font-normal">-</span>}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <Badge className={s.is_disabled ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
@@ -293,7 +381,7 @@ export default function PPPoEPage() {
               ))}
               {filteredSecrets.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-slate-400 italic">
+                  <td colSpan={7} className="p-12 text-center text-slate-400 italic">
                     No PPPoE secrets found.
                   </td>
                 </tr>
@@ -302,6 +390,86 @@ export default function PPPoEPage() {
           </table>
         </div>
       </Card>
+
+      {/* IP Automation Settings Dialog */}
+      <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}>
+        <DialogContent className="sm:max-w-[550px] bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-indigo-600" /> Pengaturan Automasi IP PPPoE
+            </DialogTitle>
+            <DialogDescription>
+              Atur IP Gateway (Local) dan rentang IP Pool (Remote) untuk alokasi otomatis tanpa bentrok.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">Target Router / Scope</label>
+              <select
+                className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={settingsRouterId}
+                onChange={(e) => handleSettingsRouterChange(e.target.value)}
+                disabled={loadingSettings}
+              >
+                <option value="">🌐 Global (Default Semua Router)</option>
+                {routers.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    Router: {r.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">
+                Pilih router spesifik jika memiliki segmen IP terpisah dari default global.
+              </p>
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 space-y-4">
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Local Address (Gateway Router)</label>
+                <Input
+                  placeholder="Contoh: 10.10.10.1"
+                  value={ipSettings.local_address}
+                  onChange={(e) => setIpSettings({ ...ipSettings, local_address: e.target.value })}
+                  className="mt-1 font-mono text-sm"
+                />
+                <p className="text-xs text-slate-500 mt-1">IP lokal router yang menjadi gateway bagi client PPPoE.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">Remote Pool Start</label>
+                  <Input
+                    placeholder="Contoh: 10.10.10.2"
+                    value={ipSettings.pool_start}
+                    onChange={(e) => setIpSettings({ ...ipSettings, pool_start: e.target.value })}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">Remote Pool End</label>
+                  <Input
+                    placeholder="Contoh: 10.10.10.254"
+                    value={ipSettings.pool_end}
+                    onChange={(e) => setIpSettings({ ...ipSettings, pool_end: e.target.value })}
+                    className="mt-1 font-mono text-sm"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Sistem akan mencari IP kosong secara otomatis dari urutan terkecil (Start → End) dan mencegah penggunaan IP yang sama.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettingsDialog(false)}>
+              Batal
+            </Button>
+            <Button onClick={handleSaveSettings} disabled={savingSettings} className="bg-indigo-600 hover:bg-indigo-700">
+              {savingSettings ? "Menyimpan..." : "Simpan Pengaturan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Dialog */}
       <Dialog open={createDialog} onOpenChange={setCreateDialog}>
@@ -316,7 +484,7 @@ export default function PPPoEPage() {
               <select
                 className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={formData.router_id}
-                onChange={(e) => setFormData({ ...formData, router_id: e.target.value })}
+                onChange={(e) => handleRouterSelectInCreate(e.target.value)}
               >
                 <option value="" className="text-slate-900">Select Router</option>
                 {routers.map((r) => (
@@ -383,20 +551,22 @@ export default function PPPoEPage() {
                 <Input
                   value={formData.local_address}
                   onChange={(e) => setFormData({ ...formData, local_address: e.target.value })}
-                  className="mt-1"
-                  placeholder="Auto-filled from profile/router"
+                  className="mt-1 font-mono text-sm"
+                  placeholder="Auto-fill dari pengaturan"
                 />
-                <p className="text-xs text-slate-500 mt-1">Leave empty to auto-fill from profile or router</p>
+                <p className="text-xs text-slate-500 mt-1">Dikosongkan akan terisi otomatis dari pengaturan IP.</p>
               </div>
               <div>
                 <label className="text-sm font-semibold text-slate-700">Remote Address</label>
                 <Input
                   value={formData.remote_address}
                   onChange={(e) => setFormData({ ...formData, remote_address: e.target.value })}
-                  className="mt-1"
-                  placeholder="Auto-filled from profile"
+                  className="mt-1 font-mono text-sm"
+                  placeholder="Auto-allocating from pool..."
                 />
-                <p className="text-xs text-slate-500 mt-1">Leave empty to auto-fill from profile</p>
+                <p className="text-xs text-indigo-600 mt-1 flex items-center gap-1 font-medium">
+                  <Sparkles className="w-3 h-3" /> Auto-assign IP dari pool {poolHint ? `(${poolHint})` : ""} jika dikosongkan.
+                </p>
               </div>
             </div>
             <div>
@@ -412,8 +582,8 @@ export default function PPPoEPage() {
             <Button variant="outline" onClick={() => setCreateDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={loading}>
-              Create
+            <Button onClick={handleCreate} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">
+              Create Secret
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -441,4 +611,3 @@ export default function PPPoEPage() {
     </div>
   );
 }
-

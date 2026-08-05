@@ -138,6 +138,12 @@ func main() {
 	)
 	voucherCleanupScheduler.StartDailyScheduler(context.Background())
 
+	// Step 4e: Start daily recurring expense scheduler (auto-generates recurring bills)
+	expenseRepo := repository.NewExpenseRepository(db)
+	expenseService := service.NewExpenseService(expenseRepo)
+	recurringExpenseScheduler := service.NewRecurringExpenseScheduler(expenseService)
+	recurringExpenseScheduler.Start(context.Background())
+
 	// Step 5: Create and run HTTP server
 	srv := server.New(server.Config{
 		Port:         cfg.App.Port,

@@ -28,6 +28,15 @@ import { format, addDays, isAfter } from "date-fns";
 import { Modal } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
 
+interface PaymentMethodAccount {
+  id: string;
+  name: string;
+  category: string;
+  provider?: string;
+  account_number?: string;
+  is_active: boolean;
+}
+
 export default function ExpensesPage() {
   const [filter, setFilter] = useState("all");
   const { showToast } = useNotificationStore();
@@ -43,7 +52,7 @@ export default function ExpensesPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmData, setConfirmData] = useState<{
     id: string;
-    type: "reimbursement" | "payslip" | "payroll_run";
+    type: "reimbursement" | "payslip" | "payroll_run" | "equipment" | "expense";
     title: string;
     amount: number;
   } | null>(null);
@@ -58,6 +67,22 @@ export default function ExpensesPage() {
     amount: 0,
     date: format(new Date(), "yyyy-MM-dd"),
     description: "",
+    payNow: false,
+    paymentMethodId: "",
+    paymentRef: ""
+  });
+
+  // New Operational Expense Modal State
+  const [showNewExpense, setShowNewExpense] = useState(false);
+  const [newExpense, setNewExpense] = useState({
+    title: "",
+    amount: 0,
+    date: format(new Date(), "yyyy-MM-dd"),
+    category: "bandwidth",
+    description: "",
+    isRecurring: false,
+    recurringDay: 1,
+    recurringEndAt: "",
     payNow: false,
     paymentMethodId: "",
     paymentRef: ""
@@ -98,10 +123,9 @@ export default function ExpensesPage() {
     try {
       setProcessingId(id);
       
-      // Check if this is an equipment expense or reimbursement
-      const expense = [...mappedReimbursements, ...otherMockExpenses].find(e => e.id === id);
+      const expense = [...mappedReimbursements, ...mappedExpenses].find(e => e.id === id);
       
-      if (expense?.type === "equipment") {
+      if (expense?.type === "equipment" || expense?.type === "expense") {
         // Use expense API
         await financeService.markExpenseAsPaid(id, method || "", ref || "");
       } else {
@@ -111,7 +135,7 @@ export default function ExpensesPage() {
       
       showToast({
         title: "Payment Recorded",
-        description: expense?.type === "equipment" ? "Equipment expense has been marked as paid." : "Reimbursement has been marked as paid.",
+        description: (expense?.type === "equipment" || expense?.type === "expense") ? "Expense has been marked as paid." : "Reimbursement has been marked as paid.",
         variant: "success",
       });
       
@@ -126,7 +150,7 @@ export default function ExpensesPage() {
 
       // Update selectedExpense if it's the one we just paid
       if (selectedExpense) {
-        if ((selectedExpense.type === "reimbursement" || selectedExpense.type === "equipment") && selectedExpense.id === id) {
+        if ((selectedExpense.type === "reimbursement" || selectedExpense.type === "equipment" || selectedExpense.type === "expense") && selectedExpense.id === id) {
           const updatedReimb = reimbData.find(r => r.id === id);
           if (updatedReimb) {
             setSelectedExpense({
@@ -296,6 +320,68 @@ export default function ExpensesPage() {
     }
   };
 
+  const handleCreateExpense = async () => {
+    try {
+      setLoading(true);
+      
+      // Prepare operational expense data
+      const expenseData: any = {
+        title: newExpense.title,
+        amount: Number(newExpense.amount),
+        date: new Date(newExpense.date).toISOString(),
+        category: newExpense.category,
+        description: newExpense.description || "",
+        is_recurring: newExpense.isRecurring,
+      };
+
+      // Handle recurring template fields
+      if (newExpense.isRecurring) {
+        expenseData.recurring_day = Number(newExpense.recurringDay);
+        if (newExpense.recurringEndAt) {
+          expenseData.recurring_end_at = new Date(newExpense.recurringEndAt).toISOString();
+        }
+      } else {
+        // Instant payment for non-recurring expenses
+        if (newExpense.payNow && newExpense.paymentMethodId) {
+          expenseData.payment_method_id = newExpense.paymentMethodId;
+          expenseData.payment_reference = newExpense.paymentRef || "";
+        }
+      }
+
+      await financeService.createExpense(expenseData);
+      
+      showToast({
+        title: "Success",
+        description: newExpense.isRecurring ? "Recurring template created successfully" : "Expense record created successfully",
+        variant: "success"
+      });
+      
+      setShowNewExpense(false);
+      setNewExpense({
+        title: "",
+        amount: 0,
+        date: format(new Date(), "yyyy-MM-dd"),
+        category: "bandwidth",
+        description: "",
+        isRecurring: false,
+        recurringDay: 1,
+        recurringEndAt: "",
+        payNow: false,
+        paymentMethodId: "",
+        paymentRef: ""
+      });
+      await fetchData();
+    } catch (err: any) {
+      showToast({
+        title: "Error",
+        description: err.message || "Failed to create expense",
+        variant: "error"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleTogglePayroll = async (id: string, enabled: boolean) => {
     // Save previous state for rollback
     const previousExpense = { ...selectedExpense };
@@ -349,7 +435,10 @@ export default function ExpensesPage() {
     }
   };
 
-  const getStatusBadge = (status: string, payWithPayroll?: boolean) => {
+  const getStatusBadge = (status: string, payWithPayroll?: boolean, isRecurring?: boolean) => {
+    if (isRecurring) {
+      return <Badge className="bg-purple-100 text-purple-700 border-purple-200">🔁 Recurring</Badge>;
+    }
     if (status === "approved" && payWithPayroll) {
       return (
         <div className="flex flex-col items-center gap-1">
@@ -371,7 +460,10 @@ export default function ExpensesPage() {
     }
   };
 
-  const getTypeIcon = (type: string) => {
+  const getTypeIcon = (type: string, isRecurring?: boolean) => {
+    if (isRecurring) {
+      return <div className="p-2 bg-purple-100 rounded-lg text-purple-600"><CalendarIcon className="w-5 h-5" /></div>;
+    }
     switch (type) {
       case "reimbursement": return <div className="p-2 bg-purple-100 rounded-lg text-purple-600"><ClipboardDocumentCheckIcon className="w-5 h-5" /></div>;
       case "salary": return <div className="p-2 bg-blue-100 rounded-lg text-blue-600"><UserGroupIcon className="w-5 h-5" /></div>;
@@ -388,6 +480,7 @@ export default function ExpensesPage() {
     date: r.date,
     status: r.status,
     pay_with_payroll: r.pay_with_payroll,
+    is_recurring: false,
     approved_by: "System Admin",
     original: r 
   }));
@@ -399,24 +492,27 @@ export default function ExpensesPage() {
     amount: run.total_amount,
     date: run.processed_at || run.created_at,
     status: run.status,
+    pay_with_payroll: false,
+    is_recurring: false,
     approved_by: run.processed_at ? "HR System" : "System Admin",
     original: run
   }));
 
-  const otherMockExpenses = [
-    // Mock data removed
-  ];
-
   const mappedExpenses = expenses.map(e => ({
     id: e.id,
-    type: e.category === "equipment" ? "equipment" : "expense", // Map generic expenses too if needed
+    type: e.category === "equipment" ? "equipment" : "expense", 
     title: e.title,
     amount: e.amount,
-    date: e.date.split("T")[0], // Ensure date format
+    date: e.date.split("T")[0], 
     status: e.status,
-    approved_by: "Finance Manager", // Placeholder or from API if available
+    pay_with_payroll: false,
+    approved_by: e.is_recurring ? "System (Template)" : "Finance Manager", 
     description: e.description,
     category: e.category,
+    is_recurring: !!e.is_recurring,
+    recurring_day: e.recurring_day,
+    recurring_end_at: e.recurring_end_at,
+    parent_expense_id: e.parent_expense_id,
     original: e
   }));
 
@@ -497,8 +593,8 @@ export default function ExpensesPage() {
 
         {/* Filters & Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-300">
-          <div className="flex gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-xs">
-            {["all", "reimbursement", "salary", "equipment"].map((t) => (
+          <div className="flex flex-wrap gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-xs">
+            {["all", "reimbursement", "salary", "equipment", "expense"].map((t) => (
               <button
                 key={t}
                 onClick={() => setFilter(t)}
@@ -508,21 +604,35 @@ export default function ExpensesPage() {
                     : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {t}
+                {t === "expense" ? "operasional" : t}
               </button>
             ))}
           </div>
 
-          <div className={`transition-all duration-500 transform ${filter === 'equipment' ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-95 pointer-events-none'}`}>
-             <Button 
-               onClick={() => setShowNewEquip(true)}
-               className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 h-11 rounded-xl shadow-xl shadow-indigo-100 border-0 flex items-center gap-2 group active:scale-95 transition-all"
-             >
-                <div className="bg-white/20 p-1 rounded-lg group-hover:rotate-90 transition-transform duration-300">
-                  <PlusIcon className="w-4 h-4" />
-                </div>
-                <span>New Equipment</span>
-             </Button>
+          <div className="flex gap-2">
+             <div className={`transition-all duration-300 transform ${filter === 'equipment' ? 'opacity-100 scale-100' : 'hidden opacity-0 scale-95 pointer-events-none'}`}>
+                <Button 
+                  onClick={() => setShowNewEquip(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 h-11 rounded-xl shadow-xl shadow-indigo-100 border-0 flex items-center gap-2 group active:scale-95 transition-all"
+                >
+                   <div className="bg-white/20 p-1 rounded-lg group-hover:rotate-90 transition-transform duration-300">
+                     <PlusIcon className="w-4 h-4" />
+                   </div>
+                   <span>New Equipment</span>
+                </Button>
+             </div>
+
+             <div className={`transition-all duration-300 transform ${filter === 'all' || filter === 'expense' ? 'opacity-100 scale-100' : 'hidden opacity-0 scale-95 pointer-events-none'}`}>
+                <Button 
+                  onClick={() => setShowNewExpense(true)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 h-11 rounded-xl shadow-xl shadow-emerald-100 border-0 flex items-center gap-2 group active:scale-95 transition-all"
+                >
+                   <div className="bg-white/20 p-1 rounded-lg group-hover:rotate-90 transition-transform duration-300">
+                     <PlusIcon className="w-4 h-4" />
+                   </div>
+                   <span>Pengeluaran Lainnya</span>
+                </Button>
+             </div>
           </div>
         </div>
 
@@ -574,7 +684,7 @@ export default function ExpensesPage() {
                       <tr key={expense.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => openDetails(expense)}>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-4">
-                            {getTypeIcon(expense.type)}
+                            {getTypeIcon(expense.type, expense.is_recurring)}
                             <div>
                               <p className="font-bold text-slate-900">{expense.title}</p>
                               <p className="text-xs text-slate-500 capitalize">{expense.type}</p>
@@ -584,10 +694,10 @@ export default function ExpensesPage() {
                         <td className="px-6 py-4 text-slate-600 font-medium">{formatDateLabel(expense.date)}</td>
                         <td className="px-6 py-4 text-slate-600">{expense.approved_by}</td>
                         <td className="px-6 py-4 text-right font-black text-slate-900">{formatCurrency(expense.amount)}</td>
-                        <td className="px-6 py-4 text-center whitespace-nowrap">{getStatusBadge(expense.status, expense.pay_with_payroll)}</td>
+                        <td className="px-6 py-4 text-center whitespace-nowrap">{getStatusBadge(expense.status, expense.pay_with_payroll, expense.is_recurring)}</td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {(expense.type === "reimbursement" || expense.type === "equipment") && expense.status === "approved" && !expense.pay_with_payroll && (
+                            {(expense.type === "reimbursement" || expense.type === "equipment" || expense.type === "expense") && expense.status === "approved" && !expense.pay_with_payroll && !expense.is_recurring && (
                               <Button 
                                 size="sm" 
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-8 px-3"
@@ -625,7 +735,7 @@ export default function ExpensesPage() {
         {selectedExpense && (
           <div className="space-y-6">
             <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
-              {getTypeIcon(selectedExpense.type)}
+              {getTypeIcon(selectedExpense.type, selectedExpense.is_recurring)}
               <div>
                 <h4 className="text-xl font-black text-slate-900">{selectedExpense.title}</h4>
                 <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">{selectedExpense.type}</p>
@@ -649,7 +759,7 @@ export default function ExpensesPage() {
                 <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 leading-none">
                   <UserIcon className="w-3 h-3" /> Requested By
                 </label>
-                <p className="text-slate-900 font-bold">{selectedExpense.original?.user_name || "System"}</p>
+                <p className="text-slate-900 font-bold">{selectedExpense.original?.user_name || (selectedExpense.is_recurring ? "System (Template)" : "System")}</p>
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5 leading-none">
@@ -658,6 +768,29 @@ export default function ExpensesPage() {
                 <p className="text-2xl font-black text-indigo-600">{formatCurrency(selectedExpense.amount)}</p>
               </div>
             </div>
+
+            {selectedExpense.is_recurring && (
+              <div className="p-4 bg-purple-50 rounded-xl border border-purple-100 grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-purple-600/60 uppercase leading-none">🔁 Recurring Schedule</label>
+                  <p className="text-purple-900 font-bold">
+                    Generates monthly on day {selectedExpense.recurring_day}
+                  </p>
+                </div>
+                {selectedExpense.recurring_end_at && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-purple-600/60 uppercase leading-none">Ends On</label>
+                    <p className="text-purple-900 font-bold">{formatDateLabel(selectedExpense.recurring_end_at)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedExpense.parent_expense_id && (
+              <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100/50 text-indigo-950 text-xs flex items-center gap-2">
+                <span>🔁 Generated automatically from monthly recurring template.</span>
+              </div>
+            )}
 
             {selectedExpense.status === "paid" && (selectedExpense.original?.payment_method_id || selectedExpense.original?.payment_method || selectedExpense.original?.payment_reference) && (
               <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 grid grid-cols-2 gap-4">
@@ -812,6 +945,24 @@ export default function ExpensesPage() {
               </div>
             )}
 
+            {selectedExpense.type === "expense" && selectedExpense.status === "approved" && !selectedExpense.is_recurring && (
+              <div className="pt-2 border-t border-slate-100">
+                <Button 
+                  variant="default" 
+                  className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                  onClick={() => openConfirmPayload(selectedExpense.id, "expense", selectedExpense.title, selectedExpense.amount)}
+                  disabled={processingId === selectedExpense.id}
+                >
+                  {processingId === selectedExpense.id ? "Processing..." : (
+                    <>
+                      <CheckBadgeIcon className="w-5 h-5" />
+                      Mark as Paid Now
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="outline" onClick={() => setShowDetails(false)}>Close</Button>
             </div>
@@ -879,7 +1030,7 @@ export default function ExpensesPage() {
               <Button 
                 className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 font-black text-white"
                 onClick={() => {
-                   if (confirmData.type === 'reimbursement' || confirmData.type === 'equipment') handleMarkAsPaid(confirmData.id, selectedPaymentMethodId, paymentRef);
+                   if (confirmData.type === 'reimbursement' || confirmData.type === 'equipment' || confirmData.type === 'expense') handleMarkAsPaid(confirmData.id, selectedPaymentMethodId, paymentRef);
                    else if (confirmData.type === 'payslip') handlePayPayslip(confirmData.id, selectedPaymentMethodId, paymentRef);
                    else if (confirmData.type === 'payroll_run') handlePayRun(confirmData.id, selectedPaymentMethodId, paymentRef);
                 }}
@@ -891,6 +1042,7 @@ export default function ExpensesPage() {
           </div>
         )}
       </Modal>
+
       {/* New Equipment Modal */}
       <Modal
         isOpen={showNewEquip}
@@ -996,6 +1148,177 @@ export default function ExpensesPage() {
                 disabled={loading || !newEquip.title || !newEquip.amount}
               >
                  {loading ? "Saving..." : "Create Record"}
+              </Button>
+           </div>
+        </div>
+      </Modal>
+
+      {/* New General/Operational/Recurring Expense Modal */}
+      <Modal
+        isOpen={showNewExpense}
+        onClose={() => setShowNewExpense(false)}
+        title="Tambah Pengeluaran Lainnya"
+        size="lg"
+      >
+        <div className="space-y-5">
+           <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase">Nama Pengeluaran</label>
+              <input 
+                type="text" 
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="e.g. Pembayaran Bandwidth ISP (Biznet), Langganan SaaS"
+                value={newExpense.title}
+                onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
+              />
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase">Jumlah (IDR)</label>
+                 <input 
+                   type="number" 
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20"
+                   placeholder="0"
+                   value={newExpense.amount || ""}
+                   onChange={(e) => setNewExpense({...newExpense, amount: Number(e.target.value)})}
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase">Kategori</label>
+                 <select 
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 bg-white"
+                   value={newExpense.category}
+                   onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+                 >
+                    <option value="bandwidth">Bandwidth</option>
+                    <option value="layanan">Layanan Software/SaaS</option>
+                    <option value="sewa">Sewa Kantor/Infrastruktur</option>
+                    <option value="utilitas">Utilitas (Listrik/Air/Internet)</option>
+                    <option value="others">Lainnya</option>
+                 </select>
+              </div>
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase">Tanggal Pengeluaran / Tanggal Mulai</label>
+                 <input 
+                   type="date" 
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                   value={newExpense.date}
+                   onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
+                 />
+              </div>
+              <div className="flex items-center pt-6">
+                 <label className="flex items-center gap-3 cursor-pointer">
+                    <Switch 
+                      checked={newExpense.isRecurring}
+                      onCheckedChange={(checked) => setNewExpense({
+                        ...newExpense, 
+                        isRecurring: checked,
+                        payNow: checked ? false : newExpense.payNow // cannot pay templates instantly
+                      })}
+                      className="data-[state=unchecked]:bg-slate-300 data-[state=checked]:bg-indigo-600"
+                    />
+                    <span className="text-sm font-bold text-slate-700">Berulang setiap bulan (Recurring)</span>
+                 </label>
+              </div>
+           </div>
+
+           {newExpense.isRecurring && (
+              <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-purple-900 uppercase">Hari Tagihan Dibuat (Hari Ke-)</label>
+                    <select
+                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500/20"
+                      value={newExpense.recurringDay}
+                      onChange={(e) => setNewExpense({...newExpense, recurringDay: Number(e.target.value)})}
+                    >
+                       {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                          <option key={d} value={d}>Tanggal {d} setiap bulan</option>
+                       ))}
+                    </select>
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-purple-900 uppercase">Tanggal Berakhir (Opsional)</label>
+                    <input 
+                      type="date"
+                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20"
+                      value={newExpense.recurringEndAt}
+                      onChange={(e) => setNewExpense({...newExpense, recurringEndAt: e.target.value})}
+                    />
+                 </div>
+              </div>
+           )}
+
+           {!newExpense.isRecurring && (
+              <div className={`p-4 rounded-2xl border transition-all duration-300 ${newExpense.payNow ? 'bg-white border-emerald-200 shadow-xl shadow-emerald-100/50' : 'bg-slate-50 border-slate-200'}`}>
+                 <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                       <div className={`p-2.5 rounded-xl transition-colors ${newExpense.payNow ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-slate-200 text-slate-500'}`}>
+                          <BanknotesIcon className="w-5 h-5" />
+                       </div>
+                       <div>
+                          <p className={`text-sm font-black transition-colors ${newExpense.payNow ? 'text-emerald-900' : 'text-slate-900'}`}>Instant Payment</p>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Record payment now</p>
+                       </div>
+                    </div>
+                    <Switch 
+                      checked={newExpense.payNow} 
+                      onCheckedChange={(v) => setNewExpense({...newExpense, payNow: v})}
+                      className="data-[state=unchecked]:bg-slate-300 data-[state=checked]:bg-emerald-600"
+                    />
+                 </div>
+
+                 {newExpense.payNow && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Payment Source</label>
+                          <select 
+                            className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500/20"
+                            value={newExpense.paymentMethodId}
+                            onChange={(e) => setNewExpense({...newExpense, paymentMethodId: e.target.value})}
+                          >
+                             <option value="">Select Account...</option>
+                             {paymentMethods.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                             ))}
+                          </select>
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Ref Number</label>
+                          <input 
+                            type="text" 
+                            className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20"
+                            placeholder="TRF-..."
+                            value={newExpense.paymentRef}
+                            onChange={(e) => setNewExpense({...newExpense, paymentRef: e.target.value})}
+                          />
+                       </div>
+                    </div>
+                 )}
+              </div>
+           )}
+
+           <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase">Deskripsi / Catatan Tambahan</label>
+              <textarea 
+                rows={3}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="Keterangan tambahan mengenai pengeluaran..."
+                value={newExpense.description}
+                onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
+              />
+           </div>
+
+           <div className="flex gap-3 pt-4 border-t border-slate-100">
+              <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setShowNewExpense(false)}>Cancel</Button>
+              <Button 
+                className="flex-1 h-12 bg-slate-900 hover:bg-black text-white font-black rounded-xl shadow-xl shadow-slate-200"
+                onClick={handleCreateExpense}
+                disabled={loading || !newExpense.title || !newExpense.amount}
+              >
+                 {loading ? "Saving..." : "Simpan Pengeluaran"}
               </Button>
            </div>
         </div>

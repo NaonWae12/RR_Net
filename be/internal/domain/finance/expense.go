@@ -19,13 +19,19 @@ type Expense struct {
 	PaymentMethodID  *uuid.UUID `json:"payment_method_id,omitempty"`
 	PaymentReference string     `json:"payment_reference,omitempty"`
 	PaidAt           *time.Time `json:"paid_at,omitempty"`
+	// Recurring fields
+	IsRecurring      bool       `json:"is_recurring"`
+	RecurringDay     *int       `json:"recurring_day,omitempty"`  // 1-28: day of month to generate
+	RecurringEndAt   *time.Time `json:"recurring_end_at,omitempty"`
+	ParentExpenseID  *uuid.UUID `json:"parent_expense_id,omitempty"` // set on generated children
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type ExpenseFilter struct {
-	Status   string
-	Category string
-	Limit    int
-	Offset   int
+	Status      string
+	Category    string
+	IsRecurring *bool
+	Limit       int
+	Offset      int
 }

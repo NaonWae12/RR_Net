@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"rrnet/internal/auth"
+	"rrnet/internal/domain/network"
 	"rrnet/internal/http/middleware"
 	"rrnet/internal/service"
 )
@@ -369,4 +370,50 @@ func (h *PPPoEHandler) DisconnectSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *PPPoEHandler) GetIPSettings(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	var routerID *uuid.UUID
+	routerIDStr := r.URL.Query().Get("router_id")
+	if routerIDStr != "" {
+		if parsed, err := uuid.Parse(routerIDStr); err == nil {
+			routerID = &parsed
+		}
+	}
+
+	settings, err := h.pppoeService.GetIPSettings(r.Context(), tenantID, routerID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "Failed to fetch IP settings")
+		return
+	}
+
+	sendJSON(w, http.StatusOK, settings)
+}
+
+func (h *PPPoEHandler) UpsertIPSettings(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok {
+		sendError(w, http.StatusBadRequest, "No tenant context")
+		return
+	}
+
+	var req network.PPPoEIPSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		sendError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	settings, err := h.pppoeService.UpsertIPSettings(r.Context(), tenantID, &req)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, settings)
 }

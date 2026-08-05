@@ -76,3 +76,11 @@ func (s *FinanceService) GetTrendData(ctx context.Context, tenantID uuid.UUID, y
 func (s *FinanceService) GetBalance(ctx context.Context, tenantID uuid.UUID) (float64, error) {
 	return s.financeRepo.GetBalance(ctx, tenantID)
 }
+
+func (s *FinanceService) DeleteTransactionBySource(ctx context.Context, tenantID uuid.UUID, source string, sourceID uuid.UUID) error {
+	return s.financeRepo.DeleteTransactionBySource(ctx, tenantID, source, sourceID)
+}
+
+func (s *FinanceService) DeleteTransactionsBySourceIDs(ctx context.Context, tenantID uuid.UUID, source string, sourceIDs []uuid.UUID) error {
+	return s.financeRepo.DeleteTransactionsBySourceIDs(ctx, tenantID, source, sourceIDs)
+}

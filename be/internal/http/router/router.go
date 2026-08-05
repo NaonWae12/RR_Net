@@ -2147,6 +2147,18 @@ func New(deps Dependencies) http.Handler {
 	// PPPoE Management
 	pppoeHandler := handler.NewPPPoEHandler(pppoeService)
 
+	// PPPoE IP settings route (GET settings, PUT update settings)
+	mux.Handle("/api/v1/pppoe/settings", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			requireCapability(rbac.CapNetworkView)(http.HandlerFunc(pppoeHandler.GetIPSettings)).ServeHTTP(w, r)
+		case http.MethodPut, http.MethodPost:
+			requireCapability(rbac.CapNetworkManage)(http.HandlerFunc(pppoeHandler.UpsertIPSettings)).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})))
+
 	// PPPoE secrets base route (GET list, POST create)
 	mux.Handle("/api/v1/pppoe/secrets", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
