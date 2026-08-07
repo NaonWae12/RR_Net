@@ -34,6 +34,7 @@ function showCheck(status: PaymentMatrixCellStatus) {
 }
 
 export function PaymentsMatrixView() {
+  const [initialLoad, setInitialLoad] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entries, setEntries] = useState<PaymentMatrixEntry[]>([]);
@@ -89,7 +90,10 @@ export function PaymentsMatrixView() {
         setError(e?.message || "Failed to load payment matrix");
         setEntries([]);
       } finally {
-        if (alive) setLoading(false);
+        if (alive) {
+          setLoading(false);
+          setInitialLoad(false);
+        }
       }
     })();
     return () => {
@@ -97,7 +101,7 @@ export function PaymentsMatrixView() {
     };
   }, [queryParams]);
 
-  if (loading) {
+  if (initialLoad) {
     return (
       <div className="flex justify-center items-center h-48">
         <LoadingSpinner size={40} />
@@ -112,7 +116,7 @@ export function PaymentsMatrixView() {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-col sm:flex-row gap-2 items-center">
         {showYearFilter && (
           <SimpleSelect
             value={String(year)}
@@ -170,7 +174,11 @@ export function PaymentsMatrixView() {
         >
           Reset
         </Button>
+        {loading && (
+          <div className="w-5 h-5 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin shrink-0" />
+        )}
       </div>
+
 
       {/* Matrix table */}
       {!entries || entries.length === 0 ? (

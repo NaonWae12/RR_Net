@@ -996,10 +996,10 @@ export default function ExpensesPage() {
                   <select
                     value={selectedPaymentMethodId}
                     onChange={(e) => setSelectedPaymentMethodId(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
                   >
                     {paymentMethods.map((m) => (
-                      <option key={m.id} value={m.id}>
+                      <option key={m.id} value={m.id} className="text-slate-900">
                         {m.name} ({m.category.toUpperCase()}) {m.provider ? `- ${m.provider}` : ""}
                       </option>
                     ))}
@@ -1012,7 +1012,7 @@ export default function ExpensesPage() {
                 <input
                   type="text"
                   placeholder="e.g. TRF-123456 or Receipt No."
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                   value={paymentRef}
                   onChange={(e) => setPaymentRef(e.target.value)}
                 />
@@ -1051,12 +1051,12 @@ export default function ExpensesPage() {
         size="lg"
       >
         <div className="space-y-6">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase">Item Name / Title</label>
                  <input 
                    type="text" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                    placeholder="e.g. Printer Epson L3110"
                    value={newEquip.title}
                    onChange={(e) => setNewEquip({...newEquip, title: e.target.value})}
@@ -1065,18 +1065,22 @@ export default function ExpensesPage() {
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase">Total Amount (IDR)</label>
                  <input 
-                   type="number" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20"
+                   type="text"
+                   inputMode="numeric"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                    placeholder="0"
-                   value={newEquip.amount}
-                   onChange={(e) => setNewEquip({...newEquip, amount: Number(e.target.value)})}
+                   value={newEquip.amount ? newEquip.amount.toLocaleString('id-ID') : ""}
+                   onChange={(e) => {
+                     const raw = e.target.value.replace(/\./g, "").replace(/[^0-9]/g, "");
+                     setNewEquip({...newEquip, amount: raw === "" ? 0 : Number(raw)});
+                   }}
                  />
               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase">Purchase Date</label>
                  <input 
                    type="date" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                    value={newEquip.date}
                    onChange={(e) => setNewEquip({...newEquip, date: e.target.value})}
                  />
@@ -1085,7 +1089,7 @@ export default function ExpensesPage() {
                  <label className="text-[10px] font-black text-slate-400 uppercase">Description</label>
                  <input 
                    type="text" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                    placeholder="Purpose of purchase..."
                    value={newEquip.description}
                    onChange={(e) => setNewEquip({...newEquip, description: e.target.value})}
@@ -1116,13 +1120,13 @@ export default function ExpensesPage() {
                     <div className="space-y-1.5">
                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">Payment Source</label>
                        <select 
-                         className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500/20"
+                         className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                          value={newEquip.paymentMethodId}
                          onChange={(e) => setNewEquip({...newEquip, paymentMethodId: e.target.value})}
                        >
-                          <option value="">Select Account...</option>
+                          <option value="" className="text-slate-900">Select Account...</option>
                           {paymentMethods.map(m => (
-                             <option key={m.id} value={m.id}>{m.name}</option>
+                             <option key={m.id} value={m.id} className="text-slate-900">{m.name}</option>
                           ))}
                        </select>
                     </div>
@@ -1130,7 +1134,7 @@ export default function ExpensesPage() {
                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">Ref Number</label>
                        <input 
                          type="text" 
-                         className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20"
+                         className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                          placeholder="TRF-..."
                          value={newEquip.paymentRef}
                          onChange={(e) => setNewEquip({...newEquip, paymentRef: e.target.value})}
@@ -1165,36 +1169,40 @@ export default function ExpensesPage() {
               <label className="text-[10px] font-black text-slate-400 uppercase">Nama Pengeluaran</label>
               <input 
                 type="text" 
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                 placeholder="e.g. Pembayaran Bandwidth ISP (Biznet), Langganan SaaS"
                 value={newExpense.title}
                 onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
               />
-           </div>
+            </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase">Jumlah (IDR)</label>
                  <input 
-                   type="number" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20"
+                   type="text"
+                   inputMode="numeric"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                    placeholder="0"
-                   value={newExpense.amount || ""}
-                   onChange={(e) => setNewExpense({...newExpense, amount: Number(e.target.value)})}
+                   value={newExpense.amount ? newExpense.amount.toLocaleString('id-ID') : ""}
+                   onChange={(e) => {
+                     const raw = e.target.value.replace(/\./g, "").replace(/[^0-9]/g, "");
+                     setNewExpense({...newExpense, amount: raw === "" ? 0 : Number(raw)});
+                   }}
                  />
               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-400 uppercase">Kategori</label>
                  <select 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 bg-white"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 bg-white"
                    value={newExpense.category}
                    onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
                  >
-                    <option value="bandwidth">Bandwidth</option>
-                    <option value="layanan">Layanan Software/SaaS</option>
-                    <option value="sewa">Sewa Kantor/Infrastruktur</option>
-                    <option value="utilitas">Utilitas (Listrik/Air/Internet)</option>
-                    <option value="others">Lainnya</option>
+                    <option value="bandwidth" className="text-slate-900">Bandwidth</option>
+                    <option value="layanan" className="text-slate-900">Layanan Software/SaaS</option>
+                    <option value="sewa" className="text-slate-900">Sewa Kantor/Infrastruktur</option>
+                    <option value="utilitas" className="text-slate-900">Utilitas (Listrik/Air/Internet)</option>
+                    <option value="others" className="text-slate-900">Lainnya</option>
                  </select>
               </div>
            </div>
@@ -1204,7 +1212,7 @@ export default function ExpensesPage() {
                  <label className="text-[10px] font-black text-slate-400 uppercase">Tanggal Pengeluaran / Tanggal Mulai</label>
                  <input 
                    type="date" 
-                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                    value={newExpense.date}
                    onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
                  />
@@ -1230,12 +1238,12 @@ export default function ExpensesPage() {
                  <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-purple-900 uppercase">Hari Tagihan Dibuat (Hari Ke-)</label>
                     <select
-                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                       value={newExpense.recurringDay}
                       onChange={(e) => setNewExpense({...newExpense, recurringDay: Number(e.target.value)})}
                     >
                        {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                          <option key={d} value={d}>Tanggal {d} setiap bulan</option>
+                          <option key={d} value={d} className="text-slate-900">Tanggal {d} setiap bulan</option>
                        ))}
                     </select>
                  </div>
@@ -1243,7 +1251,7 @@ export default function ExpensesPage() {
                     <label className="text-[10px] font-black text-purple-900 uppercase">Tanggal Berakhir (Opsional)</label>
                     <input 
                       type="date"
-                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                       value={newExpense.recurringEndAt}
                       onChange={(e) => setNewExpense({...newExpense, recurringEndAt: e.target.value})}
                     />
@@ -1275,13 +1283,13 @@ export default function ExpensesPage() {
                        <div className="space-y-1.5">
                           <label className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Payment Source</label>
                           <select 
-                            className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-500/20"
+                            className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                             value={newExpense.paymentMethodId}
                             onChange={(e) => setNewExpense({...newExpense, paymentMethodId: e.target.value})}
                           >
-                             <option value="">Select Account...</option>
+                             <option value="" className="text-slate-900">Select Account...</option>
                              {paymentMethods.map(m => (
-                                <option key={m.id} value={m.id}>{m.name}</option>
+                                <option key={m.id} value={m.id} className="text-slate-900">{m.name}</option>
                              ))}
                           </select>
                        </div>
@@ -1289,7 +1297,7 @@ export default function ExpensesPage() {
                           <label className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Ref Number</label>
                           <input 
                             type="text" 
-                            className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500/20"
+                            className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                             placeholder="TRF-..."
                             value={newExpense.paymentRef}
                             onChange={(e) => setNewExpense({...newExpense, paymentRef: e.target.value})}
@@ -1304,7 +1312,7 @@ export default function ExpensesPage() {
               <label className="text-[10px] font-black text-slate-400 uppercase">Deskripsi / Catatan Tambahan</label>
               <textarea 
                 rows={3}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                 placeholder="Keterangan tambahan mengenai pengeluaran..."
                 value={newExpense.description}
                 onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}

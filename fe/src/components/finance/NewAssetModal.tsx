@@ -95,7 +95,7 @@ export function NewAssetModal({ isOpen, onClose }: NewAssetModalProps) {
             <Input 
               id="asset-name" 
               placeholder="e.g. Mikrotik RB5009" 
-              className="h-12 bg-white/50 border-slate-200 focus:ring-2 focus:ring-slate-900 rounded-xl transition-all"
+              className="h-12 bg-white/50 border-slate-200 focus:ring-2 focus:ring-slate-900 rounded-xl transition-all text-slate-900"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -145,7 +145,7 @@ export function NewAssetModal({ isOpen, onClose }: NewAssetModalProps) {
               id="initial-stock" 
               type="number" 
               placeholder="0" 
-              className="h-12 bg-white/50 border-slate-200 focus:ring-2 focus:ring-slate-900 rounded-xl transition-all"
+              className="h-12 bg-white/50 border-slate-200 focus:ring-2 focus:ring-slate-900 rounded-xl transition-all text-slate-900"
               required
               value={stock}
               onChange={(e) => setStock(e.target.value)}
@@ -174,7 +174,7 @@ export function NewAssetModal({ isOpen, onClose }: NewAssetModalProps) {
               id="min-stock" 
               type="number" 
               placeholder="5" 
-              className="h-12 bg-white/50 border-slate-200 focus:ring-2 focus:ring-slate-900 rounded-xl transition-all"
+              className="h-12 bg-white/50 border-slate-200 focus:ring-2 focus:ring-slate-900 rounded-xl transition-all text-slate-900"
               value={minStock}
               onChange={(e) => setMinStock(e.target.value)}
             />
@@ -189,7 +189,7 @@ export function NewAssetModal({ isOpen, onClose }: NewAssetModalProps) {
           <textarea 
             id="description" 
             placeholder="Technical specs, serial number patterns, or storage location..."
-            className="flex min-h-[100px] w-full rounded-xl border border-slate-200 bg-white/50 px-4 py-3 text-sm ring-offset-white placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-sm"
+            className="flex min-h-[100px] w-full rounded-xl border border-slate-200 bg-white/50 px-4 py-3 text-sm text-slate-900 ring-offset-white placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 disabled:cursor-not-allowed disabled:opacity-50 transition-all shadow-sm"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
