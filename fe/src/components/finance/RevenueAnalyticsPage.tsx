@@ -96,7 +96,7 @@ export function RevenueAnalyticsPage() {
             <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Time Granularity</label>
             <SimpleSelect
               value={interval}
-              onChange={(val) => setInterval(val as any)}
+              onValueChange={(val) => setInterval(val as any)}
               options={[
                 { label: "Daily", value: "daily" },
                 { label: "Weekly", value: "weekly" },

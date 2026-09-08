@@ -8,7 +8,7 @@ import { CreateNetworkProfileRequest, UpdateNetworkProfileRequest } from "@/lib/
 import { ArrowLeftIcon } from "@heroicons/react/20/solid";
 import { Button } from "@/components/ui/button";
 
-export default function CreateNetworkProfilePage() {
+export default function CreatePPPoEProfilePage() {
   const router = useRouter();
   const { createProfile, loading } = useNetworkStore();
   const { showToast } = useNotificationStore();
@@ -42,9 +42,8 @@ export default function CreateNetworkProfilePage() {
           <ArrowLeftIcon className="h-4 w-4 mr-2 text-slate-700" /> Back to Profiles
         </Button>
       </div>
-      <h1 className="text-2xl font-bold text-slate-900">Create New Network Profile</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Create New Config Profile</h1>
       <NetworkProfileForm onSubmit={handleSubmit} onCancel={handleCancel} isLoading={loading} />
     </div>
   );
 }
-

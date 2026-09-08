@@ -48,11 +48,11 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
   const [deleting, setDeleting] = useState(false);
 
   const handleView = (id: string) => {
-    router.push(`/network/profiles/${id}`);
+    router.push(`/pppoe/profiles/${id}`);
   };
 
   const handleEdit = (id: string) => {
-    router.push(`/network/profiles/${id}/edit`);
+    router.push(`/pppoe/profiles/${id}/edit`);
   };
 
   const openDeleteDialog = (id: string, name: string) => {
@@ -151,7 +151,7 @@ export function NetworkProfileTable({ profiles, loading }: NetworkProfileTablePr
                  </div>
               </TableCell>
               <TableCell className="py-5 px-6 text-right">
-                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0">
+                <div className="flex items-center justify-end gap-1">
                   <Button 
                     variant="ghost" 
                     size="icon" 

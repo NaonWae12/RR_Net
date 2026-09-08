@@ -1190,7 +1190,9 @@ export interface Voucher {
   created_at: string;
   updated_at: string;
   total_uptime_seconds?: number;
+  uptime_seconds?: number;
   total_bytes_used?: number;
+  shared_users?: number;
 }
 
 export interface ResellerPurchase {

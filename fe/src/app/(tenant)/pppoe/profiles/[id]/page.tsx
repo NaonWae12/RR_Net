@@ -24,7 +24,7 @@ function formatSpeed(kbps: number): string {
   return `${kbps} Kbps`;
 }
 
-export default function NetworkProfileDetailPage() {
+export default function PPPoEProfileDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { profile, loading, error, fetchProfile, deleteProfile, clearProfile } = useNetworkStore();
@@ -52,7 +52,7 @@ export default function NetworkProfileDetailPage() {
         variant: "success",
       });
       setIsDeleteDialogOpen(false);
-      router.push("/network");
+      router.push("/pppoe?tab=profiles");
     } catch (err: any) {
       showToast({
         title: "Purge Failed",
@@ -80,8 +80,8 @@ export default function NetworkProfileDetailPage() {
         </div>
         <h2 className="text-xl font-black uppercase text-slate-900">Communication Error</h2>
         <p className="text-sm text-slate-500 font-medium leading-relaxed">{error}</p>
-        <Button onClick={() => router.back()} variant="outline" className="rounded-xl border-slate-200 uppercase font-black text-[10px] tracking-widest px-8">
-           Abort & Return
+        <Button onClick={() => router.push("/pppoe?tab=profiles")} variant="outline" className="rounded-xl border-slate-200 uppercase font-black text-[10px] tracking-widest px-8">
+           Return to Profiles
         </Button>
       </div>
     );
@@ -133,7 +133,7 @@ export default function NetworkProfileDetailPage() {
         <div className="flex items-center gap-3">
           <Button 
             variant="outline" 
-            onClick={() => router.push(`/network/profiles/${profile.id}/edit`)}
+            onClick={() => router.push(`/pppoe/profiles/${profile.id}/edit`)}
             className="h-12 px-6 rounded-2xl border-slate-200 bg-white shadow-sm hover:bg-slate-50 font-black uppercase text-[10px] tracking-widest text-slate-600"
           >
             <Pencil className="h-4 w-4 mr-2" />
@@ -345,4 +345,3 @@ export default function NetworkProfileDetailPage() {
     </div>
   );
 }
-

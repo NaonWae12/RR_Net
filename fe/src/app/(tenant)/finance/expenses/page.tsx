@@ -710,7 +710,7 @@ export default function ExpensesPage() {
                                 {processingId === expense.id ? "..." : "Pay"}
                               </Button>
                             )}
-                            <div className="p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="p-2">
                               <EyeIcon className="w-5 h-5 text-indigo-500" />
                             </div>
                           </div>

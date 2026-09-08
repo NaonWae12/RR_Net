@@ -594,7 +594,7 @@ export default function AssetDetailPage() {
                       </td>
                     )}
                     <td className="px-6 py-4 text-right">
-                      <Button variant="ghost" size="sm" className="rounded-xl h-8 w-10 p-0 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all opacity-0 group-hover:opacity-100">
+                       <Button variant="ghost" size="sm" className="rounded-xl h-8 w-10 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all">
                         <PencilSquareIcon className="w-4 h-4" />
                       </Button>
                     </td>

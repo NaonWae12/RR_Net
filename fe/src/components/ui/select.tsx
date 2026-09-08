@@ -109,10 +109,13 @@ export const SelectItem = React.forwardRef<HTMLDivElement, SelectItemProps>(
 SelectItem.displayName = "SelectItem";
 
 // Simple Select component wrapper for easier usage
-interface SimpleSelectProps {
+export interface SimpleSelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
   value?: string;
+  defaultValue?: string;
   onValueChange?: (value: string) => void;
-  children: React.ReactNode;
+  onChange?: React.ChangeEventHandler<HTMLSelectElement>;
+  options?: Array<{ label: string; value: string }>;
+  children?: React.ReactNode;
   className?: string;
   placeholder?: string;
   disabled?: boolean;
@@ -120,7 +123,20 @@ interface SimpleSelectProps {
   error?: string;
 }
 
-export function SimpleSelect({ value, onValueChange, children, className, placeholder, disabled, label, error }: SimpleSelectProps) {
+export function SimpleSelect({
+  value,
+  defaultValue,
+  onValueChange,
+  onChange,
+  options,
+  children,
+  className,
+  placeholder,
+  disabled,
+  label,
+  error,
+  ...props
+}: SimpleSelectProps) {
   return (
     <div className="flex w-full flex-col gap-1">
       {label && (
@@ -130,15 +146,26 @@ export function SimpleSelect({ value, onValueChange, children, className, placeh
       )}
       <Select
         value={value}
-        onChange={(e) => onValueChange?.(e.target.value)}
+        defaultValue={defaultValue}
+        onChange={(e) => {
+          onValueChange?.(e.target.value);
+          onChange?.(e);
+        }}
         className={cn(
           className,
           error ? "border-rose-400 focus-visible:ring-rose-200" : ""
         )}
         disabled={disabled}
+        {...props}
       >
         {placeholder && <option value="">{placeholder}</option>}
-        {children}
+        {options
+          ? options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))
+          : children}
       </Select>
       {error && (
         <span className="text-xs text-rose-600" role="alert">

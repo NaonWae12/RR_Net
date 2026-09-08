@@ -88,41 +88,20 @@ export default function NetworkPage() {
           )}
         </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-             <div className="flex items-center gap-3">
-                <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight text-indigo-900">Config Profiles</h2>
-                {profiles && (
-                   <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg text-[10px] font-black">{profiles.length}</span>
-                )}
-             </div>
-             <div className="flex items-center gap-2">
-                <Button 
-                   variant="ghost"
-                   onClick={() => router.push("/network/profiles")}
-                   className="h-10 px-4 text-indigo-400 hover:text-indigo-600 font-black uppercase text-[10px] tracking-widest hidden sm:flex"
-                >
-                   All Configs <ChevronRight className="h-3 w-3 ml-1" />
-                </Button>
-                <Button 
-                   onClick={() => router.push("/network/profiles/create")}
-                   variant="outline"
-                   className="h-10 px-5 rounded-xl border-indigo-100 bg-indigo-50/30 text-indigo-600 hover:bg-indigo-100 font-black uppercase text-[10px] tracking-widest"
-                >
-                   <Plus className="h-4 w-4 mr-2" />
-                   Create Config
-                </Button>
-             </div>
+        {/* Config Profiles Banner */}
+        <section className="p-6 rounded-3xl bg-indigo-50/50 border border-indigo-100/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="font-black text-indigo-950 uppercase text-xs tracking-wider">Managing Bandwidth & Speed Profiles?</h3>
+            <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+              Config Profiles are now unified under the <strong>PPPoE Management</strong> workspace alongside client secrets and IP automation.
+            </p>
           </div>
-
-          {profilesLoading ? (
-            <div className="flex justify-center items-center h-64 bg-slate-50/50 rounded-3xl border border-slate-100">
-              <LoadingSpinner size={32} />
-            </div>
-          ) : (
-            <NetworkProfileTable profiles={profiles} loading={false} />
-          )}
+          <Button 
+            onClick={() => router.push("/pppoe?tab=profiles")}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest px-5 h-11 rounded-xl shrink-0 shadow-md shadow-indigo-200"
+          >
+            Go to PPPoE Profiles <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
         </section>
       </div>
     </RoleGuard>

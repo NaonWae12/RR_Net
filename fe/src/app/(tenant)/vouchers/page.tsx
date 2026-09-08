@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { voucherService, VoucherPackage, Voucher } from "@/lib/api/voucherService";
+import { voucherService } from "@/lib/api/voucherService";
+import { VoucherPackage, Voucher } from "@/lib/api/types";
 import { useNetworkStore } from "@/stores/networkStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -675,7 +676,7 @@ export default function VouchersPage() {
       description: "Fitur edit voucher akan segera tersedia",
       variant: "info"
     });
-    setEditDialog({ open: false, voucher: null });
+    setEditDialog({ open: false, voucher: null, isEditMode: false });
   };
 
   const copy = async (text: string) => {
@@ -822,7 +823,7 @@ export default function VouchersPage() {
                   <label className="text-sm font-medium text-slate-700">Sistem Waktu (Timer)</label>
                   <select
                     value={pkgForm.expiration_mode || "wall_clock"}
-                    onChange={(e) => setPkgForm({ ...pkgForm, expiration_mode: e.target.value })}
+                    onChange={(e) => setPkgForm({ ...pkgForm, expiration_mode: e.target.value as 'wall_clock' | 'uptime_limit' })}
                     className="h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
                   >
                     <option value="wall_clock">Jalan Terus (Wall-Clock)</option>
@@ -1384,6 +1385,7 @@ export default function VouchersPage() {
                       routerId: defaultRouter?.id || "",
                       dnsNames: defaultRouter?.branding_config?.dns_names || (defaultRouter?.dns_name ? [defaultRouter.dns_name] : []),
                       labels: defaultRouter?.branding_config?.labels || [],
+                      selectedDesignSlug: defaultRouter?.branding_config?.selected_design_slug || "simple",
                     });
                   }}
                   variant="outline"
@@ -1549,7 +1551,7 @@ export default function VouchersPage() {
                       <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Username</label>
                       <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center justify-between group">
                         <span className="font-mono font-black text-indigo-700 text-lg">{editDialog.voucher.code}</span>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copy(editDialog.voucher?.code || "")}><Copy className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-400 hover:text-indigo-700 transition-colors" onClick={() => copy(editDialog.voucher?.code || "")}><Copy className="w-3.5 h-3.5" /></Button>
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -1587,7 +1589,7 @@ export default function VouchersPage() {
                         <Clock className="w-3 h-3 text-emerald-400" /> Total Uptime
                       </p>
                       <p className="text-xl font-mono font-black text-emerald-50">
-                        {formatDuration(editDialog.voucher.uptime_seconds)}
+                        {formatDuration(calculateUptime(editDialog.voucher))}
                       </p>
                     </div>
                     <div className="space-y-1 border-l border-white/10 pl-4">

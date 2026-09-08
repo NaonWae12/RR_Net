@@ -233,7 +233,7 @@ export function RouterTable({ routers, loading }: RouterTableProps) {
                 )}
               </TableCell>
               <TableCell className="py-5 px-6 text-right">
-                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0">
+                <div className="flex items-center justify-end gap-1">
                   <Button 
                     variant="ghost" 
                     size="icon" 

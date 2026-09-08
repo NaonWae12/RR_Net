@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { pppoeService, PPPoESecret, PPPoEIPSettings } from "@/lib/api/pppoeService";
 import { clientService, Client } from "@/lib/api/clientService";
 import { useNetworkStore } from "@/stores/networkStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NetworkProfileTable } from "@/components/network";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,10 @@ import {
   Settings,
   ShieldAlert,
   Sparkles,
+  Zap,
+  Layers,
+  Sliders,
+  ChevronRight,
 } from "lucide-react";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { Badge } from "@/components/ui/badge";
@@ -33,9 +39,25 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { Input } from "@/components/ui/input";
 
 export default function PPPoEPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+
   const { showToast } = useNotificationStore();
-  const { routers, profiles, fetchRouters, fetchProfiles } = useNetworkStore();
+  const { routers, profiles, profilesLoading, fetchRouters, fetchProfiles } = useNetworkStore();
   const { isAuthenticated } = useAuth();
+
+  const [activeTab, setActiveTab] = useState<"secrets" | "profiles">(
+    tabParam === "profiles" ? "profiles" : "secrets"
+  );
+
+  useEffect(() => {
+    if (tabParam === "profiles") {
+      setActiveTab("profiles");
+    } else if (tabParam === "secrets") {
+      setActiveTab("secrets");
+    }
+  }, [tabParam]);
 
   const [secrets, setSecrets] = useState<PPPoESecret[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -266,130 +288,204 @@ export default function PPPoEPage() {
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <RouterIcon className="w-8 h-8 text-indigo-600" /> PPPoE Management
           </h1>
-          <p className="text-slate-500 mt-1">Manage PPPoE client accounts and sync to routers.</p>
+          <p className="text-slate-500 mt-1">Manage PPPoE client accounts, IP automation, and speed limit profiles.</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={openSettingsModal}
-            className="gap-2 text-slate-700 border-slate-300 hover:bg-slate-50"
-          >
-            <Settings className="w-4 h-4 text-indigo-600" /> Automasi IP
-          </Button>
-          <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
-            <RotateCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-          <Button onClick={() => setCreateDialog(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-            <Plus className="w-4 h-4" /> Create Secret
-          </Button>
+          {activeTab === "secrets" ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={openSettingsModal}
+                className="gap-2 text-slate-700 border-slate-300 hover:bg-slate-50"
+              >
+                <Settings className="w-4 h-4 text-indigo-600" /> Automasi IP
+              </Button>
+              <Button variant="outline" onClick={load} disabled={loading} className="gap-2">
+                <RotateCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+              </Button>
+              <Button onClick={() => setCreateDialog(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                <Plus className="w-4 h-4" /> Create Secret
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={load} disabled={profilesLoading} className="gap-2">
+                <RotateCw className={`w-4 h-4 ${profilesLoading ? "animate-spin" : ""}`} /> Refresh
+              </Button>
+              <Button 
+                onClick={() => router.push("/pppoe/profiles/create")} 
+                className="gap-2 bg-indigo-600 hover:bg-indigo-700 font-bold"
+              >
+                <Plus className="w-4 h-4" /> Create Config Profile
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      <Card className="border-slate-200 shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50/50 border-b border-slate-200 py-4 px-6 gap-4">
-          <CardTitle className="text-lg font-bold text-slate-900 px-0">PPPoE Secrets</CardTitle>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:flex-initial">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                placeholder="Search username..."
-                className="w-full sm:w-64 bg-white border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+        <button
+          onClick={() => setActiveTab("secrets")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
+            activeTab === "secrets"
+              ? "bg-slate-900 text-white shadow-md shadow-slate-200"
+              : "bg-white text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 border border-slate-200/80"
+          }`}
+        >
+          <RouterIcon className="w-4 h-4" />
+          PPPoE Secrets
+          <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === "secrets" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"}`}>
+            {secrets.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("profiles")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
+            activeTab === "profiles"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+              : "bg-white text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 border border-slate-200/80"
+          }`}
+        >
+          <Zap className="w-4 h-4 text-indigo-300" />
+          Config Profiles
+          <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === "profiles" ? "bg-indigo-700 text-indigo-100" : "bg-indigo-50 text-indigo-600"}`}>
+            {profiles.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Tab Content: PPPoE Secrets */}
+      {activeTab === "secrets" && (
+        <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50/50 border-b border-slate-200 py-4 px-6 gap-4">
+            <CardTitle className="text-lg font-bold text-slate-900 px-0">PPPoE Secrets</CardTitle>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  placeholder="Search username..."
+                  className="w-full sm:w-64 bg-white border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <select
+                className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={selectedRouter}
+                onChange={(e) => setSelectedRouter(e.target.value)}
+              >
+                <option value="" className="text-slate-900">All Routers</option>
+                {routers.map((r) => (
+                  <option key={r.id} value={r.id} className="text-slate-900">
+                    {r.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={selectedRouter}
-              onChange={(e) => setSelectedRouter(e.target.value)}
-            >
-              <option value="" className="text-slate-900">All Routers</option>
-              {routers.map((r) => (
-                <option key={r.id} value={r.id} className="text-slate-900">
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </CardHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 text-left font-semibold">Username</th>
-                <th className="px-6 py-4 text-left font-semibold">Router</th>
-                <th className="px-6 py-4 text-left font-semibold">Profile</th>
-                <th className="px-6 py-4 text-left font-semibold">Local IP</th>
-                <th className="px-6 py-4 text-left font-semibold">Remote IP</th>
-                <th className="px-6 py-4 text-center font-semibold">Status</th>
-                <th className="px-6 py-4 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {filteredSecrets.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-50/80 transition-colors group">
-                  <td className="px-6 py-4 text-slate-900 font-mono font-bold">{s.username}</td>
-                  <td className="px-6 py-4 text-slate-600">
-                    {routers.find((r) => r.id === s.router_id)?.name || "Unknown"}
-                  </td>
-                  <td className="px-6 py-4 text-slate-600">
-                    {profiles.find((p) => p.id === s.profile_id)?.name || "Unknown"}
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-600">
-                    {s.local_address || <span className="text-slate-300 italic">-</span>}
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs font-semibold text-indigo-600">
-                    {s.remote_address || <span className="text-slate-300 italic font-normal">-</span>}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <Badge className={s.is_disabled ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
-                      {s.is_disabled ? "Disabled" : "Enabled"}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleToggleStatus(s)}
-                        className={`h-9 w-9 ${s.is_disabled ? "text-green-600 hover:text-green-700" : "text-orange-600 hover:text-orange-700"}`}
-                        title={s.is_disabled ? "Enable" : "Disable"}
-                      >
-                        {s.is_disabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleSync(s)}
-                        className="h-9 w-9 text-blue-600 hover:text-blue-700"
-                        title="Sync to Router"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteDialog({ open: true, secret: { id: s.id, username: s.username } })}
-                        className="h-9 w-9 text-red-600 hover:text-red-700"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredSecrets.length === 0 && (
+          </CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                 <tr>
-                  <td colSpan={7} className="p-12 text-center text-slate-400 italic">
-                    No PPPoE secrets found.
-                  </td>
+                  <th className="px-6 py-4 text-left font-semibold">Username</th>
+                  <th className="px-6 py-4 text-left font-semibold">Router</th>
+                  <th className="px-6 py-4 text-left font-semibold">Profile</th>
+                  <th className="px-6 py-4 text-left font-semibold">Local IP</th>
+                  <th className="px-6 py-4 text-left font-semibold">Remote IP</th>
+                  <th className="px-6 py-4 text-center font-semibold">Status</th>
+                  <th className="px-6 py-4 text-right font-semibold">Actions</th>
                 </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filteredSecrets.map((s) => (
+                  <tr key={s.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-6 py-4 text-slate-900 font-mono font-bold">{s.username}</td>
+                    <td className="px-6 py-4 text-slate-600">
+                      {routers.find((r) => r.id === s.router_id)?.name || "Unknown"}
+                    </td>
+                    <td className="px-6 py-4 text-slate-600">
+                      {profiles.find((p) => p.id === s.profile_id)?.name || "Unknown"}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                      {s.local_address || <span className="text-slate-300 italic">-</span>}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs font-semibold text-indigo-600">
+                      {s.remote_address || <span className="text-slate-300 italic font-normal">-</span>}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <Badge className={s.is_disabled ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+                        {s.is_disabled ? "Disabled" : "Enabled"}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleToggleStatus(s)}
+                          className={`h-9 w-9 ${s.is_disabled ? "text-green-600 hover:text-green-700" : "text-amber-600 hover:text-amber-700"}`}
+                          title={s.is_disabled ? "Enable Secret" : "Disable Secret"}
+                        >
+                          {s.is_disabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleSync(s)}
+                          className="h-9 w-9 text-blue-600 hover:text-blue-700"
+                          title="Sync to Router"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteDialog({ open: true, secret: { id: s.id, username: s.username } })}
+                          className="h-9 w-9 text-red-600 hover:text-red-700"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredSecrets.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-12 text-center text-slate-400 italic">
+                      No PPPoE secrets found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Tab Content: Config Profiles */}
+      {activeTab === "profiles" && (
+        <Card className="border-slate-200 shadow-sm overflow-hidden p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+              <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Speed & Bandwidth Profiles</h2>
+              {profiles && (
+                <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg text-xs font-black">{profiles.length} Profiles</span>
               )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+            </div>
+            <Button 
+              onClick={() => router.push("/pppoe/profiles/create")}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider px-4 rounded-xl gap-2"
+            >
+              <Plus className="w-4 h-4" /> Deploy Config
+            </Button>
+          </div>
+          <NetworkProfileTable profiles={profiles} loading={profilesLoading} />
+        </Card>
+      )}
 
       {/* IP Automation Settings Dialog */}
       <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}>
