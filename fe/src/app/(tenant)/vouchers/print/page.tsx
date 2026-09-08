@@ -80,7 +80,7 @@ export default function VoucherPrintPage() {
         vouchers: [],
         notes: v.notes || 'Tanpa Catatan',
         timestamp: v.created_at,
-        routerId: v.router_id
+        routerId: v.router_id || undefined
       };
     }
     acc[key].vouchers.push(v);
@@ -130,7 +130,7 @@ export default function VoucherPrintPage() {
 
       // --- LOGIK GLOBAL DESIGN ---
       // Cek role user
-      const isReseller = user?.role === 'reseller';
+      const isReseller = (user?.role as string) === 'reseller';
       const defaultSlugs = tenant?.default_voucher_design_slug;
       const resellerSlugs = tenant?.reseller_voucher_design_slug;
       
@@ -257,12 +257,12 @@ export default function VoucherPrintPage() {
             </div>
 
             {/* Template Selection - HIDDEN for Resellers if forced */}
-            {user?.role !== 'reseller' && (
+            {(user?.role as string) !== 'reseller' && (
               <div className="space-y-2 flex-shrink-0">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Template:</label>
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full no-scrollbar">
                   {(() => {
-                    const isReseller = user?.role === 'reseller';
+                    const isReseller = (user?.role as string) === 'reseller';
                     
                     const defaultSlugs = tenant?.default_voucher_design_slug;
                     const defaultAllowed = Array.isArray(defaultSlugs) ? defaultSlugs : (defaultSlugs ? [defaultSlugs as unknown as string] : []);
