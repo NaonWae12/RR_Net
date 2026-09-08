@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"strconv"
 	"time"
 
 	hibasynq "github.com/hibiken/asynq"
@@ -129,12 +130,18 @@ func main() {
 	)
 	cleanupScheduler.StartWeeklyScheduler(context.Background())
 
-	// Step 4d: Start daily voucher cleanup scheduler (hard delete after 60 days / 2 months)
+	// Step 4d: Start daily voucher cleanup scheduler (hard delete after 17 days)
+	voucherRetentionDays := 17
+	if envDays := os.Getenv("VOUCHER_RETENTION_DAYS"); envDays != "" {
+		if parsed, err := strconv.Atoi(envDays); err == nil && parsed > 0 {
+			voucherRetentionDays = parsed
+		}
+	}
 	voucherRepo := repository.NewVoucherRepository(db)
 	voucherCleanupScheduler := service.NewVoucherCleanupScheduler(
 		voucherRepo,
-		60,      // retentionDays (2 months)
-		"01:15", // runTime
+		voucherRetentionDays, // 17 days (or VOUCHER_RETENTION_DAYS env)
+		"01:15",               // runTime
 	)
 	voucherCleanupScheduler.StartDailyScheduler(context.Background())
 

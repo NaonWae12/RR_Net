@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { voucherService, VoucherPackage, Voucher } from "@/lib/api/voucherService";
+import { voucherService } from "@/lib/api/voucherService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import { LoadingSpinner } from "@/components/utilities/LoadingSpinner";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useNetworkStore } from "@/stores/networkStore";
-import { VoucherDesign } from '@/lib/api/types';
+import { VoucherDesign, VoucherPackage, Voucher } from '@/lib/api/types';
 import { VOUCHER_TEMPLATES, getTemplateBySlug } from '@/components/vouchers/templates/registry';
 import {
   DropdownMenu,
@@ -43,7 +43,7 @@ export default function VoucherPrintPage() {
   const [selectedBatchKey, setSelectedBatchKey] = useState<string>("");
   const [cardDesignMode, setCardDesignMode] = useState<string>('simple');
   const [ownedDesigns, setOwnedDesigns] = useState<VoucherDesign[]>([]);
-  const { tenant } = useAuth();
+  const { user, tenant } = useAuth();
   const { routers, fetchRouters } = useNetworkStore();
 
   const [brandingSource, setBrandingSource] = useState<'tenant' | 'package' | 'dns' | 'label'>('tenant');
@@ -99,7 +99,7 @@ export default function VoucherPrintPage() {
     setLoading(true);
     try {
       const [vres, pkgs, owned] = await Promise.all([
-        voucherService.listVouchers({ limit: 1000 }),
+        voucherService.listVouchers({ limit: 50000 }),
         voucherService.listPackages(),
         voucherService.listOwnedDesigns()
       ]);
@@ -130,7 +130,7 @@ export default function VoucherPrintPage() {
 
       // --- LOGIK GLOBAL DESIGN ---
       // Cek role user
-      const isReseller = tenant?.role === 'reseller';
+      const isReseller = user?.role === 'reseller';
       const defaultSlugs = tenant?.default_voucher_design_slug;
       const resellerSlugs = tenant?.reseller_voucher_design_slug;
       
@@ -257,12 +257,12 @@ export default function VoucherPrintPage() {
             </div>
 
             {/* Template Selection - HIDDEN for Resellers if forced */}
-            {tenant?.role !== 'reseller' && (
+            {user?.role !== 'reseller' && (
               <div className="space-y-2 flex-shrink-0">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Template:</label>
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full no-scrollbar">
                   {(() => {
-                    const isReseller = tenant?.role === 'reseller';
+                    const isReseller = user?.role === 'reseller';
                     
                     const defaultSlugs = tenant?.default_voucher_design_slug;
                     const defaultAllowed = Array.isArray(defaultSlugs) ? defaultSlugs : (defaultSlugs ? [defaultSlugs as unknown as string] : []);
