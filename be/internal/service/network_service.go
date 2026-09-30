@@ -1674,9 +1674,9 @@ func convertToMikrotikProfile(profile *network.NetworkProfile) mikrotik.PPPoEPro
 	if downloadBps >= 1000000 {
 		downloadMbps := downloadBps / 1000000
 		uploadMbps := uploadBps / 1000000
-		rateLimit = fmt.Sprintf("%dM/%dM", uploadMbps, downloadMbps)
+		rateLimit = fmt.Sprintf("%dM/%dM", downloadMbps, uploadMbps)
 	} else {
-		rateLimit = fmt.Sprintf("%d/%d", uploadBps, downloadBps)
+		rateLimit = fmt.Sprintf("%d/%d", downloadBps, uploadBps)
 	}
 
 	mikrotikProfile := mikrotik.PPPoEProfile{

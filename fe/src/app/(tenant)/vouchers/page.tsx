@@ -454,7 +454,12 @@ export default function VouchersPage() {
       name: pkg.name,
       download_speed: pkg.download_speed,
       upload_speed: pkg.upload_speed,
-      validity: pkg.validity || "2h",
+      validity: pkg.validity || (pkg.duration_hours ? (
+        pkg.duration_hours % 720 === 0 ? `${pkg.duration_hours / 720}B` :
+        pkg.duration_hours % 168 === 0 ? `${pkg.duration_hours / 168}M` :
+        pkg.duration_hours % 24 === 0 ? `${pkg.duration_hours / 24}H` :
+        `${pkg.duration_hours}J`
+      ) : "2J"),
       price: pkg.price || "",
       rate_limit_mode: pkg.rate_limit_mode || "full_radius",
       expiration_mode: pkg.expiration_mode || "wall_clock",
@@ -473,6 +478,7 @@ export default function VouchersPage() {
         validity: editPkgForm.validity,
         price: Number(editPkgForm.price),
         rate_limit_mode: editPkgForm.rate_limit_mode,
+        expiration_mode: editPkgForm.expiration_mode,
       });
       showToast({ title: "Paket diperbarui", description: "Perubahan paket berhasil disimpan", variant: "success" });
       setEditPackageDialog({ open: false, pkg: null });

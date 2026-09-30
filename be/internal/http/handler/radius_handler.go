@@ -184,7 +184,7 @@ AuthSuccess:
 	pkg, _ := h.voucherService.GetPackage(ctx, v.PackageID)
 	if pkg != nil {
 		if pkg.RateLimitMode == "full_radius" {
-			response["Mikrotik-Rate-Limit"] = fmt.Sprintf("%dk/%dk", pkg.DownloadSpeed, pkg.UploadSpeed)
+			response["Mikrotik-Rate-Limit"] = fmt.Sprintf("%dk/%dk", pkg.UploadSpeed, pkg.DownloadSpeed)
 		} else {
 			response["Class"] = pkg.Name
 		}

@@ -205,131 +205,127 @@ export default function VoucherPrintPage() {
         </div>
       </div>
 
-      {/* Filters & Controls */}
-      <Card className="border-purple-100 shadow-sm no-print">
-        <CardHeader className="bg-purple-50/50 border-b border-purple-200">
-          <CardTitle className="text-purple-900 text-lg">Filter & Pengaturan Print</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row flex-wrap gap-6 lg:items-end">
-            {/* Batch Selection */}
-            <div className="space-y-2 flex-grow min-w-[280px]">
-              <label className="text-sm font-medium text-slate-700">Pilih Batch Print</label>
-              <div className="flex gap-2">
-                <select
-                  value={selectedBatchKey}
-                  onChange={(e) => {
-                    setSelectedBatchKey(e.target.value);
-                    setBrandingSource('tenant');
-                    setSelectedBrandingValue("");
-                  }}
-                  className="flex-1 h-10 border rounded-md px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-purple-500 outline-none text-slate-900 border-slate-200"
-                >
-                  <option value="">-- Pilih Batch Waktu Generate --</option>
-                  {sortedBatchKeys.map((key) => {
-                    const batch = batchGroups[key];
-                    const createdDate = batch.timestamp ? new Date(batch.timestamp).toLocaleDateString('id-ID', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    }) : 'Waktu Tidak Diketahui';
-                    return (
-                      <option key={key} value={key}>
-                        Batch [{createdDate}] - {batch.vouchers.length} Vouchers ({batch.notes})
-                      </option>
-                    );
-                  })}
-                </select>
-                {selectedBatchKey && (
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={() => setIsDeleteDialogOpen(true)}
-                    className="h-10 w-10 text-red-500 border-red-200 hover:bg-red-50"
-                    title="Hapus Batch Voucher Ini"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
+      {/* Filters & Controls — compact single-row bar */}
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-white border border-purple-100 rounded-xl shadow-sm no-print">
+        {/* Label */}
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap hidden sm:block">
+          Batch Print
+        </span>
 
-            {/* Template Selection - HIDDEN for Resellers if forced */}
-            {(user?.role as string) !== 'reseller' && (
-              <div className="space-y-2 flex-shrink-0">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Template:</label>
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full no-scrollbar">
-                  {(() => {
-                    const isReseller = (user?.role as string) === 'reseller';
-                    
-                    const defaultSlugs = tenant?.default_voucher_design_slug;
-                    const defaultAllowed = Array.isArray(defaultSlugs) ? defaultSlugs : (defaultSlugs ? [defaultSlugs as unknown as string] : []);
-
-                    const resellerSlugs = tenant?.reseller_voucher_design_slug;
-                    const resellerAllowed = Array.isArray(resellerSlugs) ? resellerSlugs : (resellerSlugs ? [resellerSlugs as unknown as string] : []);
-                    
-                    // Filter designs based on role and mandatory collection
-                    let availableDesigns: VoucherDesign[] = [];
-                    const alwaysAllowed = ['simple', 'mikhmon'];
-                    
-                    if (isReseller) {
-                      const allowed = resellerAllowed.length > 0 ? resellerAllowed : alwaysAllowed;
-                      availableDesigns = ownedDesigns.filter(d => allowed.includes(d.slug) || alwaysAllowed.includes(d.slug));
-                    } else {
-                      const allowed = defaultAllowed.length > 0 ? defaultAllowed : alwaysAllowed;
-                      availableDesigns = ownedDesigns.filter(d => allowed.includes(d.slug) || alwaysAllowed.includes(d.slug));
-                    }
-
-                    if (availableDesigns.length > 0) {
-                      return availableDesigns.map(design => {
-                        const isActive = cardDesignMode === design.slug;
-                        return (
-                          <button
-                            key={design.id}
-                            onClick={() => setCardDesignMode(design.slug)}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap ${
-                              isActive ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                            }`}
-                          >
-                            {design.name}
-                          </button>
-                        );
-                      });
-                    }
-
-                    // No designs allowed case
-                    return (
-                      <div className="flex items-center gap-3 px-2">
-                        <span className="text-xs font-bold text-red-500">Belum ada desain yang diaktifkan.</span>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => router.push('/vouchers/design')}
-                          className="h-7 text-[10px] font-bold border-red-200 text-red-600 hover:bg-red-50"
-                        >
-                          Pilih Desain Sekarang
-                        </Button>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            )}
-
-            {/* Print Button */}
+        {/* Batch dropdown + delete */}
+        <div className="flex gap-2 flex-1 min-w-0">
+          <select
+            value={selectedBatchKey}
+            onChange={(e) => {
+              setSelectedBatchKey(e.target.value);
+              setBrandingSource('tenant');
+              setSelectedBrandingValue("");
+            }}
+            className="flex-1 min-w-0 h-9 border rounded-lg px-3 py-1.5 bg-white text-sm focus:ring-2 focus:ring-purple-500 outline-none text-slate-900 border-slate-200"
+          >
+            <option value="">-- Pilih Batch Waktu Generate --</option>
+            {sortedBatchKeys.map((key) => {
+              const batch = batchGroups[key];
+              const createdDate = batch.timestamp ? new Date(batch.timestamp).toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : 'Waktu Tidak Diketahui';
+              return (
+                <option key={key} value={key}>
+                  Batch [{createdDate}] - {batch.vouchers.length} Vouchers ({batch.notes})
+                </option>
+              );
+            })}
+          </select>
+          {selectedBatchKey && (
             <Button
-              onClick={() => window.print()}
-              disabled={filteredVouchers.length === 0}
-              className="bg-purple-600 hover:bg-purple-700 h-10 gap-2 flex-shrink-0 sm:w-auto w-full"
+              variant="outline"
+              size="icon"
+              onClick={() => setIsDeleteDialogOpen(true)}
+              className="h-9 w-9 shrink-0 text-red-500 border-red-200 hover:bg-red-50"
+              title="Hapus Batch Voucher Ini"
             >
-              <Printer className="w-4 h-4" />
-              Print {filteredVouchers.length} Voucher
+              <Trash2 className="w-4 h-4" />
             </Button>
-          </div>
+          )}
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 pt-6 border-t border-slate-100">
+        {/* Template selector pill */}
+        {(user?.role as string) !== 'reseller' && (
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto no-scrollbar shrink-0">
+            {(() => {
+              const isReseller = (user?.role as string) === 'reseller';
+
+              const defaultSlugs = tenant?.default_voucher_design_slug;
+              const defaultAllowed = Array.isArray(defaultSlugs) ? defaultSlugs : (defaultSlugs ? [defaultSlugs as unknown as string] : []);
+
+              const resellerSlugs = tenant?.reseller_voucher_design_slug;
+              const resellerAllowed = Array.isArray(resellerSlugs) ? resellerSlugs : (resellerSlugs ? [resellerSlugs as unknown as string] : []);
+
+              // Filter designs based on role and mandatory collection
+              let availableDesigns: VoucherDesign[] = [];
+              const alwaysAllowed = ['simple', 'mikhmon'];
+
+              if (isReseller) {
+                const allowed = resellerAllowed.length > 0 ? resellerAllowed : alwaysAllowed;
+                availableDesigns = ownedDesigns.filter(d => allowed.includes(d.slug) || alwaysAllowed.includes(d.slug));
+              } else {
+                const allowed = defaultAllowed.length > 0 ? defaultAllowed : alwaysAllowed;
+                availableDesigns = ownedDesigns.filter(d => allowed.includes(d.slug) || alwaysAllowed.includes(d.slug));
+              }
+
+              if (availableDesigns.length > 0) {
+                return availableDesigns.map(design => {
+                  const isActive = cardDesignMode === design.slug;
+                  return (
+                    <button
+                      key={design.id}
+                      onClick={() => setCardDesignMode(design.slug)}
+                      className={`px-3 py-1 rounded-md text-xs font-black transition-all whitespace-nowrap ${
+                        isActive ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {design.name}
+                    </button>
+                  );
+                });
+              }
+
+              return (
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs font-bold text-red-500">Belum ada desain.</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push('/vouchers/design')}
+                    className="h-6 text-[10px] font-bold border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Pilih Desain
+                  </Button>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Print Button */}
+        <Button
+          onClick={() => window.print()}
+          disabled={filteredVouchers.length === 0}
+          className="bg-purple-600 hover:bg-purple-700 h-9 gap-2 shrink-0"
+        >
+          <Printer className="w-4 h-4" />
+          Print {filteredVouchers.length} Voucher
+        </Button>
+      </div>
+
+      {/* Branding & Batch Info */}
+      <Card className="border-purple-100 shadow-sm no-print">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Header Branding Selection */}
             {(() => {
               const currentBatch = batchGroups[selectedBatchKey];
@@ -433,7 +429,7 @@ export default function VoucherPrintPage() {
 
           {/* Batch Info */}
           {selectedBatchKey && batchGroups[selectedBatchKey] && filteredVouchers.length > 0 && (
-            <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm text-purple-900">
                 <Calendar className="w-4 h-4" />
                 <span className="font-bold">Tanggal Generate Batch:</span>
@@ -449,8 +445,8 @@ export default function VoucherPrintPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2 text-sm text-purple-900">
-                 <span className="font-bold">Notes/Keterangan:</span>
-                 <Badge variant="outline" className="bg-white border-purple-200 text-purple-800">{batchGroups[selectedBatchKey].notes}</Badge>
+                <span className="font-bold">Notes/Keterangan:</span>
+                <Badge variant="outline" className="bg-white border-purple-200 text-purple-800">{batchGroups[selectedBatchKey].notes}</Badge>
               </div>
             </div>
           )}
