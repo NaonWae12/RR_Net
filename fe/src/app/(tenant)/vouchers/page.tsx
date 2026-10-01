@@ -46,7 +46,10 @@ import {
   Share2,
   MoreHorizontal,
   Check,
-  ShoppingBag
+  ShoppingBag,
+  Eye,
+  Calendar,
+  Info
 } from "lucide-react";
 import { VoucherDesign } from "@/lib/api/types";
 import { VOUCHER_TEMPLATES, getTemplateBySlug } from '@/components/vouchers/templates/registry';
@@ -76,6 +79,23 @@ function formatDuration(seconds: number = 0) {
   if (h > 0) return `${h}j ${m}m ${s}s`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+function formatExpiredAgo(expiresAt: string | null | undefined) {
+  if (!expiresAt) return null;
+  const expTime = new Date(expiresAt).getTime();
+  if (isNaN(expTime)) return null;
+  const now = Date.now();
+  if (expTime > now) return null;
+  const diffSec = Math.floor((now - expTime) / 1000);
+  const days = Math.floor(diffSec / 86400);
+  const hours = Math.floor((diffSec % 86400) / 3600);
+  const minutes = Math.floor((diffSec % 3600) / 60);
+
+  if (days > 0) return `${days} hari ${hours} jam yang lalu`;
+  if (hours > 0) return `${hours} jam ${minutes} menit yang lalu`;
+  if (minutes > 0) return `${minutes} menit yang lalu`;
+  return "Baru saja expired";
 }
 
 function calculateUptime(v: Voucher) {
@@ -1218,55 +1238,74 @@ export default function VouchersPage() {
                               <DropdownMenuLabel>Aksi Voucher</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               
-                              {(v.status === "active" || v.status === "revoked") && (
-                                <DropdownMenuItem onClick={() => handleToggleStatus(v)} className="gap-2">
-                                  {v.status === "revoked" ? (
-                                    <>
-                                      <Power className="w-4 h-4 text-green-600" />
-                                      <span>Enable Voucher</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <PowerOff className="w-4 h-4 text-orange-600" />
-                                      <span>Disable Voucher</span>
-                                    </>
+                              {statusFilter === 'kadaluarsa' ? (
+                                <>
+                                  <DropdownMenuItem onClick={() => setEditDialog({ open: true, voucher: v, isEditMode: false })} className="gap-2">
+                                    <Eye className="w-4 h-4 text-indigo-600" />
+                                    <span>Detail Voucher</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteClick(v.id, v.code)} 
+                                    className="gap-2 text-red-600 focus:text-red-700 focus:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Hapus Voucher</span>
+                                  </DropdownMenuItem>
+                                </>
+                              ) : (
+                                <>
+                                  {(v.status === "active" || v.status === "revoked") && (
+                                    <DropdownMenuItem onClick={() => handleToggleStatus(v)} className="gap-2">
+                                      {v.status === "revoked" ? (
+                                        <>
+                                          <Power className="w-4 h-4 text-green-600" />
+                                          <span>Enable Voucher</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <PowerOff className="w-4 h-4 text-orange-600" />
+                                          <span>Disable Voucher</span>
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
                                   )}
-                                </DropdownMenuItem>
+
+                                  <DropdownMenuItem onClick={() => handleToggleIsolate(v)} className="gap-2">
+                                    {v.isolated ? (
+                                      <>
+                                        <Shield className="w-4 h-4 text-green-600" />
+                                        <span>Un-Isolir (Aktifkan)</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ShieldOff className="w-4 h-4 text-red-600" />
+                                        <span>Isolir (Blokir)</span>
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuItem onClick={() => router.push('/vouchers/print')} className="gap-2">
+                                    <Printer className="w-4 h-4 text-purple-600" />
+                                    <span>Print Management</span>
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuItem onClick={() => handleEditVoucher(v)} className="gap-2">
+                                    <Edit className="w-4 h-4 text-blue-600" />
+                                    <span>Edit Voucher</span>
+                                  </DropdownMenuItem>
+                                  
+                                  <DropdownMenuSeparator />
+                                  
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteClick(v.id, v.code)} 
+                                    className="gap-2 text-red-600 focus:text-red-700 focus:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Hapus Voucher</span>
+                                  </DropdownMenuItem>
+                                </>
                               )}
-
-                              <DropdownMenuItem onClick={() => handleToggleIsolate(v)} className="gap-2">
-                                {v.isolated ? (
-                                  <>
-                                    <Shield className="w-4 h-4 text-green-600" />
-                                    <span>Un-Isolir (Aktifkan)</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ShieldOff className="w-4 h-4 text-red-600" />
-                                    <span>Isolir (Blokir)</span>
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem onClick={() => router.push('/vouchers/print')} className="gap-2">
-                                <Printer className="w-4 h-4 text-purple-600" />
-                                <span>Print Management</span>
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem onClick={() => handleEditVoucher(v)} className="gap-2">
-                                <Edit className="w-4 h-4 text-blue-600" />
-                                <span>Edit Voucher</span>
-                              </DropdownMenuItem>
-                              
-                              <DropdownMenuSeparator />
-                              
-                              <DropdownMenuItem 
-                                onClick={() => handleDeleteClick(v.id, v.code)} 
-                                className="gap-2 text-red-600 focus:text-red-700 focus:bg-red-50"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                <span>Hapus Voucher</span>
-                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -1588,6 +1627,41 @@ export default function VouchersPage() {
                       </div>
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tanggal Pakai</label>
+                      <div className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700">
+                        {editDialog.voucher.used_at ? new Date(editDialog.voucher.used_at).toLocaleDateString("id-ID", {
+                          day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                        }) : <span className="text-slate-400 italic">Belum dipakai</span>}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tanggal Expired</label>
+                      <div className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700">
+                        {editDialog.voucher.expires_at ? new Date(editDialog.voucher.expires_at).toLocaleDateString("id-ID", {
+                          day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                        }) : <span className="text-slate-400 italic">Tidak ditentukan</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const expiredAgo = formatExpiredAgo(editDialog.voucher.expires_at);
+                    if (!expiredAgo) return null;
+                    return (
+                      <div className="p-3 bg-red-50 rounded-xl border border-red-200 flex items-center justify-between text-red-700">
+                        <div className="flex items-center gap-2 text-xs font-bold">
+                          <Clock className="w-4 h-4 text-red-500" />
+                          <span>Sudah Expired Sejak:</span>
+                        </div>
+                        <span className="text-xs font-extrabold bg-red-100 px-2.5 py-1 rounded-lg text-red-800">
+                          {expiredAgo}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   <div className="grid grid-cols-2 gap-4 p-4 bg-slate-900 rounded-2xl text-white shadow-lg shadow-slate-200">
                     <div className="space-y-1">

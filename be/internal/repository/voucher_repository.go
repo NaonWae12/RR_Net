@@ -498,9 +498,12 @@ func (r *VoucherRepository) ListByRouter(ctx context.Context, routerID uuid.UUID
 	return vouchers, nil
 }
 
-// HardDeleteExpiredVouchers deletes vouchers that have been expired longer than the retention period
+// HardDeleteExpiredVouchers deletes vouchers that have been expired/used longer than the retention period.
+// Covers both 'expired' (wall_clock/uptime timeout) and 'used' (voucher was consumed) statuses.
 func (r *VoucherRepository) HardDeleteExpiredVouchers(ctx context.Context, olderThan time.Time) (int64, error) {
-	query := `DELETE FROM vouchers WHERE status = 'expired' AND expires_at < $1`
+	query := `DELETE FROM vouchers 
+	          WHERE status IN ('expired', 'used') 
+	          AND expires_at < $1`
 	result, err := r.db.Exec(ctx, query, olderThan)
 	if err != nil {
 		return 0, err
