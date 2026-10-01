@@ -74,7 +74,7 @@ func (s *VoucherService) UpdateVoucher(ctx context.Context, tenantID uuid.UUID, 
 				return
 			}
 			addr := net.JoinHostPort(router.Host, strconv.Itoa(router.APIPort))
-			userCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			userCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
 
 			// Try update first

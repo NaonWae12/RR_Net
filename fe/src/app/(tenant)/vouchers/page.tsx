@@ -568,7 +568,7 @@ export default function VouchersPage() {
       shared_users: voucher.shared_users || 1,
       notes: voucher.notes || ""
     });
-    setEditDialog({ open: true, voucher, isEditMode: false });
+    setEditDialog({ open: true, voucher, isEditMode: true });
   };
 
   const confirmUpdateVoucher = async () => {
@@ -1504,7 +1504,19 @@ export default function VouchersPage() {
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  onClick={() => setEditDialog(prev => ({ ...prev, isEditMode: true }))}
+                  onClick={() => {
+                    if (editDialog.voucher) {
+                      setEditVoucherForm({
+                        code: editDialog.voucher.code,
+                        password: editDialog.voucher.password || "",
+                        package_id: editDialog.voucher.package_id,
+                        router_id: editDialog.voucher.router_id || "all",
+                        shared_users: editDialog.voucher.shared_users || 1,
+                        notes: editDialog.voucher.notes || ""
+                      });
+                    }
+                    setEditDialog(prev => ({ ...prev, isEditMode: true }));
+                  }}
                   className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 gap-2 h-8"
                 >
                   <Edit className="w-3.5 h-3.5" /> Edit
