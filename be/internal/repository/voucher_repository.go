@@ -127,12 +127,12 @@ func (r *VoucherRepository) CreateVoucher(ctx context.Context, v *voucher.Vouche
 	query := `
 		INSERT INTO vouchers (
 			id, tenant_id, package_id, router_id, code, password, status,
-			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, batch_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	_, err := r.db.Exec(ctx, query,
 		v.ID, v.TenantID, v.PackageID, v.RouterID, v.Code, v.Password, v.Status,
-		v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers, v.ResellerPurchaseID, v.CreatedAt, v.UpdatedAt,
+		v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers, v.ResellerPurchaseID, v.BatchID, v.CreatedAt, v.UpdatedAt,
 	)
 	return err
 }
@@ -146,14 +146,14 @@ func (r *VoucherRepository) CreateVouchersBatch(ctx context.Context, vouchers []
 	query := `
 		INSERT INTO vouchers (
 			id, tenant_id, package_id, router_id, code, password, status,
-			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			used_at, expires_at, first_session_id, notes, shared_users, reseller_purchase_id, batch_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	for _, v := range vouchers {
 		batch.Queue(query,
 			v.ID, v.TenantID, v.PackageID, v.RouterID, v.Code, v.Password, v.Status,
-			v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers, v.ResellerPurchaseID, v.CreatedAt, v.UpdatedAt,
+			v.UsedAt, v.ExpiresAt, v.FirstSessionID, v.Notes, v.SharedUsers, v.ResellerPurchaseID, v.BatchID, v.CreatedAt, v.UpdatedAt,
 		)
 	}
 
@@ -174,7 +174,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 	query := `
 		SELECT
 			v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
-			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.batch_id, v.created_at, v.updated_at,
 			v.total_uptime_seconds, v.total_bytes_used,
 			p.name as package_name, p.expiration_mode
 		FROM vouchers v
@@ -184,7 +184,7 @@ func (r *VoucherRepository) GetVoucherByCode(ctx context.Context, tenantID uuid.
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, tenantID, code).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.BatchID, &v.CreatedAt, &v.UpdatedAt,
 		&v.TotalUptimeSeconds, &v.TotalBytesUsed,
 		&v.PackageName, &v.ExpirationMode,
 	)
@@ -233,7 +233,7 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 				ELSE v.status 
 			END as status,
 			v.isolated,
-			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.batch_id, v.created_at, v.updated_at,
 			p.name as package_name,
 			p.expiration_mode,
 			v.total_uptime_seconds,
@@ -257,7 +257,7 @@ func (r *VoucherRepository) ListVouchersByTenant(ctx context.Context, tenantID u
 		var v voucher.Voucher
 		err := rows.Scan(
 			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
+			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.BatchID, &v.CreatedAt, &v.UpdatedAt,
 			&v.PackageName, &v.ExpirationMode, &v.TotalUptimeSeconds, &v.TotalBytesUsed,
 		)
 		if err != nil {
@@ -286,7 +286,7 @@ func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*
 				ELSE v.status 
 			END as status,
 			v.isolated,
-			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.created_at, v.updated_at,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.batch_id, v.created_at, v.updated_at,
 			p.name as package_name,
 			p.expiration_mode,
 			v.total_uptime_seconds,
@@ -298,7 +298,7 @@ func (r *VoucherRepository) GetVoucherByID(ctx context.Context, id uuid.UUID) (*
 	var v voucher.Voucher
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
-		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.CreatedAt, &v.UpdatedAt,
+		&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.BatchID, &v.CreatedAt, &v.UpdatedAt,
 		&v.PackageName, &v.ExpirationMode, &v.TotalUptimeSeconds, &v.TotalBytesUsed,
 	)
 	if err == pgx.ErrNoRows {
@@ -356,8 +356,93 @@ func (r *VoucherRepository) DeleteVouchersByPurchase(ctx context.Context, purcha
 	return err
 }
 
+func (r *VoucherRepository) GetVouchersByBatchID(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID) ([]*voucher.Voucher, error) {
+	query := `
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.batch_id, v.created_at, v.updated_at,
+			v.total_uptime_seconds, v.total_bytes_used,
+			p.name as package_name, p.expiration_mode
+		FROM vouchers v
+		JOIN voucher_packages p ON v.package_id = p.id
+		WHERE v.tenant_id = $1 AND v.batch_id = $2
+	`
+	rows, err := r.db.Query(ctx, query, tenantID, batchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vouchers []*voucher.Voucher
+	for rows.Next() {
+		var v voucher.Voucher
+		err := rows.Scan(
+			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
+			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.BatchID, &v.CreatedAt, &v.UpdatedAt,
+			&v.TotalUptimeSeconds, &v.TotalBytesUsed,
+			&v.PackageName, &v.ExpirationMode,
+		)
+		if err != nil {
+			return nil, err
+		}
+		vouchers = append(vouchers, &v)
+	}
+	return vouchers, nil
+}
+
+func (r *VoucherRepository) GetVouchersByCreatedAtRange(ctx context.Context, tenantID uuid.UUID, createdAt time.Time) ([]*voucher.Voucher, error) {
+	query := `
+		SELECT v.id, v.tenant_id, v.package_id, v.router_id, v.code, COALESCE(v.password, ''), v.status, v.isolated,
+			v.used_at, v.expires_at, v.first_session_id, COALESCE(v.notes, ''), v.shared_users, v.reseller_purchase_id, v.batch_id, v.created_at, v.updated_at,
+			v.total_uptime_seconds, v.total_bytes_used,
+			p.name as package_name, p.expiration_mode
+		FROM vouchers v
+		JOIN voucher_packages p ON v.package_id = p.id
+		WHERE v.tenant_id = $1 
+		  AND (
+			v.created_at = $2 
+			OR date_trunc('second', v.created_at) = date_trunc('second', $2::timestamptz)
+			OR v.created_at BETWEEN $2::timestamptz - INTERVAL '2 seconds' AND $2::timestamptz + INTERVAL '2 seconds'
+		  )
+	`
+	rows, err := r.db.Query(ctx, query, tenantID, createdAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vouchers []*voucher.Voucher
+	for rows.Next() {
+		var v voucher.Voucher
+		err := rows.Scan(
+			&v.ID, &v.TenantID, &v.PackageID, &v.RouterID, &v.Code, &v.Password, &v.Status, &v.Isolated,
+			&v.UsedAt, &v.ExpiresAt, &v.FirstSessionID, &v.Notes, &v.SharedUsers, &v.ResellerPurchaseID, &v.BatchID, &v.CreatedAt, &v.UpdatedAt,
+			&v.TotalUptimeSeconds, &v.TotalBytesUsed,
+			&v.PackageName, &v.ExpirationMode,
+		)
+		if err != nil {
+			return nil, err
+		}
+		vouchers = append(vouchers, &v)
+	}
+	return vouchers, nil
+}
+
+func (r *VoucherRepository) DeleteVouchersByBatchID(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID) error {
+	query := `DELETE FROM vouchers WHERE tenant_id = $1 AND batch_id = $2`
+	_, err := r.db.Exec(ctx, query, tenantID, batchID)
+	return err
+}
+
 func (r *VoucherRepository) DeleteVouchersByCreatedAt(ctx context.Context, tenantID uuid.UUID, createdAt time.Time) error {
-	query := `DELETE FROM vouchers WHERE tenant_id = $1 AND created_at = $2`
+	query := `
+		DELETE FROM vouchers 
+		WHERE tenant_id = $1 
+		  AND (
+			created_at = $2 
+			OR date_trunc('second', created_at) = date_trunc('second', $2::timestamptz)
+			OR created_at BETWEEN $2::timestamptz - INTERVAL '2 seconds' AND $2::timestamptz + INTERVAL '2 seconds'
+		  )
+	`
 	_, err := r.db.Exec(ctx, query, tenantID, createdAt)
 	return err
 }

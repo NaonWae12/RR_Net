@@ -58,6 +58,7 @@ type Voucher struct {
 	FirstSessionID     *uuid.UUID    `json:"first_session_id,omitempty"`
 	Notes              string        `json:"notes,omitempty"`
 	ResellerPurchaseID *uuid.UUID    `json:"reseller_purchase_id,omitempty"`
+	BatchID            *uuid.UUID    `json:"batch_id,omitempty"`
 	
 	// Denormalized Uptime & Usage (updated by accounting)
 	TotalUptimeSeconds int   `json:"total_uptime_seconds"`

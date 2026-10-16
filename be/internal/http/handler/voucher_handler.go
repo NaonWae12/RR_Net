@@ -318,13 +318,35 @@ func (h *VoucherHandler) DeleteBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	batchIDStr := r.URL.Query().Get("batch_id")
 	createdAtStr := r.URL.Query().Get("created_at")
-	if createdAtStr == "" {
-		http.Error(w, `{"error":"created_at query param is required"}`, http.StatusBadRequest)
+
+	if batchIDStr == "" && createdAtStr == "" {
+		http.Error(w, `{"error":"batch_id or created_at query param is required"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Try multiple time formats
+	// Priority 1: Check if batch_id is explicitly given OR if created_at is a UUID string
+	targetUUIDStr := batchIDStr
+	if targetUUIDStr == "" && createdAtStr != "" {
+		if _, err := uuid.Parse(createdAtStr); err == nil {
+			targetUUIDStr = createdAtStr
+		}
+	}
+
+	if targetUUIDStr != "" {
+		batchID, err := uuid.Parse(targetUUIDStr)
+		if err == nil {
+			if err := h.voucherService.DeleteBatchByID(r.Context(), tenantID, batchID); err != nil {
+				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
+
+	// Priority 2: Fallback to parsing created_at timestamp string
 	var createdAt time.Time
 	var err error
 	

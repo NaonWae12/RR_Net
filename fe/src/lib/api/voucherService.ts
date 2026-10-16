@@ -106,7 +106,9 @@ export const voucherService = {
     });
   },
 
-  async deleteBatch(createdAt: string): Promise<void> {
-    await apiClient.delete(`/vouchers/delete-batch?created_at=${encodeURIComponent(createdAt)}`);
+  async deleteBatch(batchKey: string): Promise<void> {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(batchKey);
+    const paramName = isUUID ? 'batch_id' : 'created_at';
+    await apiClient.delete(`/vouchers/delete-batch?${paramName}=${encodeURIComponent(batchKey)}`);
   },
 };

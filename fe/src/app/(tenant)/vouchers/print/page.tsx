@@ -72,20 +72,21 @@ export default function VoucherPrintPage() {
     }
   }, [brandingSource, allAvailableDNS, allAvailableLabels]);
 
-  // Group vouchers by created_at (generation batch) since vouchers generated together share the exact same timestamp
+  // Group vouchers by batch_id or created_at (generation batch)
   const batchGroups = vouchers.reduce((acc, v) => {
-    const key = v.created_at || 'UNKNOWN_TIME';
+    const key = v.batch_id || v.created_at || 'UNKNOWN_TIME';
     if (!acc[key]) {
       acc[key] = {
         vouchers: [],
         notes: v.notes || 'Tanpa Catatan',
         timestamp: v.created_at,
+        batchId: v.batch_id || undefined,
         routerId: v.router_id || undefined
       };
     }
     acc[key].vouchers.push(v);
     return acc;
-  }, {} as Record<string, { vouchers: Voucher[], notes: string, timestamp: string, routerId?: string }>);
+  }, {} as Record<string, { vouchers: Voucher[], notes: string, timestamp: string, batchId?: string, routerId?: string }>);
 
   const sortedBatchKeys = Object.keys(batchGroups).sort((a, b) => {
     return b.localeCompare(a); // Sort newest first

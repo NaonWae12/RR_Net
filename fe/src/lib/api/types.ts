@@ -1183,6 +1183,8 @@ export interface Voucher {
   expires_at?: string | null;
   first_session_id?: string | null;
   notes?: string | null;
+  reseller_purchase_id?: string | null;
+  batch_id?: string | null;
   package_name?: string | null;
   package_price?: number | null;
   router_name?: string | null;
