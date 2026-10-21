@@ -1357,6 +1357,8 @@ export interface ONTDevice {
   tx_power_dbm?: number | null;
   ssid?: string;
   wifi_enabled: boolean;
+  ssid_list?: { index: number; ssid: string; enabled: boolean; bssid?: string }[];
+  connected_hosts?: { hostname: string; ip_address: string; mac_address: string; active: boolean }[];
   uptime_seconds: number;
 }
 

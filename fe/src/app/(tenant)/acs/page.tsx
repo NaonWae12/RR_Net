@@ -458,7 +458,14 @@ export default function ACSPage() {
                         {dev.ssid ? (
                           <div>
                             <div className="text-slate-200 font-medium truncate max-w-[140px]">{dev.ssid}</div>
-                            <div className="text-[10px] text-emerald-400">2.4 GHz Aktif</div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] text-emerald-400">2.4 GHz Aktif</span>
+                              {dev.ssid_list && dev.ssid_list.length > 1 && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                                  +{dev.ssid_list.length - 1} SSID
+                                </span>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <span className="text-slate-500">-</span>
@@ -698,8 +705,56 @@ export default function ACSPage() {
                 </div>
               </div>
 
+              {/* Multi-SSID List */}
+              {selectedDevice.ssid_list && selectedDevice.ssid_list.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-slate-300 block text-[11px] font-semibold">Daftar SSID (Multi-SSID WiFi):</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedDevice.ssid_list.map((item) => (
+                      <div key={item.index} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+                        <div className="truncate pr-2">
+                          <span className="text-[10px] text-slate-500 block">SSID #{item.index}</span>
+                          <span className="font-medium text-white truncate block">{item.ssid}</span>
+                        </div>
+                        <Badge variant="outline" className={`text-[10px] shrink-0 ${item.enabled ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" : "border-slate-700 text-slate-500"}`}>
+                          {item.enabled ? "Aktif" : "Nonaktif"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Connected LAN/WLAN Hosts */}
+              {selectedDevice.connected_hosts && selectedDevice.connected_hosts.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-300 block text-[11px] font-semibold">Perangkat Terhubung (LAN / Klien WiFi):</span>
+                    <Badge variant="outline" className="text-[10px] border-slate-700 text-indigo-300">
+                      {selectedDevice.connected_hosts.length} Perangkat
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {selectedDevice.connected_hosts.map((host, i) => (
+                      <div key={i} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-white text-[11px] flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                            {host.hostname || "Perangkat Klien"}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-400">
+                            {host.ip_address} &bull; {host.mac_address}
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-emerald-400 font-mono">Aktif</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Inform Time */}
-              <div className="text-slate-400 text-[11px] flex items-center justify-between px-1">
+              <div className="text-slate-400 text-[11px] flex items-center justify-between px-1 pt-1 border-t border-slate-800">
                 <span>Terakhir Inform TR-069:</span>
                 <span className="text-slate-200">
                   {selectedDevice.last_inform ? new Date(selectedDevice.last_inform).toLocaleString("id-ID") : "-"}

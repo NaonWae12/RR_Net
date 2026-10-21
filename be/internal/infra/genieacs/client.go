@@ -18,24 +18,42 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// WiFiSSID represents an individual SSID configuration on the device.
+type WiFiSSID struct {
+	Index   int    `json:"index"`
+	SSID    string `json:"ssid"`
+	Enabled bool   `json:"enabled"`
+	BSSID   string `json:"bssid,omitempty"`
+}
+
+// ConnectedHost represents a client device connected to the ONT (LAN/WLAN).
+type ConnectedHost struct {
+	HostName   string `json:"hostname"`
+	IPAddress  string `json:"ip_address"`
+	MACAddress string `json:"mac_address"`
+	Active     bool   `json:"active"`
+}
+
 // DeviceSummary represents common device attributes extracted from GenieACS.
 type DeviceSummary struct {
-	ID              string    `json:"id"`
-	SerialNumber    string    `json:"serial_number"`
-	ProductClass    string    `json:"product_class"`
-	Manufacturer    string    `json:"manufacturer"`
-	OUI             string    `json:"oui"`
-	SoftwareVersion string    `json:"software_version"`
-	HardwareVersion string    `json:"hardware_version"`
-	IPAddress       string    `json:"ip_address"`
-	MACAddress      string    `json:"mac_address"`
-	Status          string    `json:"status"` // online, offline
-	LastInform      time.Time `json:"last_inform"`
-	RxPowerDBm      *float64  `json:"rx_power_dbm,omitempty"`
-	TxPowerDBm      *float64  `json:"tx_power_dbm,omitempty"`
-	SSID            string    `json:"ssid,omitempty"`
-	WiFiEnabled     bool      `json:"wifi_enabled"`
-	UptimeSeconds   int64     `json:"uptime_seconds"`
+	ID              string          `json:"id"`
+	SerialNumber    string          `json:"serial_number"`
+	ProductClass    string          `json:"product_class"`
+	Manufacturer    string          `json:"manufacturer"`
+	OUI             string          `json:"oui"`
+	SoftwareVersion string          `json:"software_version"`
+	HardwareVersion string          `json:"hardware_version"`
+	IPAddress       string          `json:"ip_address"`
+	MACAddress      string          `json:"mac_address"`
+	Status          string          `json:"status"` // online, offline
+	LastInform      time.Time       `json:"last_inform"`
+	RxPowerDBm      *float64        `json:"rx_power_dbm,omitempty"`
+	TxPowerDBm      *float64        `json:"tx_power_dbm,omitempty"`
+	SSID            string          `json:"ssid,omitempty"`
+	WiFiEnabled     bool            `json:"wifi_enabled"`
+	SSIDList        []WiFiSSID      `json:"ssid_list,omitempty"`
+	ConnectedHosts  []ConnectedHost `json:"connected_hosts,omitempty"`
+	UptimeSeconds   int64           `json:"uptime_seconds"`
 }
 
 // TaskRequest represents a task sent to GenieACS NBI.
