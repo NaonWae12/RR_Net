@@ -1,0 +1,47 @@
+version: '3.8'
+
+# ==============================================================================
+# Standalone Docker Compose untuk ACS (GenieACS + MongoDB)
+# Terisolasi khusus untuk pengembangan dan pengujian TR-069
+# ==============================================================================
+
+services:
+  genieacs-mongodb:
+    image: mongo:6.0
+    container_name: genieacs-mongodb
+    restart: unless-stopped
+    volumes:
+      - genieacs_mongo_data:/data/db
+    networks:
+      - genieacs-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  genieacs:
+    image: drumsergio/genieacs:latest
+    container_name: genieacs
+    restart: unless-stopped
+    ports:
+      - "7547:7547"   # CWMP: Port yang dihubungi oleh ONT pelanggan (TR-069 Inform)
+      - "7557:7557"   # NBI: REST API untuk Backend Go ERP_NET
+      - "7567:7567"   # FS: File Server (Firmware / XML Config)
+      - "7558:3000"   # Web UI: Dipetakan ke 7558 agar tidak bentrok dengan Next.js (port 3000)
+    environment:
+      - GENIEACS_MONGODB_CONNECTION_URL=mongodb://genieacs-mongodb:27017/genieacs
+      - GENIEACS_UI_JWT_SECRET=${GENIEACS_UI_JWT_SECRET:-dev-acs-secret-key-32characterslong!!}
+      - GENIEACS_EXT_DIR=/opt/genieacs/ext
+    depends_on:
+      genieacs-mongodb:
+        condition: service_healthy
+    networks:
+      - genieacs-net
+
+volumes:
+  genieacs_mongo_data:
+
+networks:
+  genieacs-net:
+    driver: bridge

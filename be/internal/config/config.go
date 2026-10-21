@@ -17,6 +17,7 @@ type Config struct {
 	Server    ServerConfig
 	WAGateway WAGatewayConfig
 	Mail      MailConfig
+	ACS       ACSConfig
 }
 
 // AppConfig holds application-level settings
@@ -67,6 +68,12 @@ type WAGatewayConfig struct {
 type MailConfig struct {
 	ResendAPIKey string
 	FromEmail    string
+}
+
+// ACSConfig holds GenieACS integration settings (optional).
+type ACSConfig struct {
+	Enabled bool
+	NBIURL  string
 }
 
 // Load reads and validates configuration from environment variables.
@@ -201,6 +208,10 @@ func Load() (*Config, error) {
 	// Mail config
 	cfg.Mail.ResendAPIKey = os.Getenv("RESEND_API_KEY")
 	cfg.Mail.FromEmail = getEnvOrDefault("MAIL_FROM", "onboarding@resend.dev")
+
+	// ACS (GenieACS TR-069)
+	cfg.ACS.Enabled = getEnvOrDefault("ACS_ENABLED", "true") == "true"
+	cfg.ACS.NBIURL = getEnvOrDefault("ACS_NBI_URL", "http://localhost:7557")
 
 	return cfg, nil
 }

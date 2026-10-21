@@ -1340,3 +1340,23 @@ export interface SiteSetting {
   created_at: string;
   updated_at: string;
 }
+
+export interface ONTDevice {
+  id: string;
+  serial_number: string;
+  product_class: string;
+  manufacturer: string;
+  oui: string;
+  software_version: string;
+  hardware_version: string;
+  ip_address: string;
+  mac_address: string;
+  status: 'online' | 'offline';
+  last_inform: string;
+  rx_power_dbm?: number | null;
+  tx_power_dbm?: number | null;
+  ssid?: string;
+  wifi_enabled: boolean;
+  uptime_seconds: number;
+}
+

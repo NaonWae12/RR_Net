@@ -20,6 +20,7 @@ import (
 	"rrnet/internal/http/handler"
 	"rrnet/internal/http/middleware"
 	asynqInfra "rrnet/internal/infra/asynq"
+	"rrnet/internal/infra/genieacs"
 	"rrnet/internal/infra/mail"
 	wagw "rrnet/internal/infra/wa_gateway"
 	"rrnet/internal/metrics"
@@ -1774,6 +1775,9 @@ func New(deps Dependencies) http.Handler {
 	radiusHandler.StartStaleSessionCleaner(context.Background())
 	
 	voucherHandler := handler.NewVoucherHandler(voucherService)
+	genieacsClient := genieacs.NewClient(deps.Config.ACS.NBIURL)
+	acsService := service.NewACSService(genieacsClient)
+	acsHandler := handler.NewACSHandler(acsService)
 
 	// Routers
 	mux.Handle("/api/v1/network/routers", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2862,6 +2866,43 @@ func New(deps Dependencies) http.Handler {
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
+	})))
+
+	// ACS (TR-069 ONT Management)
+	mux.Handle("/api/v1/acs/devices", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			acsHandler.ListDevices(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})))
+
+	mux.Handle("/api/v1/acs/devices/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/acs/devices/")
+		if path == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if strings.HasSuffix(path, "/reboot") && r.Method == http.MethodPost {
+			acsHandler.Reboot(w, r)
+			return
+		}
+		if strings.HasSuffix(path, "/wifi") && r.Method == http.MethodPost {
+			acsHandler.SetWiFi(w, r)
+			return
+		}
+		if strings.HasSuffix(path, "/refresh") && r.Method == http.MethodPost {
+			acsHandler.Refresh(w, r)
+			return
+		}
+
+		if r.Method == http.MethodGet {
+			acsHandler.GetDevice(w, r)
+			return
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	})))
 
 	// ============================================
