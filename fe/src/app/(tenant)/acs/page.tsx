@@ -146,7 +146,7 @@ export default function ACSPage() {
 
   // Helper format uptime
   const formatUptime = (seconds: number) => {
-    if (!seconds) return "-";
+    if (!seconds || seconds <= 0) return "-";
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -211,18 +211,18 @@ export default function ACSPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Server className="w-7 h-7 text-indigo-400" />
-              ACS & Manajemen ONT
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+              <Server className="w-7 h-7 text-indigo-600" />
+              ACS &amp; Manajemen ONT
             </h1>
-            <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/30 text-[11px] font-semibold tracking-wider">
+            <Badge className="bg-indigo-500/20 text-indigo-600 border-indigo-500/30 text-[11px] font-semibold tracking-wider">
               TR-069
             </Badge>
-            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[11px] font-semibold tracking-wider">
+            <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[11px] font-semibold tracking-wider">
               DEV MODE
             </Badge>
           </div>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 mt-1">
             Pusat kontrol terpadu untuk monitoring sinyal redaman FO, ganti WiFi, dan remote reboot modem/ONT pelanggan.
           </p>
         </div>
@@ -233,7 +233,7 @@ export default function ACSPage() {
             size="sm"
             onClick={fetchDevices}
             disabled={loading}
-            className="border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 gap-2"
+            className="border-slate-300 bg-white hover:bg-slate-50 text-slate-700 gap-2 shadow-sm"
           >
             <RotateCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Refresh Data
@@ -242,28 +242,28 @@ export default function ACSPage() {
       </div>
 
       {/* Top Banner: Panduan Koneksi ONT */}
-      <Card className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border-indigo-500/20 text-slate-300">
+      <Card className="bg-indigo-950 border-indigo-800/60 shadow-sm">
         <CardContent className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0 mt-0.5 md:mt-0">
+            <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0 mt-0.5 md:mt-0">
               <Wifi className="w-5 h-5" />
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white flex items-center gap-2">
                 URL Koneksi ACS (TR-069 Inform)
               </h4>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Masukkan URL berikut ke menu <strong>Network/Application &gt; TR-069 / CWMP</strong> di web GUI modem ONT (ZTE, Huawei, VSOL, dll):
+              <p className="text-xs text-indigo-200/80 mt-0.5 max-w-lg">
+                Masukkan URL berikut ke menu <strong className="text-indigo-100">Network/Application &gt; TR-069 / CWMP</strong> di web GUI modem ONT (ZTE, Huawei, VSOL, dll):
               </p>
               <div className="flex items-center gap-2 mt-2">
-                <code className="text-xs font-mono bg-slate-950/90 text-indigo-300 px-3 py-1 rounded-md border border-indigo-500/30">
+                <code className="text-xs font-mono bg-indigo-900/80 text-indigo-200 px-3 py-1 rounded-md border border-indigo-600/40">
                   {typeof window !== "undefined" ? `http://${window.location.hostname}:7547` : "http://<IP_SERVER>:7547"}
                 </code>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={handleCopyAcsUrl}
-                  className="h-7 px-2 text-xs text-indigo-300 hover:text-white hover:bg-indigo-900/40"
+                  className="h-7 px-2 text-xs text-indigo-300 hover:text-white hover:bg-indigo-800/60"
                 >
                   {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   <span className="ml-1">{copiedUrl ? "Tersalin" : "Salin"}</span>
@@ -271,58 +271,59 @@ export default function ACSPage() {
               </div>
             </div>
           </div>
-          <div className="text-xs text-slate-400 border-l border-slate-800 pl-4 space-y-1 shrink-0">
-            <div>Periodic Inform: <strong className="text-slate-200">300s</strong></div>
-            <div>Auth: <strong className="text-slate-200">None / Optional</strong></div>
+          <div className="text-xs text-indigo-300 border-l border-indigo-700/60 pl-4 space-y-1 shrink-0">
+            <div>Periodic Inform: <strong className="text-white">300s</strong></div>
+            <div>Auth: <strong className="text-white">None / Optional</strong></div>
           </div>
         </CardContent>
       </Card>
 
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-slate-900/90 border-slate-800">
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400">Total Perangkat</p>
-              <h3 className="text-2xl font-bold text-white mt-1">{totalCount}</h3>
+              <p className="text-xs font-medium text-slate-500">Total Perangkat</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">{totalCount}</h3>
             </div>
-            <div className="p-3 bg-slate-800/80 rounded-xl text-slate-300 border border-slate-700">
+            <div className="p-3 bg-slate-100 rounded-xl text-slate-500 border border-slate-200">
               <Cpu className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900/90 border-slate-800">
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400">Online</p>
-              <h3 className="text-2xl font-bold text-emerald-400 mt-1">{onlineCount}</h3>
+              <p className="text-xs font-medium text-slate-500">Online</p>
+              <h3 className="text-2xl font-bold text-emerald-600 mt-1">{onlineCount}</h3>
             </div>
-            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
+            <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-200">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900/90 border-slate-800">
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400">Offline</p>
-              <h3 className="text-2xl font-bold text-slate-400 mt-1">{offlineCount}</h3>
+              <p className="text-xs font-medium text-slate-500">Offline</p>
+              <h3 className="text-2xl font-bold text-slate-500 mt-1">{offlineCount}</h3>
             </div>
-            <div className="p-3 bg-slate-800 rounded-xl text-slate-400 border border-slate-700">
+            <div className="p-3 bg-slate-100 rounded-xl text-slate-400 border border-slate-200">
               <XCircle className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900/90 border-slate-800">
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400">Sinyal Kritis (&lt; -27 dBm)</p>
-              <h3 className="text-2xl font-bold text-rose-400 mt-1">{criticalSignalCount}</h3>
+              <p className="text-xs font-medium text-slate-500">Sinyal Kritis (&lt; -27 dBm)</p>
+              <h3 className="text-2xl font-bold text-rose-600 mt-1">{criticalSignalCount}</h3>
             </div>
-            <div className="p-3 bg-rose-500/10 rounded-xl text-rose-400 border border-rose-500/20">
+            <div className="p-3 bg-rose-50 rounded-xl text-rose-500 border border-rose-200">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </CardContent>
@@ -330,12 +331,12 @@ export default function ACSPage() {
       </div>
 
       {/* Main Table Card */}
-      <Card className="bg-slate-900 border-slate-800 text-slate-200">
-        <CardHeader className="pb-3 border-b border-slate-800">
+      <Card className="bg-white border-slate-200 shadow-sm">
+        <CardHeader className="pb-3 border-b border-slate-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-base font-semibold text-white">Daftar ONT Terhubung</CardTitle>
-              <CardDescription className="text-xs text-slate-400 mt-0.5">
+              <CardTitle className="text-base font-semibold text-slate-900">Daftar ONT Terhubung</CardTitle>
+              <CardDescription className="text-xs text-slate-500 mt-0.5">
                 Semua unit modem pelanggan yang terdaftar dan terdeteksi di Auto Configuration Server
               </CardDescription>
             </div>
@@ -348,15 +349,15 @@ export default function ACSPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Cari SN, Model, IP, SSID..."
-                  className="pl-9 bg-slate-950/60 border-slate-800 text-xs h-9 text-slate-200 focus-visible:ring-indigo-500"
+                  className="pl-9 bg-white border-slate-300 text-xs h-9 text-slate-700 focus-visible:ring-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center rounded-lg bg-slate-950 border border-slate-800 p-0.5 text-xs">
+              <div className="flex items-center rounded-lg bg-slate-100 border border-slate-200 p-0.5 text-xs">
                 <button
                   onClick={() => setStatusFilter("all")}
                   className={`px-3 py-1 rounded-md transition-all ${
-                    statusFilter === "all" ? "bg-indigo-600 text-white font-medium shadow-sm" : "text-slate-400 hover:text-slate-200"
+                    statusFilter === "all" ? "bg-indigo-600 text-white font-medium shadow-sm" : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
                   Semua
@@ -364,7 +365,7 @@ export default function ACSPage() {
                 <button
                   onClick={() => setStatusFilter("online")}
                   className={`px-3 py-1 rounded-md transition-all ${
-                    statusFilter === "online" ? "bg-emerald-600 text-white font-medium shadow-sm" : "text-slate-400 hover:text-slate-200"
+                    statusFilter === "online" ? "bg-emerald-600 text-white font-medium shadow-sm" : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
                   Online
@@ -372,7 +373,7 @@ export default function ACSPage() {
                 <button
                   onClick={() => setStatusFilter("offline")}
                   className={`px-3 py-1 rounded-md transition-all ${
-                    statusFilter === "offline" ? "bg-slate-800 text-white font-medium shadow-sm" : "text-slate-400 hover:text-slate-200"
+                    statusFilter === "offline" ? "bg-slate-700 text-white font-medium shadow-sm" : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
                   Offline
@@ -386,7 +387,7 @@ export default function ACSPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 bg-slate-950/40">
+                <tr className="border-b border-slate-200 text-slate-500 bg-slate-50/80">
                   <th className="py-3 px-4 font-medium">Perangkat &amp; Model</th>
                   <th className="py-3 px-4 font-medium">Serial Number (PON SN)</th>
                   <th className="py-3 px-4 font-medium">Status</th>
@@ -396,53 +397,53 @@ export default function ACSPage() {
                   <th className="py-3 px-4 font-medium text-right">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500">
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
-                        <RotateCw className="w-5 h-5 animate-spin text-indigo-400" />
+                        <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
                         <span>Memuat data perangkat ACS...</span>
                       </div>
                     </td>
                   </tr>
                 ) : filteredDevices.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500">
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
                       Tidak ada modem/ONT yang cocok dengan pencarian atau filter.
                     </td>
                   </tr>
                 ) : (
                   filteredDevices.map((dev) => (
-                    <tr key={dev.id} className="hover:bg-slate-800/40 transition-colors">
+                    <tr key={dev.id} className="hover:bg-slate-50 transition-colors">
                       {/* Perangkat & Model */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
                             <Wifi className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="font-semibold text-slate-200">{dev.product_class || "Generic ONT"}</div>
-                            <div className="text-[11px] text-slate-400">{dev.manufacturer || "TR-069 Device"}</div>
+                            <div className="font-semibold text-slate-800">{dev.product_class || "Generic ONT"}</div>
+                            <div className="text-[11px] text-slate-500">{dev.manufacturer || "TR-069 Device"}</div>
                           </div>
                         </div>
                       </td>
 
                       {/* Serial Number */}
                       <td className="py-3 px-4">
-                        <div className="font-mono text-slate-200 font-medium">{dev.serial_number}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">{dev.mac_address || "-"}</div>
+                        <div className="font-mono text-slate-700 font-medium">{dev.serial_number}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{dev.mac_address || "-"}</div>
                       </td>
 
                       {/* Status */}
                       <td className="py-3 px-4">
                         {dev.status === "online" ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[11px] gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             Online
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-slate-500 border-slate-700 text-[11px]">
+                          <Badge variant="outline" className="text-slate-400 border-slate-300 text-[11px]">
                             Offline
                           </Badge>
                         )}
@@ -457,25 +458,25 @@ export default function ACSPage() {
                       <td className="py-3 px-4">
                         {dev.ssid ? (
                           <div>
-                            <div className="text-slate-200 font-medium truncate max-w-[140px]">{dev.ssid}</div>
+                            <div className="text-slate-700 font-medium truncate max-w-[140px]">{dev.ssid}</div>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[10px] text-emerald-400">2.4 GHz Aktif</span>
+                              <span className="text-[10px] text-emerald-600">2.4 GHz Aktif</span>
                               {dev.ssid_list && dev.ssid_list.length > 1 && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-600 font-semibold border border-indigo-200">
                                   +{dev.ssid_list.length - 1} SSID
                                 </span>
                               )}
                             </div>
                           </div>
                         ) : (
-                          <span className="text-slate-500">-</span>
+                          <span className="text-slate-400">-</span>
                         )}
                       </td>
 
                       {/* IP & Uptime */}
                       <td className="py-3 px-4">
-                        <div className="font-mono text-slate-300">{dev.ip_address || "-"}</div>
-                        <div className="text-[10px] text-slate-500">Up: {formatUptime(dev.uptime_seconds)}</div>
+                        <div className="font-mono text-slate-700">{dev.ip_address || "-"}</div>
+                        <div className="text-[10px] text-slate-400">Up: {formatUptime(dev.uptime_seconds)}</div>
                       </td>
 
                       {/* Actions */}
@@ -485,7 +486,7 @@ export default function ACSPage() {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleOpenDetailModal(dev)}
-                            className="h-7 px-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800"
+                            className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                             title="Detail Parameter"
                           >
                             <Info className="w-3.5 h-3.5 mr-1" />
@@ -495,7 +496,7 @@ export default function ACSPage() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenWifiModal(dev)}
-                            className="h-7 px-2 text-xs border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200"
+                            className="h-7 px-2 text-xs border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700"
                             title="Atur WiFi"
                           >
                             <Wifi className="w-3.5 h-3.5 mr-1" />
@@ -505,7 +506,7 @@ export default function ACSPage() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenRebootModal(dev)}
-                            className="h-7 px-2 text-xs border-slate-700 bg-slate-800/80 hover:bg-rose-950/40 text-rose-300 hover:text-rose-200 hover:border-rose-800"
+                            className="h-7 px-2 text-xs border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700"
                             title="Reboot ONT"
                           >
                             <Power className="w-3.5 h-3.5" />
@@ -650,7 +651,7 @@ export default function ACSPage() {
 
       {/* Modal: Detail ONT */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 sm:max-w-lg">
+        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
               <Info className="w-5 h-5 text-indigo-400" />
@@ -673,35 +674,37 @@ export default function ACSPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">Serial Number (PON SN)</span>
-                  <span className="font-mono text-white font-medium">{selectedDevice.serial_number}</span>
+                  <span className="font-mono text-slate-100 font-medium text-xs">{selectedDevice.serial_number}</span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">MAC Address</span>
-                  <span className="font-mono text-white">{selectedDevice.mac_address || "-"}</span>
+                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.mac_address || "-"}</span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">IP Address</span>
-                  <span className="font-mono text-white">{selectedDevice.ip_address || "-"}</span>
+                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.ip_address || "-"}</span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">Manufacturer OUI</span>
-                  <span className="font-mono text-white">{selectedDevice.oui || "-"}</span>
+                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.oui || "-"}</span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">Firmware / Software</span>
-                  <span className="font-mono text-white">{selectedDevice.software_version || "-"}</span>
+                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.software_version || "-"}</span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">Hardware Version</span>
-                  <span className="font-mono text-white">{selectedDevice.hardware_version || "-"}</span>
+                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.hardware_version || "-"}</span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">Optical TX Power</span>
-                  <span className="font-mono text-white">{selectedDevice.tx_power_dbm ? `${selectedDevice.tx_power_dbm.toFixed(2)} dBm` : "-"}</span>
+                  <span className="font-mono text-slate-100 text-xs">
+                    {selectedDevice.tx_power_dbm != null ? `${selectedDevice.tx_power_dbm.toFixed(2)} dBm` : <span className="text-slate-500">N/A</span>}
+                  </span>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">Total Uptime</span>
-                  <span className="font-mono text-white">{formatUptime(selectedDevice.uptime_seconds)}</span>
+                  <span className="font-mono text-slate-100 text-xs">{formatUptime(selectedDevice.uptime_seconds)}</span>
                 </div>
               </div>
 
@@ -711,10 +714,10 @@ export default function ACSPage() {
                   <span className="text-slate-300 block text-[11px] font-semibold">Daftar SSID (Multi-SSID WiFi):</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {selectedDevice.ssid_list.map((item) => (
-                      <div key={item.index} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
-                        <div className="truncate pr-2">
+                      <div key={item.index} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex items-center justify-between gap-2">
+                        <div className="truncate flex-1 min-w-0">
                           <span className="text-[10px] text-slate-500 block">SSID #{item.index}</span>
-                          <span className="font-medium text-white truncate block">{item.ssid}</span>
+                          <span className="font-medium text-slate-100 text-xs truncate block">{item.ssid}</span>
                         </div>
                         <Badge variant="outline" className={`text-[10px] shrink-0 ${item.enabled ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" : "border-slate-700 text-slate-500"}`}>
                           {item.enabled ? "Aktif" : "Nonaktif"}
@@ -738,7 +741,7 @@ export default function ACSPage() {
                     {selectedDevice.connected_hosts.map((host, i) => (
                       <div key={i} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
                         <div>
-                          <div className="font-medium text-white text-[11px] flex items-center gap-1.5">
+                          <div className="font-medium text-slate-100 text-[11px] flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                             {host.hostname || "Perangkat Klien"}
                           </div>

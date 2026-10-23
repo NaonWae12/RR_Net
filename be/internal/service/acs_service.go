@@ -35,6 +35,12 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 	var devices []genieacs.DeviceSummary
 	for _, raw := range rawDevices {
 		dev := s.normalizeDevice(raw)
+		// Skip non-ONT entries: GenieACS may auto-detect CWMP proxies or discovery
+		// services that are not real ONT devices (e.g. id contains "DISCOVERYSERVICE"
+		// or product_class is empty and serial_number looks like a service identifier)
+		if isNonONTDevice(dev) {
+			continue
+		}
 		devices = append(devices, dev)
 	}
 
@@ -272,16 +278,30 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	})
 
 	// Optical Power (RX / TX in dBm)
+	// Paths ordered: ZTE F609/F660 -> ZTE F460/ELWR -> Huawei -> Fiberhome -> Device.* (TR-181)
 	rxStr := findStringInTree(raw, []string{
+		// ZTE F609/F660 series
 		"InternetGatewayDevice.WANDevice.1.X_ZTE-FTTH_WANPONInterfaceConfig.RXPower",
+		// ZTE F460 / ELWRP series (uses X_ZTE_COM_ prefix)
+		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.RXPower",
+		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.ReceivedOpticalPower",
+		// Huawei
 		"InternetGatewayDevice.WANDevice.1.X_HW_DEBUG.SMP.OPTIC.RxPower",
+		"InternetGatewayDevice.WANDevice.1.X_HuaweiManagerServer.LoopInfo.ReceiveOpticalPower",
+		// Fiberhome / VSOL
 		"InternetGatewayDevice.WANDevice.1.X_FH_PON.RXPower",
+		"InternetGatewayDevice.WANDevice.1.X_CMCC_ONU.PON.RXPower",
+		// TR-181 standard
 		"Device.Optical.Interface.1.RxPower",
 	})
 	if rxStr != "" {
 		if f, err := strconv.ParseFloat(rxStr, 64); err == nil {
-			// Some ONTs report raw int like -1950 (-19.5 dBm) or 0.01 uW
-			if math.Abs(f) > 100 {
+			// Some ONTs report raw int like -1950 meaning -19.50 dBm
+			// or raw like -19500 meaning -19.500 dBm (millidBm)
+			switch {
+			case math.Abs(f) > 10000:
+				f = f / 1000.0
+			case math.Abs(f) > 100:
 				f = f / 100.0
 			}
 			dev.RxPowerDBm = &f
@@ -289,14 +309,25 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	}
 
 	txStr := findStringInTree(raw, []string{
+		// ZTE F609/F660 series
 		"InternetGatewayDevice.WANDevice.1.X_ZTE-FTTH_WANPONInterfaceConfig.TXPower",
+		// ZTE F460 / ELWRP series
+		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.TXPower",
+		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.TransmitOpticalPower",
+		// Huawei
 		"InternetGatewayDevice.WANDevice.1.X_HW_DEBUG.SMP.OPTIC.TxPower",
+		// Fiberhome / VSOL
 		"InternetGatewayDevice.WANDevice.1.X_FH_PON.TXPower",
+		"InternetGatewayDevice.WANDevice.1.X_CMCC_ONU.PON.TXPower",
+		// TR-181 standard
 		"Device.Optical.Interface.1.TxPower",
 	})
 	if txStr != "" {
 		if f, err := strconv.ParseFloat(txStr, 64); err == nil {
-			if math.Abs(f) > 100 {
+			switch {
+			case math.Abs(f) > 10000:
+				f = f / 1000.0
+			case math.Abs(f) > 100:
 				f = f / 100.0
 			}
 			dev.TxPowerDBm = &f
@@ -382,18 +413,42 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		})
 	}
 
-	// Uptime
+	// Uptime (seconds since boot)
+	// Some devices report as float (e.g. "184200.00"), use ParseFloat then convert
 	uptimeStr := findStringInTree(raw, []string{
 		"InternetGatewayDevice.DeviceInfo.UpTime",
 		"Device.DeviceInfo.UpTime",
+		// ZTE F460/ELWR sometimes uses X_ZTE_COM prefix
+		"InternetGatewayDevice.DeviceInfo.X_ZTE_COM_DeviceInfo.UpTime",
+		"InternetGatewayDevice.X_ZTE_COM_DeviceInfo.UpTime",
 	})
 	if uptimeStr != "" {
+		// Try integer first, fallback to float (in case of decimal)
 		if u, err := strconv.ParseInt(uptimeStr, 10, 64); err == nil {
 			dev.UptimeSeconds = u
+		} else if f, err := strconv.ParseFloat(uptimeStr, 64); err == nil {
+			dev.UptimeSeconds = int64(f)
 		}
 	}
 
 	return dev
+}
+
+// isNonONTDevice returns true for GenieACS internal discovery entries
+// that are not real ONT/CPE devices (e.g. CWMP discovery service proxies).
+func isNonONTDevice(dev genieacs.DeviceSummary) bool {
+	id := strings.ToUpper(dev.ID)
+	// GenieACS discovery service creates entries with IDs like
+	// "000000-DISCOVERYSERVICE" or "00259E-DISCOVERYSERVICE-..."
+	if strings.Contains(id, "DISCOVERYSERVICE") {
+		return true
+	}
+	// Also skip devices where both ProductClass and Manufacturer are empty
+	// AND the ID looks like a service identifier (all uppercase letters/digits, no dash pattern)
+	if dev.ProductClass == "" && dev.Manufacturer == "" && dev.SerialNumber == dev.ID {
+		return true
+	}
+	return false
 }
 
 func pathExistsInTree(m map[string]interface{}, path string) bool {
