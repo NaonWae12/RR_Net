@@ -6,10 +6,41 @@ export interface SetWiFiPayload {
   password: string;
 }
 
+export interface RegisterDevicePayload {
+  device_id?: string;
+  serial_number: string;
+  label?: string;
+  client_id?: string;
+}
+
+export type ClaimDevicePayload = RegisterDevicePayload;
+
+export interface UpdateMetadataPayload {
+  label?: string;
+  client_id?: string | null;
+}
+
 export const acsService = {
-  // List all ONT devices
+  // List ONT devices belonging to current tenant
   async listDevices(): Promise<{ data: ONTDevice[]; total: number }> {
     const res = await apiClient.get<{ data: ONTDevice[]; total: number }>("/acs/devices");
+    return res.data;
+  },
+
+  // Register device by SN to current tenant (Method 1)
+  async register(payload: RegisterDevicePayload): Promise<{ message: string }> {
+    const res = await apiClient.post<{ message: string }>("/acs/devices/register", payload);
+    return res.data;
+  },
+
+  // Alias for backward compatibility
+  async claim(payload: RegisterDevicePayload): Promise<{ message: string }> {
+    return this.register(payload);
+  },
+
+  // Update label or customer linkage
+  async updateMetadata(id: string, payload: UpdateMetadataPayload): Promise<{ message: string }> {
+    const res = await apiClient.put<{ message: string }>(`/acs/devices/${encodeURIComponent(id)}/metadata`, payload);
     return res.data;
   },
 

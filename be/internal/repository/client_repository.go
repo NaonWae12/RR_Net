@@ -487,3 +487,10 @@ func (r *ClientRepository) ListPackageChangeLogs(ctx context.Context, tenantID, 
 	}
 	return logs, rows.Err()
 }
+
+// GetTenantSlug retrieves the slug for a given tenant ID.
+func (r *ClientRepository) GetTenantSlug(ctx context.Context, tenantID uuid.UUID) (string, error) {
+	var slug string
+	err := r.db.QueryRow(ctx, "SELECT slug FROM tenants WHERE id = $1", tenantID).Scan(&slug)
+	return slug, err
+}

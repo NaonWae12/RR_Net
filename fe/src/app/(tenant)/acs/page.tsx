@@ -13,13 +13,17 @@ import {
   XCircle, 
   AlertTriangle, 
   Cpu, 
-  Activity, 
   Info, 
   Lock, 
   Copy, 
   Check,
-  ChevronRight,
-  ExternalLink
+  Plus,
+  Edit2,
+  Sparkles,
+  Eye,
+  EyeOff,
+  History,
+  KeyRound
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,8 +37,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useTenantStore } from "@/stores/tenantStore";
 
 export default function ACSPage() {
+  const tenantSlug = useTenantStore((s) => s.slug || s.tenant?.slug);
   const [devices, setDevices] = useState<ONTDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -46,9 +52,19 @@ export default function ACSPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [wifiModalOpen, setWifiModalOpen] = useState(false);
   const [rebootModalOpen, setRebootModalOpen] = useState(false);
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
-  // WiFi Form
+  // Forms
+  const [registerForm, setRegisterForm] = useState<{ serial_number: string; label: string }>({
+    serial_number: "",
+    label: "",
+  });
+  const [editForm, setEditForm] = useState<{ label: string }>({ label: "" });
   const [wifiForm, setWifiForm] = useState<SetWiFiPayload>({ ssid: "", password: "" });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -81,8 +97,10 @@ export default function ACSPage() {
     setSelectedDevice(dev);
     setWifiForm({
       ssid: dev.ssid || "",
-      password: "",
+      password: dev.wifi_password || "",
     });
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
     setActionMessage(null);
     setWifiModalOpen(true);
   };
@@ -98,6 +116,23 @@ export default function ACSPage() {
     setDetailModalOpen(true);
   };
 
+  const handleOpenRegisterModal = () => {
+    setRegisterForm({
+      serial_number: "",
+      label: "",
+    });
+    setActionMessage(null);
+    setRegisterModalOpen(true);
+  };
+
+  const handleOpenEditModal = (dev: ONTDevice) => {
+    setSelectedDevice(dev);
+    setEditForm({ label: dev.label || "" });
+    setActionMessage(null);
+    setEditModalOpen(true);
+  };
+
+  // Actions
   const handleSaveWifi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice) return;
@@ -144,6 +179,54 @@ export default function ACSPage() {
     }
   };
 
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const sn = registerForm.serial_number.trim();
+    if (!sn) {
+      setActionMessage({ type: "error", text: "Serial Number modem wajib diisi" });
+      return;
+    }
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await acsService.register({
+        device_id: sn,
+        serial_number: sn,
+        label: registerForm.label.trim(),
+      });
+      setActionMessage({ type: "success", text: res.message || "Perangkat berhasil didaftarkan ke tenant!" });
+      setTimeout(() => {
+        setRegisterModalOpen(false);
+        fetchDevices();
+      }, 1200);
+    } catch (err: any) {
+      setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal mendaftarkan perangkat" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDevice) return;
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await acsService.updateMetadata(selectedDevice.id, {
+        label: editForm.label.trim(),
+      });
+      setActionMessage({ type: "success", text: res.message || "Label perangkat berhasil diperbarui!" });
+      setTimeout(() => {
+        setEditModalOpen(false);
+        fetchDevices();
+      }, 1200);
+    } catch (err: any) {
+      setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal memperbarui label" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Helper format uptime
   const formatUptime = (seconds: number) => {
     if (!seconds || seconds <= 0) return "-";
@@ -158,6 +241,7 @@ export default function ACSPage() {
   // Filtered devices
   const filteredDevices = devices.filter((dev) => {
     const matchesSearch = 
+      (dev.label || "").toLowerCase().includes(search.toLowerCase()) ||
       (dev.serial_number || "").toLowerCase().includes(search.toLowerCase()) ||
       (dev.manufacturer || "").toLowerCase().includes(search.toLowerCase()) ||
       (dev.product_class || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -174,25 +258,24 @@ export default function ACSPage() {
     if (rx === undefined || rx === null) {
       return <Badge variant="outline" className="text-slate-400 font-mono text-xs">N/A</Badge>;
     }
-    // Fiber optic attenuation scale
     if (rx >= -24.0) {
       return (
-        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-mono text-xs gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-mono text-xs gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           {rx.toFixed(2)} dBm (Bagus)
         </Badge>
       );
     } else if (rx >= -27.0) {
       return (
-        <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 font-mono text-xs gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+        <Badge className="bg-amber-50 text-amber-700 border-amber-200 font-mono text-xs gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
           {rx.toFixed(2)} dBm (Waspada)
         </Badge>
       );
     } else {
       return (
-        <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/30 font-mono text-xs gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
+        <Badge className="bg-rose-50 text-rose-700 border-rose-200 font-mono text-xs gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
           {rx.toFixed(2)} dBm (Kritis)
         </Badge>
       );
@@ -218,16 +301,16 @@ export default function ACSPage() {
             <Badge className="bg-indigo-500/20 text-indigo-600 border-indigo-500/30 text-[11px] font-semibold tracking-wider">
               TR-069
             </Badge>
-            <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[11px] font-semibold tracking-wider">
-              DEV MODE
+            <Badge className="bg-slate-100 text-slate-700 border-slate-300 text-[11px] font-semibold tracking-wider">
+              MULTI-TENANT
             </Badge>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Pusat kontrol terpadu untuk monitoring sinyal redaman FO, ganti WiFi, dan remote reboot modem/ONT pelanggan.
+            Manajemen modem ONT khusus tenant Anda via auto-detect PPPoE atau pendaftaran Serial Number.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <Button
             variant="outline"
             size="sm"
@@ -236,7 +319,16 @@ export default function ACSPage() {
             className="border-slate-300 bg-white hover:bg-slate-50 text-slate-700 gap-2 shadow-sm"
           >
             <RotateCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh Data
+            Refresh
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={handleOpenRegisterModal}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Daftarkan ONT
           </Button>
         </div>
       </div>
@@ -278,13 +370,12 @@ export default function ACSPage() {
         </CardContent>
       </Card>
 
-
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-white border-slate-200 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500">Total Perangkat</p>
+              <p className="text-xs font-medium text-slate-500">Total ONT Terdaftar</p>
               <h3 className="text-2xl font-bold text-slate-900 mt-1">{totalCount}</h3>
             </div>
             <div className="p-3 bg-slate-100 rounded-xl text-slate-500 border border-slate-200">
@@ -335,9 +426,9 @@ export default function ACSPage() {
         <CardHeader className="pb-3 border-b border-slate-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-base font-semibold text-slate-900">Daftar ONT Terhubung</CardTitle>
+              <CardTitle className="text-base font-semibold text-slate-900">Daftar ONT Tenant</CardTitle>
               <CardDescription className="text-xs text-slate-500 mt-0.5">
-                Semua unit modem pelanggan yang terdaftar dan terdeteksi di Auto Configuration Server
+                Unit modem ONT pelanggan yang terdaftar dan ditautkan ke akun tenant Anda
               </CardDescription>
             </div>
 
@@ -348,7 +439,7 @@ export default function ACSPage() {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari SN, Model, IP, SSID..."
+                  placeholder="Cari Label, SN, Model, IP..."
                   className="pl-9 bg-white border-slate-300 text-xs h-9 text-slate-700 focus-visible:ring-indigo-500"
                 />
               </div>
@@ -388,7 +479,7 @@ export default function ACSPage() {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 bg-slate-50/80">
-                  <th className="py-3 px-4 font-medium">Perangkat &amp; Model</th>
+                  <th className="py-3 px-4 font-medium">Perangkat &amp; Label</th>
                   <th className="py-3 px-4 font-medium">Serial Number (PON SN)</th>
                   <th className="py-3 px-4 font-medium">Status</th>
                   <th className="py-3 px-4 font-medium">Redaman Optik (RX)</th>
@@ -403,28 +494,63 @@ export default function ACSPage() {
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
-                        <span>Memuat data perangkat ACS...</span>
+                        <span>Memuat data ONT tenant...</span>
                       </div>
                     </td>
                   </tr>
                 ) : filteredDevices.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      Tidak ada modem/ONT yang cocok dengan pencarian atau filter.
+                    <td colSpan={7} className="py-14 text-center">
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-3">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                          <Server className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-800">
+                            {devices.length === 0 ? "Belum Ada ONT Terdaftar" : "Tidak Ada Hasil Pencarian"}
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {devices.length === 0
+                              ? "Modem PPPoE akan otomatis terdaftar saat dial. Untuk modem IP Statik atau Hotspot, klik tombol di bawah untuk mendaftarkan Serial Number."
+                              : "Coba ubah kata kunci pencarian atau filter status untuk menemukan perangkat."}
+                          </p>
+                        </div>
+                        {devices.length === 0 && (
+                          <Button
+                            size="sm"
+                            onClick={handleOpenRegisterModal}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5 shadow-sm mt-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Daftarkan ONT by SN
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   filteredDevices.map((dev) => (
                     <tr key={dev.id} className="hover:bg-slate-50 transition-colors">
-                      {/* Perangkat & Model */}
+                      {/* Perangkat & Label */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
                             <Wifi className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="font-semibold text-slate-800">{dev.product_class || "Generic ONT"}</div>
-                            <div className="text-[11px] text-slate-500">{dev.manufacturer || "TR-069 Device"}</div>
+                            {dev.label ? (
+                              <div className="font-semibold text-slate-900 text-xs flex items-center gap-1.5">
+                                <span>{dev.label}</span>
+                              </div>
+                            ) : null}
+                            <div className={`text-slate-700 ${dev.label ? "text-[11px] text-slate-500" : "font-semibold text-xs"}`}>
+                              {dev.product_class || "Generic ONT"} &bull; {dev.manufacturer || "TR-069"}
+                            </div>
+                            {dev.client_name ? (
+                              <Badge variant="outline" className="mt-1 text-[10px] bg-slate-50 text-indigo-700 border-indigo-200 px-1.5 py-0">
+                                Pelanggan: {dev.client_name}
+                              </Badge>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -481,7 +607,7 @@ export default function ACSPage() {
 
                       {/* Actions */}
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             size="sm"
                             variant="ghost"
@@ -489,8 +615,16 @@ export default function ACSPage() {
                             className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                             title="Detail Parameter"
                           >
-                            <Info className="w-3.5 h-3.5 mr-1" />
-                            Detail
+                            <Info className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleOpenEditModal(dev)}
+                            className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                            title="Edit Label"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
                           </Button>
                           <Button
                             size="sm"
@@ -522,15 +656,153 @@ export default function ACSPage() {
         </CardContent>
       </Card>
 
+      {/* Modal: Daftarkan ONT Baru by Serial Number */}
+      <Dialog open={registerModalOpen} onOpenChange={setRegisterModalOpen}>
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Server className="w-5 h-5 text-indigo-600" />
+              Daftarkan ONT Baru (by Serial Number)
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Daftarkan modem ONT secara manual untuk koneksi IP Statik, Bridge, Hotspot, atau Pre-Provisioning.
+            </DialogDescription>
+          </DialogHeader>
+
+          {actionMessage && (
+            <div className={`p-3 rounded-lg text-xs border ${
+              actionMessage.type === "success" 
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                : "bg-rose-50 border-rose-200 text-rose-800"
+            }`}>
+              {actionMessage.text}
+            </div>
+          )}
+
+          <form onSubmit={handleRegisterSubmit} className="space-y-3.5 py-1">
+            <div className="bg-indigo-50/80 border border-indigo-200/80 rounded-xl p-3 text-xs text-indigo-950 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold text-indigo-900">
+                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                Auto-Detect PPPoE Otomatis
+              </div>
+              <p className="text-[11px] text-indigo-800/90 leading-relaxed">
+                Jika pelanggan dial PPPoE dengan format <strong className="font-mono text-indigo-950">username_{tenantSlug || "slug"}</strong>, modem ONT akan <strong>otomatis terikat</strong> ke tenant &amp; profil pelanggan Anda tanpa perlu registrasi SN.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">
+                Serial Number (SN) Modem <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                value={registerForm.serial_number}
+                onChange={(e) => setRegisterForm({ ...registerForm, serial_number: e.target.value })}
+                placeholder="Contoh: ELWRP8LH6803185 atau 78C1A7-F460-..."
+                required
+                className="bg-white border-slate-300 text-xs font-mono h-9"
+              />
+              <p className="text-[11px] text-slate-500">
+                Tercetak pada stiker fisik di bawah modem ONT.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">Label / Catatan Lokasi (Opsional)</label>
+              <Input
+                value={registerForm.label}
+                onChange={(e) => setRegisterForm({ ...registerForm, label: e.target.value })}
+                placeholder="Contoh: ONT Rumah Pak Budi - Blok A3 (atau IP Statik Kantor)"
+                className="bg-white border-slate-300 text-xs h-9"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setRegisterModalOpen(false)}
+                className="text-slate-600 hover:text-slate-900"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                disabled={actionLoading}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5"
+              >
+                {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+                Simpan &amp; Daftarkan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Edit Metadata / Label */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Edit2 className="w-5 h-5 text-indigo-600" />
+              Edit Label Perangkat ONT
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Ubah label penamaan modem ONT ({selectedDevice?.serial_number}).
+            </DialogDescription>
+          </DialogHeader>
+
+          {actionMessage && (
+            <div className={`p-3 rounded-lg text-xs border ${
+              actionMessage.type === "success" 
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                : "bg-rose-50 border-rose-200 text-rose-800"
+            }`}>
+              {actionMessage.text}
+            </div>
+          )}
+
+          <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">Label / Catatan Lokasi</label>
+              <Input
+                value={editForm.label}
+                onChange={(e) => setEditForm({ label: e.target.value })}
+                placeholder="Contoh: ONT Rumah Budi - RT 02"
+                className="bg-white border-slate-300 text-xs h-9"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditModalOpen(false)}
+                className="text-slate-600 hover:text-slate-900"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                disabled={actionLoading}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5"
+              >
+                {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+                Simpan Perubahan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal: Atur WiFi */}
       <Dialog open={wifiModalOpen} onOpenChange={setWifiModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 sm:max-w-md">
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Wifi className="w-5 h-5 text-indigo-400" />
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Wifi className="w-5 h-5 text-indigo-600" />
               Atur WiFi ONT Pelanggan
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-slate-500 text-xs">
               Ubah Nama SSID dan Password WiFi langsung tanpa login ke modem ONT ({selectedDevice?.serial_number}).
             </DialogDescription>
           </DialogHeader>
@@ -538,8 +810,8 @@ export default function ACSPage() {
           {actionMessage && (
             <div className={`p-3 rounded-lg text-xs border ${
               actionMessage.type === "success" 
-                ? "bg-emerald-950/40 border-emerald-800 text-emerald-300" 
-                : "bg-rose-950/40 border-rose-800 text-rose-300"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                : "bg-rose-50 border-rose-200 text-rose-800"
             }`}>
               {actionMessage.text}
             </div>
@@ -547,18 +819,18 @@ export default function ACSPage() {
 
           <form onSubmit={handleSaveWifi} className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-300">Nama WiFi (SSID)</label>
+              <label className="text-xs font-medium text-slate-700">Nama WiFi (SSID)</label>
               <Input
                 value={wifiForm.ssid}
                 onChange={(e) => setWifiForm({ ...wifiForm, ssid: e.target.value })}
                 placeholder="Contoh: WiFi-Rumah-Pelanggan"
                 required
-                className="bg-slate-950 border-slate-800 text-white text-xs h-9"
+                className="bg-white border-slate-300 text-slate-900 text-xs h-9 focus-visible:ring-indigo-500"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-300">Password Baru</label>
+              <label className="text-xs font-medium text-slate-700">Password Baru</label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <Input
@@ -568,7 +840,7 @@ export default function ACSPage() {
                   placeholder="Minimal 8 karakter"
                   required
                   minLength={8}
-                  className="pl-9 bg-slate-950 border-slate-800 text-white text-xs h-9 font-mono"
+                  className="pl-9 bg-white border-slate-300 text-slate-900 text-xs h-9 font-mono focus-visible:ring-indigo-500"
                 />
               </div>
               <p className="text-[11px] text-slate-500">
@@ -581,14 +853,14 @@ export default function ACSPage() {
                 type="button"
                 variant="ghost"
                 onClick={() => setWifiModalOpen(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-600 hover:text-slate-900"
               >
                 Batal
               </Button>
               <Button
                 type="submit"
                 disabled={actionLoading}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs gap-1.5"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5"
               >
                 {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
                 Terapkan ke ONT
@@ -600,30 +872,30 @@ export default function ACSPage() {
 
       {/* Modal: Reboot ONT */}
       <Dialog open={rebootModalOpen} onOpenChange={setRebootModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 sm:max-w-md">
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Power className="w-5 h-5 text-rose-400" />
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Power className="w-5 h-5 text-rose-600" />
               Konfirmasi Reboot ONT
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-slate-500 text-xs">
               Apakah Anda yakin ingin me-restart modem pelanggan dengan Serial Number:{" "}
-              <strong className="text-white font-mono">{selectedDevice?.serial_number}</strong>?
+              <strong className="text-slate-900 font-mono">{selectedDevice?.serial_number}</strong>?
             </DialogDescription>
           </DialogHeader>
 
           {actionMessage && (
             <div className={`p-3 rounded-lg text-xs border ${
               actionMessage.type === "success" 
-                ? "bg-emerald-950/40 border-emerald-800 text-emerald-300" 
-                : "bg-rose-950/40 border-rose-800 text-rose-300"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                : "bg-rose-50 border-rose-200 text-rose-800"
             }`}>
               {actionMessage.text}
             </div>
           )}
 
-          <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-lg text-xs text-rose-300 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg text-xs text-rose-800 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             <span>Koneksi internet pelanggan akan terputus sementara selama proses restart (1-2 menit).</span>
           </div>
 
@@ -632,7 +904,7 @@ export default function ACSPage() {
               type="button"
               variant="ghost"
               onClick={() => setRebootModalOpen(false)}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-600 hover:text-slate-900"
             >
               Batal
             </Button>
@@ -640,7 +912,7 @@ export default function ACSPage() {
               type="button"
               disabled={actionLoading}
               onClick={handleConfirmReboot}
-              className="bg-rose-600 hover:bg-rose-500 text-white text-xs gap-1.5"
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs gap-1.5"
             >
               {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
               Reboot Sekarang
@@ -649,52 +921,95 @@ export default function ACSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Detail ONT */}
+      {/* Modal: Detail Parameter ONT */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 sm:max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 sm:max-w-2xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="text-white flex items-center gap-2">
-              <Info className="w-5 h-5 text-indigo-400" />
-              Detail Informasi Perangkat ONT
+              <Server className="w-5 h-5 text-indigo-400" />
+              Detail Informasi Parameter ONT
             </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              Data telemetri lengkap yang diekstrak dari Auto Configuration Server (TR-069 CWMP).
+            </DialogDescription>
           </DialogHeader>
 
           {selectedDevice && (
-            <div className="space-y-4 py-2 text-xs">
-              {/* Device Header */}
-              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
-                <div>
-                  <h4 className="font-semibold text-white text-sm">{selectedDevice.product_class || "Generic ONT"}</h4>
-                  <p className="text-slate-400">{selectedDevice.manufacturer || "TR-069"}</p>
+            <div className="space-y-4 py-2 overflow-y-auto pr-1 flex-1">
+              {/* Primary Identity Card */}
+              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-base font-bold text-white flex items-center gap-2">
+                      {selectedDevice.product_class || "ONT Device"}
+                      <span className="text-xs font-normal text-slate-400">({selectedDevice.manufacturer || "Generic"})</span>
+                    </div>
+                    {selectedDevice.label && (
+                      <div className="text-xs text-indigo-300 font-medium mt-0.5">
+                        Label: {selectedDevice.label}
+                      </div>
+                    )}
+                    <div className="text-xs font-mono text-indigo-400 mt-0.5">
+                      SN: {selectedDevice.serial_number}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    {selectedDevice.status === "online" ? (
+                      <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
+                        Online
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-slate-400 border-slate-700 text-xs">
+                        Offline
+                      </Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRefreshDevice(selectedDevice.id)}
+                      className="h-6 px-2 text-[10px] text-slate-400 hover:text-white hover:bg-slate-800"
+                    >
+                      <RotateCw className="w-3.5 h-3.5 mr-1" />
+                      Refresh TR-069
+                    </Button>
+                  </div>
                 </div>
-                {renderSignalBadge(selectedDevice.rx_power_dbm)}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">GenieACS Device ID</span>
+                    <span className="font-mono text-slate-300 break-all text-[11px]">{selectedDevice.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">IP Address (WAN)</span>
+                    <span className="font-mono text-slate-300">{selectedDevice.ip_address || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">MAC Address</span>
+                    <span className="font-mono text-slate-300">{selectedDevice.mac_address || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Hardware Version</span>
+                    <span className="text-slate-300">{selectedDevice.hardware_version || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Software / Firmware</span>
+                    <span className="text-slate-300">{selectedDevice.software_version || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">OUI</span>
+                    <span className="font-mono text-slate-300">{selectedDevice.oui || "-"}</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Specs Grid */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Optical & Link Telemetry */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Serial Number (PON SN)</span>
-                  <span className="font-mono text-slate-100 font-medium text-xs">{selectedDevice.serial_number}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">MAC Address</span>
-                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.mac_address || "-"}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">IP Address</span>
-                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.ip_address || "-"}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Manufacturer OUI</span>
-                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.oui || "-"}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Firmware / Software</span>
-                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.software_version || "-"}</span>
-                </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Hardware Version</span>
-                  <span className="font-mono text-slate-100 text-xs">{selectedDevice.hardware_version || "-"}</span>
+                  <span className="text-slate-400 block text-[11px]">Optical RX Power (Redaman)</span>
+                  <div className="mt-1">
+                    {renderSignalBadge(selectedDevice.rx_power_dbm)}
+                  </div>
                 </div>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-slate-400 block text-[11px]">Optical TX Power</span>
@@ -766,7 +1081,7 @@ export default function ACSPage() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 pt-2 border-t border-slate-800/80">
             <Button
               type="button"
               variant="outline"

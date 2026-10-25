@@ -88,6 +88,16 @@ func (s *PPPoEService) CreatePPPoESecret(ctx context.Context, tenantID uuid.UUID
 		return nil, fmt.Errorf("client not found")
 	}
 
+	// Format username_slug for tenant isolation
+	u := strings.TrimSpace(req.Username)
+	if slug, err := s.clientRepo.GetTenantSlug(ctx, tenantID); err == nil && slug != "" {
+		slugSuffix := "_" + strings.ToLower(slug)
+		if !strings.HasSuffix(strings.ToLower(u), slugSuffix) {
+			u = u + slugSuffix
+		}
+	}
+	req.Username = u
+
 	// Check username uniqueness
 	existing, err := s.pppoeRepo.GetByUsername(ctx, tenantID, req.Username)
 	if err == nil && existing != nil {

@@ -1776,7 +1776,8 @@ func New(deps Dependencies) http.Handler {
 	
 	voucherHandler := handler.NewVoucherHandler(voucherService)
 	genieacsClient := genieacs.NewClient(deps.Config.ACS.NBIURL)
-	acsService := service.NewACSService(genieacsClient)
+	acsDeviceRepo := repository.NewACSDeviceRepository(deps.DB)
+	acsService := service.NewACSService(genieacsClient, acsDeviceRepo)
 	acsHandler := handler.NewACSHandler(acsService)
 
 	// Routers
@@ -2877,10 +2878,31 @@ func New(deps Dependencies) http.Handler {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	})))
 
+	mux.Handle("/api/v1/acs/unassigned", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			acsHandler.ListUnassignedDevices(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})))
+
 	mux.Handle("/api/v1/acs/devices/", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/acs/devices/")
 		if path == "" {
 			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if (path == "register" || path == "claim") && r.Method == http.MethodPost {
+			acsHandler.ClaimDevice(w, r)
+			return
+		}
+		if (strings.HasSuffix(path, "/claim") || strings.HasSuffix(path, "/unregister")) && (r.Method == http.MethodDelete || r.Method == http.MethodPost) {
+			acsHandler.UnclaimDevice(w, r)
+			return
+		}
+		if strings.HasSuffix(path, "/metadata") && (r.Method == http.MethodPut || r.Method == http.MethodPost) {
+			acsHandler.UpdateMetadata(w, r)
 			return
 		}
 

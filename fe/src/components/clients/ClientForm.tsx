@@ -20,6 +20,7 @@ import { LoadingSpinner } from '@/components/utilities/LoadingSpinner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useTenantStore } from '@/stores/tenantStore';
 
 import { User, Wifi, Tag, Calendar, Eye, EyeOff, FileText } from 'lucide-react';
 
@@ -56,6 +57,7 @@ interface ClientFormProps {
 
 export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormProps) {
   const isEdit = !!client;
+  const tenantSlug = useTenantStore((s) => s.slug || s.tenant?.slug);
 
   const {
     register,
@@ -384,6 +386,14 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       }
     }
 
+    let finalPPPoEUsername = data.pppoe_username?.trim();
+    if (finalPPPoEUsername && data.connection_type !== 'hotspot' && tenantSlug) {
+      const slugSuffix = `_${tenantSlug.toLowerCase()}`;
+      if (!finalPPPoEUsername.toLowerCase().endsWith(slugSuffix)) {
+        finalPPPoEUsername = `${finalPPPoEUsername}${slugSuffix}`;
+      }
+    }
+
     const payload: CreateClientRequest = {
       name: data.name,
       email: finalEmail,
@@ -395,7 +405,7 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
       isolir_mode: data.isolir_mode || 'manual',
       connection_type: data.connection_type || 'pppoe',
       device_count: (data.category === 'lite' || data.connection_type === 'hotspot') ? data.device_count ?? undefined : undefined,
-      pppoe_username: (data.category !== 'lite' && data.connection_type !== 'none') ? data.pppoe_username : undefined,
+      pppoe_username: (data.category !== 'lite' && data.connection_type !== 'none') ? finalPPPoEUsername : undefined,
       pppoe_password: (data.category !== 'lite' && data.connection_type !== 'none') ? (data.pppoe_password || undefined) : undefined,
       router_id: data.router_id ? data.router_id : undefined,
       pppoe_local_address: data.pppoe_local_address ? data.pppoe_local_address : undefined,
@@ -730,9 +740,14 @@ export function ClientForm({ client, onSubmit, onCancel, loading }: ClientFormPr
               </label>
               <Input
                 {...register('pppoe_username')}
-                placeholder={connectionType === 'hotspot' ? 'hotspot_user' : 'pppoe_user'}
+                placeholder={connectionType === 'hotspot' ? 'hotspot_user' : (tenantSlug ? `contoh: budi_${tenantSlug}` : 'pppoe_user')}
                 error={errors.pppoe_username?.message}
               />
+              {connectionType !== 'hotspot' && tenantSlug && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Format unik: <span className="font-mono text-indigo-600 font-semibold">username_{tenantSlug}</span> (otomatis ditambahkan akhiran jika belum).
+                </p>
+              )}
             </div>
             <div className="sm:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">

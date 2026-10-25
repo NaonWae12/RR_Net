@@ -253,6 +253,17 @@ func (s *ClientService) Create(ctx context.Context, tenantID uuid.UUID, req *Cre
 		if req.PPPoEUsername == nil || *req.PPPoEUsername == "" {
 			return nil, errors.New("pppoe_username is required")
 		}
+		// Format username_slug for tenant isolation
+		if !isHotspot {
+			u := strings.TrimSpace(*req.PPPoEUsername)
+			if slug, err := s.clientRepo.GetTenantSlug(ctx, tenantID); err == nil && slug != "" {
+				slugSuffix := "_" + strings.ToLower(slug)
+				if !strings.HasSuffix(strings.ToLower(u), slugSuffix) {
+					u = u + slugSuffix
+				}
+			}
+			req.PPPoEUsername = &u
+		}
 		if req.PPPoEPassword == nil || *req.PPPoEPassword == "" {
 			return nil, errors.New("pppoe_password is required")
 		}
@@ -926,6 +937,17 @@ func (s *ClientService) Update(ctx context.Context, tenantID, clientID uuid.UUID
 	} else {
 		if req.PPPoEUsername == nil || *req.PPPoEUsername == "" {
 			return nil, errors.New("pppoe_username is required")
+		}
+		// Format username_slug for tenant isolation
+		if !isHotspot {
+			u := strings.TrimSpace(*req.PPPoEUsername)
+			if slug, err := s.clientRepo.GetTenantSlug(ctx, tenantID); err == nil && slug != "" {
+				slugSuffix := "_" + strings.ToLower(slug)
+				if !strings.HasSuffix(strings.ToLower(u), slugSuffix) {
+					u = u + slugSuffix
+				}
+			}
+			req.PPPoEUsername = &u
 		}
 		// Only update password if provided (avoid forcing re-entry on edit)
 		if req.PPPoEPassword != nil && *req.PPPoEPassword != "" {

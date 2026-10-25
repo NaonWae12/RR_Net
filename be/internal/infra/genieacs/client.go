@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Client handles communication with GenieACS Northbound Interface (NBI REST API).
@@ -54,6 +56,11 @@ type DeviceSummary struct {
 	SSIDList        []WiFiSSID      `json:"ssid_list,omitempty"`
 	ConnectedHosts  []ConnectedHost `json:"connected_hosts,omitempty"`
 	UptimeSeconds   int64           `json:"uptime_seconds"`
+	Label           string          `json:"label,omitempty"`
+	ClientID        *uuid.UUID      `json:"client_id,omitempty"`
+	ClientName      string          `json:"client_name,omitempty"`
+	WiFiPassword    string          `json:"wifi_password,omitempty"`
+	WiFiUpdatedAt   *time.Time      `json:"wifi_updated_at,omitempty"`
 }
 
 // TaskRequest represents a task sent to GenieACS NBI.

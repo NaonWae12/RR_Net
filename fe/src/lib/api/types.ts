@@ -1360,5 +1360,10 @@ export interface ONTDevice {
   ssid_list?: { index: number; ssid: string; enabled: boolean; bssid?: string }[];
   connected_hosts?: { hostname: string; ip_address: string; mac_address: string; active: boolean }[];
   uptime_seconds: number;
+  label?: string;
+  client_id?: string;
+  client_name?: string;
+  wifi_password?: string;
+  wifi_updated_at?: string;
 }
 

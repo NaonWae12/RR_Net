@@ -10,21 +10,155 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"rrnet/internal/domain/acs"
 	"rrnet/internal/infra/genieacs"
+	"rrnet/internal/repository"
 )
 
 type ACSService struct {
 	client *genieacs.Client
+	repo   *repository.ACSDeviceRepository
 }
 
-func NewACSService(client *genieacs.Client) *ACSService {
-	return &ACSService{client: client}
+func NewACSService(client *genieacs.Client, repo *repository.ACSDeviceRepository) *ACSService {
+	return &ACSService{client: client, repo: repo}
 }
 
-// ListDevices returns all ONT devices connected to GenieACS, normalized into standard summaries.
+// ListDevices returns ONT devices registered to the current tenant.
 func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]genieacs.DeviceSummary, error) {
 	if s.client == nil {
 		return nil, fmt.Errorf("genieacs client not initialized")
+	}
+
+	// 1. Fetch raw devices from GenieACS
+	rawDevices, err := s.client.ListRawDevices(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Auto-bind newly detected devices via WAN PPPoE username
+	// If a modem connects and has an active PPPoE username matching a client in database,
+	// automatically bind it to that tenant!
+	if s.repo != nil {
+		allRegistered, _ := s.repo.GetAllRegisteredDeviceIDs(ctx)
+		for _, raw := range rawDevices {
+			devID := getString(raw, "_id")
+			if devID == "" {
+				continue
+			}
+			if isNonONTDevice(s.normalizeDevice(raw)) {
+				continue
+			}
+
+			// If device not yet registered to any tenant, check if it has a PPPoE username
+			if _, exists := allRegistered[devID]; !exists {
+				if pppoeUser := extractPPPoEUsername(raw); pppoeUser != "" {
+					if mapping, err := s.repo.FindTenantByPPPoE(ctx, pppoeUser); err == nil && mapping != nil {
+						normDev := s.normalizeDevice(raw)
+						label := mapping.ClientName
+						if label == "" {
+							label = "PPPoE: " + pppoeUser
+						}
+						_ = s.repo.Register(ctx, &acs.DeviceTenant{
+							TenantID:     mapping.TenantID,
+							DeviceID:     devID,
+							SerialNumber: normDev.SerialNumber,
+							Label:        label,
+							ClientID:     &mapping.ClientID,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Get tenant's registered devices from PostgreSQL
+	var registered []*acs.DeviceTenant
+	if s.repo != nil && tenantID != uuid.Nil {
+		registered, err = s.repo.ListByTenant(ctx, tenantID)
+		if err != nil {
+			return nil, fmt.Errorf("gagal mengambil perangkat terdaftar tenant: %w", err)
+		}
+	}
+
+	// If no devices registered in DB for this tenant, return empty list (strict multi-tenant isolation)
+	if len(registered) == 0 {
+		return []genieacs.DeviceSummary{}, nil
+	}
+
+	regMap := make(map[string]*acs.DeviceTenant)
+	for _, r := range registered {
+		regMap[r.DeviceID] = r
+		if r.SerialNumber != "" {
+			regMap[r.SerialNumber] = r
+		}
+	}
+
+	matchedMap := make(map[string]bool)
+	var devices []genieacs.DeviceSummary
+
+	for _, raw := range rawDevices {
+		dev := s.normalizeDevice(raw)
+		if isNonONTDevice(dev) {
+			continue
+		}
+
+		// Check if device belongs to this tenant
+		reg, found := regMap[dev.ID]
+		if !found && dev.SerialNumber != "" {
+			reg, found = regMap[dev.SerialNumber]
+		}
+
+		if found {
+			dev.Label = reg.Label
+			dev.ClientID = reg.ClientID
+			dev.ClientName = reg.ClientName
+			if dev.WiFiPassword == "" || dev.WiFiPassword == "********" {
+				dev.WiFiPassword = reg.WiFiPassword
+			}
+			if dev.SSID == "" && reg.WiFiSSID != "" {
+				dev.SSID = reg.WiFiSSID
+			}
+			dev.WiFiUpdatedAt = reg.WiFiUpdatedAt
+			devices = append(devices, dev)
+			matchedMap[reg.DeviceID] = true
+		}
+	}
+
+	// 4. For any device registered in DB but not currently active in GenieACS,
+	// create an offline summary so the tenant sees their pre-registered/offline ONT
+	for _, reg := range registered {
+		if !matchedMap[reg.DeviceID] {
+			devices = append(devices, genieacs.DeviceSummary{
+				ID:            reg.DeviceID,
+				SerialNumber:  reg.SerialNumber,
+				Status:        "offline",
+				Label:         reg.Label,
+				ClientID:      reg.ClientID,
+				ClientName:    reg.ClientName,
+				SSID:          reg.WiFiSSID,
+				WiFiPassword:  reg.WiFiPassword,
+				WiFiUpdatedAt: reg.WiFiUpdatedAt,
+			})
+		}
+	}
+
+	return devices, nil
+}
+
+// ListUnassignedDevices returns devices detected by GenieACS that haven't been registered by ANY tenant yet.
+func (s *ACSService) ListUnassignedDevices(ctx context.Context, tenantID uuid.UUID) ([]genieacs.DeviceSummary, error) {
+	if s.client == nil {
+		return nil, fmt.Errorf("genieacs client not initialized")
+	}
+
+	registeredIDs := make(map[string]uuid.UUID)
+	if s.repo != nil {
+		var err error
+		registeredIDs, err = s.repo.GetAllRegisteredDeviceIDs(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("gagal mengambil data kepemilikan perangkat: %w", err)
+		}
 	}
 
 	rawDevices, err := s.client.ListRawDevices(ctx, "")
@@ -32,86 +166,129 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 		return nil, err
 	}
 
-	var devices []genieacs.DeviceSummary
+	var unassigned []genieacs.DeviceSummary
 	for _, raw := range rawDevices {
 		dev := s.normalizeDevice(raw)
-		// Skip non-ONT entries: GenieACS may auto-detect CWMP proxies or discovery
-		// services that are not real ONT devices (e.g. id contains "DISCOVERYSERVICE"
-		// or product_class is empty and serial_number looks like a service identifier)
 		if isNonONTDevice(dev) {
 			continue
 		}
-		devices = append(devices, dev)
+		// If not registered by any tenant, include in unassigned list
+		if _, exists := registeredIDs[dev.ID]; !exists {
+			unassigned = append(unassigned, dev)
+		}
 	}
 
-	// IF in development and no physical device is connected yet, return a clean simulated ONT
-	// so the user can test the UI and actions immediately!
-	if len(devices) == 0 {
-		mockRx := -19.45
-		mockTx := 2.30
-		devices = append(devices, genieacs.DeviceSummary{
-			ID:              "ZTEG-F609-SIMULATOR-001",
-			SerialNumber:    "ZTEGC8923011",
-			ProductClass:    "F609 v9.0",
-			Manufacturer:    "ZTE Corporation",
-			OUI:             "00259E",
-			SoftwareVersion: "V9.0.10P1N12",
-			HardwareVersion: "V9.0",
-			IPAddress:       "10.10.20.15",
-			MACAddress:      "A4:2B:B0:12:34:56",
-			Status:          "online",
-			LastInform:      time.Now().Add(-2 * time.Minute),
-			RxPowerDBm:      &mockRx,
-			TxPowerDBm:      &mockTx,
-			SSID:            "RRNET-PELANGGAN-001",
-			WiFiEnabled:     true,
-			SSIDList: []genieacs.WiFiSSID{
-				{Index: 1, SSID: "RRNET-PELANGGAN-001", Enabled: true},
-				{Index: 2, SSID: "RRNET-GUEST", Enabled: false},
-			},
-			ConnectedHosts: []genieacs.ConnectedHost{
-				{HostName: "REDMI-Note-15", IPAddress: "192.168.1.2", MACAddress: "ea:9e:eb:d0:2a:10", Active: true},
-				{HostName: "Laptop-Admin", IPAddress: "192.168.1.5", MACAddress: "08:97:98:d1:ec:82", Active: true},
-			},
-			UptimeSeconds:   184200, // ~2 days
-		})
-	}
-
-	return devices, nil
+	return unassigned, nil
 }
 
-// GetDevice returns details of a single ONT device.
+// ClaimDevice registers or claims an ONT device for the tenant.
+func (s *ACSService) ClaimDevice(ctx context.Context, tenantID uuid.UUID, deviceID, serialNumber, label string, clientID *uuid.UUID) error {
+	if s.repo == nil {
+		return fmt.Errorf("repository not initialized")
+	}
+	if tenantID == uuid.Nil {
+		return fmt.Errorf("tenant_id tidak valid")
+	}
+	deviceID = strings.TrimSpace(deviceID)
+	serialNumber = strings.TrimSpace(serialNumber)
+	if deviceID == "" && serialNumber == "" {
+		return fmt.Errorf("Serial Number atau Device ID wajib diisi")
+	}
+
+	// If deviceID is empty but serialNumber is given, match against connected GenieACS devices
+	if deviceID == "" && s.client != nil {
+		rawDevices, _ := s.client.ListRawDevices(ctx, "")
+		for _, raw := range rawDevices {
+			norm := s.normalizeDevice(raw)
+			if strings.EqualFold(norm.SerialNumber, serialNumber) || strings.EqualFold(norm.ID, serialNumber) {
+				deviceID = norm.ID
+				break
+			}
+		}
+		if deviceID == "" {
+			// Pre-provisioning: device not yet in GenieACS, use serialNumber as temporary ID
+			deviceID = serialNumber
+		}
+	}
+
+	// Auto-fill serial number if empty and device is in GenieACS
+	if serialNumber == "" && s.client != nil {
+		if raw, err := s.client.GetRawDevice(ctx, deviceID); err == nil {
+			dev := s.normalizeDevice(raw)
+			serialNumber = dev.SerialNumber
+		}
+	}
+
+	return s.repo.Register(ctx, &acs.DeviceTenant{
+		TenantID:     tenantID,
+		DeviceID:     deviceID,
+		SerialNumber: serialNumber,
+		Label:        label,
+		ClientID:     clientID,
+	})
+}
+
+// UnclaimDevice unregisters a device from the tenant.
+func (s *ACSService) UnclaimDevice(ctx context.Context, tenantID uuid.UUID, deviceID string) error {
+	if s.repo == nil {
+		return fmt.Errorf("repository not initialized")
+	}
+	if tenantID == uuid.Nil {
+		return fmt.Errorf("tenant_id tidak valid")
+	}
+	return s.repo.Unregister(ctx, tenantID, deviceID)
+}
+
+// UpdateMetadata updates label and client binding for a tenant's device.
+func (s *ACSService) UpdateMetadata(ctx context.Context, tenantID uuid.UUID, deviceID string, label string, clientID *uuid.UUID) error {
+	if s.repo == nil {
+		return fmt.Errorf("repository not initialized")
+	}
+	if tenantID == uuid.Nil {
+		return fmt.Errorf("tenant_id tidak valid")
+	}
+	return s.repo.UpdateMetadata(ctx, tenantID, deviceID, label, clientID)
+}
+
+// GetDevice returns details of a single ONT device, verifying tenant ownership.
 func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID string) (*genieacs.DeviceSummary, error) {
-	// Check mock first
-	if deviceID == "ZTEG-F609-SIMULATOR-001" {
-		mockRx := -19.45
-		mockTx := 2.30
-		return &genieacs.DeviceSummary{
-			ID:              "ZTEG-F609-SIMULATOR-001",
-			SerialNumber:    "ZTEGC8923011",
-			ProductClass:    "F609 v9.0",
-			Manufacturer:    "ZTE Corporation",
-			OUI:             "00259E",
-			SoftwareVersion: "V9.0.10P1N12",
-			HardwareVersion: "V9.0",
-			IPAddress:       "10.10.20.15",
-			MACAddress:      "A4:2B:B0:12:34:56",
-			Status:          "online",
-			LastInform:      time.Now().Add(-2 * time.Minute),
-			RxPowerDBm:      &mockRx,
-			TxPowerDBm:      &mockTx,
-			SSID:            "RRNET-PELANGGAN-001",
-			WiFiEnabled:     true,
-			SSIDList: []genieacs.WiFiSSID{
-				{Index: 1, SSID: "RRNET-PELANGGAN-001", Enabled: true},
-				{Index: 2, SSID: "RRNET-GUEST", Enabled: false},
-			},
-			ConnectedHosts: []genieacs.ConnectedHost{
-				{HostName: "REDMI-Note-15", IPAddress: "192.168.1.2", MACAddress: "ea:9e:eb:d0:2a:10", Active: true},
-				{HostName: "Laptop-Admin", IPAddress: "192.168.1.5", MACAddress: "08:97:98:d1:ec:82", Active: true},
-			},
-			UptimeSeconds:   184200,
-		}, nil
+	if s.repo != nil && tenantID != uuid.Nil {
+		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
+		if err != nil {
+			return nil, fmt.Errorf("perangkat tidak ditemukan atau belum terdaftar di tenant Anda")
+		}
+		if reg.TenantID != tenantID {
+			return nil, fmt.Errorf("akses ditolak: perangkat ini milik tenant lain")
+		}
+
+		raw, err := s.client.GetRawDevice(ctx, deviceID)
+		if err != nil {
+			// If not reachable in GenieACS, return basic offline summary
+			return &genieacs.DeviceSummary{
+				ID:            reg.DeviceID,
+				SerialNumber:  reg.SerialNumber,
+				Status:        "offline",
+				Label:         reg.Label,
+				ClientID:      reg.ClientID,
+				ClientName:    reg.ClientName,
+				SSID:          reg.WiFiSSID,
+				WiFiPassword:  reg.WiFiPassword,
+				WiFiUpdatedAt: reg.WiFiUpdatedAt,
+			}, nil
+		}
+
+		dev := s.normalizeDevice(raw)
+		dev.Label = reg.Label
+		dev.ClientID = reg.ClientID
+		dev.ClientName = reg.ClientName
+		if dev.WiFiPassword == "" || dev.WiFiPassword == "********" {
+			dev.WiFiPassword = reg.WiFiPassword
+		}
+		if dev.SSID == "" && reg.WiFiSSID != "" {
+			dev.SSID = reg.WiFiSSID
+		}
+		dev.WiFiUpdatedAt = reg.WiFiUpdatedAt
+		return &dev, nil
 	}
 
 	raw, err := s.client.GetRawDevice(ctx, deviceID)
@@ -123,65 +300,103 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 	return &dev, nil
 }
 
-// Reboot triggers device restart.
+// Reboot triggers device restart after verifying tenant ownership.
 func (s *ACSService) Reboot(ctx context.Context, tenantID uuid.UUID, deviceID string) error {
-	if deviceID == "ZTEG-F609-SIMULATOR-001" {
-		return nil // Simulated success
+	if s.repo != nil && tenantID != uuid.Nil {
+		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
+		if err != nil || reg.TenantID != tenantID {
+			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
+		}
 	}
 	return s.client.Reboot(ctx, deviceID)
 }
 
-// SetWiFi configures WiFi SSID and Password on ONT (with automatic multi-vendor path detection).
+// SetWiFi configures WiFi SSID and Password on ONT after verifying tenant ownership.
 func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID string, ssid, password string) error {
-	if strings.TrimSpace(ssid) == "" {
-		return fmt.Errorf("SSID cannot be empty")
+	ssid = strings.TrimSpace(ssid)
+	password = strings.TrimSpace(password)
+	if ssid == "" {
+		return fmt.Errorf("nama SSID tidak boleh kosong")
 	}
-	if len(password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters")
+	if password != "" && len(password) < 8 {
+		return fmt.Errorf("password WiFi minimal 8 karakter")
 	}
 
-	if deviceID == "ZTEG-F609-SIMULATOR-001" {
-		return nil // Simulated success
+	if s.repo != nil && tenantID != uuid.Nil {
+		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
+		if err != nil || reg.TenantID != tenantID {
+			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
+		}
+		// If password is not provided, preserve existing password from DB
+		if password == "" && reg.WiFiPassword != "" {
+			password = reg.WiFiPassword
+		}
 	}
 
 	// Fetch raw device to detect supported WiFi parameter path
-	raw, err := s.client.GetRawDevice(ctx, deviceID)
-	if err != nil {
-		// Fallback to client default if fetch fails
-		return s.client.SetWiFi(ctx, deviceID, ssid, password)
-	}
+	raw, _ := s.client.GetRawDevice(ctx, deviceID)
 
-	// Detect if device supports direct KeyPassphrase (older ZTE like F460) or standard PreSharedKey (F609, Huawei, etc.)
+	isTR181 := raw != nil && (pathExistsInTree(raw, "Device.WiFi.SSID.1.SSID") || pathExistsInTree(raw, "Device.WiFi.Radio.1.Enable"))
 	directKeyPath := "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase"
-	hasDirectKey := pathExistsInTree(raw, directKeyPath)
+	hasDirectKey := raw != nil && pathExistsInTree(raw, directKeyPath)
 
 	var paramValues [][]interface{}
-	paramValues = append(paramValues, []interface{}{
-		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", ssid, "xsd:string",
-	})
-
-	if hasDirectKey {
-		// Older ZTE (F460, etc.)
+	if isTR181 {
 		paramValues = append(paramValues, []interface{}{
-			directKeyPath, password, "xsd:string",
+			"Device.WiFi.SSID.1.SSID", ssid, "xsd:string",
 		})
+		if password != "" {
+			paramValues = append(paramValues, []interface{}{
+				"Device.WiFi.AccessPoint.1.Security.KeyPassphrase", password, "xsd:string",
+			})
+		}
+	} else if hasDirectKey {
+		// Older ZTE (F460, F401, etc.)
+		paramValues = append(paramValues, []interface{}{
+			"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", ssid, "xsd:string",
+		})
+		if password != "" {
+			paramValues = append(paramValues, []interface{}{
+				directKeyPath, password, "xsd:string",
+			})
+		}
 	} else {
-		// Standard TR-098 (F609, Huawei, Fiberhome, VSOL)
+		// Standard TR-098 (F609/F660, Huawei, Fiberhome, VSOL)
 		paramValues = append(paramValues, []interface{}{
-			"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", password, "xsd:string",
+			"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", ssid, "xsd:string",
 		})
+		if password != "" {
+			paramValues = append(paramValues, []interface{}{
+				"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", password, "xsd:string",
+			})
+		}
 	}
 
-	return s.client.SendTask(ctx, deviceID, genieacs.TaskRequest{
+	// Send task to GenieACS (with connection_request = true to push immediately)
+	sendErr := s.client.SendTask(ctx, deviceID, genieacs.TaskRequest{
 		Name:            "setParameterValues",
 		ParameterValues: paramValues,
 	}, true)
+
+	// Persist to database so tenant always has record of current/configured WiFi
+	if s.repo != nil && tenantID != uuid.Nil {
+		_ = s.repo.UpdateWiFi(ctx, tenantID, deviceID, ssid, password)
+	}
+
+	if sendErr != nil {
+		return fmt.Errorf("perintah dikirim ke antrean, namun peringatan ACS: %w", sendErr)
+	}
+
+	return nil
 }
 
-// Refresh triggers parameter refresh.
+// Refresh triggers parameter refresh after verifying tenant ownership.
 func (s *ACSService) Refresh(ctx context.Context, tenantID uuid.UUID, deviceID string) error {
-	if deviceID == "ZTEG-F609-SIMULATOR-001" {
-		return nil // Simulated success
+	if s.repo != nil && tenantID != uuid.Nil {
+		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
+		if err != nil || reg.TenantID != tenantID {
+			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
+		}
 	}
 	return s.client.RefreshDevice(ctx, deviceID)
 }
@@ -383,6 +598,15 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		dev.WiFiEnabled = (wifiEnabledStr == "1" || strings.ToLower(wifiEnabledStr) == "true")
 	}
 
+	// WiFi Password extraction across multiple vendors (TR-098 & TR-181)
+	dev.WiFiPassword = findStringInTree(raw, []string{
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase",
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase",
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.X_ZTE-COM_KeyPassphrase",
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.PreSharedKey",
+		"Device.WiFi.AccessPoint.1.Security.KeyPassphrase",
+	})
+
 	// Connected Hosts (LAN/WLAN client devices)
 	for hostIdx := 1; hostIdx <= 32; hostIdx++ {
 		mac := findStringInTree(raw, []string{
@@ -507,4 +731,20 @@ func findStringInTree(m map[string]interface{}, paths []string) string {
 		}
 	}
 	return ""
+}
+
+// extractPPPoEUsername searches for WAN PPPoE username configured on the ONT device.
+func extractPPPoEUsername(raw map[string]interface{}) string {
+	var candidates []string
+	for slot := 1; slot <= 4; slot++ {
+		candidates = append(candidates,
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1.Username", slot),
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.Username", slot),
+			fmt.Sprintf("Device.PPP.Interface.%d.Username", slot),
+		)
+	}
+	candidates = append(candidates,
+		"Device.IP.Interface.1.Username",
+	)
+	return findStringInTree(raw, candidates)
 }
