@@ -567,13 +567,32 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		enableStr := findStringInTree(raw, []string{
 			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.Enable", slot),
 			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.RadioEnabled", slot),
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.X_HW_RadioEnable", slot),
 			fmt.Sprintf("Device.WiFi.Radio.%d.Enable", slot),
+		})
+		statusStr := findStringInTree(raw, []string{
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.Status", slot),
+			fmt.Sprintf("Device.WiFi.SSID.%d.Status", slot),
 		})
 		bssid := findStringInTree(raw, []string{
 			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.BSSID", slot),
 			fmt.Sprintf("Device.WiFi.SSID.%d.BSSID", slot),
 		})
-		isEnabled := (enableStr == "1" || strings.ToLower(enableStr) == "true" || enableStr == "")
+
+		// Determine enabled state:
+		// 1. If Enable/_value was fetched: use it ("1", "true" = on)
+		// 2. If Status was fetched: "Up" = enabled
+		// 3. If neither was fetched (both empty) but SSID name exists: assume enabled
+		var isEnabled bool
+		if enableStr != "" {
+			isEnabled = (enableStr == "1" || strings.EqualFold(enableStr, "true"))
+		} else if statusStr != "" {
+			isEnabled = strings.EqualFold(statusStr, "Up")
+		} else {
+			// No enable/status data fetched yet, but SSID exists → assume enabled
+			isEnabled = true
+		}
+
 		dev.SSIDList = append(dev.SSIDList, genieacs.WiFiSSID{
 			Index:   slot,
 			SSID:    ssidName,
@@ -731,6 +750,14 @@ func findStringInTree(m map[string]interface{}, paths []string) string {
 			if leafMap, ok := current.(map[string]interface{}); ok {
 				if v, ok := leafMap["_value"]; ok && v != nil {
 					return fmt.Sprintf("%v", v)
+				}
+				// If leaf has metadata keys (_object, _writable, _type, _timestamp)
+				// but NO _value, the parameter exists but was never fetched → return empty
+				if _, hasObj := leafMap["_object"]; hasObj {
+					return ""
+				}
+				if _, hasWr := leafMap["_writable"]; hasWr {
+					return ""
 				}
 			}
 			return fmt.Sprintf("%v", current)
