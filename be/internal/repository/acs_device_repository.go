@@ -184,14 +184,20 @@ func (r *ACSDeviceRepository) Unregister(ctx context.Context, tenantID uuid.UUID
 	return nil
 }
 
-// UpdateMetadata updates label and client_id of a tenant's device.
-func (r *ACSDeviceRepository) UpdateMetadata(ctx context.Context, tenantID uuid.UUID, deviceID string, label string, clientID *uuid.UUID) error {
+// UpdateMetadata updates label, serial_number, and client_id of a tenant's device.
+func (r *ACSDeviceRepository) UpdateMetadata(ctx context.Context, tenantID uuid.UUID, deviceID string, serialNumber string, label string, clientID *uuid.UUID) error {
+	serialNumber = strings.TrimSpace(serialNumber)
 	query := `
 		UPDATE acs_device_tenants
-		SET label = $3, client_id = $4, updated_at = NOW()
+		SET 
+			device_id = CASE WHEN device_id = serial_number AND $3 <> '' THEN $3 ELSE device_id END,
+			serial_number = COALESCE(NULLIF($3, ''), serial_number),
+			label = $4, 
+			client_id = $5, 
+			updated_at = NOW()
 		WHERE tenant_id = $1 AND device_id = $2
 	`
-	cmdTag, err := r.db.Exec(ctx, query, tenantID, deviceID, label, clientID)
+	cmdTag, err := r.db.Exec(ctx, query, tenantID, deviceID, serialNumber, label, clientID)
 	if err != nil {
 		return err
 	}

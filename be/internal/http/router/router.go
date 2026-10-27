@@ -2897,7 +2897,7 @@ func New(deps Dependencies) http.Handler {
 			acsHandler.ClaimDevice(w, r)
 			return
 		}
-		if (strings.HasSuffix(path, "/claim") || strings.HasSuffix(path, "/unregister")) && (r.Method == http.MethodDelete || r.Method == http.MethodPost) {
+		if r.Method == http.MethodDelete || ((strings.HasSuffix(path, "/claim") || strings.HasSuffix(path, "/unregister")) && r.Method == http.MethodPost) {
 			acsHandler.UnclaimDevice(w, r)
 			return
 		}

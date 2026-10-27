@@ -30,10 +30,10 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 		return nil, fmt.Errorf("genieacs client not initialized")
 	}
 
-	// 1. Fetch raw devices from GenieACS
+	// 1. Fetch raw devices from GenieACS (graceful fallback to DB if GenieACS is unreachable)
 	rawDevices, err := s.client.ListRawDevices(ctx, "")
 	if err != nil {
-		return nil, err
+		rawDevices = nil
 	}
 
 	// 2. Auto-bind newly detected devices via WAN PPPoE username
@@ -163,7 +163,7 @@ func (s *ACSService) ListUnassignedDevices(ctx context.Context, tenantID uuid.UU
 
 	rawDevices, err := s.client.ListRawDevices(ctx, "")
 	if err != nil {
-		return nil, err
+		return []genieacs.DeviceSummary{}, nil
 	}
 
 	var unassigned []genieacs.DeviceSummary
@@ -239,15 +239,15 @@ func (s *ACSService) UnclaimDevice(ctx context.Context, tenantID uuid.UUID, devi
 	return s.repo.Unregister(ctx, tenantID, deviceID)
 }
 
-// UpdateMetadata updates label and client binding for a tenant's device.
-func (s *ACSService) UpdateMetadata(ctx context.Context, tenantID uuid.UUID, deviceID string, label string, clientID *uuid.UUID) error {
+// UpdateMetadata updates label, serial number, and client binding for a tenant's device.
+func (s *ACSService) UpdateMetadata(ctx context.Context, tenantID uuid.UUID, deviceID string, serialNumber string, label string, clientID *uuid.UUID) error {
 	if s.repo == nil {
 		return fmt.Errorf("repository not initialized")
 	}
 	if tenantID == uuid.Nil {
 		return fmt.Errorf("tenant_id tidak valid")
 	}
-	return s.repo.UpdateMetadata(ctx, tenantID, deviceID, label, clientID)
+	return s.repo.UpdateMetadata(ctx, tenantID, deviceID, serialNumber, label, clientID)
 }
 
 // GetDevice returns details of a single ONT device, verifying tenant ownership.

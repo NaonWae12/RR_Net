@@ -16,6 +16,7 @@ export interface RegisterDevicePayload {
 export type ClaimDevicePayload = RegisterDevicePayload;
 
 export interface UpdateMetadataPayload {
+  serial_number?: string;
   label?: string;
   client_id?: string | null;
 }
@@ -38,10 +39,21 @@ export const acsService = {
     return this.register(payload);
   },
 
-  // Update label or customer linkage
+  // Update label, serial number, or customer linkage
   async updateMetadata(id: string, payload: UpdateMetadataPayload): Promise<{ message: string }> {
     const res = await apiClient.put<{ message: string }>(`/acs/devices/${encodeURIComponent(id)}/metadata`, payload);
     return res.data;
+  },
+
+  // Remove / delete device from tenant
+  async deleteDevice(id: string): Promise<{ message: string }> {
+    const res = await apiClient.delete<{ message: string }>(`/acs/devices/${encodeURIComponent(id)}`);
+    return res.data;
+  },
+
+  // Alias for backward compatibility
+  async unclaim(id: string): Promise<{ message: string }> {
+    return this.deleteDevice(id);
   },
 
   // Get single device details

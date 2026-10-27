@@ -115,9 +115,10 @@ func (h *ACSHandler) UnclaimDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Path: /api/v1/acs/devices/{id}/claim
+	// Path: /api/v1/acs/devices/{id} or /api/v1/acs/devices/{id}/claim or /api/v1/acs/devices/{id}/unregister
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/acs/devices/")
 	deviceID := strings.TrimSuffix(path, "/claim")
+	deviceID = strings.TrimSuffix(deviceID, "/unregister")
 	deviceID = strings.TrimSpace(deviceID)
 
 	if deviceID == "" {
@@ -137,8 +138,9 @@ func (h *ACSHandler) UnclaimDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateMetadataRequest struct {
-	Label    string     `json:"label"`
-	ClientID *uuid.UUID `json:"client_id"`
+	SerialNumber string     `json:"serial_number"`
+	Label        string     `json:"label"`
+	ClientID     *uuid.UUID `json:"client_id"`
 }
 
 // UpdateMetadata updates label or client binding for a device.
@@ -165,7 +167,7 @@ func (h *ACSHandler) UpdateMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.acsService.UpdateMetadata(r.Context(), tenantID, deviceID, req.Label, req.ClientID); err != nil {
+	if err := h.acsService.UpdateMetadata(r.Context(), tenantID, deviceID, req.SerialNumber, req.Label, req.ClientID); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}

@@ -23,7 +23,8 @@ import {
   Eye,
   EyeOff,
   History,
-  KeyRound
+  KeyRound,
+  Trash2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,13 +55,14 @@ export default function ACSPage() {
   const [rebootModalOpen, setRebootModalOpen] = useState(false);
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Forms
   const [registerForm, setRegisterForm] = useState<{ serial_number: string; label: string }>({
     serial_number: "",
     label: "",
   });
-  const [editForm, setEditForm] = useState<{ label: string }>({ label: "" });
+  const [editForm, setEditForm] = useState<{ serial_number: string; label: string }>({ serial_number: "", label: "" });
   const [wifiForm, setWifiForm] = useState<SetWiFiPayload>({ ssid: "", password: "" });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -127,9 +129,18 @@ export default function ACSPage() {
 
   const handleOpenEditModal = (dev: ONTDevice) => {
     setSelectedDevice(dev);
-    setEditForm({ label: dev.label || "" });
+    setEditForm({
+      serial_number: dev.serial_number || "",
+      label: dev.label || "",
+    });
     setActionMessage(null);
     setEditModalOpen(true);
+  };
+
+  const handleOpenDeleteModal = (dev: ONTDevice) => {
+    setSelectedDevice(dev);
+    setActionMessage(null);
+    setDeleteModalOpen(true);
   };
 
   // Actions
@@ -209,19 +220,45 @@ export default function ACSPage() {
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice) return;
+    const sn = editForm.serial_number.trim();
+    if (!sn) {
+      setActionMessage({ type: "error", text: "Serial Number tidak boleh kosong" });
+      return;
+    }
     setActionLoading(true);
     setActionMessage(null);
     try {
       const res = await acsService.updateMetadata(selectedDevice.id, {
+        serial_number: sn,
         label: editForm.label.trim(),
       });
-      setActionMessage({ type: "success", text: res.message || "Label perangkat berhasil diperbarui!" });
+      setActionMessage({ type: "success", text: res.message || "Data perangkat berhasil diperbarui!" });
       setTimeout(() => {
         setEditModalOpen(false);
         fetchDevices();
       }, 1200);
     } catch (err: any) {
-      setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal memperbarui label" });
+      setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal memperbarui data" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedDevice) return;
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await acsService.deleteDevice(selectedDevice.id);
+      setActionMessage({ type: "success", text: res.message || "Perangkat berhasil dihapus dari tenant!" });
+      setTimeout(() => {
+        setDeleteModalOpen(false);
+        setEditModalOpen(false);
+        setDetailModalOpen(false);
+        fetchDevices();
+      }, 1200);
+    } catch (err: any) {
+      setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal menghapus perangkat" });
     } finally {
       setActionLoading(false);
     }
@@ -645,6 +682,15 @@ export default function ACSPage() {
                           >
                             <Power className="w-3.5 h-3.5" />
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleOpenDeleteModal(dev)}
+                            className="h-7 px-2 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                            title="Hapus / Lepas Perangkat"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -738,16 +784,16 @@ export default function ACSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Edit Metadata / Label */}
+      {/* Modal: Edit Metadata / Label & SN */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
         <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-slate-900 flex items-center gap-2">
               <Edit2 className="w-5 h-5 text-indigo-600" />
-              Edit Label Perangkat ONT
+              Edit Informasi &amp; SN Perangkat
             </DialogTitle>
             <DialogDescription className="text-slate-500 text-xs">
-              Ubah label penamaan modem ONT ({selectedDevice?.serial_number}).
+              Koreksi Serial Number atau ubah label penamaan modem ONT.
             </DialogDescription>
           </DialogHeader>
 
@@ -763,32 +809,60 @@ export default function ACSPage() {
 
           <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-700">Label / Catatan Lokasi</label>
+              <label className="text-xs font-medium text-slate-700">Serial Number (SN) *</label>
+              <Input
+                value={editForm.serial_number}
+                onChange={(e) => setEditForm({ ...editForm, serial_number: e.target.value })}
+                placeholder="Contoh: ELWRP8LH6803185 atau 48575443260C42A8"
+                required
+                className="bg-white border-slate-300 text-xs font-mono h-9"
+              />
+              <p className="text-[11px] text-slate-500">
+                Ubah jika terdapat salah ketik saat input pendaftaran awal.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">Label / Catatan Lokasi (Opsional)</label>
               <Input
                 value={editForm.label}
-                onChange={(e) => setEditForm({ label: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, label: e.target.value })}
                 placeholder="Contoh: ONT Rumah Budi - RT 02"
                 className="bg-white border-slate-300 text-xs h-9"
               />
             </div>
 
-            <DialogFooter className="pt-2">
+            <DialogFooter className="pt-2 flex items-center justify-between sm:justify-between w-full">
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setEditModalOpen(false)}
-                className="text-slate-600 hover:text-slate-900"
+                onClick={() => {
+                  setEditModalOpen(false);
+                  if (selectedDevice) handleOpenDeleteModal(selectedDevice);
+                }}
+                className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs gap-1.5 px-2"
               >
-                Batal
+                <Trash2 className="w-3.5 h-3.5" />
+                Hapus Perangkat
               </Button>
-              <Button
-                type="submit"
-                disabled={actionLoading}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5"
-              >
-                {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
-                Simpan Perubahan
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setEditModalOpen(false)}
+                  className="text-slate-600 hover:text-slate-900 text-xs"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5"
+                >
+                  {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+                  Simpan Perubahan
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -921,15 +995,73 @@ export default function ACSPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal: Hapus / Lepas Perangkat ONT */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-rose-600" />
+              Hapus / Lepas Perangkat ONT
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Apakah Anda yakin ingin melepas perangkat ini dari tenant Anda?
+            </DialogDescription>
+          </DialogHeader>
+
+          {actionMessage && (
+            <div className={`p-3 rounded-lg text-xs border ${
+              actionMessage.type === "success" 
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                : "bg-rose-50 border-rose-200 text-rose-800"
+            }`}>
+              {actionMessage.text}
+            </div>
+          )}
+
+          <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-lg text-xs text-rose-800 space-y-1.5">
+            <div className="font-semibold flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>Perangkat: {selectedDevice?.label || selectedDevice?.product_class || "ONT"}</span>
+            </div>
+            <div className="font-mono text-[11px] text-rose-700">
+              SN: {selectedDevice?.serial_number}
+            </div>
+            <p className="pt-1 text-[11px] text-rose-600 leading-relaxed">
+              Perangkat tidak akan dihapus dari fisik modem, namun tidak akan dikelola lagi oleh tenant Anda sampai didaftarkan kembali.
+            </p>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDeleteModalOpen(false)}
+              className="text-slate-600 hover:text-slate-900 text-xs"
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              disabled={actionLoading}
+              onClick={handleConfirmDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs gap-1.5"
+            >
+              {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+              Hapus Sekarang
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal: Detail Parameter ONT */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 sm:max-w-2xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Server className="w-5 h-5 text-indigo-400" />
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-2xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
+          <DialogHeader className="shrink-0 pb-2 border-b border-slate-100">
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Server className="w-5 h-5 text-indigo-600" />
               Detail Informasi Parameter ONT
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-slate-500 text-xs">
               Data telemetri lengkap yang diekstrak dari Auto Configuration Server (TR-069 CWMP).
             </DialogDescription>
           </DialogHeader>
@@ -937,29 +1069,29 @@ export default function ACSPage() {
           {selectedDevice && (
             <div className="space-y-4 py-2 overflow-y-auto pr-1 flex-1">
               {/* Primary Identity Card */}
-              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-base font-bold text-white flex items-center gap-2">
+                    <div className="text-base font-bold text-slate-900 flex items-center gap-2">
                       {selectedDevice.product_class || "ONT Device"}
-                      <span className="text-xs font-normal text-slate-400">({selectedDevice.manufacturer || "Generic"})</span>
+                      <span className="text-xs font-normal text-slate-500">({selectedDevice.manufacturer || "Generic"})</span>
                     </div>
                     {selectedDevice.label && (
-                      <div className="text-xs text-indigo-300 font-medium mt-0.5">
+                      <div className="text-xs text-indigo-700 font-medium mt-0.5">
                         Label: {selectedDevice.label}
                       </div>
                     )}
-                    <div className="text-xs font-mono text-indigo-400 mt-0.5">
+                    <div className="text-xs font-mono text-indigo-600 font-semibold mt-0.5">
                       SN: {selectedDevice.serial_number}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     {selectedDevice.status === "online" ? (
-                      <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
+                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
                         Online
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-slate-400 border-slate-700 text-xs">
+                      <Badge variant="outline" className="text-slate-500 border-slate-300 text-xs">
                         Offline
                       </Badge>
                     )}
@@ -967,7 +1099,7 @@ export default function ACSPage() {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleRefreshDevice(selectedDevice.id)}
-                      className="h-6 px-2 text-[10px] text-slate-400 hover:text-white hover:bg-slate-800"
+                      className="h-6 px-2 text-[10px] text-slate-600 hover:text-slate-900 hover:bg-slate-200"
                     >
                       <RotateCw className="w-3.5 h-3.5 mr-1" />
                       Refresh TR-069
@@ -975,66 +1107,66 @@ export default function ACSPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200 text-xs">
                   <div>
                     <span className="text-slate-500 block text-[11px]">GenieACS Device ID</span>
-                    <span className="font-mono text-slate-300 break-all text-[11px]">{selectedDevice.id}</span>
+                    <span className="font-mono text-slate-800 break-all text-[11px]">{selectedDevice.id}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[11px]">IP Address (WAN)</span>
-                    <span className="font-mono text-slate-300">{selectedDevice.ip_address || "-"}</span>
+                    <span className="font-mono text-slate-800 font-medium">{selectedDevice.ip_address || "-"}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[11px]">MAC Address</span>
-                    <span className="font-mono text-slate-300">{selectedDevice.mac_address || "-"}</span>
+                    <span className="font-mono text-slate-800">{selectedDevice.mac_address || "-"}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[11px]">Hardware Version</span>
-                    <span className="text-slate-300">{selectedDevice.hardware_version || "-"}</span>
+                    <span className="text-slate-800 font-medium">{selectedDevice.hardware_version || "-"}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[11px]">Software / Firmware</span>
-                    <span className="text-slate-300">{selectedDevice.software_version || "-"}</span>
+                    <span className="text-slate-800 font-medium">{selectedDevice.software_version || "-"}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[11px]">OUI</span>
-                    <span className="font-mono text-slate-300">{selectedDevice.oui || "-"}</span>
+                    <span className="font-mono text-slate-800">{selectedDevice.oui || "-"}</span>
                   </div>
                 </div>
               </div>
 
               {/* Optical & Link Telemetry */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Optical RX Power (Redaman)</span>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-600 block text-[11px] font-medium">Optical RX Power (Redaman)</span>
                   <div className="mt-1">
                     {renderSignalBadge(selectedDevice.rx_power_dbm)}
                   </div>
                 </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Optical TX Power</span>
-                  <span className="font-mono text-slate-100 text-xs">
-                    {selectedDevice.tx_power_dbm != null ? `${selectedDevice.tx_power_dbm.toFixed(2)} dBm` : <span className="text-slate-500">N/A</span>}
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-600 block text-[11px] font-medium">Optical TX Power</span>
+                  <span className="font-mono text-slate-900 font-semibold text-xs block mt-1">
+                    {selectedDevice.tx_power_dbm != null ? `${selectedDevice.tx_power_dbm.toFixed(2)} dBm` : <span className="text-slate-400">N/A</span>}
                   </span>
                 </div>
-                <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Total Uptime</span>
-                  <span className="font-mono text-slate-100 text-xs">{formatUptime(selectedDevice.uptime_seconds)}</span>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-600 block text-[11px] font-medium">Total Uptime</span>
+                  <span className="font-mono text-slate-900 font-semibold text-xs block mt-1">{formatUptime(selectedDevice.uptime_seconds)}</span>
                 </div>
               </div>
 
               {/* Multi-SSID List */}
               {selectedDevice.ssid_list && selectedDevice.ssid_list.length > 0 && (
                 <div className="space-y-1.5 pt-1">
-                  <span className="text-slate-300 block text-[11px] font-semibold">Daftar SSID (Multi-SSID WiFi):</span>
+                  <span className="text-slate-800 block text-[11px] font-semibold">Daftar SSID (Multi-SSID WiFi):</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {selectedDevice.ssid_list.map((item) => (
-                      <div key={item.index} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex items-center justify-between gap-2">
+                      <div key={item.index} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
                         <div className="truncate flex-1 min-w-0">
-                          <span className="text-[10px] text-slate-500 block">SSID #{item.index}</span>
-                          <span className="font-medium text-slate-100 text-xs truncate block">{item.ssid}</span>
+                          <span className="text-[10px] text-slate-500 font-medium block">SSID #{item.index}</span>
+                          <span className="font-semibold text-slate-900 text-xs truncate block">{item.ssid}</span>
                         </div>
-                        <Badge variant="outline" className={`text-[10px] shrink-0 ${item.enabled ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" : "border-slate-700 text-slate-500"}`}>
+                        <Badge variant="outline" className={`text-[10px] font-semibold shrink-0 ${item.enabled ? "border-emerald-200 text-emerald-700 bg-emerald-50" : "border-rose-200 text-rose-700 bg-rose-50"}`}>
                           {item.enabled ? "Aktif" : "Nonaktif"}
                         </Badge>
                       </div>
@@ -1047,24 +1179,24 @@ export default function ACSPage() {
               {selectedDevice.connected_hosts && selectedDevice.connected_hosts.length > 0 && (
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-300 block text-[11px] font-semibold">Perangkat Terhubung (LAN / Klien WiFi):</span>
-                    <Badge variant="outline" className="text-[10px] border-slate-700 text-indigo-300">
+                    <span className="text-slate-800 block text-[11px] font-semibold">Perangkat Terhubung (LAN / Klien WiFi):</span>
+                    <Badge variant="outline" className="text-[10px] border-indigo-200 bg-indigo-50 text-indigo-700 font-semibold">
                       {selectedDevice.connected_hosts.length} Perangkat
                     </Badge>
                   </div>
                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                     {selectedDevice.connected_hosts.map((host, i) => (
-                      <div key={i} className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
+                      <div key={i} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex items-center justify-between">
                         <div>
-                          <div className="font-medium text-slate-100 text-[11px] flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          <div className="font-semibold text-slate-900 text-[11px] flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                             {host.hostname || "Perangkat Klien"}
                           </div>
-                          <div className="text-[10px] font-mono text-slate-400">
+                          <div className="text-[10px] font-mono text-slate-500 mt-0.5">
                             {host.ip_address} &bull; {host.mac_address}
                           </div>
                         </div>
-                        <span className="text-[10px] text-emerald-400 font-mono">Aktif</span>
+                        <span className="text-[10px] text-emerald-700 font-semibold font-mono bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">Aktif</span>
                       </div>
                     ))}
                   </div>
@@ -1072,21 +1204,33 @@ export default function ACSPage() {
               )}
 
               {/* Inform Time */}
-              <div className="text-slate-400 text-[11px] flex items-center justify-between px-1 pt-1 border-t border-slate-800">
+              <div className="text-slate-500 text-[11px] flex items-center justify-between px-1 pt-2 border-t border-slate-200">
                 <span>Terakhir Inform TR-069:</span>
-                <span className="text-slate-200">
+                <span className="text-slate-800 font-medium">
                   {selectedDevice.last_inform ? new Date(selectedDevice.last_inform).toLocaleString("id-ID") : "-"}
                 </span>
               </div>
             </div>
           )}
 
-          <DialogFooter className="shrink-0 pt-2 border-t border-slate-800/80">
+          <DialogFooter className="shrink-0 pt-2 border-t border-slate-200 flex items-center justify-between sm:justify-between w-full">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setDetailModalOpen(false);
+                if (selectedDevice) handleOpenDeleteModal(selectedDevice);
+              }}
+              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs gap-1.5 px-2"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Hapus Perangkat
+            </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => setDetailModalOpen(false)}
-              className="border-slate-700 bg-slate-800 text-slate-200"
+              className="border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs"
             >
               Tutup
             </Button>
