@@ -500,9 +500,12 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		// ZTE F460 / ELWRP series (uses X_ZTE_COM_ prefix)
 		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.RXPower",
 		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.ReceivedOpticalPower",
-		// Huawei
+		// Huawei (including firmware typo 'Interafce' and standard 'Interface')
+		"InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.RXPower",
+		"InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.RXPower",
 		"InternetGatewayDevice.WANDevice.1.X_HW_DEBUG.SMP.OPTIC.RxPower",
 		"InternetGatewayDevice.WANDevice.1.X_HuaweiManagerServer.LoopInfo.ReceiveOpticalPower",
+		"InternetGatewayDevice.WANDevice.1.X_HW_PON_INTERFACECONFIG.RXPower",
 		// Fiberhome / VSOL
 		"InternetGatewayDevice.WANDevice.1.X_FH_PON.RXPower",
 		"InternetGatewayDevice.WANDevice.1.X_CMCC_ONU.PON.RXPower",
@@ -529,8 +532,11 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		// ZTE F460 / ELWRP series
 		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.TXPower",
 		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.TransmitOpticalPower",
-		// Huawei
+		// Huawei (including firmware typo 'Interafce' and standard 'Interface')
+		"InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TXPower",
+		"InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TXPower",
 		"InternetGatewayDevice.WANDevice.1.X_HW_DEBUG.SMP.OPTIC.TxPower",
+		"InternetGatewayDevice.WANDevice.1.X_HW_PON_INTERFACECONFIG.TXPower",
 		// Fiberhome / VSOL
 		"InternetGatewayDevice.WANDevice.1.X_FH_PON.TXPower",
 		"InternetGatewayDevice.WANDevice.1.X_CMCC_ONU.PON.TXPower",
