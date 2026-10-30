@@ -312,7 +312,11 @@ func (s *ACSService) Reboot(ctx context.Context, tenantID uuid.UUID, deviceID st
 }
 
 // SetWiFi configures WiFi SSID and Password on ONT after verifying tenant ownership.
-func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID string, ssid, password string) error {
+// If slot is <= 0, it defaults to 1.
+func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID string, slot int, ssid, password string) error {
+	if slot <= 0 {
+		slot = 1
+	}
 	ssid = strings.TrimSpace(ssid)
 	password = strings.TrimSpace(password)
 	if ssid == "" {
@@ -327,47 +331,54 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 		if err != nil || reg.TenantID != tenantID {
 			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
 		}
-		// If password is not provided, preserve existing password from DB
-		if password == "" && reg.WiFiPassword != "" {
-			password = reg.WiFiPassword
-		}
 	}
 
 	// Fetch raw device to detect supported WiFi parameter path
 	raw, _ := s.client.GetRawDevice(ctx, deviceID)
 
-	isTR181 := raw != nil && (pathExistsInTree(raw, "Device.WiFi.SSID.1.SSID") || pathExistsInTree(raw, "Device.WiFi.Radio.1.Enable"))
-	directKeyPath := "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase"
+	isTR181 := raw != nil && (pathExistsInTree(raw, fmt.Sprintf("Device.WiFi.SSID.%d.SSID", slot)) || pathExistsInTree(raw, fmt.Sprintf("Device.WiFi.Radio.%d.Enable", slot)))
+	directKeyPath := fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.KeyPassphrase", slot)
 	hasDirectKey := raw != nil && pathExistsInTree(raw, directKeyPath)
+	zteDirectKeyPath := fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.X_ZTE-COM_KeyPassphrase", slot)
+	hasZteDirectKey := raw != nil && pathExistsInTree(raw, zteDirectKeyPath)
 
 	var paramValues [][]interface{}
 	if isTR181 {
 		paramValues = append(paramValues, []interface{}{
-			"Device.WiFi.SSID.1.SSID", ssid, "xsd:string",
+			fmt.Sprintf("Device.WiFi.SSID.%d.SSID", slot), ssid, "xsd:string",
 		})
 		if password != "" {
 			paramValues = append(paramValues, []interface{}{
-				"Device.WiFi.AccessPoint.1.Security.KeyPassphrase", password, "xsd:string",
+				fmt.Sprintf("Device.WiFi.AccessPoint.%d.Security.KeyPassphrase", slot), password, "xsd:string",
 			})
 		}
 	} else if hasDirectKey {
 		// Older ZTE (F460, F401, etc.)
 		paramValues = append(paramValues, []interface{}{
-			"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", ssid, "xsd:string",
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.SSID", slot), ssid, "xsd:string",
 		})
 		if password != "" {
 			paramValues = append(paramValues, []interface{}{
 				directKeyPath, password, "xsd:string",
 			})
 		}
-	} else {
-		// Standard TR-098 (F609/F660, Huawei, Fiberhome, VSOL)
+	} else if hasZteDirectKey {
 		paramValues = append(paramValues, []interface{}{
-			"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", ssid, "xsd:string",
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.SSID", slot), ssid, "xsd:string",
 		})
 		if password != "" {
 			paramValues = append(paramValues, []interface{}{
-				"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", password, "xsd:string",
+				zteDirectKeyPath, password, "xsd:string",
+			})
+		}
+	} else {
+		// Standard TR-098 (F609/F660, Huawei, Fiberhome, VSOL)
+		paramValues = append(paramValues, []interface{}{
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.SSID", slot), ssid, "xsd:string",
+		})
+		if password != "" {
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.PreSharedKey.1.KeyPassphrase", slot), password, "xsd:string",
 			})
 		}
 	}
@@ -378,8 +389,8 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 		ParameterValues: paramValues,
 	}, true)
 
-	// Persist to database so tenant always has record of current/configured WiFi
-	if s.repo != nil && tenantID != uuid.Nil {
+	// Persist to database for primary SSID (slot 1) so tenant always has record of current/configured WiFi
+	if slot == 1 && s.repo != nil && tenantID != uuid.Nil {
 		_ = s.repo.UpdateWiFi(ctx, tenantID, deviceID, ssid, password)
 	}
 

@@ -2,8 +2,9 @@ import { apiClient } from "./apiClient";
 import { ONTDevice } from "./types";
 
 export interface SetWiFiPayload {
+  slot?: number;
   ssid: string;
-  password: string;
+  password?: string;
 }
 
 export interface RegisterDevicePayload {

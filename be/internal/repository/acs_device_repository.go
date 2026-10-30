@@ -211,7 +211,10 @@ func (r *ACSDeviceRepository) UpdateMetadata(ctx context.Context, tenantID uuid.
 func (r *ACSDeviceRepository) UpdateWiFi(ctx context.Context, tenantID uuid.UUID, deviceID string, ssid, password string) error {
 	query := `
 		UPDATE acs_device_tenants
-		SET wifi_ssid = $3, wifi_password = $4, wifi_updated_at = NOW(), updated_at = NOW()
+		SET wifi_ssid = $3,
+		    wifi_password = CASE WHEN $4 != '' THEN $4 ELSE wifi_password END,
+		    wifi_updated_at = NOW(),
+		    updated_at = NOW()
 		WHERE tenant_id = $1 AND device_id = $2
 	`
 	cmdTag, err := r.db.Exec(ctx, query, tenantID, deviceID, ssid, password)

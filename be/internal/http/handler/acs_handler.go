@@ -234,6 +234,7 @@ func (h *ACSHandler) Reboot(w http.ResponseWriter, r *http.Request) {
 }
 
 type SetWiFiRequest struct {
+	Slot     int    `json:"slot"`
 	SSID     string `json:"ssid"`
 	Password string `json:"password"`
 }
@@ -261,7 +262,11 @@ func (h *ACSHandler) SetWiFi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.acsService.SetWiFi(r.Context(), tenantID, deviceID, req.SSID, req.Password); err != nil {
+	if req.Slot <= 0 {
+		req.Slot = 1
+	}
+
+	if err := h.acsService.SetWiFi(r.Context(), tenantID, deviceID, req.Slot, req.SSID, req.Password); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
