@@ -79,8 +79,13 @@ func (r *ACSDeviceRepository) ListByTenant(ctx context.Context, tenantID uuid.UU
 	return list, nil
 }
 
-// GetByDeviceID fetches a device registration by its GenieACS device_id.
-func (r *ACSDeviceRepository) GetByDeviceID(ctx context.Context, deviceID string) (*acs.DeviceTenant, error) {
+// GetByDeviceID fetches a device registration by its GenieACS device_id or serial_number.
+func (r *ACSDeviceRepository) GetByDeviceID(ctx context.Context, identifier string) (*acs.DeviceTenant, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return nil, ErrACSDeviceNotFound
+	}
+
 	query := `
 		SELECT 
 			d.id, 
@@ -97,10 +102,20 @@ func (r *ACSDeviceRepository) GetByDeviceID(ctx context.Context, deviceID string
 			d.updated_at
 		FROM acs_device_tenants d
 		LEFT JOIN clients c ON c.id = d.client_id AND c.deleted_at IS NULL
-		WHERE d.device_id = $1
+		WHERE d.device_id = $1 
+		   OR d.serial_number = $1
+		   OR (d.serial_number != '' AND ($1 LIKE '%' || d.serial_number OR d.serial_number LIKE '%' || $1))
+		   OR (d.device_id != '' AND ($1 LIKE '%' || d.device_id OR d.device_id LIKE '%' || $1))
+		ORDER BY 
+		   CASE 
+		     WHEN d.device_id = $1 THEN 1 
+		     WHEN d.serial_number = $1 THEN 2 
+		     ELSE 3 
+		   END
+		LIMIT 1
 	`
 	var item acs.DeviceTenant
-	err := r.db.QueryRow(ctx, query, deviceID).Scan(
+	err := r.db.QueryRow(ctx, query, identifier).Scan(
 		&item.ID,
 		&item.TenantID,
 		&item.DeviceID,
@@ -135,13 +150,14 @@ func (r *ACSDeviceRepository) Register(ctx context.Context, dt *acs.DeviceTenant
 		updateQuery := `
 			UPDATE acs_device_tenants
 			SET 
+				device_id = CASE WHEN $2 != '' AND $2 != serial_number THEN $2 ELSE device_id END,
 				serial_number = COALESCE(NULLIF($3, ''), serial_number),
 				label = $4,
 				client_id = $5,
 				updated_at = NOW()
-			WHERE tenant_id = $1 AND device_id = $2
+			WHERE id = $1
 		`
-		_, err := r.db.Exec(ctx, updateQuery, dt.TenantID, dt.DeviceID, dt.SerialNumber, dt.Label, dt.ClientID)
+		_, err := r.db.Exec(ctx, updateQuery, existing.ID, dt.DeviceID, dt.SerialNumber, dt.Label, dt.ClientID)
 		return err
 	}
 
@@ -173,7 +189,15 @@ func (r *ACSDeviceRepository) Register(ctx context.Context, dt *acs.DeviceTenant
 
 // Unregister removes a device registration for a tenant.
 func (r *ACSDeviceRepository) Unregister(ctx context.Context, tenantID uuid.UUID, deviceID string) error {
-	query := `DELETE FROM acs_device_tenants WHERE tenant_id = $1 AND device_id = $2`
+	query := `
+		DELETE FROM acs_device_tenants 
+		WHERE tenant_id = $1 AND (
+			device_id = $2 
+			OR serial_number = $2
+			OR (serial_number != '' AND ($2 LIKE '%' || serial_number OR serial_number LIKE '%' || $2))
+			OR (device_id != '' AND ($2 LIKE '%' || device_id OR device_id LIKE '%' || $2))
+		)
+	`
 	cmdTag, err := r.db.Exec(ctx, query, tenantID, deviceID)
 	if err != nil {
 		return err
@@ -195,7 +219,12 @@ func (r *ACSDeviceRepository) UpdateMetadata(ctx context.Context, tenantID uuid.
 			label = $4, 
 			client_id = $5, 
 			updated_at = NOW()
-		WHERE tenant_id = $1 AND device_id = $2
+		WHERE tenant_id = $1 AND (
+			device_id = $2 
+			OR serial_number = $2
+			OR (serial_number != '' AND ($2 LIKE '%' || serial_number OR serial_number LIKE '%' || $2))
+			OR (device_id != '' AND ($2 LIKE '%' || device_id OR device_id LIKE '%' || $2))
+		)
 	`
 	cmdTag, err := r.db.Exec(ctx, query, tenantID, deviceID, serialNumber, label, clientID)
 	if err != nil {
@@ -215,7 +244,12 @@ func (r *ACSDeviceRepository) UpdateWiFi(ctx context.Context, tenantID uuid.UUID
 		    wifi_password = CASE WHEN $4 != '' THEN $4 ELSE wifi_password END,
 		    wifi_updated_at = NOW(),
 		    updated_at = NOW()
-		WHERE tenant_id = $1 AND device_id = $2
+		WHERE tenant_id = $1 AND (
+			device_id = $2 
+			OR serial_number = $2
+			OR (serial_number != '' AND ($2 LIKE '%' || serial_number OR serial_number LIKE '%' || $2))
+			OR (device_id != '' AND ($2 LIKE '%' || device_id OR device_id LIKE '%' || $2))
+		)
 	`
 	cmdTag, err := r.db.Exec(ctx, query, tenantID, deviceID, ssid, password)
 	if err != nil {
@@ -225,6 +259,19 @@ func (r *ACSDeviceRepository) UpdateWiFi(ctx context.Context, tenantID uuid.UUID
 		return ErrACSDeviceNotFound
 	}
 	return nil
+}
+
+// SyncDeviceID updates the device_id in the database to the actual GenieACS device ID.
+func (r *ACSDeviceRepository) SyncDeviceID(ctx context.Context, tenantID, recordID uuid.UUID, actualDeviceID, serialNumber string) error {
+	query := `
+		UPDATE acs_device_tenants
+		SET device_id = $3,
+		    serial_number = COALESCE(NULLIF($4, ''), serial_number),
+		    updated_at = NOW()
+		WHERE id = $1 AND tenant_id = $2
+	`
+	_, err := r.db.Exec(ctx, query, recordID, tenantID, actualDeviceID, serialNumber)
+	return err
 }
 
 // GetAllRegisteredDeviceIDs returns a map of device_id -> tenant_id for all registered devices.

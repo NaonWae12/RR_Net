@@ -110,6 +110,12 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 		}
 
 		if found {
+			// Auto-sync device_id if registered using raw SN or outdated ID
+			if reg.DeviceID != dev.ID && strings.Contains(dev.ID, "-") {
+				_ = s.repo.SyncDeviceID(ctx, reg.TenantID, reg.ID, dev.ID, dev.SerialNumber)
+				reg.DeviceID = dev.ID
+			}
+
 			dev.Label = reg.Label
 			dev.ClientID = reg.ClientID
 			dev.ClientName = reg.ClientName
@@ -252,6 +258,7 @@ func (s *ACSService) UpdateMetadata(ctx context.Context, tenantID uuid.UUID, dev
 
 // GetDevice returns details of a single ONT device, verifying tenant ownership.
 func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID string) (*genieacs.DeviceSummary, error) {
+	var targetDevID = deviceID
 	if s.repo != nil && tenantID != uuid.Nil {
 		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
 		if err != nil {
@@ -260,8 +267,11 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 		if reg.TenantID != tenantID {
 			return nil, fmt.Errorf("akses ditolak: perangkat ini milik tenant lain")
 		}
+		if reg.DeviceID != "" && strings.Contains(reg.DeviceID, "-") {
+			targetDevID = reg.DeviceID
+		}
 
-		raw, err := s.client.GetRawDevice(ctx, deviceID)
+		raw, err := s.client.GetRawDevice(ctx, targetDevID)
 		if err != nil {
 			// If not reachable in GenieACS, return basic offline summary
 			return &genieacs.DeviceSummary{
@@ -291,7 +301,7 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 		return &dev, nil
 	}
 
-	raw, err := s.client.GetRawDevice(ctx, deviceID)
+	raw, err := s.client.GetRawDevice(ctx, targetDevID)
 	if err != nil {
 		return nil, err
 	}
@@ -302,13 +312,17 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 
 // Reboot triggers device restart after verifying tenant ownership.
 func (s *ACSService) Reboot(ctx context.Context, tenantID uuid.UUID, deviceID string) error {
+	var targetDevID = deviceID
 	if s.repo != nil && tenantID != uuid.Nil {
 		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
 		if err != nil || reg.TenantID != tenantID {
 			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
 		}
+		if reg.DeviceID != "" && strings.Contains(reg.DeviceID, "-") {
+			targetDevID = reg.DeviceID
+		}
 	}
-	return s.client.Reboot(ctx, deviceID)
+	return s.client.Reboot(ctx, targetDevID)
 }
 
 // SetWiFi configures WiFi SSID and Password on ONT after verifying tenant ownership.
@@ -326,15 +340,19 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 		return fmt.Errorf("password WiFi minimal 8 karakter")
 	}
 
+	var targetDevID = deviceID
 	if s.repo != nil && tenantID != uuid.Nil {
 		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
 		if err != nil || reg.TenantID != tenantID {
 			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
 		}
+		if reg.DeviceID != "" && strings.Contains(reg.DeviceID, "-") {
+			targetDevID = reg.DeviceID
+		}
 	}
 
 	// Fetch raw device to detect supported WiFi parameter path
-	raw, _ := s.client.GetRawDevice(ctx, deviceID)
+	raw, _ := s.client.GetRawDevice(ctx, targetDevID)
 
 	isTR181 := raw != nil && (pathExistsInTree(raw, fmt.Sprintf("Device.WiFi.SSID.%d.SSID", slot)) || pathExistsInTree(raw, fmt.Sprintf("Device.WiFi.Radio.%d.Enable", slot)))
 	directKeyPath := fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.KeyPassphrase", slot)
@@ -384,7 +402,7 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 	}
 
 	// Send task to GenieACS (with connection_request = true to push immediately)
-	sendErr := s.client.SendTask(ctx, deviceID, genieacs.TaskRequest{
+	sendErr := s.client.SendTask(ctx, targetDevID, genieacs.TaskRequest{
 		Name:            "setParameterValues",
 		ParameterValues: paramValues,
 	}, true)
@@ -403,13 +421,17 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 
 // Refresh triggers parameter refresh after verifying tenant ownership.
 func (s *ACSService) Refresh(ctx context.Context, tenantID uuid.UUID, deviceID string) error {
+	var targetDevID = deviceID
 	if s.repo != nil && tenantID != uuid.Nil {
 		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
 		if err != nil || reg.TenantID != tenantID {
 			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
 		}
+		if reg.DeviceID != "" && strings.Contains(reg.DeviceID, "-") {
+			targetDevID = reg.DeviceID
+		}
 	}
-	return s.client.RefreshDevice(ctx, deviceID)
+	return s.client.RefreshDevice(ctx, targetDevID)
 }
 
 // normalizeDevice parses raw GenieACS device JSON into standardized DeviceSummary.
