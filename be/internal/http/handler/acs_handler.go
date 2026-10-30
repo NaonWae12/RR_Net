@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -273,7 +274,7 @@ func (h *ACSHandler) SetWiFi(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": "WiFi configuration sent to ONT successfully",
+		"message": fmt.Sprintf("Konfigurasi SSID #%d berhasil dikirim ke antrean ONT! Modem akan menerapkannya otomatis dalam ~60 detik.", req.Slot),
 	})
 }
 

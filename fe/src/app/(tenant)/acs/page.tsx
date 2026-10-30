@@ -24,7 +24,8 @@ import {
   EyeOff,
   History,
   KeyRound,
-  Trash2
+  Trash2,
+  Clock
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -981,6 +982,13 @@ export default function ACSPage() {
               <p className="text-[11px] text-slate-500">
                 Isi minimal 8 karakter jika ingin mengganti password WiFi. Jika dikosongkan, password lama tetap dipertahankan.
               </p>
+            </div>
+
+            <div className="bg-amber-50/90 border border-amber-200/90 rounded-lg p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Sinkronisasi Otomatis:</strong> Perubahan akan diterapkan ke modem ONT dalam <strong>~60 detik</strong> (sesuai siklus Periodic Inform TR-069) tanpa perlu restart modem.
+              </span>
             </div>
 
             <DialogFooter className="pt-2">
