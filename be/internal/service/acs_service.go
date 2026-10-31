@@ -536,31 +536,40 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	for slot := 1; slot <= 4; slot++ {
 		ipCandidates = append(ipCandidates,
 			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1.ExternalIPAddress", slot),
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.ExternalIPAddress", slot),
 			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1.ExternalIPAddress", slot),
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.2.ExternalIPAddress", slot),
 		)
 	}
 	ipCandidates = append(ipCandidates,
 		"Device.IP.Interface.1.IPv4Address.1.IPAddress",
 		"InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
 	)
-	ipVal := findStringInTree(raw, ipCandidates)
-	if strings.HasPrefix(ipVal, "http://") || strings.HasPrefix(ipVal, "https://") {
-		if u, err := url.Parse(ipVal); err == nil {
-			ipVal = u.Hostname()
-		}
-	}
-	if ipVal != "" && ipVal != "0.0.0.0" {
+	ipVal := findIPInTree(raw, ipCandidates)
+	if ipVal != "" {
 		dev.IPAddress = ipVal
 	} else {
 		dev.IPAddress = getString(raw, "_ip")
 	}
 
-	dev.MACAddress = findStringInTree(raw, []string{
+	var macCandidates []string
+	for slot := 1; slot <= 4; slot++ {
+		macCandidates = append(macCandidates,
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1.MACAddress", slot),
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.MACAddress", slot),
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1.MACAddress", slot),
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.2.MACAddress", slot),
+		)
+	}
+	macCandidates = append(macCandidates,
 		"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.MACAddress",
-		"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress",
-		"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.MACAddress",
+		"InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MACAddress",
+		"InternetGatewayDevice.DeviceInfo.MACAddress",
+		"InternetGatewayDevice.DeviceInfo.X_ZTE_COM_BaseMAC",
+		"InternetGatewayDevice.DeviceInfo.X_HW_BaseMac",
 		"Device.Ethernet.Interface.1.MACAddress",
-	})
+	)
+	dev.MACAddress = findStringInTree(raw, macCandidates)
 
 	// Optical Power (RX / TX in dBm)
 	// Paths ordered: ZTE F609/F660 -> ZTE F460/ELWR -> Huawei -> Fiberhome -> Device.* (TR-181)
@@ -733,20 +742,23 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	}
 
 	// Uptime (seconds since boot)
-	// Some devices report as float (e.g. "184200.00"), use ParseFloat then convert
-	uptimeStr := findStringInTree(raw, []string{
+	// Uptime (seconds since boot)
+	rawUptime, uptimeTs := findUptimeInTree(raw, []string{
 		"InternetGatewayDevice.DeviceInfo.UpTime",
 		"Device.DeviceInfo.UpTime",
 		// ZTE F460/ELWR sometimes uses X_ZTE_COM prefix
 		"InternetGatewayDevice.DeviceInfo.X_ZTE_COM_DeviceInfo.UpTime",
 		"InternetGatewayDevice.X_ZTE_COM_DeviceInfo.UpTime",
 	})
-	if uptimeStr != "" {
-		// Try integer first, fallback to float (in case of decimal)
-		if u, err := strconv.ParseInt(uptimeStr, 10, 64); err == nil {
-			dev.UptimeSeconds = u
-		} else if f, err := strconv.ParseFloat(uptimeStr, 64); err == nil {
-			dev.UptimeSeconds = int64(f)
+	if rawUptime > 0 {
+		dev.UptimeSeconds = rawUptime
+		// If device is online and we know when the snapshot was taken,
+		// advance uptime by the elapsed seconds so it does not stay frozen
+		if dev.Status == "online" && !uptimeTs.IsZero() {
+			elapsed := int64(time.Since(uptimeTs).Seconds())
+			if elapsed > 0 {
+				dev.UptimeSeconds += elapsed
+			}
 		}
 	}
 
@@ -796,6 +808,8 @@ func getString(m map[string]interface{}, key string) string {
 	return ""
 }
 
+// findStringInTree searches for the first non-empty value across multiple paths.
+// If a path exists but has no valid _value, it continues to the next path instead of aborting.
 func findStringInTree(m map[string]interface{}, paths []string) string {
 	for _, p := range paths {
 		parts := strings.Split(p, ".")
@@ -819,21 +833,94 @@ func findStringInTree(m map[string]interface{}, paths []string) string {
 			// GenieACS leaf values are typically objects: {"_value": "...", "_type": "xsd:string"}
 			if leafMap, ok := current.(map[string]interface{}); ok {
 				if v, ok := leafMap["_value"]; ok && v != nil {
-					return fmt.Sprintf("%v", v)
+					strVal := strings.TrimSpace(fmt.Sprintf("%v", v))
+					if strVal != "" && strVal != "<nil>" {
+						return strVal
+					}
 				}
-				// If leaf has metadata keys (_object, _writable, _type, _timestamp)
-				// but NO _value, the parameter exists but was never fetched → return empty
-				if _, hasObj := leafMap["_object"]; hasObj {
-					return ""
-				}
-				if _, hasWr := leafMap["_writable"]; hasWr {
-					return ""
-				}
+				// If leaf has metadata keys (_object, _writable) but no valid _value,
+				// do NOT abort! Continue searching the next candidate path.
+				continue
 			}
-			return fmt.Sprintf("%v", current)
+			strVal := strings.TrimSpace(fmt.Sprintf("%v", current))
+			if strVal != "" && strVal != "<nil>" {
+				return strVal
+			}
 		}
 	}
 	return ""
+}
+
+// findIPInTree searches across candidates for a valid IP address.
+// It skips empty strings and "0.0.0.0", and extracts the host if a URL is provided.
+func findIPInTree(m map[string]interface{}, paths []string) string {
+	for _, p := range paths {
+		val := findStringInTree(m, []string{p})
+		if val == "" || val == "0.0.0.0" {
+			continue
+		}
+		if strings.HasPrefix(val, "http://") || strings.HasPrefix(val, "https://") {
+			if u, err := url.Parse(val); err == nil {
+				host := u.Hostname()
+				if host != "" && host != "0.0.0.0" {
+					return host
+				}
+			}
+			continue
+		}
+		return val
+	}
+	return ""
+}
+
+// findUptimeInTree searches for UpTime across paths, returning the raw seconds and its snapshot timestamp.
+func findUptimeInTree(m map[string]interface{}, paths []string) (int64, time.Time) {
+	for _, p := range paths {
+		parts := strings.Split(p, ".")
+		var current interface{} = m
+		found := true
+
+		for _, part := range parts {
+			currMap, ok := current.(map[string]interface{})
+			if !ok {
+				found = false
+				break
+			}
+			current, ok = currMap[part]
+			if !ok {
+				found = false
+				break
+			}
+		}
+
+		if found && current != nil {
+			if leafMap, ok := current.(map[string]interface{}); ok {
+				if v, ok := leafMap["_value"]; ok && v != nil {
+					var rawSec int64
+					var parsed bool
+					strVal := strings.TrimSpace(fmt.Sprintf("%v", v))
+					if u, err := strconv.ParseInt(strVal, 10, 64); err == nil {
+						rawSec = u
+						parsed = true
+					} else if f, err := strconv.ParseFloat(strVal, 64); err == nil {
+						rawSec = int64(f)
+						parsed = true
+					}
+					if parsed && rawSec > 0 {
+						var t time.Time
+						if tsStr, ok := leafMap["_timestamp"].(string); ok && tsStr != "" {
+							if parsedTime, err := time.Parse(time.RFC3339Nano, tsStr); err == nil {
+								t = parsedTime
+							}
+						}
+						return rawSec, t
+					}
+				}
+				continue
+			}
+		}
+	}
+	return 0, time.Time{}
 }
 
 // extractPPPoEUsername searches for WAN PPPoE username configured on the ONT device.

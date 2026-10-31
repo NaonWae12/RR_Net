@@ -309,6 +309,21 @@ export default function ACSPage() {
     return `${mins}m`;
   };
 
+  // Helper format time ago
+  const formatTimeAgo = (dateStr?: string | Date) => {
+    if (!dateStr) return "-";
+    const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 0) return "baru saja";
+    if (diffSec < 60) return `${diffSec} dtk lalu`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} mnt lalu`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} jam lalu`;
+    const diffDay = Math.floor(diffHour / 24);
+    return `${diffDay} hr lalu`;
+  };
+
   // Filtered devices
   const filteredDevices = devices.filter((dev) => {
     const matchesSearch = 
@@ -635,14 +650,29 @@ export default function ACSPage() {
                       {/* Status */}
                       <td className="py-3 px-4">
                         {dev.status === "online" ? (
-                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Online
-                          </Badge>
+                          <div>
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Online
+                            </Badge>
+                            {dev.last_inform && (
+                              <div className="text-[10px] text-slate-400 mt-0.5" title={new Date(dev.last_inform).toLocaleString("id-ID")}>
+                                Kontak: {formatTimeAgo(dev.last_inform)}
+                              </div>
+                            )}
+                          </div>
                         ) : (
-                          <Badge variant="outline" className="text-slate-400 border-slate-300 text-[11px]">
-                            Offline
-                          </Badge>
+                          <div>
+                            <Badge variant="outline" className="text-rose-600 bg-rose-50 border-rose-200 text-[11px] gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              Offline
+                            </Badge>
+                            {dev.last_inform && (
+                              <div className="text-[10px] text-rose-500 font-medium mt-0.5" title={new Date(dev.last_inform).toLocaleString("id-ID")}>
+                                Sejak {formatTimeAgo(dev.last_inform)}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
 
@@ -672,8 +702,10 @@ export default function ACSPage() {
 
                       {/* IP & Uptime */}
                       <td className="py-3 px-4">
-                        <div className="font-mono text-slate-700">{dev.ip_address || "-"}</div>
-                        <div className="text-[10px] text-slate-400">Up: {formatUptime(dev.uptime_seconds)}</div>
+                        <div className="font-mono text-slate-700 font-medium">{dev.ip_address || "-"}</div>
+                        <div className="text-[10px] text-slate-400">
+                          {dev.status === "online" ? `Up: ${formatUptime(dev.uptime_seconds)}` : `Terakhir up: ${formatUptime(dev.uptime_seconds)}`}
+                        </div>
                       </td>
 
                       {/* Actions */}
@@ -1174,13 +1206,29 @@ export default function ACSPage() {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     {selectedDevice.status === "online" ? (
-                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
-                        Online
-                      </Badge>
+                      <div className="text-right">
+                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Online
+                        </Badge>
+                        {selectedDevice.last_inform && (
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            Kontak: {formatTimeAgo(selectedDevice.last_inform)}
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <Badge variant="outline" className="text-slate-500 border-slate-300 text-xs">
-                        Offline
-                      </Badge>
+                      <div className="text-right">
+                        <Badge variant="outline" className="text-rose-600 bg-rose-50 border-rose-200 text-xs gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          Offline
+                        </Badge>
+                        {selectedDevice.last_inform && (
+                          <div className="text-[10px] text-rose-500 font-medium mt-0.5" title={new Date(selectedDevice.last_inform).toLocaleString("id-ID")}>
+                            Sejak {formatTimeAgo(selectedDevice.last_inform)}
+                          </div>
+                        )}
+                      </div>
                     )}
                     <Button
                       size="sm"
@@ -1238,7 +1286,14 @@ export default function ACSPage() {
                 </div>
                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                   <span className="text-slate-600 block text-[11px] font-medium">Total Uptime</span>
-                  <span className="font-mono text-slate-900 font-semibold text-xs block mt-1">{formatUptime(selectedDevice.uptime_seconds)}</span>
+                  <span className="font-mono text-slate-900 font-semibold text-xs block mt-1">
+                    {formatUptime(selectedDevice.uptime_seconds)}
+                    {selectedDevice.status === "online" ? (
+                      <span className="text-[10px] font-normal text-emerald-600 ml-1.5 font-sans">(Berjalan)</span>
+                    ) : (
+                      <span className="text-[10px] font-normal text-slate-400 ml-1.5 font-sans">(Terakhir)</span>
+                    )}
+                  </span>
                 </div>
               </div>
 
@@ -1348,7 +1403,12 @@ export default function ACSPage() {
               <div className="text-slate-500 text-[11px] flex items-center justify-between px-1 pt-2 border-t border-slate-200">
                 <span>Terakhir Inform TR-069:</span>
                 <span className="text-slate-800 font-medium">
-                  {selectedDevice.last_inform ? new Date(selectedDevice.last_inform).toLocaleString("id-ID") : "-"}
+                  {selectedDevice.last_inform ? (
+                    <span>
+                      {new Date(selectedDevice.last_inform).toLocaleString("id-ID")}{" "}
+                      <span className="text-slate-500 font-normal">({formatTimeAgo(selectedDevice.last_inform)})</span>
+                    </span>
+                  ) : "-"}
                 </span>
               </div>
             </div>
