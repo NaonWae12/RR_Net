@@ -68,6 +68,10 @@ export default function ACSPage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
+  // Inform Interval
+  const [informInterval, setInformInterval] = useState<number>(300);
+  const [informIntervalLoading, setInformIntervalLoading] = useState(false);
+
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -203,6 +207,20 @@ export default function ACSPage() {
       fetchDevices();
     } catch (err) {
       console.error("Failed to refresh device:", err);
+    }
+  };
+
+  const handleSetInformInterval = async () => {
+    if (!selectedDevice) return;
+    setInformIntervalLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await acsService.setInformInterval(selectedDevice.id, informInterval);
+      setActionMessage({ type: "success", text: res.message || `Interval berhasil diset ke ${informInterval}s` });
+    } catch (err: any) {
+      setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal mengatur interval" });
+    } finally {
+      setInformIntervalLoading(false);
     }
   };
 
@@ -417,7 +435,7 @@ export default function ACSPage() {
             </div>
           </div>
           <div className="text-xs text-indigo-300 border-l border-indigo-700/60 pl-4 space-y-1 shrink-0">
-            <div>Periodic Inform: <strong className="text-white">300s</strong></div>
+            <div>Periodic Inform: <strong className="text-white">{informInterval}s</strong></div>
             <div>Auth: <strong className="text-white">None / Optional</strong></div>
           </div>
         </CardContent>
@@ -987,7 +1005,7 @@ export default function ACSPage() {
             <div className="bg-amber-50/90 border border-amber-200/90 rounded-lg p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
               <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <span>
-                <strong>Sinkronisasi Otomatis:</strong> Perubahan akan diterapkan ke modem ONT dalam <strong>~60 detik</strong> (sesuai siklus Periodic Inform TR-069) tanpa perlu restart modem.
+                <strong>Sinkronisasi Otomatis:</strong> Perubahan akan diterapkan ke modem ONT dalam <strong>~{informInterval} detik</strong> (sesuai siklus Periodic Inform TR-069 yang dikonfigurasi) tanpa perlu restart modem.
               </span>
             </div>
 
@@ -1285,6 +1303,46 @@ export default function ACSPage() {
                   </div>
                 </div>
               )}
+
+              {/* Periodic Inform Interval Control */}
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-indigo-800 text-[11px] font-semibold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    Periodic Inform Interval (TR-069)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={informInterval}
+                    onChange={(e) => setInformInterval(Number(e.target.value))}
+                    className="flex-1 text-xs bg-white border border-indigo-200 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 font-mono"
+                  >
+                    <option value={30}>30 detik</option>
+                    <option value={60}>60 detik (1 menit)</option>
+                    <option value={120}>120 detik (2 menit)</option>
+                    <option value={300}>300 detik (5 menit)</option>
+                    <option value={600}>600 detik (10 menit)</option>
+                    <option value={900}>900 detik (15 menit)</option>
+                  </select>
+                  <Button
+                    size="sm"
+                    onClick={handleSetInformInterval}
+                    disabled={informIntervalLoading || selectedDevice.status !== "online"}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5 shrink-0 h-7 px-3"
+                  >
+                    {informIntervalLoading ? (
+                      <RotateCw className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Check className="w-3 h-3" />
+                    )}
+                    Terapkan
+                  </Button>
+                </div>
+                {selectedDevice.status !== "online" && (
+                  <p className="text-[10px] text-slate-500 italic">Modem harus online untuk mengubah interval.</p>
+                )}
+              </div>
 
               {/* Inform Time */}
               <div className="text-slate-500 text-[11px] flex items-center justify-between px-1 pt-2 border-t border-slate-200">

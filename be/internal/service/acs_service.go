@@ -419,6 +419,43 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 	return nil
 }
 
+// SetInformInterval configures the TR-069 PeriodicInformInterval on the ONT.
+// intervalSeconds is the interval in seconds (e.g. 60, 120, 300, 600).
+// Pushes the value immediately via connection_request.
+func (s *ACSService) SetInformInterval(ctx context.Context, tenantID uuid.UUID, deviceID string, intervalSeconds int) error {
+	if intervalSeconds < 30 {
+		return fmt.Errorf("interval minimal 30 detik")
+	}
+	if intervalSeconds > 86400 {
+		return fmt.Errorf("interval maksimal 86400 detik (24 jam)")
+	}
+
+	var targetDevID = deviceID
+	if s.repo != nil && tenantID != uuid.Nil {
+		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
+		if err != nil || reg.TenantID != tenantID {
+			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
+		}
+		if reg.DeviceID != "" && strings.Contains(reg.DeviceID, "-") {
+			targetDevID = reg.DeviceID
+		}
+	}
+
+	intervalStr := strconv.Itoa(intervalSeconds)
+
+	// TR-098 path (most ONTs: Huawei, ZTE, Fiberhome)
+	// TR-181 path as fallback (newer devices)
+	paramValues := [][]interface{}{
+		{"InternetGatewayDevice.ManagementServer.PeriodicInformInterval", intervalStr, "xsd:unsignedInt"},
+		{"InternetGatewayDevice.ManagementServer.PeriodicInformEnable", "1", "xsd:boolean"},
+	}
+
+	return s.client.SendTask(ctx, targetDevID, genieacs.TaskRequest{
+		Name:            "setParameterValues",
+		ParameterValues: paramValues,
+	}, true)
+}
+
 // Refresh triggers parameter refresh after verifying tenant ownership.
 func (s *ACSService) Refresh(ctx context.Context, tenantID uuid.UUID, deviceID string) error {
 	var targetDevID = deviceID

@@ -274,7 +274,7 @@ func (h *ACSHandler) SetWiFi(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": fmt.Sprintf("Konfigurasi SSID #%d berhasil dikirim ke antrean ONT! Modem akan menerapkannya otomatis dalam ~60 detik.", req.Slot),
+		"message": fmt.Sprintf("Konfigurasi SSID #%d berhasil dikirim! Modem akan menerapkannya otomatis sesuai interval periodic inform yang dikonfigurasi.", req.Slot),
 	})
 }
 
@@ -305,3 +305,44 @@ func (h *ACSHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		"message": "Parameter refresh task queued successfully",
 	})
 }
+
+type SetInformIntervalRequest struct {
+	IntervalSeconds int `json:"interval_seconds"`
+}
+
+// SetInformInterval configures the TR-069 PeriodicInformInterval on the ONT device.
+func (h *ACSHandler) SetInformInterval(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == uuid.Nil {
+		http.Error(w, `{"error":"unauthorized: tenant context missing"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Path: /api/v1/acs/devices/{id}/inform-interval
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/acs/devices/")
+	deviceID := strings.TrimSuffix(path, "/inform-interval")
+	deviceID = strings.TrimSpace(deviceID)
+
+	var req SetInformIntervalRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IntervalSeconds == 0 {
+		http.Error(w, `{"error":"interval_seconds wajib diisi dan harus lebih dari 0"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.acsService.SetInformInterval(r.Context(), tenantID, deviceID, req.IntervalSeconds); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":          fmt.Sprintf("Interval inform berhasil diset ke %d detik. Modem akan menerapkannya saat koneksi berikutnya.", req.IntervalSeconds),
+		"interval_seconds": req.IntervalSeconds,
+	})
+}
+

@@ -2918,6 +2918,11 @@ func New(deps Dependencies) http.Handler {
 			acsHandler.Refresh(w, r)
 			return
 		}
+		if strings.HasSuffix(path, "/inform-interval") && r.Method == http.MethodPost {
+			acsHandler.SetInformInterval(w, r)
+			return
+		}
+
 
 		if r.Method == http.MethodGet {
 			acsHandler.GetDevice(w, r)

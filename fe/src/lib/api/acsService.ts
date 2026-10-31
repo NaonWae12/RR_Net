@@ -80,4 +80,14 @@ export const acsService = {
     const res = await apiClient.post<{ message: string }>(`/acs/devices/${encodeURIComponent(id)}/refresh`, {});
     return res.data;
   },
+
+  // Set TR-069 PeriodicInformInterval on ONT (in seconds)
+  async setInformInterval(id: string, intervalSeconds: number): Promise<{ message: string; interval_seconds: number }> {
+    const res = await apiClient.post<{ message: string; interval_seconds: number }>(
+      `/acs/devices/${encodeURIComponent(id)}/inform-interval`,
+      { interval_seconds: intervalSeconds }
+    );
+    return res.data;
+  },
 };
+
