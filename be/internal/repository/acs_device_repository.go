@@ -42,6 +42,10 @@ func (r *ACSDeviceRepository) ListByTenant(ctx context.Context, tenantID uuid.UU
 			COALESCE(d.wifi_ssid, ''),
 			COALESCE(d.wifi_password, ''),
 			d.wifi_updated_at,
+			COALESCE(d.status, 'offline'),
+			d.online_at,
+			d.offline_at,
+			COALESCE(d.inform_interval, 300),
 			d.created_at, 
 			d.updated_at
 		FROM acs_device_tenants d
@@ -69,6 +73,10 @@ func (r *ACSDeviceRepository) ListByTenant(ctx context.Context, tenantID uuid.UU
 			&item.WiFiSSID,
 			&item.WiFiPassword,
 			&item.WiFiUpdatedAt,
+			&item.Status,
+			&item.OnlineAt,
+			&item.OfflineAt,
+			&item.InformInterval,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 		); err != nil {
@@ -98,6 +106,10 @@ func (r *ACSDeviceRepository) GetByDeviceID(ctx context.Context, identifier stri
 			COALESCE(d.wifi_ssid, ''),
 			COALESCE(d.wifi_password, ''),
 			d.wifi_updated_at,
+			COALESCE(d.status, 'offline'),
+			d.online_at,
+			d.offline_at,
+			COALESCE(d.inform_interval, 300),
 			d.created_at, 
 			d.updated_at
 		FROM acs_device_tenants d
@@ -126,6 +138,10 @@ func (r *ACSDeviceRepository) GetByDeviceID(ctx context.Context, identifier stri
 		&item.WiFiSSID,
 		&item.WiFiPassword,
 		&item.WiFiUpdatedAt,
+		&item.Status,
+		&item.OnlineAt,
+		&item.OfflineAt,
+		&item.InformInterval,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	)
@@ -271,6 +287,37 @@ func (r *ACSDeviceRepository) SyncDeviceID(ctx context.Context, tenantID, record
 		WHERE id = $1 AND tenant_id = $2
 	`
 	_, err := r.db.Exec(ctx, query, recordID, tenantID, actualDeviceID, serialNumber)
+	return err
+}
+
+// UpdateDeviceStatus updates the status and online_at/offline_at timestamp for a device.
+func (r *ACSDeviceRepository) UpdateDeviceStatus(ctx context.Context, tenantID, recordID uuid.UUID, status string, onlineAt, offlineAt *time.Time) error {
+	query := `
+		UPDATE acs_device_tenants
+		SET status = $3,
+		    online_at = CASE WHEN $4::timestamptz IS NOT NULL THEN $4 ELSE online_at END,
+		    offline_at = CASE WHEN $5::timestamptz IS NOT NULL THEN $5 ELSE offline_at END,
+		    updated_at = NOW()
+		WHERE id = $1 AND tenant_id = $2
+	`
+	_, err := r.db.Exec(ctx, query, recordID, tenantID, status, onlineAt, offlineAt)
+	return err
+}
+
+// UpdateInformInterval updates the configured TR-069 periodic inform interval.
+func (r *ACSDeviceRepository) UpdateInformInterval(ctx context.Context, tenantID uuid.UUID, deviceID string, interval int) error {
+	query := `
+		UPDATE acs_device_tenants
+		SET inform_interval = $3,
+		    updated_at = NOW()
+		WHERE tenant_id = $1 AND (
+			device_id = $2 
+			OR serial_number = $2
+			OR (serial_number != '' AND ($2 LIKE '%' || serial_number OR serial_number LIKE '%' || $2))
+			OR (device_id != '' AND ($2 LIKE '%' || device_id OR device_id LIKE '%' || $2))
+		)
+	`
+	_, err := r.db.Exec(ctx, query, tenantID, deviceID, interval)
 	return err
 }
 

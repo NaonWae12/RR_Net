@@ -116,6 +116,76 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 				reg.DeviceID = dev.ID
 			}
 
+			// Dynamic +30s tolerance threshold
+			intervalSec := reg.InformInterval
+			if intervalSec <= 0 {
+				intervalSec = 300
+			}
+			threshold := time.Duration(intervalSec+30) * time.Second
+			isOnlineNow := !dev.LastInform.IsZero() && time.Since(dev.LastInform) <= threshold
+
+			currentStatus := "offline"
+			if isOnlineNow {
+				currentStatus = "online"
+			}
+
+			now := time.Now()
+			// State-Change Only Write: ONLY update database if status actually transitioned!
+			if currentStatus != reg.Status {
+				if currentStatus == "online" {
+					onlineAt := dev.LastInform
+					if onlineAt.IsZero() {
+						onlineAt = now
+					}
+					_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil)
+					reg.Status = "online"
+					reg.OnlineAt = &onlineAt
+					reg.OfflineAt = nil
+				} else {
+					offlineAt := dev.LastInform
+					if offlineAt.IsZero() {
+						offlineAt = now
+					}
+					_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt)
+					reg.Status = "offline"
+					reg.OfflineAt = &offlineAt
+				}
+			} else if currentStatus == "online" && reg.OnlineAt == nil {
+				// Initial boot initialization if null
+				onlineAt := dev.LastInform
+				if onlineAt.IsZero() {
+					onlineAt = now
+				}
+				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil)
+				reg.OnlineAt = &onlineAt
+			} else if currentStatus == "offline" && reg.OfflineAt == nil && !dev.LastInform.IsZero() {
+				offlineAt := dev.LastInform
+				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt)
+				reg.OfflineAt = &offlineAt
+			}
+
+			dev.Status = reg.Status
+			dev.OnlineAt = reg.OnlineAt
+			dev.OfflineAt = reg.OfflineAt
+			dev.InformInterval = intervalSec
+
+			// Accurate Uptime calculated by Backend
+			if dev.Status == "online" {
+				if reg.OnlineAt != nil {
+					dev.UptimeSeconds = int64(time.Since(*reg.OnlineAt).Seconds())
+				} else if !dev.LastInform.IsZero() {
+					dev.UptimeSeconds = int64(time.Since(dev.LastInform).Seconds())
+				}
+			} else {
+				if reg.OfflineAt != nil {
+					dev.UptimeSeconds = int64(time.Since(*reg.OfflineAt).Seconds())
+				} else if !dev.LastInform.IsZero() {
+					dev.UptimeSeconds = int64(time.Since(dev.LastInform).Seconds())
+				} else {
+					dev.UptimeSeconds = 0
+				}
+			}
+
 			dev.Label = reg.Label
 			dev.ClientID = reg.ClientID
 			dev.ClientName = reg.ClientName
@@ -135,16 +205,24 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 	// create an offline summary so the tenant sees their pre-registered/offline ONT
 	for _, reg := range registered {
 		if !matchedMap[reg.DeviceID] {
+			var uptimeSec int64
+			if reg.OfflineAt != nil {
+				uptimeSec = int64(time.Since(*reg.OfflineAt).Seconds())
+			}
 			devices = append(devices, genieacs.DeviceSummary{
-				ID:            reg.DeviceID,
-				SerialNumber:  reg.SerialNumber,
-				Status:        "offline",
-				Label:         reg.Label,
-				ClientID:      reg.ClientID,
-				ClientName:    reg.ClientName,
-				SSID:          reg.WiFiSSID,
-				WiFiPassword:  reg.WiFiPassword,
-				WiFiUpdatedAt: reg.WiFiUpdatedAt,
+				ID:             reg.DeviceID,
+				SerialNumber:   reg.SerialNumber,
+				Status:         "offline",
+				OnlineAt:       reg.OnlineAt,
+				OfflineAt:      reg.OfflineAt,
+				InformInterval: reg.InformInterval,
+				UptimeSeconds:  uptimeSec,
+				Label:          reg.Label,
+				ClientID:       reg.ClientID,
+				ClientName:     reg.ClientName,
+				SSID:           reg.WiFiSSID,
+				WiFiPassword:   reg.WiFiPassword,
+				WiFiUpdatedAt:  reg.WiFiUpdatedAt,
 			})
 		}
 	}
@@ -273,21 +351,84 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 
 		raw, err := s.client.GetRawDevice(ctx, targetDevID)
 		if err != nil {
-			// If not reachable in GenieACS, return basic offline summary
+			var uptimeSec int64
+			if reg.OfflineAt != nil {
+				uptimeSec = int64(time.Since(*reg.OfflineAt).Seconds())
+			}
 			return &genieacs.DeviceSummary{
-				ID:            reg.DeviceID,
-				SerialNumber:  reg.SerialNumber,
-				Status:        "offline",
-				Label:         reg.Label,
-				ClientID:      reg.ClientID,
-				ClientName:    reg.ClientName,
-				SSID:          reg.WiFiSSID,
-				WiFiPassword:  reg.WiFiPassword,
-				WiFiUpdatedAt: reg.WiFiUpdatedAt,
+				ID:             reg.DeviceID,
+				SerialNumber:   reg.SerialNumber,
+				Status:         "offline",
+				OnlineAt:       reg.OnlineAt,
+				OfflineAt:      reg.OfflineAt,
+				InformInterval: reg.InformInterval,
+				UptimeSeconds:  uptimeSec,
+				Label:          reg.Label,
+				ClientID:       reg.ClientID,
+				ClientName:     reg.ClientName,
+				SSID:           reg.WiFiSSID,
+				WiFiPassword:   reg.WiFiPassword,
+				WiFiUpdatedAt:  reg.WiFiUpdatedAt,
 			}, nil
 		}
 
 		dev := s.normalizeDevice(raw)
+
+		intervalSec := reg.InformInterval
+		if intervalSec <= 0 {
+			intervalSec = 300
+		}
+		threshold := time.Duration(intervalSec+30) * time.Second
+		isOnlineNow := !dev.LastInform.IsZero() && time.Since(dev.LastInform) <= threshold
+
+		currentStatus := "offline"
+		if isOnlineNow {
+			currentStatus = "online"
+		}
+
+		now := time.Now()
+		if currentStatus != reg.Status {
+			if currentStatus == "online" {
+				onlineAt := dev.LastInform
+				if onlineAt.IsZero() {
+					onlineAt = now
+				}
+				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil)
+				reg.Status = "online"
+				reg.OnlineAt = &onlineAt
+				reg.OfflineAt = nil
+			} else {
+				offlineAt := dev.LastInform
+				if offlineAt.IsZero() {
+					offlineAt = now
+				}
+				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt)
+				reg.Status = "offline"
+				reg.OfflineAt = &offlineAt
+			}
+		}
+
+		dev.Status = reg.Status
+		dev.OnlineAt = reg.OnlineAt
+		dev.OfflineAt = reg.OfflineAt
+		dev.InformInterval = intervalSec
+
+		if dev.Status == "online" {
+			if reg.OnlineAt != nil {
+				dev.UptimeSeconds = int64(time.Since(*reg.OnlineAt).Seconds())
+			} else if !dev.LastInform.IsZero() {
+				dev.UptimeSeconds = int64(time.Since(dev.LastInform).Seconds())
+			}
+		} else {
+			if reg.OfflineAt != nil {
+				dev.UptimeSeconds = int64(time.Since(*reg.OfflineAt).Seconds())
+			} else if !dev.LastInform.IsZero() {
+				dev.UptimeSeconds = int64(time.Since(dev.LastInform).Seconds())
+			} else {
+				dev.UptimeSeconds = 0
+			}
+		}
+
 		dev.Label = reg.Label
 		dev.ClientID = reg.ClientID
 		dev.ClientName = reg.ClientName
@@ -450,10 +591,17 @@ func (s *ACSService) SetInformInterval(ctx context.Context, tenantID uuid.UUID, 
 		{"InternetGatewayDevice.ManagementServer.PeriodicInformEnable", "1", "xsd:boolean"},
 	}
 
-	return s.client.SendTask(ctx, targetDevID, genieacs.TaskRequest{
+	sendErr := s.client.SendTask(ctx, targetDevID, genieacs.TaskRequest{
 		Name:            "setParameterValues",
 		ParameterValues: paramValues,
 	}, true)
+
+	// Persist inform interval to database so future threshold calculations use this value
+	if s.repo != nil && tenantID != uuid.Nil {
+		_ = s.repo.UpdateInformInterval(ctx, tenantID, deviceID, intervalSeconds)
+	}
+
+	return sendErr
 }
 
 // Refresh triggers parameter refresh after verifying tenant ownership.
@@ -482,8 +630,8 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	if lastInformStr := getString(raw, "_lastInform"); lastInformStr != "" {
 		if t, err := time.Parse(time.RFC3339Nano, lastInformStr); err == nil {
 			dev.LastInform = t
-			// If device contacted within last 10 minutes, consider online
-			if time.Since(t) < 10*time.Minute {
+			// Default heuristic for unassigned devices without DB records: 3 minutes
+			if time.Since(t) <= 3*time.Minute {
 				dev.Status = "online"
 			}
 		}
@@ -742,8 +890,7 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	}
 
 	// Uptime (seconds since boot)
-	// Uptime (seconds since boot)
-	rawUptime, uptimeTs := findUptimeInTree(raw, []string{
+	rawUptime, _ := findUptimeInTree(raw, []string{
 		"InternetGatewayDevice.DeviceInfo.UpTime",
 		"Device.DeviceInfo.UpTime",
 		// ZTE F460/ELWR sometimes uses X_ZTE_COM prefix
@@ -752,14 +899,6 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	})
 	if rawUptime > 0 {
 		dev.UptimeSeconds = rawUptime
-		// If device is online and we know when the snapshot was taken,
-		// advance uptime by the elapsed seconds so it does not stay frozen
-		if dev.Status == "online" && !uptimeTs.IsZero() {
-			elapsed := int64(time.Since(uptimeTs).Seconds())
-			if elapsed > 0 {
-				dev.UptimeSeconds += elapsed
-			}
-		}
 	}
 
 	return dev

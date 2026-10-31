@@ -1365,5 +1365,8 @@ export interface ONTDevice {
   client_name?: string;
   wifi_password?: string;
   wifi_updated_at?: string;
+  online_at?: string;
+  offline_at?: string;
+  inform_interval?: number;
 }
 

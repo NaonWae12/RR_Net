@@ -15,9 +15,13 @@ type DeviceTenant struct {
 	Label        string     `json:"label,omitempty"`
 	ClientID     *uuid.UUID `json:"client_id,omitempty"`
 	ClientName    string     `json:"client_name,omitempty"`
-	WiFiSSID      string     `json:"wifi_ssid,omitempty"`
-	WiFiPassword  string     `json:"wifi_password,omitempty"`
-	WiFiUpdatedAt *time.Time `json:"wifi_updated_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	WiFiSSID       string     `json:"wifi_ssid,omitempty"`
+	WiFiPassword   string     `json:"wifi_password,omitempty"`
+	WiFiUpdatedAt  *time.Time `json:"wifi_updated_at,omitempty"`
+	Status         string     `json:"status"` // "online", "offline"
+	OnlineAt       *time.Time `json:"online_at,omitempty"`
+	OfflineAt      *time.Time `json:"offline_at,omitempty"`
+	InformInterval int        `json:"inform_interval,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }

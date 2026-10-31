@@ -61,6 +61,9 @@ type DeviceSummary struct {
 	ClientName      string          `json:"client_name,omitempty"`
 	WiFiPassword    string          `json:"wifi_password,omitempty"`
 	WiFiUpdatedAt   *time.Time      `json:"wifi_updated_at,omitempty"`
+	OnlineAt        *time.Time      `json:"online_at,omitempty"`
+	OfflineAt       *time.Time      `json:"offline_at,omitempty"`
+	InformInterval  int             `json:"inform_interval,omitempty"`
 }
 
 // TaskRequest represents a task sent to GenieACS NBI.
