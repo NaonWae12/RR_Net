@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,12 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+
+	// In-memory cache for ListRawDevices to avoid hammering GenieACS on every dashboard refresh.
+	cacheMu       sync.Mutex
+	cachedDevices []map[string]interface{}
+	cachedAt      time.Time
+	cacheTTL      time.Duration
 }
 
 // WiFiSSID represents an individual SSID configuration on the device.
@@ -84,7 +91,14 @@ func NewClient(baseURL string) *Client {
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        20,
+				MaxConnsPerHost:     10,
+				IdleConnTimeout:     30 * time.Second,
+				ResponseHeaderTimeout: 8 * time.Second,
+			},
 		},
+		cacheTTL: 10 * time.Second,
 	}
 }
 
@@ -107,7 +121,20 @@ func (c *Client) Ping(ctx context.Context) error {
 }
 
 // ListRawDevices fetches raw device list from GenieACS.
+// Uses an in-memory cache (default 10s TTL) for unfiltered queries to avoid
+// hammering GenieACS when multiple tenants refresh dashboards simultaneously.
 func (c *Client) ListRawDevices(ctx context.Context, queryJSON string) ([]map[string]interface{}, error) {
+	// Only cache unfiltered (full list) queries
+	if queryJSON == "" {
+		c.cacheMu.Lock()
+		if c.cachedDevices != nil && time.Since(c.cachedAt) < c.cacheTTL {
+			result := c.cachedDevices
+			c.cacheMu.Unlock()
+			return result, nil
+		}
+		c.cacheMu.Unlock()
+	}
+
 	reqURL := c.baseURL + "/devices"
 	if queryJSON != "" {
 		reqURL += "?query=" + url.QueryEscape(queryJSON)
@@ -134,7 +161,24 @@ func (c *Client) ListRawDevices(ctx context.Context, queryJSON string) ([]map[st
 		return nil, fmt.Errorf("failed to decode devices JSON: %w", err)
 	}
 
+	// Cache unfiltered results
+	if queryJSON == "" {
+		c.cacheMu.Lock()
+		c.cachedDevices = devices
+		c.cachedAt = time.Now()
+		c.cacheMu.Unlock()
+	}
+
 	return devices, nil
+}
+
+// InvalidateCache clears the cached device list, forcing the next ListRawDevices call
+// to fetch fresh data from GenieACS. Call after mutations (reboot, setWifi, etc).
+func (c *Client) InvalidateCache() {
+	c.cacheMu.Lock()
+	c.cachedDevices = nil
+	c.cachedAt = time.Time{}
+	c.cacheMu.Unlock()
 }
 
 // GetRawDevice fetches single raw device by ID from GenieACS.

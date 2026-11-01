@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"rrnet/internal/domain/acs"
 	"rrnet/internal/infra/genieacs"
 	"rrnet/internal/repository"
@@ -33,6 +34,7 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 	// 1. Fetch raw devices from GenieACS (graceful fallback to DB if GenieACS is unreachable)
 	rawDevices, err := s.client.ListRawDevices(ctx, "")
 	if err != nil {
+		log.Warn().Err(err).Msg("ACS: GenieACS unreachable, falling back to DB-only")
 		rawDevices = nil
 	}
 
@@ -40,7 +42,11 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 	// If a modem connects and has an active PPPoE username matching a client in database,
 	// automatically bind it to that tenant!
 	if s.repo != nil {
-		allRegistered, _ := s.repo.GetAllRegisteredDeviceIDs(ctx)
+		allRegistered, regErr := s.repo.GetAllRegisteredDeviceIDs(ctx)
+		if regErr != nil {
+			log.Warn().Err(regErr).Msg("ACS: failed to get registered device IDs for auto-bind")
+			allRegistered = make(map[string]uuid.UUID)
+		}
 		for _, raw := range rawDevices {
 			devID := getString(raw, "_id")
 			if devID == "" {
@@ -59,13 +65,15 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 						if label == "" {
 							label = "PPPoE: " + pppoeUser
 						}
-						_ = s.repo.Register(ctx, &acs.DeviceTenant{
+						if bindErr := s.repo.Register(ctx, &acs.DeviceTenant{
 							TenantID:     mapping.TenantID,
 							DeviceID:     devID,
 							SerialNumber: normDev.SerialNumber,
 							Label:        label,
 							ClientID:     &mapping.ClientID,
-						})
+						}); bindErr != nil {
+							log.Warn().Err(bindErr).Str("device", devID).Str("pppoe", pppoeUser).Msg("ACS: auto-bind PPPoE failed")
+						}
 					}
 				}
 			}
@@ -112,7 +120,9 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 		if found {
 			// Auto-sync device_id if registered using raw SN or outdated ID
 			if reg.DeviceID != dev.ID && strings.Contains(dev.ID, "-") {
-				_ = s.repo.SyncDeviceID(ctx, reg.TenantID, reg.ID, dev.ID, dev.SerialNumber)
+				if syncErr := s.repo.SyncDeviceID(ctx, reg.TenantID, reg.ID, dev.ID, dev.SerialNumber); syncErr != nil {
+					log.Warn().Err(syncErr).Str("device", dev.ID).Msg("ACS: SyncDeviceID failed")
+				}
 				reg.DeviceID = dev.ID
 			}
 
@@ -137,7 +147,9 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 					if onlineAt.IsZero() {
 						onlineAt = now
 					}
-					_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil)
+					if err := s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil); err != nil {
+						log.Warn().Err(err).Str("device", dev.ID).Msg("ACS: UpdateDeviceStatus(online) failed")
+					}
 					reg.Status = "online"
 					reg.OnlineAt = &onlineAt
 					reg.OfflineAt = nil
@@ -146,7 +158,9 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 					if offlineAt.IsZero() {
 						offlineAt = now
 					}
-					_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt)
+					if err := s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt); err != nil {
+						log.Warn().Err(err).Str("device", dev.ID).Msg("ACS: UpdateDeviceStatus(offline) failed")
+					}
 					reg.Status = "offline"
 					reg.OfflineAt = &offlineAt
 				}
@@ -156,11 +170,15 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 				if onlineAt.IsZero() {
 					onlineAt = now
 				}
-				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil)
+				if err := s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil); err != nil {
+					log.Warn().Err(err).Str("device", dev.ID).Msg("ACS: init UpdateDeviceStatus(online) failed")
+				}
 				reg.OnlineAt = &onlineAt
 			} else if currentStatus == "offline" && reg.OfflineAt == nil && !dev.LastInform.IsZero() {
 				offlineAt := dev.LastInform
-				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt)
+				if err := s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt); err != nil {
+					log.Warn().Err(err).Str("device", dev.ID).Msg("ACS: init UpdateDeviceStatus(offline) failed")
+				}
 				reg.OfflineAt = &offlineAt
 			}
 
@@ -393,7 +411,9 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 				if onlineAt.IsZero() {
 					onlineAt = now
 				}
-				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil)
+				if err := s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "online", &onlineAt, nil); err != nil {
+					log.Warn().Err(err).Str("device", dev.ID).Msg("ACS: GetDevice UpdateDeviceStatus(online) failed")
+				}
 				reg.Status = "online"
 				reg.OnlineAt = &onlineAt
 				reg.OfflineAt = nil
@@ -402,7 +422,9 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 				if offlineAt.IsZero() {
 					offlineAt = now
 				}
-				_ = s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt)
+				if err := s.repo.UpdateDeviceStatus(ctx, reg.TenantID, reg.ID, "offline", nil, &offlineAt); err != nil {
+					log.Warn().Err(err).Str("device", dev.ID).Msg("ACS: GetDevice UpdateDeviceStatus(offline) failed")
+				}
 				reg.Status = "offline"
 				reg.OfflineAt = &offlineAt
 			}
@@ -463,7 +485,11 @@ func (s *ACSService) Reboot(ctx context.Context, tenantID uuid.UUID, deviceID st
 			targetDevID = reg.DeviceID
 		}
 	}
-	return s.client.Reboot(ctx, targetDevID)
+	err := s.client.Reboot(ctx, targetDevID)
+	if err == nil && s.client != nil {
+		s.client.InvalidateCache()
+	}
+	return err
 }
 
 // SetWiFi configures WiFi SSID and Password on ONT after verifying tenant ownership.
@@ -550,11 +576,17 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 
 	// Persist to database for primary SSID (slot 1) so tenant always has record of current/configured WiFi
 	if slot == 1 && s.repo != nil && tenantID != uuid.Nil {
-		_ = s.repo.UpdateWiFi(ctx, tenantID, deviceID, ssid, password)
+		if err := s.repo.UpdateWiFi(ctx, tenantID, deviceID, ssid, password); err != nil {
+			log.Warn().Err(err).Str("device", deviceID).Msg("ACS: UpdateWiFi failed")
+		}
 	}
 
 	if sendErr != nil {
 		return fmt.Errorf("perintah dikirim ke antrean, namun peringatan ACS: %w", sendErr)
+	}
+
+	if s.client != nil {
+		s.client.InvalidateCache()
 	}
 
 	return nil
@@ -598,7 +630,13 @@ func (s *ACSService) SetInformInterval(ctx context.Context, tenantID uuid.UUID, 
 
 	// Persist inform interval to database so future threshold calculations use this value
 	if s.repo != nil && tenantID != uuid.Nil {
-		_ = s.repo.UpdateInformInterval(ctx, tenantID, deviceID, intervalSeconds)
+		if err := s.repo.UpdateInformInterval(ctx, tenantID, deviceID, intervalSeconds); err != nil {
+			log.Warn().Err(err).Str("device", deviceID).Msg("ACS: UpdateInformInterval failed")
+		}
+	}
+
+	if sendErr == nil && s.client != nil {
+		s.client.InvalidateCache()
 	}
 
 	return sendErr
@@ -616,7 +654,11 @@ func (s *ACSService) Refresh(ctx context.Context, tenantID uuid.UUID, deviceID s
 			targetDevID = reg.DeviceID
 		}
 	}
-	return s.client.RefreshDevice(ctx, targetDevID)
+	err := s.client.RefreshDevice(ctx, targetDevID)
+	if err == nil && s.client != nil {
+		s.client.InvalidateCache()
+	}
+	return err
 }
 
 // normalizeDevice parses raw GenieACS device JSON into standardized DeviceSummary.
