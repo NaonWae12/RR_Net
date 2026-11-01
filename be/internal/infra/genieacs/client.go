@@ -56,9 +56,11 @@ type DeviceSummary struct {
 	MACAddress      string          `json:"mac_address"`
 	Status          string          `json:"status"` // online, offline
 	LastInform      time.Time       `json:"last_inform"`
-	RxPowerDBm      *float64        `json:"rx_power_dbm,omitempty"`
-	TxPowerDBm      *float64        `json:"tx_power_dbm,omitempty"`
-	SSID            string          `json:"ssid,omitempty"`
+	RxPowerDBm         *float64        `json:"rx_power_dbm,omitempty"`
+	TxPowerDBm         *float64        `json:"tx_power_dbm,omitempty"`
+	TemperatureCelsius *float64        `json:"temperature_celsius,omitempty"`
+	VoltageVolts       *float64        `json:"voltage_volts,omitempty"`
+	SSID               string          `json:"ssid,omitempty"`
 	WiFiEnabled     bool            `json:"wifi_enabled"`
 	SSIDList        []WiFiSSID      `json:"ssid_list,omitempty"`
 	ConnectedHosts  []ConnectedHost `json:"connected_hosts,omitempty"`

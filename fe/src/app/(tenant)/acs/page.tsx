@@ -25,7 +25,10 @@ import {
   History,
   KeyRound,
   Trash2,
-  Clock
+  Clock,
+  Thermometer,
+  Zap,
+  User
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -957,6 +960,33 @@ export default function ACSPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {/* Info Kepemilikan Pelanggan */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50/70 border border-indigo-100 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 bg-indigo-600 text-white rounded-lg shrink-0">
+                <User className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wider text-indigo-700 font-semibold">Pelanggan Pemilik</div>
+                <div className="font-bold text-slate-900 text-sm truncate">
+                  {selectedDevice?.client_name ? (
+                    selectedDevice.client_name
+                  ) : selectedDevice?.label ? (
+                    selectedDevice.label
+                  ) : (
+                    <span className="text-slate-400 font-normal italic">Belum terhubung ke data pelanggan</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="text-right shrink-0 pl-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">SN Perangkat</div>
+              <div className="font-mono text-xs font-bold text-slate-800">
+                {selectedDevice?.serial_number || selectedDevice?.id}
+              </div>
+            </div>
+          </div>
+
           {actionMessage && (
             <div className={`p-3 rounded-lg text-xs border ${
               actionMessage.type === "success" 
@@ -1205,6 +1235,12 @@ export default function ACSPage() {
                       {selectedDevice.product_class || "ONT Device"}
                       <span className="text-xs font-normal text-slate-500">({selectedDevice.manufacturer || "Generic"})</span>
                     </div>
+                    {selectedDevice.client_name && (
+                      <div className="text-xs font-semibold text-slate-900 flex items-center gap-1.5 mt-0.5">
+                        <User className="w-3.5 h-3.5 text-indigo-600" />
+                        Pelanggan: {selectedDevice.client_name}
+                      </div>
+                    )}
                     {selectedDevice.label && (
                       <div className="text-xs text-indigo-700 font-medium mt-0.5">
                         Label: {selectedDevice.label}
@@ -1286,10 +1322,10 @@ export default function ACSPage() {
                 </div>
               </div>
 
-              {/* Optical & Link Telemetry */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Telemetri Optik, Daya & Hardware */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  <span className="text-slate-600 block text-[11px] font-medium">Optical RX Power (Redaman)</span>
+                  <span className="text-slate-600 block text-[11px] font-medium">Optical RX Power</span>
                   <div className="mt-1">
                     {renderSignalBadge(selectedDevice.rx_power_dbm)}
                   </div>
@@ -1301,15 +1337,32 @@ export default function ACSPage() {
                   </span>
                 </div>
                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  <span className="text-slate-600 block text-[11px] font-medium">
-                    {selectedDevice.status === "online" ? "Durasi Online" : "Durasi Offline"}
+                  <span className="text-slate-600 flex items-center gap-1 text-[11px] font-medium">
+                    <Thermometer className="w-3.5 h-3.5 text-amber-500" />
+                    Suhu Transceiver
                   </span>
                   <span className="font-mono text-slate-900 font-semibold text-xs block mt-1">
-                    {formatUptime(selectedDevice.uptime_seconds)}
-                    {selectedDevice.status === "online" ? (
-                      <span className="text-[10px] font-normal text-emerald-600 ml-1.5 font-sans">(Aktif)</span>
+                    {selectedDevice.temperature_celsius != null ? (
+                      <span className={selectedDevice.temperature_celsius > 70 ? "text-rose-600 font-bold" : selectedDevice.temperature_celsius > 55 ? "text-amber-600 font-semibold" : "text-emerald-700 font-semibold"}>
+                        {selectedDevice.temperature_celsius.toFixed(1)} °C
+                      </span>
                     ) : (
-                      <span className="text-[10px] font-normal text-rose-500 ml-1.5 font-sans">(Terputus)</span>
+                      <span className="text-slate-400">N/A</span>
+                    )}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-600 flex items-center gap-1 text-[11px] font-medium">
+                    <Zap className="w-3.5 h-3.5 text-blue-500" />
+                    Voltase Transceiver
+                  </span>
+                  <span className="font-mono text-slate-900 font-semibold text-xs block mt-1">
+                    {selectedDevice.voltage_volts != null ? (
+                      <span className="text-slate-900 font-semibold">
+                        {selectedDevice.voltage_volts.toFixed(2)} V
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">N/A</span>
                     )}
                   </span>
                 </div>

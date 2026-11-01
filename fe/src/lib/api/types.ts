@@ -1355,6 +1355,8 @@ export interface ONTDevice {
   last_inform: string;
   rx_power_dbm?: number | null;
   tx_power_dbm?: number | null;
+  temperature_celsius?: number | null;
+  voltage_volts?: number | null;
   ssid?: string;
   wifi_enabled: boolean;
   ssid_list?: { index: number; ssid: string; enabled: boolean; bssid?: string }[];

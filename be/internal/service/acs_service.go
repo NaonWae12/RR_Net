@@ -824,6 +824,75 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		}
 	}
 
+	// Optical Transceiver / Device Temperature (in °C)
+	tempStr := findStringInTree(raw, []string{
+		// ZTE F609/F660/F460
+		"InternetGatewayDevice.WANDevice.1.X_ZTE-FTTH_WANPONInterfaceConfig.TransceiverTemperature",
+		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.TransceiverTemperature",
+		"InternetGatewayDevice.WANDevice.1.X_ZTE-FTTH_WANPONInterfaceConfig.Temperature",
+		"InternetGatewayDevice.DeviceInfo.MemoryStatus.Temperature",
+		"InternetGatewayDevice.DeviceInfo.X_ZTE_COM_DeviceInfo.Temperature",
+		"InternetGatewayDevice.DeviceInfo.Temperature",
+		// Huawei
+		"InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TransceiverTemperature",
+		"InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TransceiverTemperature",
+		"InternetGatewayDevice.WANDevice.1.X_HW_DEBUG.SMP.OPTIC.Temperature",
+		"InternetGatewayDevice.WANDevice.1.X_HW_PON_INTERFACECONFIG.TransceiverTemperature",
+		// Fiberhome / VSOL / CMCC
+		"InternetGatewayDevice.WANDevice.1.X_FH_PON.TransceiverTemperature",
+		"InternetGatewayDevice.WANDevice.1.X_CMCC_ONU.PON.TransceiverTemperature",
+		"InternetGatewayDevice.WANDevice.1.X_CMCC_ONU.PON.Temperature",
+		// TR-181 standard
+		"Device.Optical.Interface.1.TransceiverTemperature",
+		"Device.DeviceInfo.TemperatureStatus.TemperatureSensor.1.Value",
+	})
+	if tempStr != "" {
+		if f, err := strconv.ParseFloat(tempStr, 64); err == nil {
+			switch {
+			case math.Abs(f) > 1000:
+				f = f / 1000.0 // millidegrees (e.g. 45000 -> 45.0 °C)
+			case math.Abs(f) > 150:
+				f = f / 100.0 // 1/100 degrees (e.g. 4500 -> 45.0 °C)
+			}
+			if f >= -20 && f <= 125 {
+				dev.TemperatureCelsius = &f
+			}
+		}
+	}
+
+	// Optical Transceiver Supply Voltage (in Volts)
+	voltStr := findStringInTree(raw, []string{
+		// ZTE F609/F660/F460
+		"InternetGatewayDevice.WANDevice.1.X_ZTE-FTTH_WANPONInterfaceConfig.TransceiverVoltage",
+		"InternetGatewayDevice.WANDevice.1.X_ZTE_COM_WANPONInterfaceConfig.TransceiverVoltage",
+		"InternetGatewayDevice.WANDevice.1.X_ZTE-FTTH_WANPONInterfaceConfig.SupplyVoltage",
+		// Huawei
+		"InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TransceiverSupplyVoltage",
+		"InternetGatewayDevice.WANDevice.1.X_GponInterafceConfig.TransceiverSupplyVoltage",
+		"InternetGatewayDevice.WANDevice.1.X_GponInterfaceConfig.TransceiverVoltage",
+		"InternetGatewayDevice.WANDevice.1.X_HW_DEBUG.SMP.OPTIC.Voltage",
+		"InternetGatewayDevice.WANDevice.1.X_HW_PON_INTERFACECONFIG.TransceiverSupplyVoltage",
+		// Fiberhome / VSOL / CMCC
+		"InternetGatewayDevice.WANDevice.1.X_FH_PON.TransceiverVoltage",
+		"InternetGatewayDevice.WANDevice.1.X_CMCC_ONU.PON.TransceiverVoltage",
+		// TR-181 standard
+		"Device.Optical.Interface.1.TransceiverSupplyVoltage",
+		"Device.Optical.Interface.1.TransceiverVoltage",
+	})
+	if voltStr != "" {
+		if f, err := strconv.ParseFloat(voltStr, 64); err == nil {
+			switch {
+			case f > 10000:
+				f = f / 10000.0 // 100 uV (e.g. 33000 -> 3.3V)
+			case f > 50:
+				f = f / 1000.0 // mV (e.g. 3300 -> 3.3V)
+			}
+			if f >= 0.5 && f <= 15.0 {
+				dev.VoltageVolts = &f
+			}
+		}
+	}
+
 	// Multi-SSID Info: scan slots 1..8
 	for slot := 1; slot <= 8; slot++ {
 		ssidName := findStringInTree(raw, []string{
