@@ -126,13 +126,8 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 				reg.DeviceID = dev.ID
 			}
 
-			// Dynamic +30s tolerance threshold
-			intervalSec := reg.InformInterval
-			if intervalSec <= 0 {
-				intervalSec = 300
-			}
-			threshold := time.Duration(intervalSec+30) * time.Second
-			isOnlineNow := !dev.LastInform.IsZero() && time.Since(dev.LastInform) <= threshold
+			// Dynamic threshold with idle protection & inform interval awareness
+			isOnlineNow, effectiveInterval := s.calculateDeviceOnlineStatus(dev, reg.InformInterval)
 
 			currentStatus := "offline"
 			if isOnlineNow {
@@ -185,7 +180,7 @@ func (s *ACSService) ListDevices(ctx context.Context, tenantID uuid.UUID) ([]gen
 			dev.Status = reg.Status
 			dev.OnlineAt = reg.OnlineAt
 			dev.OfflineAt = reg.OfflineAt
-			dev.InformInterval = intervalSec
+			dev.InformInterval = effectiveInterval
 
 			// Accurate Uptime calculated by Backend
 			if dev.Status == "online" {
@@ -392,12 +387,8 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 
 		dev := s.normalizeDevice(raw)
 
-		intervalSec := reg.InformInterval
-		if intervalSec <= 0 {
-			intervalSec = 300
-		}
-		threshold := time.Duration(intervalSec+30) * time.Second
-		isOnlineNow := !dev.LastInform.IsZero() && time.Since(dev.LastInform) <= threshold
+		// Dynamic threshold with idle protection & inform interval awareness
+		isOnlineNow, effectiveInterval := s.calculateDeviceOnlineStatus(dev, reg.InformInterval)
 
 		currentStatus := "offline"
 		if isOnlineNow {
@@ -433,7 +424,7 @@ func (s *ACSService) GetDevice(ctx context.Context, tenantID uuid.UUID, deviceID
 		dev.Status = reg.Status
 		dev.OnlineAt = reg.OnlineAt
 		dev.OfflineAt = reg.OfflineAt
-		dev.InformInterval = intervalSec
+		dev.InformInterval = effectiveInterval
 
 		if dev.Status == "online" {
 			if reg.OnlineAt != nil {
@@ -614,13 +605,28 @@ func (s *ACSService) SetInformInterval(ctx context.Context, tenantID uuid.UUID, 
 		}
 	}
 
-	intervalStr := strconv.Itoa(intervalSeconds)
+	// Detect TR-181 vs TR-098 parameter tree model
+	var isTR181 bool
+	if s.client != nil {
+		if rawDev, err := s.client.GetRawDevice(ctx, targetDevID); err == nil && rawDev != nil {
+			if pathExistsInTree(rawDev, "Device.ManagementServer") {
+				isTR181 = true
+			}
+		}
+	}
 
-	// TR-098 path (most ONTs: Huawei, ZTE, Fiberhome)
-	// TR-181 path as fallback (newer devices)
-	paramValues := [][]interface{}{
-		{"InternetGatewayDevice.ManagementServer.PeriodicInformInterval", intervalStr, "xsd:unsignedInt"},
-		{"InternetGatewayDevice.ManagementServer.PeriodicInformEnable", "1", "xsd:boolean"},
+	var paramValues [][]interface{}
+	if isTR181 {
+		paramValues = [][]interface{}{
+			{"Device.ManagementServer.PeriodicInformInterval", intervalSeconds, "xsd:unsignedInt"},
+			{"Device.ManagementServer.PeriodicInformEnable", true, "xsd:boolean"},
+		}
+	} else {
+		// Standard TR-098 path (Huawei, ZTE, Fiberhome, VSOL)
+		paramValues = [][]interface{}{
+			{"InternetGatewayDevice.ManagementServer.PeriodicInformInterval", intervalSeconds, "xsd:unsignedInt"},
+			{"InternetGatewayDevice.ManagementServer.PeriodicInformEnable", true, "xsd:boolean"},
+		}
 	}
 
 	sendErr := s.client.SendTask(ctx, targetDevID, genieacs.TaskRequest{
@@ -661,6 +667,46 @@ func (s *ACSService) Refresh(ctx context.Context, tenantID uuid.UUID, deviceID s
 	return err
 }
 
+// calculateDeviceOnlineStatus determines if an ONT is currently online based on LastInform
+// and the dynamic InformInterval (taking both device-reported and DB-configured values into account).
+// It returns (isOnline, effectiveIntervalSec).
+func (s *ACSService) calculateDeviceOnlineStatus(dev genieacs.DeviceSummary, regInformInterval int) (bool, int) {
+	if dev.LastInform.IsZero() {
+		return false, 300
+	}
+
+	effectiveInterval := 300
+	if dev.InformInterval > 0 {
+		effectiveInterval = dev.InformInterval
+	} else if regInformInterval > 0 {
+		effectiveInterval = regInformInterval
+	}
+
+	// Safety protection for idle ONTs:
+	// If the device is running with a higher interval (e.g. 300s) than requested by DB (e.g. 60s),
+	// or vice versa, honor the larger interval so an idle modem is not falsely marked offline!
+	if dev.InformInterval > 0 && dev.InformInterval > effectiveInterval {
+		effectiveInterval = dev.InformInterval
+	}
+	if regInformInterval > 0 && regInformInterval > effectiveInterval {
+		effectiveInterval = regInformInterval
+	}
+
+	// Dynamic threshold calculation:
+	// TR-069 periodic inform can have minor network latency, CWMP session queueing, or retry backoffs.
+	// We give at least 1.5x interval or interval + 60s (whichever is larger), with a floor of 2 minutes.
+	threshold := time.Duration(effectiveInterval)*time.Second + 60*time.Second
+	if multThreshold := time.Duration(float64(effectiveInterval)*1.5) * time.Second; multThreshold > threshold {
+		threshold = multThreshold
+	}
+	if threshold < 2*time.Minute {
+		threshold = 2 * time.Minute
+	}
+
+	isOnline := time.Since(dev.LastInform) <= threshold
+	return isOnline, effectiveInterval
+}
+
 // normalizeDevice parses raw GenieACS device JSON into standardized DeviceSummary.
 func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.DeviceSummary {
 	dev := genieacs.DeviceSummary{
@@ -672,8 +718,8 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	if lastInformStr := getString(raw, "_lastInform"); lastInformStr != "" {
 		if t, err := time.Parse(time.RFC3339Nano, lastInformStr); err == nil {
 			dev.LastInform = t
-			// Default heuristic for unassigned devices without DB records: 3 minutes
-			if time.Since(t) <= 3*time.Minute {
+			// Default heuristic for unassigned devices: 5.5 minutes (standard 300s inform + 30s jitter)
+			if time.Since(t) <= 5*time.Minute+30*time.Second {
 				dev.Status = "online"
 			}
 		}
@@ -1010,6 +1056,16 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 	})
 	if rawUptime > 0 {
 		dev.UptimeSeconds = rawUptime
+	}
+	// Periodic Inform Interval extraction from device parameter tree (TR-098 & TR-181)
+	intervalStr := findStringInTree(raw, []string{
+		"InternetGatewayDevice.ManagementServer.PeriodicInformInterval",
+		"Device.ManagementServer.PeriodicInformInterval",
+	})
+	if intervalStr != "" {
+		if v, err := strconv.Atoi(intervalStr); err == nil && v > 0 {
+			dev.InformInterval = v
+		}
 	}
 
 	return dev

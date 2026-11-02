@@ -134,6 +134,8 @@ export default function ACSPage() {
 
   const handleOpenDetailModal = (dev: ONTDevice) => {
     setSelectedDevice(dev);
+    setInformInterval(dev.inform_interval || 300);
+    setActionMessage(null);
     setDetailModalOpen(true);
   };
 
@@ -220,6 +222,8 @@ export default function ACSPage() {
     try {
       const res = await acsService.setInformInterval(selectedDevice.id, informInterval);
       setActionMessage({ type: "success", text: res.message || `Interval berhasil diset ke ${informInterval}s` });
+      setSelectedDevice((prev) => (prev ? { ...prev, inform_interval: informInterval } : null));
+      fetchDevices();
     } catch (err: any) {
       setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal mengatur interval" });
     } finally {
@@ -1437,6 +1441,9 @@ export default function ACSPage() {
                     <Clock className="w-3.5 h-3.5" />
                     Periodic Inform Interval (TR-069)
                   </span>
+                  <span className="text-[10px] font-mono text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded border border-indigo-200">
+                    Aktif: {selectedDevice.inform_interval ? `${selectedDevice.inform_interval}s` : "300s"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <select
@@ -1444,10 +1451,10 @@ export default function ACSPage() {
                     onChange={(e) => setInformInterval(Number(e.target.value))}
                     className="flex-1 text-xs bg-white border border-indigo-200 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 font-mono"
                   >
-                    <option value={30}>30 detik</option>
-                    <option value={60}>60 detik (1 menit)</option>
+                    <option value={30}>30 detik (Ultra Cepat)</option>
+                    <option value={60}>60 detik (1 menit - Disarankan)</option>
                     <option value={120}>120 detik (2 menit)</option>
-                    <option value={300}>300 detik (5 menit)</option>
+                    <option value={300}>300 detik (5 menit - Standar Pabrik)</option>
                     <option value={600}>600 detik (10 menit)</option>
                     <option value={900}>900 detik (15 menit)</option>
                   </select>
