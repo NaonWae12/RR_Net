@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { acsService, SetWiFiPayload } from "@/lib/api/acsService";
-import { ONTDevice } from "@/lib/api/types";
+import { acsService } from "@/lib/api/acsService";
+import { ONTDevice, SetWiFiPayload, SetWANPayload, WANConfig } from "@/lib/api/types";
 import { 
   Wifi, 
   RotateCw, 
@@ -28,7 +28,13 @@ import {
   Clock,
   Thermometer,
   Zap,
-  User
+  User,
+  Globe,
+  Shield,
+  Radio,
+  Sliders,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,6 +62,7 @@ export default function ACSPage() {
   const [selectedDevice, setSelectedDevice] = useState<ONTDevice | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [wifiModalOpen, setWifiModalOpen] = useState(false);
+  const [wanModalOpen, setWanModalOpen] = useState(false);
   const [rebootModalOpen, setRebootModalOpen] = useState(false);
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -67,9 +74,30 @@ export default function ACSPage() {
     label: "",
   });
   const [editForm, setEditForm] = useState<{ serial_number: string; label: string }>({ serial_number: "", label: "" });
-  const [wifiForm, setWifiForm] = useState<SetWiFiPayload>({ ssid: "", password: "" });
+  const [wifiForm, setWifiForm] = useState<SetWiFiPayload>({
+    slot: 1,
+    ssid: "",
+    password: "",
+    security_mode: "11i",
+    encryption: "AESEncryption",
+    channel: 0,
+    tx_power: 100,
+    enabled: true,
+  });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+
+  // WAN Form
+  const [wanForm, setWanForm] = useState<SetWANPayload>({
+    mode: "PPPoE",
+    username: "",
+    password: "",
+    vlan_id: 0,
+    service_list: "INTERNET",
+    nat_enabled: true,
+    connection_index: 1,
+  });
+  const [showWanPassword, setShowWanPassword] = useState(false);
 
   // Inform Interval
   const [informInterval, setInformInterval] = useState<number>(300);
@@ -107,23 +135,47 @@ export default function ACSPage() {
     setSelectedDevice(dev);
     const slot = initialSlot || 1;
     let ssidToUse = initialSsid || "";
-    if (!ssidToUse) {
-      if (dev.ssid_list && dev.ssid_list.length > 0) {
-        const found = dev.ssid_list.find((s) => s.index === slot) || dev.ssid_list[0];
-        ssidToUse = found.ssid;
-      } else {
-        ssidToUse = dev.ssid || "";
-      }
+    let isEnabled = true;
+    if (dev.ssid_list && dev.ssid_list.length > 0) {
+      const found = dev.ssid_list.find((s) => s.index === slot) || dev.ssid_list[0];
+      if (!ssidToUse) ssidToUse = found.ssid;
+      isEnabled = found.enabled;
+    } else {
+      if (!ssidToUse) ssidToUse = dev.ssid || "";
     }
     setWifiForm({
       slot: slot,
       ssid: ssidToUse,
       password: "",
+      security_mode: dev.security_mode || "11i",
+      encryption: "AESEncryption",
+      channel: dev.wifi_channel || 0,
+      tx_power: dev.wifi_tx_power || 100,
+      enabled: isEnabled,
     });
     setShowCurrentPassword(false);
     setShowNewPassword(false);
     setActionMessage(null);
     setWifiModalOpen(true);
+  };
+
+  const handleOpenWanModal = (dev: ONTDevice, wanIndex?: number) => {
+    setSelectedDevice(dev);
+    const currentWan = (dev.wan_list && dev.wan_list.length > 0)
+      ? (dev.wan_list.find(w => w.index === (wanIndex || 1)) || dev.wan || dev.wan_list[0])
+      : dev.wan;
+    setWanForm({
+      mode: currentWan?.mode || "PPPoE",
+      username: currentWan?.username || "",
+      password: "",
+      vlan_id: currentWan?.vlan_id || 0,
+      service_list: currentWan?.service_list || "INTERNET",
+      nat_enabled: currentWan?.nat_enabled ?? true,
+      connection_index: wanIndex || currentWan?.index || 1,
+    });
+    setShowWanPassword(false);
+    setActionMessage(null);
+    setWanModalOpen(true);
   };
 
   const handleOpenRebootModal = (dev: ONTDevice) => {
@@ -168,7 +220,7 @@ export default function ACSPage() {
   const handleSaveWifi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDevice) return;
-    if (wifiForm.password && wifiForm.password.length < 8) {
+    if (wifiForm.password && wifiForm.password.length < 8 && wifiForm.security_mode !== "None") {
       setActionMessage({ type: "error", text: "Password WiFi minimal 8 karakter jika diisi" });
       return;
     }
@@ -183,6 +235,29 @@ export default function ACSPage() {
       }, 1500);
     } catch (err: any) {
       setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal mengubah WiFi" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSaveWan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDevice) return;
+    if (wanForm.mode === "PPPoE" && !wanForm.username?.trim()) {
+      setActionMessage({ type: "error", text: "Username PPPoE wajib diisi" });
+      return;
+    }
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const res = await acsService.setWAN(selectedDevice.id, wanForm);
+      setActionMessage({ type: "success", text: res.message || "Konfigurasi WAN berhasil dikirim ke ONT!" });
+      setTimeout(() => {
+        setWanModalOpen(false);
+        fetchDevices();
+      }, 1500);
+    } catch (err: any) {
+      setActionMessage({ type: "error", text: err.response?.data?.error || err.message || "Gagal mengatur WAN" });
     } finally {
       setActionLoading(false);
     }
@@ -577,6 +652,7 @@ export default function ACSPage() {
                   <th className="py-3 px-4 font-medium">Status</th>
                   <th className="py-3 px-4 font-medium">Redaman Optik (RX)</th>
                   <th className="py-3 px-4 font-medium">WiFi SSID</th>
+                  <th className="py-3 px-4 font-medium">WAN</th>
                   <th className="py-3 px-4 font-medium">IP &amp; Uptime</th>
                   <th className="py-3 px-4 font-medium text-right">Aksi</th>
                 </tr>
@@ -584,7 +660,7 @@ export default function ACSPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
                         <span>Memuat data ONT tenant...</span>
@@ -593,7 +669,7 @@ export default function ACSPage() {
                   </tr>
                 ) : filteredDevices.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-14 text-center">
+                    <td colSpan={8} className="py-14 text-center">
                       <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-3">
                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
                           <Server className="w-6 h-6" />
@@ -713,6 +789,37 @@ export default function ACSPage() {
                         )}
                       </td>
 
+                      {/* WAN */}
+                      <td className="py-3 px-4">
+                        {dev.wan ? (
+                          <div>
+                            <Badge
+                              className={`text-[10px] font-semibold ${
+                                dev.wan.mode === "PPPoE"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : dev.wan.mode === "Bridge"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-slate-50 text-slate-700 border-slate-200"
+                              }`}
+                            >
+                              {dev.wan.mode || "PPPoE"}
+                            </Badge>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              {dev.wan.connection_status === "Connected" ? (
+                                <span className="text-emerald-600 font-medium">Connected</span>
+                              ) : (
+                                <span className="text-rose-500">{dev.wan.connection_status || "–"}</span>
+                              )}
+                              {dev.wan.vlan_id && dev.wan.vlan_id > 0 ? (
+                                <span className="ml-1 font-mono text-slate-400">VLAN {dev.wan.vlan_id}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">–</span>
+                        )}
+                      </td>
+
                       {/* IP & Uptime */}
                       <td className="py-3 px-4">
                         <div className="font-mono text-slate-700 font-medium">{dev.ip_address || "-"}</div>
@@ -745,6 +852,16 @@ export default function ACSPage() {
                             title="Edit Label"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenWanModal(dev)}
+                            className="h-7 px-2 text-xs border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700"
+                            title="Atur WAN"
+                          >
+                            <Globe className="w-3.5 h-3.5 mr-1" />
+                            WAN
                           </Button>
                           <Button
                             size="sm"
@@ -1058,24 +1175,91 @@ export default function ACSPage() {
               />
             </div>
 
+            {/* Security Mode */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-700 flex items-center justify-between">
-                <span>Password Baru WiFi</span>
-                <span className="text-[10px] text-slate-400 font-normal">(Opsional)</span>
+              <label className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-indigo-600" />
+                Mode Keamanan WiFi
               </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <Input
-                  type="text"
-                  value={wifiForm.password}
-                  onChange={(e) => setWifiForm({ ...wifiForm, password: e.target.value })}
-                  placeholder="Kosongkan jika hanya ingin ganti nama SSID"
-                  className="pl-9 bg-white border-slate-300 text-slate-900 text-xs h-9 font-mono focus-visible:ring-indigo-500"
-                />
+              <select
+                value={wifiForm.security_mode || "11i"}
+                onChange={(e) => {
+                  const mode = e.target.value;
+                  setWifiForm({
+                    ...wifiForm,
+                    security_mode: mode,
+                    password: mode === "None" ? "" : wifiForm.password,
+                  });
+                }}
+                className="w-full text-xs bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              >
+                <option value="11i">WPA2-PSK (Paling Aman - Disarankan)</option>
+                <option value="WPAand11i">WPA/WPA2 Mixed (Kompatibel lama)</option>
+                <option value="None">Open / Tanpa Password</option>
+              </select>
+            </div>
+
+            {/* Password - hanya tampil jika bukan Open */}
+            {wifiForm.security_mode !== "None" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-700 flex items-center justify-between">
+                  <span>Password Baru WiFi</span>
+                  <span className="text-[10px] text-slate-400 font-normal">(Opsional, kosongkan untuk tidak ubah)</span>
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    type={showNewPassword ? "text" : "password"}
+                    value={wifiForm.password}
+                    onChange={(e) => setWifiForm({ ...wifiForm, password: e.target.value })}
+                    placeholder="Min 8 karakter"
+                    className="pl-9 pr-9 bg-white border-slate-300 text-slate-900 text-xs h-9 font-mono focus-visible:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
-              <p className="text-[11px] text-slate-500">
-                Isi minimal 8 karakter jika ingin mengganti password WiFi. Jika dikosongkan, password lama tetap dipertahankan.
-              </p>
+            )}
+
+            {/* Channel & Tx Power */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+                  <Radio className="w-3.5 h-3.5 text-indigo-600" />
+                  Channel WiFi
+                </label>
+                <select
+                  value={wifiForm.channel ?? 0}
+                  onChange={(e) => setWifiForm({ ...wifiForm, channel: Number(e.target.value) })}
+                  className="w-full text-xs bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                >
+                  <option value={0}>Auto</option>
+                  {[1,2,3,4,5,6,7,8,9,10,11,12,13].map(ch => (
+                    <option key={ch} value={ch}>CH {ch}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                  Daya Pancar (Tx)
+                </label>
+                <select
+                  value={wifiForm.tx_power ?? 100}
+                  onChange={(e) => setWifiForm({ ...wifiForm, tx_power: Number(e.target.value) })}
+                  className="w-full text-xs bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                >
+                  <option value={100}>100% (Maksimal)</option>
+                  <option value={75}>75%</option>
+                  <option value={50}>50%</option>
+                  <option value={20}>20% (Hemat)</option>
+                </select>
+              </div>
             </div>
 
             <div className="bg-amber-50/90 border border-amber-200/90 rounded-lg p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
@@ -1101,6 +1285,166 @@ export default function ACSPage() {
               >
                 {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
                 Terapkan ke ONT
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Atur WAN */}
+      <Dialog open={wanModalOpen} onOpenChange={setWanModalOpen}>
+        <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 flex items-center gap-2">
+              <Globe className="w-5 h-5 text-emerald-600" />
+              Atur Koneksi WAN ONT
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Konfigurasi mode WAN, kredensial PPPoE, VLAN, dan NAT untuk ONT ({selectedDevice?.serial_number}).
+            </DialogDescription>
+          </DialogHeader>
+
+          {actionMessage && (
+            <div className={`p-3 rounded-lg text-xs border ${
+              actionMessage.type === "success" 
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                : "bg-rose-50 border-rose-200 text-rose-800"
+            }`}>
+              {actionMessage.text}
+            </div>
+          )}
+
+          <form onSubmit={handleSaveWan} className="space-y-4 py-2">
+            {/* Mode WAN */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">Mode WAN</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["PPPoE", "IPoE", "Bridge"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setWanForm({ ...wanForm, mode: m })}
+                    className={`py-2 rounded-lg border text-xs font-semibold transition-all ${
+                      wanForm.mode === m
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-500"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {m === "IPoE" ? "IPoE (DHCP)" : m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* PPPoE Credentials */}
+            {wanForm.mode === "PPPoE" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-700">Username PPPoE <span className="text-rose-500">*</span></label>
+                  <Input
+                    value={wanForm.username || ""}
+                    onChange={(e) => setWanForm({ ...wanForm, username: e.target.value })}
+                    placeholder="Contoh: pelanggan@isp"
+                    required
+                    className="bg-white border-slate-300 text-xs h-9 font-mono focus-visible:ring-emerald-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-700 flex items-center justify-between">
+                    <span>Password PPPoE</span>
+                    <span className="text-[10px] text-slate-400">(Kosongkan jika tidak ubah)</span>
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      type={showWanPassword ? "text" : "password"}
+                      value={wanForm.password || ""}
+                      onChange={(e) => setWanForm({ ...wanForm, password: e.target.value })}
+                      placeholder="Password PPPoE"
+                      className="pl-9 pr-9 bg-white border-slate-300 text-xs h-9 font-mono focus-visible:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowWanPassword(!showWanPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showWanPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* VLAN ID */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">VLAN ID <span className="text-slate-400 font-normal">(0 = Untagged)</span></label>
+              <Input
+                type="number"
+                min={0}
+                max={4094}
+                value={wanForm.vlan_id ?? 0}
+                onChange={(e) => setWanForm({ ...wanForm, vlan_id: Number(e.target.value) })}
+                placeholder="0"
+                className="bg-white border-slate-300 text-xs h-9 font-mono focus-visible:ring-emerald-500"
+              />
+            </div>
+
+            {/* Service List */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">Service List</label>
+              <select
+                value={wanForm.service_list || "INTERNET"}
+                onChange={(e) => setWanForm({ ...wanForm, service_list: e.target.value })}
+                className="w-full text-xs bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              >
+                <option value="INTERNET">INTERNET</option>
+                <option value="TR069,INTERNET">TR069 + INTERNET</option>
+                <option value="VOIP,INTERNET">VOIP + INTERNET</option>
+              </select>
+            </div>
+
+            {/* NAT Enable - hanya untuk PPPoE/IPoE */}
+            {wanForm.mode !== "Bridge" && (
+              <div className="flex items-center gap-2.5 py-1">
+                <button
+                  type="button"
+                  onClick={() => setWanForm({ ...wanForm, nat_enabled: !wanForm.nat_enabled })}
+                  className="shrink-0"
+                >
+                  {wanForm.nat_enabled
+                    ? <CheckSquare className="w-4 h-4 text-emerald-600" />
+                    : <Square className="w-4 h-4 text-slate-400" />
+                  }
+                </button>
+                <label className="text-xs font-medium text-slate-700 cursor-pointer" onClick={() => setWanForm({ ...wanForm, nat_enabled: !wanForm.nat_enabled })}>
+                  NAT Enabled (Internet Sharing)
+                </label>
+              </div>
+            )}
+
+            <div className="bg-amber-50/90 border border-amber-200/90 rounded-lg p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Catatan:</strong> Perubahan WAN akan diterapkan saat modem kontak ACS berikutnya (~{selectedDevice?.inform_interval || 300} detik). Koneksi internet mungkin akan terputus sebentar saat rekonfigurasi WAN.
+              </span>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setWanModalOpen(false)}
+                className="text-slate-600 hover:text-slate-900 text-xs"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                disabled={actionLoading}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5"
+              >
+                {actionLoading && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
+                Terapkan WAN
               </Button>
             </DialogFooter>
           </form>
@@ -1371,6 +1715,79 @@ export default function ACSPage() {
                   </span>
                 </div>
               </div>
+
+              {/* WAN Info */}
+              {(selectedDevice.wan || (selectedDevice.wan_list && selectedDevice.wan_list.length > 0)) && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-800 block text-[11px] font-semibold flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                      Informasi WAN:
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setDetailModalOpen(false);
+                        handleOpenWanModal(selectedDevice);
+                      }}
+                      className="h-6 px-2 text-[10px] border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 gap-1 font-medium"
+                    >
+                      <Globe className="w-3 h-3" />
+                      Atur WAN
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(selectedDevice.wan_list && selectedDevice.wan_list.length > 0
+                      ? selectedDevice.wan_list
+                      : selectedDevice.wan ? [selectedDevice.wan] : []
+                    ).map((w, i) => (
+                      <div key={i} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-slate-500 font-medium">WAN #{w.index || i + 1}</span>
+                          <Badge
+                            className={`text-[10px] font-semibold ${
+                              w.mode === "PPPoE"
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                : w.mode === "Bridge"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-slate-50 text-slate-700 border-slate-200"
+                            }`}
+                          >
+                            {w.mode}
+                          </Badge>
+                        </div>
+                        <div className="space-y-0.5 text-[11px]">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Status</span>
+                            <span className={`font-medium font-mono ${w.connection_status === "Connected" ? "text-emerald-600" : "text-rose-500"}`}>
+                              {w.connection_status || "–"}
+                            </span>
+                          </div>
+                          {w.external_ip && (
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">IP Publik</span>
+                              <span className="font-mono text-slate-800">{w.external_ip}</span>
+                            </div>
+                          )}
+                          {w.default_gateway && (
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Gateway</span>
+                              <span className="font-mono text-slate-800">{w.default_gateway}</span>
+                            </div>
+                          )}
+                          {w.vlan_id && w.vlan_id > 0 ? (
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">VLAN ID</span>
+                              <span className="font-mono text-indigo-700 font-semibold">{w.vlan_id}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Multi-SSID List */}
               {selectedDevice.ssid_list && selectedDevice.ssid_list.length > 0 && (

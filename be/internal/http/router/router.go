@@ -2914,6 +2914,10 @@ func New(deps Dependencies) http.Handler {
 			acsHandler.SetWiFi(w, r)
 			return
 		}
+		if strings.HasSuffix(path, "/wan") && r.Method == http.MethodPost {
+			acsHandler.SetWAN(w, r)
+			return
+		}
 		if strings.HasSuffix(path, "/refresh") && r.Method == http.MethodPost {
 			acsHandler.Refresh(w, r)
 			return

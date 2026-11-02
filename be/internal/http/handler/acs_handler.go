@@ -235,12 +235,17 @@ func (h *ACSHandler) Reboot(w http.ResponseWriter, r *http.Request) {
 }
 
 type SetWiFiRequest struct {
-	Slot     int    `json:"slot"`
-	SSID     string `json:"ssid"`
-	Password string `json:"password"`
+	Slot         int    `json:"slot"`
+	SSID         string `json:"ssid"`
+	Password     string `json:"password"`
+	SecurityMode string `json:"security_mode,omitempty"`
+	Encryption   string `json:"encryption,omitempty"`
+	Enabled      *bool  `json:"enabled,omitempty"`
+	Channel      *int   `json:"channel,omitempty"`
+	TxPower      *int   `json:"tx_power,omitempty"`
 }
 
-// SetWiFi updates WiFi SSID and passphrase.
+// SetWiFi updates WiFi SSID, passphrase, and security settings.
 func (h *ACSHandler) SetWiFi(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -267,14 +272,80 @@ func (h *ACSHandler) SetWiFi(w http.ResponseWriter, r *http.Request) {
 		req.Slot = 1
 	}
 
-	if err := h.acsService.SetWiFi(r.Context(), tenantID, deviceID, req.Slot, req.SSID, req.Password); err != nil {
+	payload := service.SetWiFiPayload{
+		Slot:         req.Slot,
+		SSID:         req.SSID,
+		Password:     req.Password,
+		SecurityMode: req.SecurityMode,
+		Encryption:   req.Encryption,
+		Enabled:      req.Enabled,
+		Channel:      req.Channel,
+		TxPower:      req.TxPower,
+	}
+
+	if err := h.acsService.SetWiFi(r.Context(), tenantID, deviceID, payload); err != nil {
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": fmt.Sprintf("Konfigurasi SSID #%d berhasil dikirim! Modem akan menerapkannya otomatis sesuai interval periodic inform yang dikonfigurasi.", req.Slot),
+		"message": fmt.Sprintf("Konfigurasi WiFi #%d berhasil dikirim ke antrean ONT via TR-069!", req.Slot),
+	})
+}
+
+type SetWANRequest struct {
+	Slot        int    `json:"slot"`
+	Mode        string `json:"mode"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	VLANID      int    `json:"vlan_id"`
+	ServiceList string `json:"service_list"`
+	NATEnabled  *bool  `json:"nat_enabled"`
+}
+
+// SetWAN updates WAN connection settings (PPPoE, IPoE, or Bridge), credentials, and VLAN on ONT.
+func (h *ACSHandler) SetWAN(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	tenantID, ok := auth.GetTenantID(r.Context())
+	if !ok || tenantID == uuid.Nil {
+		http.Error(w, `{"error":"unauthorized: tenant context missing"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Path: /api/v1/acs/devices/{id}/wan
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/acs/devices/")
+	deviceID := strings.TrimSuffix(path, "/wan")
+	deviceID = strings.TrimSpace(deviceID)
+
+	var req SetWANRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	payload := service.SetWANPayload{
+		Slot:        req.Slot,
+		Mode:        req.Mode,
+		Username:    req.Username,
+		Password:    req.Password,
+		VLANID:      req.VLANID,
+		ServiceList: req.ServiceList,
+		NATEnabled:  req.NATEnabled,
+	}
+
+	if err := h.acsService.SetWAN(r.Context(), tenantID, deviceID, payload); err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"message": "Konfigurasi WAN berhasil dikirim ke antrean ONT via TR-069!",
 	})
 }
 

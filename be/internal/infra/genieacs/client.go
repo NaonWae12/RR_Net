@@ -29,10 +29,31 @@ type Client struct {
 
 // WiFiSSID represents an individual SSID configuration on the device.
 type WiFiSSID struct {
-	Index   int    `json:"index"`
-	SSID    string `json:"ssid"`
-	Enabled bool   `json:"enabled"`
-	BSSID   string `json:"bssid,omitempty"`
+	Index        int    `json:"index"`
+	SSID         string `json:"ssid"`
+	Enabled      bool   `json:"enabled"`
+	BSSID        string `json:"bssid,omitempty"`
+	SecurityMode string `json:"security_mode,omitempty"` // None, 11i, WPAand11i, Basic
+	Encryption   string `json:"encryption,omitempty"`    // AESEncryption, TKIPandAESEncryption
+	Channel      int    `json:"channel,omitempty"`
+}
+
+// WANConfig represents the primary WAN interface configuration and status on the ONT.
+type WANConfig struct {
+	Index            int    `json:"index"`
+	Name             string `json:"name,omitempty"`
+	Mode             string `json:"mode"`                         // PPPoE, IPoE, Bridge
+	Username         string `json:"username,omitempty"`
+	VLANID           int    `json:"vlan_id,omitempty"`
+	ConnectionStatus string `json:"connection_status,omitempty"` // Connected, Disconnected, Connecting
+	ExternalIP       string `json:"external_ip,omitempty"`
+	DefaultGateway   string `json:"default_gateway,omitempty"`
+	DNSServers       string `json:"dns_servers,omitempty"`
+	MACAddress       string `json:"mac_address,omitempty"`
+	NATEnabled       bool   `json:"nat_enabled"`
+	ServiceList      string `json:"service_list,omitempty"`
+	AddressingType   string `json:"addressing_type,omitempty"` // DHCP, Static, PPPoE
+	UptimeSeconds    int64  `json:"uptime_seconds,omitempty"`
 }
 
 // ConnectedHost represents a client device connected to the ONT (LAN/WLAN).
@@ -45,34 +66,39 @@ type ConnectedHost struct {
 
 // DeviceSummary represents common device attributes extracted from GenieACS.
 type DeviceSummary struct {
-	ID              string          `json:"id"`
-	SerialNumber    string          `json:"serial_number"`
-	ProductClass    string          `json:"product_class"`
-	Manufacturer    string          `json:"manufacturer"`
-	OUI             string          `json:"oui"`
-	SoftwareVersion string          `json:"software_version"`
-	HardwareVersion string          `json:"hardware_version"`
-	IPAddress       string          `json:"ip_address"`
-	MACAddress      string          `json:"mac_address"`
-	Status          string          `json:"status"` // online, offline
-	LastInform      time.Time       `json:"last_inform"`
+	ID                 string          `json:"id"`
+	SerialNumber       string          `json:"serial_number"`
+	ProductClass       string          `json:"product_class"`
+	Manufacturer       string          `json:"manufacturer"`
+	OUI                string          `json:"oui"`
+	SoftwareVersion    string          `json:"software_version"`
+	HardwareVersion    string          `json:"hardware_version"`
+	IPAddress          string          `json:"ip_address"`
+	MACAddress         string          `json:"mac_address"`
+	Status             string          `json:"status"` // online, offline
+	LastInform         time.Time       `json:"last_inform"`
 	RxPowerDBm         *float64        `json:"rx_power_dbm,omitempty"`
 	TxPowerDBm         *float64        `json:"tx_power_dbm,omitempty"`
 	TemperatureCelsius *float64        `json:"temperature_celsius,omitempty"`
 	VoltageVolts       *float64        `json:"voltage_volts,omitempty"`
 	SSID               string          `json:"ssid,omitempty"`
-	WiFiEnabled     bool            `json:"wifi_enabled"`
-	SSIDList        []WiFiSSID      `json:"ssid_list,omitempty"`
-	ConnectedHosts  []ConnectedHost `json:"connected_hosts,omitempty"`
-	UptimeSeconds   int64           `json:"uptime_seconds"`
-	Label           string          `json:"label,omitempty"`
-	ClientID        *uuid.UUID      `json:"client_id,omitempty"`
-	ClientName      string          `json:"client_name,omitempty"`
-	WiFiPassword    string          `json:"wifi_password,omitempty"`
-	WiFiUpdatedAt   *time.Time      `json:"wifi_updated_at,omitempty"`
-	OnlineAt        *time.Time      `json:"online_at,omitempty"`
-	OfflineAt       *time.Time      `json:"offline_at,omitempty"`
-	InformInterval  int             `json:"inform_interval,omitempty"`
+	WiFiEnabled        bool            `json:"wifi_enabled"`
+	SecurityMode       string          `json:"security_mode,omitempty"` // None, 11i, WPAand11i, Basic
+	WiFiChannel        int             `json:"wifi_channel,omitempty"`
+	WiFiTxPower        int             `json:"wifi_tx_power,omitempty"`
+	SSIDList           []WiFiSSID      `json:"ssid_list,omitempty"`
+	ConnectedHosts     []ConnectedHost `json:"connected_hosts,omitempty"`
+	UptimeSeconds      int64           `json:"uptime_seconds"`
+	Label              string          `json:"label,omitempty"`
+	ClientID           *uuid.UUID      `json:"client_id,omitempty"`
+	ClientName         string          `json:"client_name,omitempty"`
+	WiFiPassword       string          `json:"wifi_password,omitempty"`
+	WiFiUpdatedAt      *time.Time      `json:"wifi_updated_at,omitempty"`
+	OnlineAt           *time.Time      `json:"online_at,omitempty"`
+	OfflineAt          *time.Time      `json:"offline_at,omitempty"`
+	InformInterval     int             `json:"inform_interval,omitempty"`
+	WAN                *WANConfig      `json:"wan,omitempty"`
+	WANList            []WANConfig     `json:"wan_list,omitempty"`
 }
 
 // TaskRequest represents a task sent to GenieACS NBI.

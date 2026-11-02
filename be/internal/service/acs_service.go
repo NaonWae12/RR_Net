@@ -483,19 +483,41 @@ func (s *ACSService) Reboot(ctx context.Context, tenantID uuid.UUID, deviceID st
 	return err
 }
 
-// SetWiFi configures WiFi SSID and Password on ONT after verifying tenant ownership.
-// If slot is <= 0, it defaults to 1.
-func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID string, slot int, ssid, password string) error {
+// SetWiFiPayload holds parameters for configuring WiFi on ONT.
+type SetWiFiPayload struct {
+	Slot         int    `json:"slot"`
+	SSID         string `json:"ssid"`
+	Password     string `json:"password"`
+	SecurityMode string `json:"security_mode,omitempty"` // None, 11i, WPAand11i, Basic
+	Encryption   string `json:"encryption,omitempty"`    // AESEncryption, TKIPandAESEncryption
+	Enabled      *bool  `json:"enabled,omitempty"`       // On/Off WiFi
+	Channel      *int   `json:"channel,omitempty"`       // 0 (Auto), 1-13
+	TxPower      *int   `json:"tx_power,omitempty"`      // 20, 50, 75, 100
+}
+
+// SetWiFi configures WiFi SSID, Password, Security Mode, Channel, and Radio on ONT.
+func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID string, req SetWiFiPayload) error {
+	slot := req.Slot
 	if slot <= 0 {
 		slot = 1
 	}
-	ssid = strings.TrimSpace(ssid)
-	password = strings.TrimSpace(password)
+	ssid := strings.TrimSpace(req.SSID)
+	password := strings.TrimSpace(req.Password)
 	if ssid == "" {
 		return fmt.Errorf("nama SSID tidak boleh kosong")
 	}
-	if password != "" && len(password) < 8 {
-		return fmt.Errorf("password WiFi minimal 8 karakter")
+
+	secMode := req.SecurityMode
+	if secMode == "" {
+		if password == "" {
+			secMode = "None"
+		} else {
+			secMode = "11i" // WPA2-PSK default
+		}
+	}
+
+	if secMode != "None" && password != "" && len(password) < 8 {
+		return fmt.Errorf("password WiFi minimal 8 karakter untuk mode keamanan %s", secMode)
 	}
 
 	var targetDevID = deviceID
@@ -523,38 +545,107 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 		paramValues = append(paramValues, []interface{}{
 			fmt.Sprintf("Device.WiFi.SSID.%d.SSID", slot), ssid, "xsd:string",
 		})
-		if password != "" {
+		if req.Enabled != nil {
 			paramValues = append(paramValues, []interface{}{
-				fmt.Sprintf("Device.WiFi.AccessPoint.%d.Security.KeyPassphrase", slot), password, "xsd:string",
+				fmt.Sprintf("Device.WiFi.SSID.%d.Enable", slot), *req.Enabled, "xsd:boolean",
 			})
 		}
-	} else if hasDirectKey {
-		// Older ZTE (F460, F401, etc.)
-		paramValues = append(paramValues, []interface{}{
-			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.SSID", slot), ssid, "xsd:string",
-		})
-		if password != "" {
+		if secMode == "None" {
 			paramValues = append(paramValues, []interface{}{
-				directKeyPath, password, "xsd:string",
+				fmt.Sprintf("Device.WiFi.AccessPoint.%d.Security.ModeEnabled", slot), "None", "xsd:string",
 			})
-		}
-	} else if hasZteDirectKey {
-		paramValues = append(paramValues, []interface{}{
-			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.SSID", slot), ssid, "xsd:string",
-		})
-		if password != "" {
+		} else {
+			modeStr := "WPA2-Personal"
+			if secMode == "WPAand11i" {
+				modeStr = "WPA-WPA2-Personal"
+			}
 			paramValues = append(paramValues, []interface{}{
-				zteDirectKeyPath, password, "xsd:string",
+				fmt.Sprintf("Device.WiFi.AccessPoint.%d.Security.ModeEnabled", slot), modeStr, "xsd:string",
+			})
+			if password != "" {
+				paramValues = append(paramValues, []interface{}{
+					fmt.Sprintf("Device.WiFi.AccessPoint.%d.Security.KeyPassphrase", slot), password, "xsd:string",
+				})
+			}
+		}
+		if req.Channel != nil && *req.Channel >= 0 {
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("Device.WiFi.Radio.%d.Channel", slot), *req.Channel, "xsd:unsignedInt",
 			})
 		}
 	} else {
-		// Standard TR-098 (F609/F660, Huawei, Fiberhome, VSOL)
+		// Standard TR-098
 		paramValues = append(paramValues, []interface{}{
 			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.SSID", slot), ssid, "xsd:string",
 		})
-		if password != "" {
+		if req.Enabled != nil {
 			paramValues = append(paramValues, []interface{}{
-				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.PreSharedKey.1.KeyPassphrase", slot), password, "xsd:string",
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.Enable", slot), *req.Enabled, "xsd:boolean",
+			})
+		}
+
+		// Security Mode (BeaconType)
+		switch secMode {
+		case "None":
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.BeaconType", slot), "None", "xsd:string",
+			})
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.BasicEncryptionModes", slot), "None", "xsd:string",
+			})
+		case "WPAand11i":
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.BeaconType", slot), "WPAand11i", "xsd:string",
+			})
+			encMode := "TKIPandAESEncryption"
+			if req.Encryption != "" {
+				encMode = req.Encryption
+			}
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.WPAEncryptionModes", slot), encMode, "xsd:string",
+			})
+		default:
+			// Default 11i (WPA2-PSK)
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.BeaconType", slot), "11i", "xsd:string",
+			})
+			encMode := "AESEncryption"
+			if req.Encryption != "" {
+				encMode = req.Encryption
+			}
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.WPAEncryptionModes", slot), encMode, "xsd:string",
+			})
+		}
+
+		// Password passphrase
+		if secMode != "None" && password != "" {
+			if hasDirectKey {
+				paramValues = append(paramValues, []interface{}{
+					directKeyPath, password, "xsd:string",
+				})
+			} else if hasZteDirectKey {
+				paramValues = append(paramValues, []interface{}{
+					zteDirectKeyPath, password, "xsd:string",
+				})
+			} else {
+				paramValues = append(paramValues, []interface{}{
+					fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.PreSharedKey.1.KeyPassphrase", slot), password, "xsd:string",
+				})
+			}
+		}
+
+		// Channel (0 = Auto, 1-13)
+		if req.Channel != nil && *req.Channel >= 0 {
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.Channel", slot), *req.Channel, "xsd:unsignedInt",
+			})
+		}
+
+		// Transmit Power (20, 50, 75, 100)
+		if req.TxPower != nil && *req.TxPower > 0 {
+			paramValues = append(paramValues, []interface{}{
+				fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.TransmitPower", slot), *req.TxPower, "xsd:unsignedInt",
 			})
 		}
 	}
@@ -574,6 +665,148 @@ func (s *ACSService) SetWiFi(ctx context.Context, tenantID uuid.UUID, deviceID s
 
 	if sendErr != nil {
 		return fmt.Errorf("perintah dikirim ke antrean, namun peringatan ACS: %w", sendErr)
+	}
+
+	if s.client != nil {
+		s.client.InvalidateCache()
+	}
+
+	return nil
+}
+
+// SetWANPayload holds parameters for configuring WAN connection on ONT.
+type SetWANPayload struct {
+	Slot        int    `json:"slot"`                   // 1..4 (default 1)
+	Mode        string `json:"mode"`                   // PPPoE, IPoE (DHCP), Bridge
+	Username    string `json:"username,omitempty"`     // PPPoE username
+	Password    string `json:"password,omitempty"`     // PPPoE password
+	VLANID      int    `json:"vlan_id,omitempty"`      // 0 for untagged, or 1..4094
+	ServiceList string `json:"service_list,omitempty"` // default "INTERNET"
+	NATEnabled  *bool  `json:"nat_enabled,omitempty"`  // default true for PPPoE/IPoE
+}
+
+// SetWAN configures WAN connection (PPPoE, IPoE, or Bridge), VLAN, and Credentials on ONT.
+func (s *ACSService) SetWAN(ctx context.Context, tenantID uuid.UUID, deviceID string, req SetWANPayload) error {
+	slot := req.Slot
+	if slot <= 0 {
+		slot = 1
+	}
+
+	mode := strings.ToUpper(strings.TrimSpace(req.Mode))
+	if mode == "" {
+		mode = "PPPOE"
+	}
+	if mode != "PPPOE" && mode != "IPOE" && mode != "DHCP" && mode != "BRIDGE" {
+		return fmt.Errorf("mode WAN tidak valid (harus PPPoE, IPoE, atau Bridge)")
+	}
+
+	serviceList := strings.TrimSpace(req.ServiceList)
+	if serviceList == "" {
+		serviceList = "INTERNET"
+	}
+
+	natEnabled := true
+	if mode == "BRIDGE" {
+		natEnabled = false
+	}
+	if req.NATEnabled != nil {
+		natEnabled = *req.NATEnabled
+	}
+
+	var targetDevID = deviceID
+	if s.repo != nil && tenantID != uuid.Nil {
+		reg, err := s.repo.GetByDeviceID(ctx, deviceID)
+		if err != nil || reg.TenantID != tenantID {
+			return fmt.Errorf("akses ditolak: perangkat ini tidak terdaftar di tenant Anda")
+		}
+		if reg.DeviceID != "" && strings.Contains(reg.DeviceID, "-") {
+			targetDevID = reg.DeviceID
+		}
+	}
+
+	raw, _ := s.client.GetRawDevice(ctx, targetDevID)
+
+	var paramValues [][]interface{}
+
+	switch mode {
+	case "PPPOE":
+		connPath := fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1", slot)
+		paramValues = append(paramValues,
+			[]interface{}{connPath + ".Enable", true, "xsd:boolean"},
+			[]interface{}{connPath + ".ConnectionType", "IP_Routed", "xsd:string"},
+			[]interface{}{connPath + ".NATEnable", natEnabled, "xsd:boolean"},
+		)
+		if req.Username != "" {
+			paramValues = append(paramValues, []interface{}{connPath + ".Username", req.Username, "xsd:string"})
+		}
+		if req.Password != "" {
+			paramValues = append(paramValues, []interface{}{connPath + ".Password", req.Password, "xsd:string"})
+		}
+		connName := fmt.Sprintf("%d_INTERNET_R", slot)
+		if req.VLANID > 0 {
+			connName = fmt.Sprintf("%d_INTERNET_R_VID_%d", slot, req.VLANID)
+			paramValues = append(paramValues,
+				[]interface{}{fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANEthernetInterfaceConfig.VLANIDMark", slot), req.VLANID, "xsd:unsignedInt"},
+			)
+			if raw != nil && pathExistsInTree(raw, connPath+".X_HW_VLAN") {
+				paramValues = append(paramValues, []interface{}{connPath + ".X_HW_VLAN", req.VLANID, "xsd:unsignedInt"})
+			}
+			if raw != nil && pathExistsInTree(raw, connPath+".X_ZTE-COM_VLAN") {
+				paramValues = append(paramValues, []interface{}{connPath + ".X_ZTE-COM_VLAN", req.VLANID, "xsd:unsignedInt"})
+			}
+		}
+		paramValues = append(paramValues, []interface{}{connPath + ".Name", connName, "xsd:string"})
+
+		if raw != nil && pathExistsInTree(raw, connPath+".X_HW_ServiceList") {
+			paramValues = append(paramValues, []interface{}{connPath + ".X_HW_ServiceList", serviceList, "xsd:string"})
+		}
+		if raw != nil && pathExistsInTree(raw, connPath+".X_ZTE-COM_ServiceList") {
+			paramValues = append(paramValues, []interface{}{connPath + ".X_ZTE-COM_ServiceList", serviceList, "xsd:string"})
+		}
+	case "BRIDGE":
+		connPath := fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1", slot)
+		paramValues = append(paramValues,
+			[]interface{}{connPath + ".Enable", true, "xsd:boolean"},
+			[]interface{}{connPath + ".ConnectionType", "PPPoE_Bridged", "xsd:string"},
+			[]interface{}{connPath + ".NATEnable", false, "xsd:boolean"},
+		)
+		connName := fmt.Sprintf("%d_INTERNET_B", slot)
+		if req.VLANID > 0 {
+			connName = fmt.Sprintf("%d_INTERNET_B_VID_%d", slot, req.VLANID)
+			paramValues = append(paramValues,
+				[]interface{}{fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANEthernetInterfaceConfig.VLANIDMark", slot), req.VLANID, "xsd:unsignedInt"},
+			)
+			if raw != nil && pathExistsInTree(raw, connPath+".X_HW_VLAN") {
+				paramValues = append(paramValues, []interface{}{connPath + ".X_HW_VLAN", req.VLANID, "xsd:unsignedInt"})
+			}
+		}
+		paramValues = append(paramValues, []interface{}{connPath + ".Name", connName, "xsd:string"})
+	default:
+		// IPoE / DHCP
+		connPath := fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1", slot)
+		paramValues = append(paramValues,
+			[]interface{}{connPath + ".Enable", true, "xsd:boolean"},
+			[]interface{}{connPath + ".ConnectionType", "IP_Routed", "xsd:string"},
+			[]interface{}{connPath + ".AddressingType", "DHCP", "xsd:string"},
+			[]interface{}{connPath + ".NATEnable", natEnabled, "xsd:boolean"},
+		)
+		connName := fmt.Sprintf("%d_INTERNET_IP_R", slot)
+		if req.VLANID > 0 {
+			connName = fmt.Sprintf("%d_INTERNET_IP_R_VID_%d", slot, req.VLANID)
+			paramValues = append(paramValues,
+				[]interface{}{fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANEthernetInterfaceConfig.VLANIDMark", slot), req.VLANID, "xsd:unsignedInt"},
+			)
+		}
+		paramValues = append(paramValues, []interface{}{connPath + ".Name", connName, "xsd:string"})
+	}
+
+	sendErr := s.client.SendTask(ctx, targetDevID, genieacs.TaskRequest{
+		Name:            "setParameterValues",
+		ParameterValues: paramValues,
+	}, true)
+
+	if sendErr != nil {
+		return fmt.Errorf("perintah WAN dikirim ke antrean, namun peringatan ACS: %w", sendErr)
 	}
 
 	if s.client != nil {
@@ -767,45 +1000,151 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		"Device.DeviceInfo.HardwareVersion",
 	})
 
-	// Network info: Search IP across WANConnectionDevice 1..4 (both WANPPPConnection and WANIPConnection)
-	var ipCandidates []string
+	// WAN Interfaces extraction across WANConnectionDevice 1..4 (both PPP and IP)
 	for slot := 1; slot <= 4; slot++ {
-		ipCandidates = append(ipCandidates,
-			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1.ExternalIPAddress", slot),
+		// 1. WAN PPP Connection (PPPoE / Bridged PPP)
+		pppPrefix := fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1", slot)
+		pppUsername := findStringInTree(raw, []string{
+			pppPrefix + ".Username",
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.Username", slot),
+		})
+		pppConnType := findStringInTree(raw, []string{
+			pppPrefix + ".ConnectionType",
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.ConnectionType", slot),
+		})
+		pppStatus := findStringInTree(raw, []string{
+			pppPrefix + ".ConnectionStatus",
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.ConnectionStatus", slot),
+		})
+		pppIP := findStringInTree(raw, []string{
+			pppPrefix + ".ExternalIPAddress",
 			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.ExternalIPAddress", slot),
-			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1.ExternalIPAddress", slot),
-			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.2.ExternalIPAddress", slot),
-		)
-	}
-	ipCandidates = append(ipCandidates,
-		"Device.IP.Interface.1.IPv4Address.1.IPAddress",
-		"InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
-	)
-	ipVal := findIPInTree(raw, ipCandidates)
-	if ipVal != "" {
-		dev.IPAddress = ipVal
-	} else {
-		dev.IPAddress = getString(raw, "_ip")
+		})
+		pppGateway := findStringInTree(raw, []string{pppPrefix + ".DefaultGateway"})
+		pppDNS := findStringInTree(raw, []string{pppPrefix + ".DNSServers"})
+		pppMAC := findStringInTree(raw, []string{pppPrefix + ".MACAddress"})
+		pppName := findStringInTree(raw, []string{pppPrefix + ".Name"})
+		pppNATStr := findStringInTree(raw, []string{pppPrefix + ".NATEnable"})
+		pppServiceList := findStringInTree(raw, []string{pppPrefix + ".X_HW_ServiceList", pppPrefix + ".X_ZTE-COM_ServiceList"})
+
+		vlanStr := findStringInTree(raw, []string{
+			pppPrefix + ".X_HW_VLAN",
+			pppPrefix + ".X_ZTE-COM_VLAN",
+			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANEthernetInterfaceConfig.VLANIDMark", slot),
+		})
+		vlanID, _ := strconv.Atoi(vlanStr)
+
+		if pppUsername != "" || pppIP != "" || pppConnType != "" || pppName != "" {
+			wanMode := "PPPoE"
+			if strings.Contains(strings.ToUpper(pppConnType), "BRIDGE") {
+				wanMode = "Bridge"
+			}
+			wanCfg := genieacs.WANConfig{
+				Index:            slot,
+				Name:             pppName,
+				Mode:             wanMode,
+				Username:         pppUsername,
+				VLANID:           vlanID,
+				ConnectionStatus: pppStatus,
+				ExternalIP:       pppIP,
+				DefaultGateway:   pppGateway,
+				DNSServers:       pppDNS,
+				MACAddress:       pppMAC,
+				NATEnabled:       (pppNATStr == "1" || strings.EqualFold(pppNATStr, "true")),
+				ServiceList:      pppServiceList,
+				AddressingType:   "PPPoE",
+			}
+			dev.WANList = append(dev.WANList, wanCfg)
+		}
+
+		// 2. WAN IP Connection (DHCP / Static / IP_Bridged)
+		ipPrefix := fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1", slot)
+		ipConnType := findStringInTree(raw, []string{ipPrefix + ".ConnectionType"})
+		ipAddrType := findStringInTree(raw, []string{ipPrefix + ".AddressingType"})
+		ipStatus := findStringInTree(raw, []string{ipPrefix + ".ConnectionStatus"})
+		ipExtIP := findStringInTree(raw, []string{ipPrefix + ".ExternalIPAddress"})
+		ipGateway := findStringInTree(raw, []string{ipPrefix + ".DefaultGateway"})
+		ipDNS := findStringInTree(raw, []string{ipPrefix + ".DNSServers"})
+		ipMAC := findStringInTree(raw, []string{ipPrefix + ".MACAddress"})
+		ipName := findStringInTree(raw, []string{ipPrefix + ".Name"})
+		ipNATStr := findStringInTree(raw, []string{ipPrefix + ".NATEnable"})
+
+		if ipExtIP != "" || ipConnType != "" || ipAddrType != "" {
+			wanMode := "IPoE"
+			if strings.Contains(strings.ToUpper(ipConnType), "BRIDGE") {
+				wanMode = "Bridge"
+			}
+			wanCfg := genieacs.WANConfig{
+				Index:            slot + 10,
+				Name:             ipName,
+				Mode:             wanMode,
+				VLANID:           vlanID,
+				ConnectionStatus: ipStatus,
+				ExternalIP:       ipExtIP,
+				DefaultGateway:   ipGateway,
+				DNSServers:       ipDNS,
+				MACAddress:       ipMAC,
+				NATEnabled:       (ipNATStr == "1" || strings.EqualFold(ipNATStr, "true")),
+				AddressingType:   ipAddrType,
+			}
+			dev.WANList = append(dev.WANList, wanCfg)
+		}
 	}
 
-	var macCandidates []string
-	for slot := 1; slot <= 4; slot++ {
-		macCandidates = append(macCandidates,
-			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1.MACAddress", slot),
-			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.2.MACAddress", slot),
-			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1.MACAddress", slot),
-			fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.2.MACAddress", slot),
-		)
+	if len(dev.WANList) > 0 {
+		dev.WAN = &dev.WANList[0]
+		for i := range dev.WANList {
+			if strings.EqualFold(dev.WANList[i].ConnectionStatus, "Connected") {
+				dev.WAN = &dev.WANList[i]
+				break
+			}
+		}
 	}
-	macCandidates = append(macCandidates,
-		"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.MACAddress",
-		"InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MACAddress",
-		"InternetGatewayDevice.DeviceInfo.MACAddress",
-		"InternetGatewayDevice.DeviceInfo.X_ZTE_COM_BaseMAC",
-		"InternetGatewayDevice.DeviceInfo.X_HW_BaseMac",
-		"Device.Ethernet.Interface.1.MACAddress",
-	)
-	dev.MACAddress = findStringInTree(raw, macCandidates)
+
+	// External IP priority: Primary WAN IP -> candidate tree -> _ip fallback
+	if dev.WAN != nil && dev.WAN.ExternalIP != "" {
+		dev.IPAddress = dev.WAN.ExternalIP
+	} else {
+		var ipCandidates []string
+		for slot := 1; slot <= 4; slot++ {
+			ipCandidates = append(ipCandidates,
+				fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1.ExternalIPAddress", slot),
+				fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1.ExternalIPAddress", slot),
+			)
+		}
+		ipCandidates = append(ipCandidates,
+			"Device.IP.Interface.1.IPv4Address.1.IPAddress",
+			"InternetGatewayDevice.ManagementServer.ConnectionRequestURL",
+		)
+		ipVal := findIPInTree(raw, ipCandidates)
+		if ipVal != "" {
+			dev.IPAddress = ipVal
+		} else {
+			dev.IPAddress = getString(raw, "_ip")
+		}
+	}
+
+	// MAC Address priority: Primary WAN MAC -> candidate tree
+	if dev.WAN != nil && dev.WAN.MACAddress != "" {
+		dev.MACAddress = dev.WAN.MACAddress
+	} else {
+		var macCandidates []string
+		for slot := 1; slot <= 4; slot++ {
+			macCandidates = append(macCandidates,
+				fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANPPPConnection.1.MACAddress", slot),
+				fmt.Sprintf("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.%d.WANIPConnection.1.MACAddress", slot),
+			)
+		}
+		macCandidates = append(macCandidates,
+			"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.1.MACAddress",
+			"InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MACAddress",
+			"InternetGatewayDevice.DeviceInfo.MACAddress",
+			"InternetGatewayDevice.DeviceInfo.X_ZTE_COM_BaseMAC",
+			"InternetGatewayDevice.DeviceInfo.X_HW_BaseMac",
+			"Device.Ethernet.Interface.1.MACAddress",
+		)
+		dev.MACAddress = findStringInTree(raw, macCandidates)
+	}
 
 	// Optical Power (RX / TX in dBm)
 	// Paths ordered: ZTE F609/F660 -> ZTE F460/ELWR -> Huawei -> Fiberhome -> Device.* (TR-181)
@@ -977,11 +1316,27 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 			isEnabled = true
 		}
 
+		secMode := findStringInTree(raw, []string{
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.BeaconType", slot),
+			fmt.Sprintf("Device.WiFi.AccessPoint.%d.Security.ModeEnabled", slot),
+		})
+		encMode := findStringInTree(raw, []string{
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.WPAEncryptionModes", slot),
+		})
+		chStr := findStringInTree(raw, []string{
+			fmt.Sprintf("InternetGatewayDevice.LANDevice.1.WLANConfiguration.%d.Channel", slot),
+			fmt.Sprintf("Device.WiFi.Radio.%d.Channel", slot),
+		})
+		chVal, _ := strconv.Atoi(chStr)
+
 		dev.SSIDList = append(dev.SSIDList, genieacs.WiFiSSID{
-			Index:   slot,
-			SSID:    ssidName,
-			Enabled: isEnabled,
-			BSSID:   bssid,
+			Index:        slot,
+			SSID:         ssidName,
+			Enabled:      isEnabled,
+			BSSID:        bssid,
+			SecurityMode: secMode,
+			Encryption:   encMode,
+			Channel:      chVal,
 		})
 	}
 
@@ -1015,6 +1370,23 @@ func (s *ACSService) normalizeDevice(raw map[string]interface{}) genieacs.Device
 		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.PreSharedKey",
 		"Device.WiFi.AccessPoint.1.Security.KeyPassphrase",
 	})
+
+	dev.SecurityMode = findStringInTree(raw, []string{
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.BeaconType",
+		"Device.WiFi.AccessPoint.1.Security.ModeEnabled",
+	})
+	if chStr := findStringInTree(raw, []string{
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel",
+		"Device.WiFi.Radio.1.Channel",
+	}); chStr != "" {
+		dev.WiFiChannel, _ = strconv.Atoi(chStr)
+	}
+	if pwrStr := findStringInTree(raw, []string{
+		"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TransmitPower",
+		"Device.WiFi.Radio.1.TransmitPower",
+	}); pwrStr != "" {
+		dev.WiFiTxPower, _ = strconv.Atoi(pwrStr)
+	}
 
 	// Connected Hosts (LAN/WLAN client devices)
 	for hostIdx := 1; hostIdx <= 32; hostIdx++ {

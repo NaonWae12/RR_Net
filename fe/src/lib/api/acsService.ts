@@ -1,11 +1,5 @@
 import { apiClient } from "./apiClient";
-import { ONTDevice } from "./types";
-
-export interface SetWiFiPayload {
-  slot?: number;
-  ssid: string;
-  password?: string;
-}
+import { ONTDevice, SetWiFiPayload, SetWANPayload } from "./types";
 
 export interface RegisterDevicePayload {
   device_id?: string;
@@ -69,9 +63,15 @@ export const acsService = {
     return res.data;
   },
 
-  // Update WiFi SSID & Password on ONT
+  // Update WiFi SSID, Password, and Security on ONT
   async setWiFi(id: string, payload: SetWiFiPayload): Promise<{ message: string }> {
     const res = await apiClient.post<{ message: string }>(`/acs/devices/${encodeURIComponent(id)}/wifi`, payload);
+    return res.data;
+  },
+
+  // Update WAN configuration (PPPoE, IPoE, Bridge, VLAN) on ONT
+  async setWAN(id: string, payload: SetWANPayload): Promise<{ message: string }> {
+    const res = await apiClient.post<{ message: string }>(`/acs/devices/${encodeURIComponent(id)}/wan`, payload);
     return res.data;
   },
 

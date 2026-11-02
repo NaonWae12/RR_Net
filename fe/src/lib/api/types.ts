@@ -1359,7 +1359,10 @@ export interface ONTDevice {
   voltage_volts?: number | null;
   ssid?: string;
   wifi_enabled: boolean;
-  ssid_list?: { index: number; ssid: string; enabled: boolean; bssid?: string }[];
+  security_mode?: string;
+  wifi_channel?: number;
+  wifi_tx_power?: number;
+  ssid_list?: { index: number; ssid: string; enabled: boolean; bssid?: string; security_mode?: string; encryption?: string; channel?: number }[];
   connected_hosts?: { hostname: string; ip_address: string; mac_address: string; active: boolean }[];
   uptime_seconds: number;
   label?: string;
@@ -1370,5 +1373,47 @@ export interface ONTDevice {
   online_at?: string;
   offline_at?: string;
   inform_interval?: number;
+  wan?: WANConfig;
+  wan_list?: WANConfig[];
 }
+
+export interface WANConfig {
+  index: number;
+  name?: string;
+  mode: 'PPPoE' | 'IPoE' | 'Bridge' | string;
+  username?: string;
+  vlan_id?: number;
+  connection_status?: string;
+  external_ip?: string;
+  default_gateway?: string;
+  dns_servers?: string;
+  mac_address?: string;
+  nat_enabled: boolean;
+  service_list?: string;
+  addressing_type?: string;
+  uptime_seconds?: number;
+}
+
+export interface SetWiFiPayload {
+  slot?: number;
+  ssid: string;
+  password?: string;
+  security_mode?: 'None' | '11i' | 'WPAand11i' | 'Basic' | string;
+  encryption?: string;
+  enabled?: boolean;
+  channel?: number;
+  tx_power?: number;
+}
+
+export interface SetWANPayload {
+  slot?: number;
+  connection_index?: number;
+  mode: 'PPPoE' | 'IPoE' | 'Bridge' | string;
+  username?: string;
+  password?: string;
+  vlan_id?: number;
+  service_list?: string;
+  nat_enabled?: boolean;
+}
+
 
